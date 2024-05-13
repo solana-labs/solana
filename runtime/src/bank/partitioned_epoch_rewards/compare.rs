@@ -1,5 +1,5 @@
 use {
-    super::{Bank, PartitionedRewardsCalculation},
+    super::{Bank, PartitionedRewardsCalculation, PartitionedStakeReward},
     crate::bank::{RewardCalcTracer, RewardsMetrics, VoteReward},
     dashmap::DashMap,
     log::info,
@@ -51,7 +51,7 @@ impl Bank {
         partitioned_rewards: PartitionedRewardsCalculation,
     ) {
         // put partitioned stake rewards in a hashmap
-        let mut stake_rewards: HashMap<Pubkey, &StakeReward> = HashMap::default();
+        let mut stake_rewards: HashMap<Pubkey, &PartitionedStakeReward> = HashMap::default();
         partitioned_rewards
             .stake_rewards_by_partition
             .stake_rewards_by_partition
@@ -64,7 +64,11 @@ impl Bank {
         // verify stake rewards match expected
         stake_rewards_expected.iter().for_each(|stake_reward| {
             let partitioned = stake_rewards.remove(&stake_reward.stake_pubkey).unwrap();
-            assert_eq!(partitioned, stake_reward);
+            let converted = PartitionedStakeReward::maybe_from(stake_reward).expect(
+                "StakeRewards should only be deserializable accounts with state \
+                 StakeStateV2::Stake",
+            );
+            assert_eq!(partitioned, &converted);
         });
         assert!(stake_rewards.is_empty(), "{stake_rewards:?}");
 

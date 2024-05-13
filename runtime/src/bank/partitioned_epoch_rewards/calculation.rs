@@ -2,9 +2,9 @@ use {
     super::{
         epoch_rewards_hasher::hash_rewards_into_partitions, Bank,
         CalculateRewardsAndDistributeVoteRewardsResult, CalculateValidatorRewardsResult,
-        EpochRewardCalculateParamInfo, PartitionedRewardsCalculation, StakeRewardCalculation,
-        StakeRewardCalculationPartitioned, StakeRewards, VoteRewardsAccounts,
-        REWARD_CALCULATION_NUM_BLOCKS,
+        EpochRewardCalculateParamInfo, PartitionedRewardsCalculation, PartitionedStakeReward,
+        PartitionedStakeRewards, StakeRewardCalculation, StakeRewardCalculationPartitioned,
+        VoteRewardsAccounts, REWARD_CALCULATION_NUM_BLOCKS,
     },
     crate::{
         bank::{
@@ -20,10 +20,10 @@ use {
         iter::{IntoParallelRefIterator, ParallelIterator},
         ThreadPool,
     },
-    solana_accounts_db::stake_rewards::StakeReward,
     solana_measure::measure_us,
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
+        account_utils::StateMut,
         clock::{Epoch, Slot},
         pubkey::Pubkey,
         reward_info::RewardInfo,
@@ -426,7 +426,14 @@ impl Bank {
 
                         let post_balance = stake_account.lamports();
                         total_stake_rewards.fetch_add(stakers_reward, Relaxed);
-                        return Some(StakeReward {
+
+                        // Safe to unwrap on the following lines because all
+                        // stake_delegations are type StakeAccount<Delegation>,
+                        // which will always only wrap a `StakeStateV2::Stake`
+                        // variant.
+                        let updated_stake_state: StakeStateV2 = stake_account.state().unwrap();
+                        let stake = updated_stake_state.stake().unwrap();
+                        return Some(PartitionedStakeReward {
                             stake_pubkey,
                             stake_reward_info: RewardInfo {
                                 reward_type: RewardType::Staking,
@@ -434,7 +441,7 @@ impl Bank {
                                 post_balance,
                                 commission: Some(vote_state.commission),
                             },
-                            stake_account,
+                            stake,
                         });
                     } else {
                         debug!(
@@ -553,7 +560,7 @@ impl Bank {
         epoch_rewards_sysvar: &EpochRewards,
         reward_calc_tracer: Option<impl RewardCalcTracer>,
         thread_pool: &ThreadPool,
-    ) -> Vec<StakeRewards> {
+    ) -> Vec<PartitionedStakeRewards> {
         assert!(epoch_rewards_sysvar.active);
         // If rewards are active, the rewarded epoch is always the immediately
         // preceding epoch.
@@ -976,8 +983,8 @@ mod tests {
     }
 
     fn compare_stake_rewards(
-        expected_stake_rewards: &[StakeRewards],
-        received_stake_rewards: &[StakeRewards],
+        expected_stake_rewards: &[PartitionedStakeRewards],
+        received_stake_rewards: &[PartitionedStakeRewards],
     ) {
         for (i, partition) in received_stake_rewards.iter().enumerate() {
             let expected_partition = &expected_stake_rewards[i];

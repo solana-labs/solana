@@ -1,13 +1,13 @@
 use {
-    crate::bank::partitioned_epoch_rewards::StakeRewards,
+    crate::bank::partitioned_epoch_rewards::PartitionedStakeRewards,
     solana_sdk::{epoch_rewards_hasher::EpochRewardsHasher, hash::Hash},
 };
 
 pub(in crate::bank::partitioned_epoch_rewards) fn hash_rewards_into_partitions(
-    stake_rewards: StakeRewards,
+    stake_rewards: PartitionedStakeRewards,
     parent_blockhash: &Hash,
     num_partitions: usize,
-) -> Vec<StakeRewards> {
+) -> Vec<PartitionedStakeRewards> {
     let hasher = EpochRewardsHasher::new(num_partitions, parent_blockhash);
     let mut result = vec![vec![]; num_partitions];
 
@@ -28,10 +28,10 @@ mod tests {
     use {
         super::*,
         crate::bank::{
-            partitioned_epoch_rewards::REWARD_CALCULATION_NUM_BLOCKS, tests::create_genesis_config,
+            partitioned_epoch_rewards::{PartitionedStakeReward, REWARD_CALCULATION_NUM_BLOCKS},
+            tests::create_genesis_config,
             Bank,
         },
-        solana_accounts_db::stake_rewards::StakeReward,
         solana_sdk::{epoch_schedule::EpochSchedule, native_token::LAMPORTS_PER_SOL},
         std::collections::HashMap,
     };
@@ -42,7 +42,7 @@ mod tests {
         let expected_num = 12345;
 
         let stake_rewards = (0..expected_num)
-            .map(|_| StakeReward::new_random())
+            .map(|_| PartitionedStakeReward::new_random())
             .collect::<Vec<_>>();
 
         let total = stake_rewards
@@ -106,7 +106,7 @@ mod tests {
         // simulate 40K - 1 rewards, the expected num of credit blocks should be 10.
         let expected_num = 40959;
         let stake_rewards = (0..expected_num)
-            .map(|_| StakeReward::new_random())
+            .map(|_| PartitionedStakeReward::new_random())
             .collect::<Vec<_>>();
 
         let stake_rewards_bucket =
@@ -121,7 +121,7 @@ mod tests {
         let _range = &stake_rewards_bucket[15];
     }
 
-    fn compare(a: &StakeRewards, b: &StakeRewards) {
+    fn compare(a: &PartitionedStakeRewards, b: &PartitionedStakeRewards) {
         let mut a = a
             .iter()
             .map(|stake_reward| (stake_reward.stake_pubkey, stake_reward.clone()))

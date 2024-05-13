@@ -27,7 +27,7 @@ use {
 const REWARD_CALCULATION_NUM_BLOCKS: u64 = 1;
 
 #[derive(AbiExample, Debug, Serialize, Deserialize, Clone, PartialEq)]
-struct PartitionedStakeReward {
+pub(crate) struct PartitionedStakeReward {
     /// Stake account address
     pub stake_pubkey: Pubkey,
     /// `Stake` state to be stored in account
@@ -59,7 +59,7 @@ pub(crate) struct StartBlockHeightAndRewards {
     /// the block height of the slot at which rewards distribution began
     pub(crate) distribution_starting_block_height: u64,
     /// calculated epoch rewards pending distribution, outer Vec is by partition (one partition per block)
-    pub(crate) stake_rewards_by_partition: Arc<Vec<StakeRewards>>,
+    pub(crate) stake_rewards_by_partition: Arc<Vec<PartitionedStakeRewards>>,
 }
 
 /// Represent whether bank is in the reward phase or not.
@@ -90,7 +90,7 @@ pub(super) struct VoteRewardsAccounts {
 /// result of calculating the stake rewards at end of epoch
 struct StakeRewardCalculation {
     /// each individual stake account to reward
-    stake_rewards: StakeRewards,
+    stake_rewards: PartitionedStakeRewards,
     /// total lamports across all `stake_rewards`
     total_stake_rewards_lamports: u64,
 }
@@ -127,7 +127,7 @@ pub(super) struct PartitionedRewardsCalculation {
 /// result of calculating the stake rewards at beginning of new epoch
 pub(super) struct StakeRewardCalculationPartitioned {
     /// each individual stake account to reward, grouped by partition
-    pub(super) stake_rewards_by_partition: Vec<StakeRewards>,
+    pub(super) stake_rewards_by_partition: Vec<PartitionedStakeRewards>,
     /// total lamports across all `stake_rewards`
     pub(super) total_stake_rewards_lamports: u64,
 }
@@ -142,7 +142,7 @@ pub(super) struct CalculateRewardsAndDistributeVoteRewardsResult {
     /// delegations
     pub(super) total_points: u128,
     /// stake rewards that still need to be distributed, grouped by partition
-    pub(super) stake_rewards_by_partition: Vec<StakeRewards>,
+    pub(super) stake_rewards_by_partition: Vec<PartitionedStakeRewards>,
 }
 
 pub(crate) type StakeRewards = Vec<StakeReward>;
@@ -156,7 +156,7 @@ impl Bank {
     pub(crate) fn set_epoch_reward_status_active(
         &mut self,
         distribution_starting_block_height: u64,
-        stake_rewards_by_partition: Vec<StakeRewards>,
+        stake_rewards_by_partition: Vec<PartitionedStakeRewards>,
     ) {
         self.epoch_reward_status = EpochRewardStatus::Active(StartBlockHeightAndRewards {
             distribution_starting_block_height,
@@ -179,7 +179,10 @@ impl Bank {
     }
 
     /// Calculate the number of blocks required to distribute rewards to all stake accounts.
-    pub(super) fn get_reward_distribution_num_blocks(&self, rewards: &StakeRewards) -> u64 {
+    pub(super) fn get_reward_distribution_num_blocks(
+        &self,
+        rewards: &PartitionedStakeRewards,
+    ) -> u64 {
         let total_stake_accounts = rewards.len();
         if self.epoch_schedule.warmup && self.epoch < self.first_normal_epoch() {
             1
@@ -252,6 +255,21 @@ mod tests {
         solana_vote_program::{vote_state, vote_transaction},
     };
 
+    impl PartitionedStakeReward {
+        pub fn new_random() -> Self {
+            Self::maybe_from(&StakeReward::new_random()).unwrap()
+        }
+    }
+
+    pub fn convert_rewards(
+        stake_rewards: impl IntoIterator<Item = StakeReward>,
+    ) -> PartitionedStakeRewards {
+        stake_rewards
+            .into_iter()
+            .map(|stake_reward| PartitionedStakeReward::maybe_from(&stake_reward).unwrap())
+            .collect()
+    }
+
     #[derive(Debug, PartialEq, Eq, Copy, Clone)]
     enum RewardInterval {
         /// the slot within the epoch is INSIDE the reward distribution interval
@@ -279,7 +297,7 @@ mod tests {
         let expected_num = 100;
 
         let stake_rewards = (0..expected_num)
-            .map(|_| StakeReward::new_random())
+            .map(|_| PartitionedStakeReward::new_random())
             .collect::<Vec<_>>();
 
         bank.set_epoch_reward_status_active(
@@ -340,7 +358,7 @@ mod tests {
             |num_stakes: u64, expected_num_reward_distribution_blocks: u64| {
                 // Given the short epoch, i.e. 32 slots, we should cap the number of reward distribution blocks to 32/10 = 3.
                 let stake_rewards = (0..num_stakes)
-                    .map(|_| StakeReward::new_random())
+                    .map(|_| PartitionedStakeReward::new_random())
                     .collect::<Vec<_>>();
 
                 assert_eq!(
@@ -378,7 +396,7 @@ mod tests {
         // Given 8k rewards, it will take 2 blocks to credit all the rewards
         let expected_num = 8192;
         let stake_rewards = (0..expected_num)
-            .map(|_| StakeReward::new_random())
+            .map(|_| PartitionedStakeReward::new_random())
             .collect::<Vec<_>>();
 
         assert_eq!(bank.get_reward_distribution_num_blocks(&stake_rewards), 2);
