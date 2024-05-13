@@ -829,6 +829,12 @@ impl AppendVec {
         })
     }
 
+    /// true if this storage can possibly be appended to (independent of capacity check)
+    pub(crate) fn can_append(&self) -> bool {
+        // always can append to a mmapped append vec
+        true
+    }
+
     /// Returns a slice suitable for use when archiving append vecs
     pub fn data_for_archive(&self) -> &[u8] {
         match &self.backing {

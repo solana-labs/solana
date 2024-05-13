@@ -4457,8 +4457,12 @@ impl AccountsDb {
                     .fetch_add(1, Ordering::Relaxed);
                 return true;
             }
-            // this slot is ancient and can become the 'current' ancient for other slots to be squashed into
-            *current_ancient = CurrentAncientAccountsFile::new(slot, Arc::clone(storage));
+            if storage.accounts.can_append() {
+                // this slot is ancient and can become the 'current' ancient for other slots to be squashed into
+                *current_ancient = CurrentAncientAccountsFile::new(slot, Arc::clone(storage));
+            } else {
+                *current_ancient = CurrentAncientAccountsFile::default();
+            }
             return false; // we're done with this slot - this slot IS the ancient append vec
         }
 

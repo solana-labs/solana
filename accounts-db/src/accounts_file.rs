@@ -80,6 +80,15 @@ impl AccountsFile {
         Ok((Self::AppendVec(av), num_accounts))
     }
 
+    /// true if this storage can possibly be appended to (independent of capacity check)
+    pub(crate) fn can_append(&self) -> bool {
+        match self {
+            Self::AppendVec(av) => av.can_append(),
+            // once created, tiered storages cannot be appended to
+            Self::TieredStorage(_) => false,
+        }
+    }
+
     pub fn flush(&self) -> Result<()> {
         match self {
             Self::AppendVec(av) => av.flush(),
