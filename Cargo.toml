@@ -242,7 +242,10 @@ lazy-lru = "0.1.2"
 lazy_static = "1.4.0"
 libc = "0.2.153"
 libloading = "0.7.4"
-libsecp256k1 = "0.6.0"
+libsecp256k1 = { version = "0.6.0", default-features = false, features = [
+    "std",
+    "static-context",
+] }
 light-poseidon = "0.2.0"
 log = "0.4.21"
 lru = "0.7.7"

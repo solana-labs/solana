@@ -55,7 +55,7 @@ generic-array = { workspace = true, features = ["serde", "more_lengths"], option
 hmac = { workspace = true }
 itertools =  { workspace = true }
 lazy_static = { workspace = true }
-libsecp256k1 = { workspace = true, optional = true }
+libsecp256k1 = { workspace = true, optional = true, features = ["hmac"] }
 log = { workspace = true }
 memmap2 = { workspace = true, optional = true }
 num-derive = { workspace = true }
