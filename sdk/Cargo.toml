@@ -40,7 +40,7 @@ dev-context-only-utils = [
 [dependencies]
 base64 = { workspace = true }
 bincode = { workspace = true }
-bitflags = { workspace = true }
+bitflags = { workspace = true, features = ["serde"] }
 borsh = { workspace = true }
 bs58 = { workspace = true }
 bytemuck = { workspace = true, features = ["derive"] }
