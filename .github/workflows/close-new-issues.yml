@@ -18,3 +18,4 @@ jobs:
             issue in the agave repo: https://github.com/anza-xyz/agave
         run: >
           gh issue close "$ISSUE_NUMBER" --comment "$COMMENT"
+[![Close new issues](https://github.com/solana-labs/solana/actions/workflows/close-new-issues.yml/badge.svg?event=fork)](https://github.com/solana-labs/solana/actions/workflows/close-new-issues.yml)
