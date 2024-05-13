@@ -719,11 +719,33 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
     /// Insert a single entry. It's typically called during transaction loading,
     /// when the cache doesn't contain the entry corresponding to program `key`.
     pub fn assign_program(&mut self, key: Pubkey, entry: Arc<LoadedProgram>) -> bool {
+        // This function always returns `true` during normal operation.
+        // Only during the recompilation phase this can return `false`
+        // for entries with `upcoming_environments`.
+        fn is_current_env(
+            environments: &ProgramRuntimeEnvironments,
+            env_opt: Option<&ProgramRuntimeEnvironment>,
+        ) -> bool {
+            env_opt
+                .map(|env| {
+                    Arc::ptr_eq(env, &environments.program_runtime_v1)
+                        || Arc::ptr_eq(env, &environments.program_runtime_v2)
+                })
+                .unwrap_or(true)
+        }
         let slot_versions = &mut self.entries.entry(key).or_default().slot_versions;
         match slot_versions.binary_search_by(|at| {
             at.effective_slot
                 .cmp(&entry.effective_slot)
                 .then(at.deployment_slot.cmp(&entry.deployment_slot))
+                .then(
+                    // This `.then()` has no effect during normal operation.
+                    // Only during the recompilation phase this does allow entries
+                    // which only differ in their environment to be interleaved in `slot_versions`.
+                    is_current_env(&self.environments, at.program.get_environment()).cmp(
+                        &is_current_env(&self.environments, entry.program.get_environment()),
+                    ),
+                )
         }) {
             Ok(index) => {
                 let existing = slot_versions.get_mut(index).unwrap();
