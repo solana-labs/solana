@@ -6188,7 +6188,6 @@ dependencies = [
 name = "solana-sdk"
 version = "2.0.0"
 dependencies = [
- "base64 0.22.0",
  "bincode",
  "bitflags 2.4.2",
  "borsh 1.5.0",
