@@ -126,12 +126,9 @@ fn bench_delete_dependencies(bencher: &mut Bencher) {
     });
 }
 
-fn store_accounts_with_possible_contention<F: 'static>(
-    bench_name: &str,
-    bencher: &mut Bencher,
-    reader_f: F,
-) where
-    F: Fn(&Accounts, &[Pubkey]) + Send + Copy,
+fn store_accounts_with_possible_contention<F>(bench_name: &str, bencher: &mut Bencher, reader_f: F)
+where
+    F: Fn(&Accounts, &[Pubkey]) + Send + Copy + 'static,
 {
     let num_readers = 5;
     let accounts_db = new_accounts_db(vec![PathBuf::from(
