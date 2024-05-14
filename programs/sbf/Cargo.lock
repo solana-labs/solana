@@ -6206,8 +6206,6 @@ dependencies = [
  "libsecp256k1 0.6.0",
  "log",
  "memmap2",
- "num-derive 0.4.2",
- "num-traits",
  "num_enum",
  "pbkdf2 0.11.0",
  "qstring",
