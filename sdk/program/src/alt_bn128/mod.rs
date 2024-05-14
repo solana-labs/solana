@@ -402,7 +402,7 @@ mod tests {
 
     #[test]
     fn alt_bn128_addition_test() {
-        use serde::Deserialize;
+        use serde_derive::Deserialize;
 
         let test_data = r#"[
         {
@@ -496,7 +496,7 @@ mod tests {
 
     #[test]
     fn alt_bn128_multiplication_test() {
-        use serde::Deserialize;
+        use serde_derive::Deserialize;
 
         let test_data = r#"[
         {
@@ -630,7 +630,7 @@ mod tests {
 
     #[test]
     fn alt_bn128_pairing_test() {
-        use serde::Deserialize;
+        use serde_derive::Deserialize;
 
         let test_data = r#"[
         {

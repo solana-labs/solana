@@ -388,7 +388,7 @@ mod tests {
     }
     #[test]
     fn alt_bn128_compression_pairing_test_input() {
-        use serde::Deserialize;
+        use serde_derive::Deserialize;
 
         let test_data = r#"[
         {

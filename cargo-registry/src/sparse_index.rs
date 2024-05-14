@@ -5,7 +5,7 @@ use {
         response_builder,
     },
     log::info,
-    serde::{Deserialize, Serialize},
+    serde_derive::{Deserialize, Serialize},
     std::{
         collections::BTreeMap,
         sync::{Arc, RwLock},

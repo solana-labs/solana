@@ -10,7 +10,8 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
-serde = { workspace = true, features = ["derive"] }
+serde = { workspace = true }
+serde_derive = { workspace = true }
 solana-sdk = { workspace = true }
 tarpc = { workspace = true, features = ["full"] }
 

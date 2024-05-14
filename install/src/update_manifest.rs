@@ -1,5 +1,5 @@
 use {
-    serde::{Deserialize, Serialize},
+    serde_derive::{Deserialize, Serialize},
     solana_config_program::ConfigState,
     solana_sdk::{
         hash::Hash,

@@ -902,14 +902,14 @@ pub mod serde_compact_vote_state_update {
     };
 
     #[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
-    #[derive(Deserialize, Serialize)]
+    #[derive(serde_derive::Deserialize, serde_derive::Serialize)]
     struct LockoutOffset {
         #[serde(with = "serde_varint")]
         offset: Slot,
         confirmation_count: u8,
     }
 
-    #[derive(Deserialize, Serialize)]
+    #[derive(serde_derive::Deserialize, serde_derive::Serialize)]
     struct CompactVoteStateUpdate {
         root: Slot,
         #[serde(with = "short_vec")]
@@ -999,14 +999,14 @@ pub mod serde_tower_sync {
     };
 
     #[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
-    #[derive(Deserialize, Serialize)]
+    #[derive(serde_derive::Deserialize, serde_derive::Serialize)]
     struct LockoutOffset {
         #[serde(with = "serde_varint")]
         offset: Slot,
         confirmation_count: u8,
     }
 
-    #[derive(Deserialize, Serialize)]
+    #[derive(serde_derive::Deserialize, serde_derive::Serialize)]
     struct CompactTowerSync {
         root: Slot,
         #[serde(with = "short_vec")]

@@ -17,7 +17,7 @@ use {
     },
     dashmap::DashMap,
     log::*,
-    serde::Serialize,
+    serde_derive::Serialize,
     solana_account_decoder::UiAccountEncoding,
     solana_accounts_db::{
         accounts_db::CalcAccountsHashDataSource, accounts_index::ScanConfig,

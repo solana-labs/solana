@@ -1,10 +1,8 @@
 use {
     crate::ledger_utils::get_program_ids,
     chrono::{Local, TimeZone},
-    serde::{
-        ser::{Impossible, SerializeSeq, SerializeStruct, Serializer},
-        Deserialize, Serialize,
-    },
+    serde::ser::{Impossible, SerializeSeq, SerializeStruct, Serializer},
+    serde_derive::{Deserialize, Serialize},
     solana_account_decoder::{UiAccount, UiAccountData, UiAccountEncoding},
     solana_accounts_db::accounts_index::ScanConfig,
     solana_cli_output::{
@@ -742,7 +740,7 @@ impl AccountsScanner {
     }
 }
 
-impl Serialize for AccountsScanner {
+impl serde::Serialize for AccountsScanner {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,

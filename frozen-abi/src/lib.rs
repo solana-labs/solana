@@ -15,11 +15,6 @@ mod hash;
 #[macro_use]
 extern crate solana_frozen_abi_macro;
 
-#[cfg(RUSTC_WITH_SPECIALIZATION)]
-#[cfg(test)]
-#[macro_use]
-extern crate serde_derive;
-
 // Not public API. Referenced by macro-generated code.
 #[doc(hidden)]
 pub mod __private {

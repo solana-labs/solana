@@ -10,8 +10,8 @@ use {
     serde::{
         de::{self, Deserializer, SeqAccess, Unexpected, Visitor},
         ser::{SerializeTuple, Serializer},
-        Deserialize, Serialize,
     },
+    serde_derive::{Deserialize, Serialize},
     std::{collections::HashSet, fmt},
 };
 
@@ -166,7 +166,7 @@ impl Default for VersionedMessage {
     }
 }
 
-impl Serialize for VersionedMessage {
+impl serde::Serialize for VersionedMessage {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -192,7 +192,7 @@ enum MessagePrefix {
     Versioned(u8),
 }
 
-impl<'de> Deserialize<'de> for MessagePrefix {
+impl<'de> serde::Deserialize<'de> for MessagePrefix {
     fn deserialize<D>(deserializer: D) -> Result<MessagePrefix, D::Error>
     where
         D: Deserializer<'de>,
@@ -228,7 +228,7 @@ impl<'de> Deserialize<'de> for MessagePrefix {
     }
 }
 
-impl<'de> Deserialize<'de> for VersionedMessage {
+impl<'de> serde::Deserialize<'de> for VersionedMessage {
     fn deserialize<D>(deserializer: D) -> Result<VersionedMessage, D::Error>
     where
         D: Deserializer<'de>,

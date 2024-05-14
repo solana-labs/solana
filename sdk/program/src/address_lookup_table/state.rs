@@ -1,7 +1,7 @@
 #[cfg(feature = "frozen-abi")]
 use solana_frozen_abi_macro::{AbiEnumVisitor, AbiExample};
 use {
-    serde::{Deserialize, Serialize},
+    serde_derive::{Deserialize, Serialize},
     solana_program::{
         address_lookup_table::error::AddressLookupError,
         clock::Slot,

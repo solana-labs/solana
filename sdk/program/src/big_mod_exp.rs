@@ -62,7 +62,7 @@ mod tests {
 
     #[test]
     fn big_mod_exp_test() {
-        #[derive(serde::Deserialize)]
+        #[derive(serde_derive::Deserialize)]
         #[serde(rename_all = "PascalCase")]
         struct TestCase {
             base: String,

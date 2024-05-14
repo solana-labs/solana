@@ -6,7 +6,7 @@ use {
         pubkey::Pubkey,
         system_program,
     },
-    serde::{Deserialize, Serialize},
+    serde_derive::{Deserialize, Serialize},
 };
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]

@@ -1,7 +1,7 @@
 #![allow(deprecated)]
 
 use {
-    serde::{Deserialize, Serialize},
+    serde_derive::{Deserialize, Serialize},
     solana_sdk::{
         account::Account,
         clock::Slot,

@@ -30,7 +30,8 @@ itertools = { workspace = true }
 lazy_static = { workspace = true }
 merlin = { workspace = true }
 rand = { version = "0.7" }
-serde = { workspace = true, features = ["derive"] }
+serde = { workspace = true }
+serde_derive = { workspace = true }
 serde_json = { workspace = true }
 sha3 = "0.9"
 solana-sdk = { workspace = true }

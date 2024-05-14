@@ -2,7 +2,7 @@ use {
     crate::{args::*, canonicalize_ledger_path, ledger_utils::*},
     clap::{value_t, App, AppSettings, Arg, ArgMatches, SubCommand},
     log::*,
-    serde::{Deserialize, Serialize},
+    serde_derive::{Deserialize, Serialize},
     serde_json::Result,
     solana_bpf_loader_program::{
         create_vm, load_program_from_bytes, serialization::serialize_parameters,

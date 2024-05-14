@@ -4699,7 +4699,6 @@ dependencies = [
  "num-derive 0.4.2",
  "num-traits",
  "rustc_version",
- "serde",
  "solana-frozen-abi",
  "solana-frozen-abi-macro",
  "solana-program",
@@ -4728,6 +4727,7 @@ name = "solana-banks-interface"
 version = "2.0.0"
 dependencies = [
  "serde",
+ "serde_derive",
  "solana-sdk",
  "tarpc",
 ]
@@ -4790,6 +4790,7 @@ version = "2.0.0"
 dependencies = [
  "array-bytes",
  "serde",
+ "serde_derive",
  "serde_json",
  "solana-program",
 ]
@@ -6362,6 +6363,7 @@ dependencies = [
  "percentage",
  "rustc_version",
  "serde",
+ "serde_derive",
  "solana-frozen-abi",
  "solana-frozen-abi-macro",
  "solana-loader-v4-program",
@@ -6665,6 +6667,7 @@ dependencies = [
  "num-traits",
  "rand 0.7.3",
  "serde",
+ "serde_derive",
  "serde_json",
  "sha3 0.9.1",
  "solana-program",

@@ -1,6 +1,6 @@
 use {
     crate::update_manifest::UpdateManifest,
-    serde::{Deserialize, Serialize},
+    serde_derive::{Deserialize, Serialize},
     solana_sdk::pubkey::Pubkey,
     std::{
         fs::{create_dir_all, File},

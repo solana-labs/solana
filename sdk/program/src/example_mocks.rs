@@ -204,7 +204,7 @@ pub mod solana_sdk {
                 message::{Message, VersionedMessage},
                 pubkey::Pubkey,
             },
-            serde::Serialize,
+            serde_derive::Serialize,
         };
 
         pub struct VersionedTransaction {

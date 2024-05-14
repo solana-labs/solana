@@ -2,7 +2,7 @@
 use {
     clap::{crate_description, crate_name, crate_version, Arg, ArgMatches, Command},
     rand::{thread_rng, Rng},
-    serde::{Deserialize, Serialize},
+    serde_derive::{Deserialize, Serialize},
     std::{fs, io, path::PathBuf},
 };
 

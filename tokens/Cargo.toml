@@ -18,7 +18,8 @@ ctrlc = { workspace = true, features = ["termination"] }
 indexmap = { workspace = true }
 indicatif = { workspace = true }
 pickledb = { workspace = true, features = ["yaml"] }
-serde = { workspace = true, features = ["derive"] }
+serde = { workspace = true }
+serde_derive = { workspace = true }
 solana-account-decoder = { workspace = true }
 solana-clap-utils = { workspace = true }
 solana-cli-config = { workspace = true }

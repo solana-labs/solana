@@ -542,22 +542,22 @@ mod tests {
     type TestTypeAlias = i32;
 
     #[frozen_abi(digest = "Apwkp9Ah9zKirzwuSzVoU9QRc43EghpkD1nGVakJLfUY")]
-    #[derive(Serialize, AbiExample)]
+    #[derive(serde_derive::Serialize, AbiExample)]
     struct TestStruct {
         test_field: i8,
         test_field2: i8,
     }
 
     #[frozen_abi(digest = "4LbuvQLX78XPbm4hqqZcHFHpseDJcw4qZL9EUZXSi2Ss")]
-    #[derive(Serialize, AbiExample)]
+    #[derive(serde_derive::Serialize, AbiExample)]
     struct TestTupleStruct(i8, i8);
 
     #[frozen_abi(digest = "FNHa6mNYJZa59Fwbipep5dXRXcFreaDHn9jEUZEH1YLv")]
-    #[derive(Serialize, AbiExample)]
+    #[derive(serde_derive::Serialize, AbiExample)]
     struct TestNewtypeStruct(i8);
 
     #[frozen_abi(digest = "Hbs1X2X7TF2gFEfsspwfZ1JKr8ZGbLY3uidQBebqcMYt")]
-    #[derive(Serialize, AbiExample)]
+    #[derive(serde_derive::Serialize, AbiExample)]
     struct Foo<'a> {
         #[serde(with = "serde_bytes")]
         data1: Vec<u8>,
@@ -568,21 +568,21 @@ mod tests {
     }
 
     #[frozen_abi(digest = "5qio5qYurHDv6fq5kcwP2ue2RBEazSZF8CPk2kUuwC2j")]
-    #[derive(Serialize, AbiExample)]
+    #[derive(serde_derive::Serialize, AbiExample)]
     struct TestStructReversed {
         test_field2: i8,
         test_field: i8,
     }
 
     #[frozen_abi(digest = "DLLrTWprsMjdJGR447A4mui9HpqxbKdsFXBfaWPcwhny")]
-    #[derive(Serialize, AbiExample)]
+    #[derive(serde_derive::Serialize, AbiExample)]
     struct TestStructAnotherType {
         test_field: i16,
         test_field2: i8,
     }
 
     #[frozen_abi(digest = "GMeECsxg37a5qznstWXeeX3d6HXs6j12oB4SKaZZuNJk")]
-    #[derive(Serialize, AbiExample)]
+    #[derive(serde_derive::Serialize, AbiExample)]
     struct TestNest {
         nested_field: [TestStruct; 5],
     }
@@ -591,26 +591,26 @@ mod tests {
     type TestUnitStruct = std::marker::PhantomData<i8>;
 
     #[frozen_abi(digest = "6kj3mPXbzWTwZho48kZWxZjuseLU2oiqhbpqca4DmcRq")]
-    #[derive(Serialize, AbiExample, AbiEnumVisitor)]
+    #[derive(serde_derive::Serialize, AbiExample, AbiEnumVisitor)]
     enum TestEnum {
         Variant1,
         Variant2,
     }
 
     #[frozen_abi(digest = "3WqYwnbQEdu6iPZi5LJa2b5kw55hxBtZdqFqiViFCKPo")]
-    #[derive(Serialize, AbiExample, AbiEnumVisitor)]
+    #[derive(serde_derive::Serialize, AbiExample, AbiEnumVisitor)]
     enum TestTupleVariant {
         Variant1(u8, u16),
         Variant2(u8, u16),
     }
 
     #[frozen_abi(digest = "4E9gJjvKiETBeZ8dybZPAQ7maaHTHFucmLqgX2m6yrBh")]
-    #[derive(Serialize, AbiExample)]
+    #[derive(serde_derive::Serialize, AbiExample)]
     struct TestVecEnum {
         enums: Vec<TestTupleVariant>,
     }
 
-    #[derive(Serialize, AbiExample)]
+    #[derive(serde_derive::Serialize, AbiExample)]
     struct TestGenericStruct<T: Ord> {
         test_field: T,
     }
@@ -618,7 +618,7 @@ mod tests {
     #[frozen_abi(digest = "2Dr5k3Z513mV4KrGeUfcMwjsVHLmVyLiZarmfnXawEbf")]
     type TestConcreteStruct = TestGenericStruct<i64>;
 
-    #[derive(Serialize, AbiExample, AbiEnumVisitor)]
+    #[derive(serde_derive::Serialize, AbiExample, AbiEnumVisitor)]
     enum TestGenericEnum<T: serde::Serialize + Sized + Ord> {
         TestVariant(T),
     }
@@ -647,7 +647,7 @@ mod tests {
     #[frozen_abi(digest = "7rH7gnEhJ8YouzqPT6VPyUDELvL51DGednSPcoLXG2rg")]
     type TestOptionWithIsize = Option<isize>;
 
-    #[derive(Serialize, AbiExample, AbiEnumVisitor)]
+    #[derive(serde_derive::Serialize, AbiExample, AbiEnumVisitor)]
     enum TestMyOption<T: serde::Serialize + Sized + Ord> {
         None,
         Some(T),
@@ -663,7 +663,7 @@ mod tests {
 
         bitflags::bitflags! {
             #[frozen_abi(digest = "HhKNkaeAd7AohTb8S8sPKjAWwzxWY2DPz5FvkWmx5bSH")]
-            #[derive(Serialize, Deserialize)]
+            #[derive(serde_derive::Serialize, serde_derive::Deserialize)]
             struct TestFlags: u8 {
                 const TestBit = 0b0000_0001;
             }
@@ -688,12 +688,12 @@ mod tests {
 
     mod skip_should_be_same {
         #[frozen_abi(digest = "4LbuvQLX78XPbm4hqqZcHFHpseDJcw4qZL9EUZXSi2Ss")]
-        #[derive(Serialize, AbiExample)]
+        #[derive(serde_derive::Serialize, AbiExample)]
         #[allow(dead_code)]
         struct TestTupleStruct(i8, i8, #[serde(skip)] i8);
 
         #[frozen_abi(digest = "Hk7BYjZ71upWQJAx2PqoNcapggobPmFbMJd34xVdvRso")]
-        #[derive(Serialize, AbiExample)]
+        #[derive(serde_derive::Serialize, AbiExample)]
         struct TestStruct {
             test_field: i8,
             #[serde(skip)]
@@ -701,7 +701,7 @@ mod tests {
         }
 
         #[frozen_abi(digest = "6kj3mPXbzWTwZho48kZWxZjuseLU2oiqhbpqca4DmcRq")]
-        #[derive(Serialize, AbiExample, AbiEnumVisitor)]
+        #[derive(serde_derive::Serialize, AbiExample, AbiEnumVisitor)]
         enum TestEnum {
             Variant1,
             Variant2,
@@ -711,7 +711,7 @@ mod tests {
         }
 
         #[frozen_abi(digest = "3WqYwnbQEdu6iPZi5LJa2b5kw55hxBtZdqFqiViFCKPo")]
-        #[derive(Serialize, AbiExample, AbiEnumVisitor)]
+        #[derive(serde_derive::Serialize, AbiExample, AbiEnumVisitor)]
         enum TestTupleVariant {
             Variant1(u8, u16),
             Variant2(u8, u16, #[serde(skip)] u32),
@@ -719,10 +719,10 @@ mod tests {
     }
 
     #[frozen_abi(digest = "B1PcwZdUfGnxaRid9e6ZwkST3NZ2KUEYobA1DkxWrYLP")]
-    #[derive(Serialize, AbiExample)]
+    #[derive(serde_derive::Serialize, AbiExample)]
     struct TestArcWeak(std::sync::Weak<u64>);
 
     #[frozen_abi(digest = "4R8uCLR1BVU1aFgkSaNyKcFD1FeM6rGdsjbJBFpnqx4v")]
-    #[derive(Serialize, AbiExample)]
+    #[derive(serde_derive::Serialize, AbiExample)]
     struct TestRcWeak(std::rc::Weak<u64>);
 }
