@@ -4033,7 +4033,7 @@ fn test_zero_signatures() {
     let mut transfer_instruction = system_instruction::transfer(&mint_keypair.pubkey(), &key, 0);
     transfer_instruction.accounts[0].is_signer = false;
     let message = Message::new(&[transfer_instruction], None);
-    let tx = Transaction::new(&[&Keypair::new(); 0], message, bank.last_blockhash());
+    let tx = Transaction::new(&Vec::<&Keypair>::new(), message, bank.last_blockhash());
 
     assert_eq!(
         bank.process_transaction(&tx),

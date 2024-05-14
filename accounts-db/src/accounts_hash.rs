@@ -1647,7 +1647,7 @@ mod tests {
         let (hashes, lamports) =
             accounts_hash.de_dup_accounts(vec, &mut HashStats::default(), one_range());
         assert_eq!(
-            vec![Hash::default(); 0],
+            Vec::<Hash>::new(),
             get_vec_vec(hashes)
                 .into_iter()
                 .flatten()
@@ -1663,12 +1663,12 @@ mod tests {
 
         let (hashes, lamports) =
             accounts_hash.de_dup_accounts_in_parallel(&[], 1, 1, &HashStats::default());
-        assert_eq!(vec![Hash::default(); 0], get_vec(hashes));
+        assert_eq!(Vec::<Hash>::new(), get_vec(hashes));
         assert_eq!(lamports, 0);
 
         let (hashes, lamports) =
             accounts_hash.de_dup_accounts_in_parallel(&[], 2, 1, &HashStats::default());
-        assert_eq!(vec![Hash::default(); 0], get_vec(hashes));
+        assert_eq!(Vec::<Hash>::new(), get_vec(hashes));
         assert_eq!(lamports, 0);
     }
 
