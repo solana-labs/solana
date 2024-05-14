@@ -992,55 +992,6 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .help("Enable the unstable RPC PubSub `voteSubscribe` subscription"),
         )
         .arg(
-            Arg::with_name("rpc_pubsub_max_connections")
-                .long("rpc-pubsub-max-connections")
-                .value_name("NUMBER")
-                .takes_value(true)
-                .validator(is_parsable::<usize>)
-                .hidden(hidden_unless_forced())
-                .help(
-                    "The maximum number of connections that RPC PubSub will support. This is a \
-                     hard limit and no new connections beyond this limit can be made until an old \
-                     connection is dropped. (Obsolete)",
-                ),
-        )
-        .arg(
-            Arg::with_name("rpc_pubsub_max_fragment_size")
-                .long("rpc-pubsub-max-fragment-size")
-                .value_name("BYTES")
-                .takes_value(true)
-                .validator(is_parsable::<usize>)
-                .hidden(hidden_unless_forced())
-                .help(
-                    "The maximum length in bytes of acceptable incoming frames. Messages longer \
-                     than this will be rejected. (Obsolete)",
-                ),
-        )
-        .arg(
-            Arg::with_name("rpc_pubsub_max_in_buffer_capacity")
-                .long("rpc-pubsub-max-in-buffer-capacity")
-                .value_name("BYTES")
-                .takes_value(true)
-                .validator(is_parsable::<usize>)
-                .hidden(hidden_unless_forced())
-                .help(
-                    "The maximum size in bytes to which the incoming websocket buffer can grow. \
-                     (Obsolete)",
-                ),
-        )
-        .arg(
-            Arg::with_name("rpc_pubsub_max_out_buffer_capacity")
-                .long("rpc-pubsub-max-out-buffer-capacity")
-                .value_name("BYTES")
-                .takes_value(true)
-                .validator(is_parsable::<usize>)
-                .hidden(hidden_unless_forced())
-                .help(
-                    "The maximum size in bytes to which the outgoing websocket buffer can grow. \
-                     (Obsolete)",
-                ),
-        )
-        .arg(
             Arg::with_name("rpc_pubsub_max_active_subscriptions")
                 .long("rpc-pubsub-max-active-subscriptions")
                 .takes_value(true)
@@ -2124,6 +2075,37 @@ fn deprecated_arguments() -> Vec<DeprecatedArg> {
         .value_name("ROCKSDB_MAX_COMPACTION_JITTER_SLOTS")
         .takes_value(true)
         .help("Introduce jitter into the compaction to offset compaction operation"));
+    add_arg!(Arg::with_name("rpc_pubsub_max_connections")
+        .long("rpc-pubsub-max-connections")
+        .value_name("NUMBER")
+        .takes_value(true)
+        .validator(is_parsable::<usize>)
+        .help(
+            "The maximum number of connections that RPC PubSub will support. This is a \
+             hard limit and no new connections beyond this limit can be made until an old \
+             connection is dropped."
+        ));
+    add_arg!(Arg::with_name("rpc_pubsub_max_fragment_size")
+        .long("rpc-pubsub-max-fragment-size")
+        .value_name("BYTES")
+        .takes_value(true)
+        .validator(is_parsable::<usize>)
+        .help(
+            "The maximum length in bytes of acceptable incoming frames. Messages longer \
+             than this will be rejected"
+        ));
+    add_arg!(Arg::with_name("rpc_pubsub_max_in_buffer_capacity")
+        .long("rpc-pubsub-max-in-buffer-capacity")
+        .value_name("BYTES")
+        .takes_value(true)
+        .validator(is_parsable::<usize>)
+        .help("The maximum size in bytes to which the incoming websocket buffer can grow."));
+    add_arg!(Arg::with_name("rpc_pubsub_max_out_buffer_capacity")
+        .long("rpc-pubsub-max-out-buffer-capacity")
+        .value_name("BYTES")
+        .takes_value(true)
+        .validator(is_parsable::<usize>)
+        .help("The maximum size in bytes to which the outgoing websocket buffer can grow."));
     add_arg!(
         Arg::with_name("skip_poh_verify")
             .long("skip-poh-verify")
