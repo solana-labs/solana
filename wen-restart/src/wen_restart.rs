@@ -185,6 +185,7 @@ pub(crate) enum WenRestartProgressInternalState {
         new_root_slot: Slot,
         my_snapshot: Option<GenerateSnapshotRecord>,
     },
+    WaitingForSupermajority,
     Done,
 }
 
@@ -797,7 +798,53 @@ pub struct WenRestartConfig {
     pub exit: Arc<AtomicBool>,
 }
 
-pub fn wait_for_wen_restart(config: WenRestartConfig) -> Result<()> {
+pub fn wen_restart_is_in_phase_one(records_path: &Option<PathBuf>) -> bool {
+    if let Some(path) = records_path {
+        if let Ok(progress) = read_wen_restart_records(path) {
+            progress.state() != RestartState::WaitingForSupermajority
+                && progress.state() != RestartState::Done
+        } else {
+            // When wen_restart has just begin the proto file might not exist yet.
+            true
+        }
+    } else {
+        false
+    }
+}
+
+pub fn wen_restart_wait_for_supermajority_bank_id(
+    records_path: &Option<PathBuf>,
+) -> Result<(Option<Slot>, Option<Hash>)> {
+    if let Some(path) = records_path {
+        if let Ok(progress) = read_wen_restart_records(path) {
+            let state = progress.state();
+            if state != RestartState::WaitingForSupermajority {
+                return Ok((None, None));
+            }
+            if let Some(my_snapshot) = &progress.my_snapshot {
+                Ok((
+                    Some(my_snapshot.slot),
+                    Some(Hash::from_str(&my_snapshot.bankhash)?),
+                ))
+            } else {
+                Err(WenRestartError::UnexpectedState(RestartState::WaitingForSupermajority).into())
+            }
+        } else {
+            Ok((None, None))
+        }
+    } else {
+        Ok((None, None))
+    }
+}
+
+pub fn wen_restart_mark_done(records_path: &PathBuf) -> Result<()> {
+    let mut progress = read_wen_restart_records(records_path)?;
+    progress.set_state(RestartState::Done);
+    write_wen_restart_records(records_path, &progress)
+}
+
+// Returns whether a restart is needed if there is no error.
+pub fn wait_for_wen_restart_phase_one(config: WenRestartConfig) -> Result<()> {
     let (mut state, mut progress) = initialize(
         &config.wen_restart_path,
         config.last_vote.clone(),
@@ -903,7 +950,12 @@ pub fn wait_for_wen_restart(config: WenRestartConfig) -> Result<()> {
                     my_snapshot: Some(snapshot_record),
                 }
             }
-            WenRestartProgressInternalState::Done => return Ok(()),
+            // Proceed to restart if we are ready to wait for supermajority.
+            WenRestartProgressInternalState::WaitingForSupermajority => return Ok(()),
+            // If everything is done, do not restart and proceed.
+            WenRestartProgressInternalState::Done => {
+                return Err(WenRestartError::UnexpectedState(RestartState::Done).into())
+            }
         };
         state = increment_and_write_wen_restart_records(
             &config.wen_restart_path,
@@ -976,12 +1028,18 @@ pub(crate) fn increment_and_write_wen_restart_records(
             my_snapshot,
         } => {
             if let Some(my_snapshot) = my_snapshot {
-                progress.set_state(RestartState::Done);
+                progress.set_state(RestartState::WaitingForSupermajority);
                 progress.my_snapshot = Some(my_snapshot.clone());
-                WenRestartProgressInternalState::Done
+                WenRestartProgressInternalState::WaitingForSupermajority
             } else {
                 return Err(WenRestartError::UnexpectedState(RestartState::Done).into());
             }
+        }
+        // WaitingForSupermajority should be handled earlier in wait_for_supermajority()
+        WenRestartProgressInternalState::WaitingForSupermajority => {
+            return Err(
+                WenRestartError::UnexpectedState(RestartState::WaitingForSupermajority).into(),
+            )
         }
         WenRestartProgressInternalState::Done => {
             return Err(WenRestartError::UnexpectedState(RestartState::Done).into())
@@ -1121,6 +1179,23 @@ pub(crate) fn write_wen_restart_records(
     new_progress.encode(&mut buf)?;
     file.write_all(&buf)?;
     Ok(())
+}
+
+#[cfg(feature = "dev-context-only-utils")]
+pub fn write_wen_restart_wait_for_supermajority_record(
+    records_path: &PathBuf,
+    slot: Slot,
+    hash: Hash,
+) {
+    let mut progress = WenRestartProgress::default();
+    progress.set_state(RestartState::WaitingForSupermajority);
+    progress.my_snapshot = Some(GenerateSnapshotRecord {
+        slot,
+        bankhash: hash.to_string(),
+        path: "/fake/snapshot/path".to_string(),
+        shred_version: 101,
+    });
+    write_wen_restart_records(records_path, &progress).unwrap();
 }
 
 #[cfg(test)]
@@ -1404,7 +1479,7 @@ mod tests {
         let wen_restart_thread_handle = Builder::new()
             .name("solana-wen-restart".to_string())
             .spawn(move || {
-                let _ = wait_for_wen_restart(wen_restart_config).is_ok();
+                let _ = wait_for_wen_restart_phase_one(wen_restart_config).is_ok();
             })
             .unwrap();
         wait_on_expected_progress_with_timeout(
@@ -1472,7 +1547,7 @@ mod tests {
         let wen_restart_thread_handle = Builder::new()
             .name("solana-wen-restart".to_string())
             .spawn(move || {
-                assert!(wait_for_wen_restart(wen_restart_config).is_ok());
+                assert!(wait_for_wen_restart_phase_one(wen_restart_config).is_ok());
             })
             .unwrap();
         let mut rng = rand::thread_rng();
@@ -1573,7 +1648,7 @@ mod tests {
         assert_eq!(
             progress,
             WenRestartProgress {
-                state: RestartState::Done.into(),
+                state: RestartState::WaitingForSupermajority.into(),
                 my_last_voted_fork_slots: Some(LastVotedForkSlotsRecord {
                     last_voted_fork_slots: test_state.last_voted_fork_slots,
                     last_vote_bankhash: last_vote_bankhash.to_string(),
@@ -2099,7 +2174,7 @@ mod tests {
                     new_root_slot: 1,
                     my_snapshot: my_snapshot.clone(),
                 },
-                WenRestartProgressInternalState::Done,
+                WenRestartProgressInternalState::WaitingForSupermajority,
                 WenRestartProgress {
                     state: RestartState::HeaviestFork.into(),
                     my_last_voted_fork_slots: my_last_voted_fork_slots.clone(),
@@ -2109,7 +2184,7 @@ mod tests {
                     ..Default::default()
                 },
                 WenRestartProgress {
-                    state: RestartState::Done.into(),
+                    state: RestartState::WaitingForSupermajority.into(),
                     my_last_voted_fork_slots: my_last_voted_fork_slots.clone(),
                     last_voted_fork_slots_aggregate: last_voted_fork_slots_aggregate.clone(),
                     my_heaviest_fork: my_heaviest_fork.clone(),
@@ -2530,5 +2605,96 @@ mod tests {
             .unwrap(),
             WenRestartError::BlockNotFound(empty_slot),
         );
+    }
+
+    #[test]
+    fn test_wen_restart_is_in_phase_one() {
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        // Proto path not given means wen_restart is not configured.
+        assert!(!wen_restart_is_in_phase_one(&None));
+        let proto_path = ledger_path.into_path().join("wen_restart_status.proto");
+        let proto_path_option = Some(proto_path.clone());
+        // No file means in init phase.
+        assert!(wen_restart_is_in_phase_one(&proto_path_option));
+        let mut progress = WenRestartProgress {
+            state: RestartState::LastVotedForkSlots.into(),
+            ..Default::default()
+        };
+        assert!(write_wen_restart_records(&proto_path, &progress).is_ok());
+        assert!(wen_restart_is_in_phase_one(&proto_path_option));
+        progress.set_state(RestartState::WaitingForSupermajority);
+        assert!(write_wen_restart_records(&proto_path, &progress).is_ok());
+        assert!(!wen_restart_is_in_phase_one(&proto_path_option));
+        progress.set_state(RestartState::Done);
+        assert!(write_wen_restart_records(&proto_path, &progress).is_ok());
+        assert!(!wen_restart_is_in_phase_one(&proto_path_option));
+    }
+
+    #[test]
+    fn test_wen_restart_wait_for_supermajority_bank_id() {
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        // Proto path not given means wen_restart is not configured.
+        assert_eq!(
+            wen_restart_wait_for_supermajority_bank_id(&None).unwrap(),
+            (None, None)
+        );
+        let proto_path = ledger_path.into_path().join("wen_restart_status.proto");
+        let proto_path_option = Some(proto_path.clone());
+        // No file means in init phase.
+        assert_eq!(
+            wen_restart_wait_for_supermajority_bank_id(&proto_path_option).unwrap(),
+            (None, None)
+        );
+        let mut progress = WenRestartProgress {
+            state: RestartState::WaitingForSupermajority.into(),
+            ..Default::default()
+        };
+        // Correct state but missing my_snapshot leads to error.
+        assert!(write_wen_restart_records(&proto_path, &progress).is_ok());
+        assert_eq!(
+            wen_restart_wait_for_supermajority_bank_id(&proto_path_option)
+                .unwrap_err()
+                .downcast::<WenRestartError>()
+                .unwrap(),
+            WenRestartError::UnexpectedState(RestartState::WaitingForSupermajority)
+        );
+        let new_bankhash = Hash::new_unique();
+        progress.my_snapshot = Some(GenerateSnapshotRecord {
+            slot: 1,
+            bankhash: new_bankhash.to_string(),
+            path: "snapshot_1".to_string(),
+            shred_version: SHRED_VERSION as u32,
+        });
+        assert!(write_wen_restart_records(&proto_path, &progress).is_ok());
+        assert_eq!(
+            wen_restart_wait_for_supermajority_bank_id(&proto_path_option).unwrap(),
+            (Some(1), Some(new_bankhash))
+        );
+    }
+
+    #[test]
+    fn test_wen_restart_mark_done() {
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        // Fail if proto file doesn't exist
+        let proto_path = ledger_path.into_path().join("wen_restart_status.proto");
+        assert_eq!(
+            wen_restart_mark_done(&proto_path)
+                .unwrap_err()
+                .downcast::<std::io::Error>()
+                .unwrap()
+                .kind(),
+            std::io::ErrorKind::NotFound
+        );
+        assert!(write_wen_restart_records(
+            &proto_path,
+            &WenRestartProgress {
+                state: RestartState::WaitingForSupermajority.into(),
+                ..Default::default()
+            }
+        )
+        .is_ok());
+        assert!(wen_restart_mark_done(&proto_path).is_ok());
+        let progress = read_wen_restart_records(&proto_path).unwrap();
+        assert_eq!(progress.state(), RestartState::Done);
     }
 }
