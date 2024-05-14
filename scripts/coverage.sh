@@ -35,8 +35,6 @@ fi
 
 # Clean up
 rm -rf "$here/../target/cov/$COMMIT_HASH"
-find "$here/.." -type f -name '*.prof*' -exec rm {} +
-find "$here/.." -type f -name '*lcov*' -exec rm {} +
 
 # https://doc.rust-lang.org/rustc/instrument-coverage.html
 export RUSTFLAGS="-C instrument-coverage $RUSTFLAGS"
@@ -54,12 +52,17 @@ TEST_ARGS=(
   --skip shred::merkle::test::test_recover_merkle_shreds::
 )
 
-cargo +"$rust_nightly" test --target-dir "$here/../target/cov" "${PACKAGES[@]}" -- "${TEST_ARGS[@]}"
+# Most verbose log level (trace) is enabled for all solana code to make log!
+# macro code green always. Also, forcibly discard the vast amount of log by
+# redirecting the stderr altogether on CI, where all tests are run unlike
+# developing.
+RUST_LOG="solana=trace,agave=trace,$RUST_LOG" INTERCEPT_OUTPUT=/dev/null "$here/../ci/intercept.sh" \
+  cargo +"$rust_nightly" test --target-dir "$here/../target/cov" "${PACKAGES[@]}" -- "${TEST_ARGS[@]}"
 
 # Generate test reports
 echo "--- grcov"
 grcov_common_args=(
-  "$here/.."
+  "$here/../target/cov/${COMMIT_HASH}"
   --source-dir "$here/.."
   --binary-path "$here/../target/cov/debug"
   --llvm
@@ -69,7 +72,6 @@ grcov_common_args=(
   --ignore upload-perf\*
   --ignore bench-streamer\*
   --ignore local-cluster\*
-  --ignore-not-existing
 )
 
 grcov "${grcov_common_args[@]}" -t html -o "$here/../target/cov/${COMMIT_HASH}/coverage/html"
