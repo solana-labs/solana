@@ -366,7 +366,7 @@ impl StandardBroadcastRun {
     ) {
         // Insert shreds into blockstore
         let insert_shreds_start = Instant::now();
-        let mut shreds = Arc::try_unwrap(shreds).unwrap_or_else(|shreds| (*shreds).clone());
+        let mut shreds = Arc::unwrap_or_clone(shreds);
         // The first data shred is inserted synchronously.
         // https://github.com/solana-labs/solana/blob/92a0b310c/turbine/src/broadcast_stage/standard_broadcast_run.rs#L268-L283
         if let Some(shred) = shreds.first() {
