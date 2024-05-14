@@ -491,7 +491,7 @@ pub struct BankFieldsToDeserialize {
 #[derive(Debug)]
 pub(crate) struct BankFieldsToSerialize<'a> {
     pub(crate) blockhash_queue: &'a RwLock<BlockhashQueue>,
-    pub(crate) ancestors: &'a AncestorsForSerialization,
+    pub(crate) ancestors: AncestorsForSerialization,
     pub(crate) hash: Hash,
     pub(crate) parent_hash: Hash,
     pub(crate) parent_slot: Slot,
@@ -1716,13 +1716,10 @@ impl Bank {
     }
 
     /// Return subset of bank fields representing serializable state
-    pub(crate) fn get_fields_to_serialize<'a>(
-        &'a self,
-        ancestors: &'a HashMap<Slot, usize>,
-    ) -> BankFieldsToSerialize<'a> {
+    pub(crate) fn get_fields_to_serialize(&self) -> BankFieldsToSerialize {
         BankFieldsToSerialize {
             blockhash_queue: &self.blockhash_queue,
-            ancestors,
+            ancestors: AncestorsForSerialization::from(&self.ancestors),
             hash: *self.hash.read().unwrap(),
             parent_hash: self.parent_hash,
             parent_slot: self.parent_slot,

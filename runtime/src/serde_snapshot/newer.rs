@@ -105,7 +105,7 @@ impl From<DeserializableVersionedBank> for BankFieldsToDeserialize {
 #[derive(Serialize)]
 struct SerializableVersionedBank<'a> {
     blockhash_queue: &'a RwLock<BlockhashQueue>,
-    ancestors: &'a AncestorsForSerialization,
+    ancestors: AncestorsForSerialization,
     hash: Hash,
     parent_hash: Hash,
     parent_slot: Slot,
@@ -194,8 +194,7 @@ impl<'a> TypeContext<'a> for Context {
     where
         Self: std::marker::Sized,
     {
-        let ancestors = HashMap::from(&serializable_bank.bank.ancestors);
-        let fields = serializable_bank.bank.get_fields_to_serialize(&ancestors);
+        let fields = serializable_bank.bank.get_fields_to_serialize();
         let lamports_per_signature = fields.fee_rate_governor.lamports_per_signature;
         let bank_fields_to_serialize = (
             SerializableVersionedBank::from(fields),
@@ -226,8 +225,7 @@ impl<'a> TypeContext<'a> for Context {
     where
         Self: std::marker::Sized,
     {
-        let ancestors = HashMap::from(&serializable_bank.bank.ancestors);
-        let fields = serializable_bank.bank.get_fields_to_serialize(&ancestors);
+        let fields = serializable_bank.bank.get_fields_to_serialize();
         (
             SerializableVersionedBank::from(fields),
             SerializableAccountsDb::<'a, Self> {
@@ -370,7 +368,7 @@ impl<'a> TypeContext<'a> for Context {
 
         let bank = SerializableVersionedBank {
             blockhash_queue: &blockhash_queue,
-            ancestors: &rhs.ancestors,
+            ancestors: rhs.ancestors,
             hash: rhs.hash,
             parent_hash: rhs.parent_hash,
             parent_slot: rhs.parent_slot,
