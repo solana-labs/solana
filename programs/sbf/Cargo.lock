@@ -5439,7 +5439,6 @@ dependencies = [
  "solana-sdk-macro",
  "thiserror",
  "wasm-bindgen",
- "zeroize",
 ]
 
 [[package]]

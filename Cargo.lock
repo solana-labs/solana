@@ -6697,7 +6697,6 @@ dependencies = [
  "static_assertions",
  "thiserror",
  "wasm-bindgen",
- "zeroize",
 ]
 
 [[package]]

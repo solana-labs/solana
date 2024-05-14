@@ -60,7 +60,6 @@ light-poseidon = { workspace = true }
 num-bigint = { workspace = true }
 rand = { workspace = true }
 wasm-bindgen = { workspace = true }
-zeroize = { workspace = true, features = ["default", "zeroize_derive"] }
 
 [target.'cfg(not(target_os = "solana"))'.dev-dependencies]
 arbitrary = { workspace = true, features = ["derive"] }
