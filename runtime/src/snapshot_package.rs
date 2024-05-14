@@ -54,8 +54,8 @@ impl AccountsPackage {
         package_kind: AccountsPackageKind,
         bank: &Bank,
         bank_snapshot_info: &BankSnapshotInfo,
-        full_snapshot_archives_dir: impl AsRef<Path>,
-        incremental_snapshot_archives_dir: impl AsRef<Path>,
+        full_snapshot_archives_dir: impl Into<PathBuf>,
+        incremental_snapshot_archives_dir: impl Into<PathBuf>,
         snapshot_storages: Vec<Arc<AccountStorageEntry>>,
         archive_format: ArchiveFormat,
         snapshot_version: SnapshotVersion,
@@ -81,10 +81,8 @@ impl AccountsPackage {
             bank_snapshot_dir: bank_snapshot_info.snapshot_dir.clone(),
             archive_format,
             snapshot_version,
-            full_snapshot_archives_dir: full_snapshot_archives_dir.as_ref().to_path_buf(),
-            incremental_snapshot_archives_dir: incremental_snapshot_archives_dir
-                .as_ref()
-                .to_path_buf(),
+            full_snapshot_archives_dir: full_snapshot_archives_dir.into(),
+            incremental_snapshot_archives_dir: incremental_snapshot_archives_dir.into(),
             epoch_accounts_hash: bank.get_epoch_accounts_hash_to_serialize(),
         };
         Self::_new(
