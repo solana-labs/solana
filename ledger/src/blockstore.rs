@@ -6737,10 +6737,7 @@ pub mod tests {
             let (mut shred, entry) =
                 make_slot_entries(slot, parent_slot, 1, /*merkle_variant:*/ false);
             num_shreds_per_slot = shred.len() as u64;
-            shred
-                .iter_mut()
-                .enumerate()
-                .for_each(|(_, shred)| shred.set_index(0));
+            shred.iter_mut().for_each(|shred| shred.set_index(0));
             shreds.extend(shred);
             entries.extend(entry);
         }
