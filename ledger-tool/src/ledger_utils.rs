@@ -377,7 +377,7 @@ pub fn load_and_process_ledger(
             enable_rpc_transaction_history,
             transaction_notifier,
             tss_blockstore,
-            false,
+            arg_matches.is_present("enable_extended_tx_metadata_storage"),
             exit.clone(),
         );
         (
