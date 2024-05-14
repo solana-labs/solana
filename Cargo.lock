@@ -6673,7 +6673,6 @@ dependencies = [
  "itertools",
  "js-sys",
  "lazy_static",
- "libc",
  "libsecp256k1",
  "light-poseidon",
  "log",

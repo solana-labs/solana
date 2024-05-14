@@ -55,7 +55,6 @@ base64 = { workspace = true, features = ["alloc", "std"] }
 bitflags = { workspace = true }
 curve25519-dalek = { workspace = true }
 itertools = { workspace = true }
-libc = { workspace = true, features = ["extra_traits"] }
 libsecp256k1 = { workspace = true }
 light-poseidon = { workspace = true }
 num-bigint = { workspace = true }
