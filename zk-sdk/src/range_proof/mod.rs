@@ -12,11 +12,11 @@
 
 #![allow(dead_code)]
 
+use crate::{RISTRETTO_POINT_LEN, SCALAR_LEN};
 #[cfg(not(target_os = "solana"))]
 use {
-    crate::encryption::pedersen::{Pedersen, PedersenCommitment, PedersenOpening},
     crate::{
-        encryption::pedersen::{G, H},
+        encryption::pedersen::{Pedersen, PedersenCommitment, PedersenOpening, G, H},
         range_proof::{
             errors::{RangeProofGenerationError, RangeProofVerificationError},
             generators::RangeProofGens,
@@ -37,12 +37,39 @@ use {
 };
 
 pub mod errors;
+pub mod pod;
+
 #[cfg(not(target_os = "solana"))]
 pub mod generators;
 #[cfg(not(target_os = "solana"))]
 pub mod inner_product;
 #[cfg(not(target_os = "solana"))]
 pub mod util;
+
+/// Byte length of a range proof excluding the inner-product proof component
+pub const RANGE_PROOF_MODULO_INNER_PRODUCT_PROOF_LEN: usize =
+    5 * RISTRETTO_POINT_LEN + 2 * SCALAR_LEN;
+
+/// Byte length of an inner-product proof for a vector of length 64
+pub const INNER_PRODUCT_PROOF_U64_LEN: usize = 448;
+
+/// Byte length of a range proof for an unsigned 64-bit number
+pub const RANGE_PROOF_U64_LEN: usize =
+    INNER_PRODUCT_PROOF_U64_LEN + RANGE_PROOF_MODULO_INNER_PRODUCT_PROOF_LEN;
+
+/// Byte length of an inner-product proof for a vector of length 128
+pub const INNER_PRODUCT_PROOF_U128_LEN: usize = 512;
+
+/// Byte length of a range proof for an unsigned 128-bit number
+pub const RANGE_PROOF_U128_LEN: usize =
+    INNER_PRODUCT_PROOF_U128_LEN + RANGE_PROOF_MODULO_INNER_PRODUCT_PROOF_LEN;
+
+/// Byte length of an inner-product proof for a vector of length 256
+pub const INNER_PRODUCT_PROOF_U256_LEN: usize = 576;
+
+/// Byte length of a range proof for an unsigned 256-bit number
+pub const RANGE_PROOF_U256_LEN: usize =
+    INNER_PRODUCT_PROOF_U256_LEN + RANGE_PROOF_MODULO_INNER_PRODUCT_PROOF_LEN;
 
 #[allow(non_snake_case)]
 #[cfg(not(target_os = "solana"))]
