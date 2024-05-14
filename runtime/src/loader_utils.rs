@@ -1,5 +1,6 @@
+#![cfg(feature = "dev-context-only-utils")]
 use {
-    crate::{bank::Bank, bank_client::BankClient},
+    crate::{bank::Bank, bank_client::BankClient, bank_forks::BankForks},
     serde::Serialize,
     solana_sdk::{
         account::{AccountSharedData, WritableAccount},
@@ -13,7 +14,13 @@ use {
         signature::{Keypair, Signer},
         system_instruction,
     },
-    std::{env, fs::File, io::Read, path::PathBuf},
+    std::{
+        env,
+        fs::File,
+        io::Read,
+        path::PathBuf,
+        sync::{Arc, RwLock},
+    },
 };
 
 const CHUNK_SIZE: usize = 512; // Size of chunk just needs to fit into tx
@@ -204,6 +211,48 @@ pub fn load_upgradeable_program(
         slot: 1,
         ..Clock::default()
     });
+}
+
+pub fn load_upgradeable_program_wrapper(
+    bank_client: &BankClient,
+    mint_keypair: &Keypair,
+    authority_keypair: &Keypair,
+    name: &str,
+) -> Pubkey {
+    let buffer_keypair = Keypair::new();
+    let program_keypair = Keypair::new();
+    load_upgradeable_program(
+        bank_client,
+        mint_keypair,
+        &buffer_keypair,
+        &program_keypair,
+        authority_keypair,
+        name,
+    );
+    program_keypair.pubkey()
+}
+
+pub fn load_upgradeable_program_and_advance_slot(
+    bank_client: &mut BankClient,
+    bank_forks: &RwLock<BankForks>,
+    mint_keypair: &Keypair,
+    authority_keypair: &Keypair,
+    name: &str,
+) -> (Arc<Bank>, Pubkey) {
+    let program_id =
+        load_upgradeable_program_wrapper(bank_client, mint_keypair, authority_keypair, name);
+
+    // load_upgradeable_program sets clock sysvar to 1, which causes the program to be effective
+    // after 2 slots. They need to be called individually to create the correct fork graph in between.
+    bank_client
+        .advance_slot(1, bank_forks, &Pubkey::default())
+        .expect("Failed to advance the slot");
+
+    let bank = bank_client
+        .advance_slot(1, bank_forks, &Pubkey::default())
+        .expect("Failed to advance the slot");
+
+    (bank, program_id)
 }
 
 pub fn upgrade_program<T: Client>(

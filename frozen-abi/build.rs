@@ -17,11 +17,6 @@ fn main() {
         }
         Channel::Dev => {
             println!("cargo:rustc-cfg=RUSTC_WITH_SPECIALIZATION");
-            // See https://github.com/solana-labs/solana/issues/11055
-            // We may be running the custom `rust-bpf-builder` toolchain,
-            // which currently needs `#![feature(proc_macro_hygiene)]` to
-            // be applied.
-            println!("cargo:rustc-cfg=RUSTC_NEEDS_PROC_MACRO_HYGIENE");
         }
     }
 }

@@ -33,13 +33,26 @@ use {
     std::{
         iter::repeat_with,
         net::{IpAddr, SocketAddr, UdpSocket},
+        // CAUTION: be careful not to introduce any awaits while holding an RwLock.
         sync::{
             atomic::{AtomicBool, AtomicU64, Ordering},
-            Arc, Mutex, MutexGuard, RwLock,
+            Arc, RwLock,
         },
         time::{Duration, Instant},
     },
-    tokio::{task::JoinHandle, time::timeout},
+    tokio::{
+        // CAUTION: It's kind of sketch that we're mixing async and sync locks (see the RwLock above).
+        // This is done so that sync code can also access the stake table.
+        // Make sure we don't hold a sync lock across an await - including the await to
+        // lock an async Mutex. This does not happen now and should not happen as long as we
+        // don't hold an async Mutex and sync RwLock at the same time (currently true)
+        // but if we do, the scope of the RwLock must always be a subset of the async Mutex
+        // (i.e. lock order is always async Mutex -> RwLock). Also, be careful not to
+        // introduce any other awaits while holding the RwLock.
+        sync::{Mutex, MutexGuard},
+        task::JoinHandle,
+        time::timeout,
+    },
 };
 
 const WAIT_FOR_STREAM_TIMEOUT: Duration = Duration::from_millis(100);
@@ -100,7 +113,6 @@ pub fn spawn_server(
     name: &'static str,
     sock: UdpSocket,
     keypair: &Keypair,
-    gossip_host: IpAddr,
     packet_sender: Sender<PacketBatch>,
     exit: Arc<AtomicBool>,
     max_connections_per_peer: usize,
@@ -111,7 +123,7 @@ pub fn spawn_server(
     coalesce: Duration,
 ) -> Result<(Endpoint, Arc<StreamStats>, JoinHandle<()>), QuicServerError> {
     info!("Start {name} quic server on {sock:?}");
-    let (config, _cert) = configure_server(keypair, gossip_host)?;
+    let (config, _cert) = configure_server(keypair)?;
 
     let endpoint = Endpoint::new(
         EndpointConfig::default(),
@@ -384,7 +396,7 @@ fn handle_and_cache_new_connection(
     }
 }
 
-fn prune_unstaked_connections_and_add_new_connection(
+async fn prune_unstaked_connections_and_add_new_connection(
     connection: Connection,
     connection_table: Arc<Mutex<ConnectionTable>>,
     max_connections: usize,
@@ -395,7 +407,7 @@ fn prune_unstaked_connections_and_add_new_connection(
     let stats = params.stats.clone();
     if max_connections > 0 {
         let connection_table_clone = connection_table.clone();
-        let mut connection_table = connection_table.lock().unwrap();
+        let mut connection_table = connection_table.lock().await;
         prune_unstaked_connection_table(&mut connection_table, max_connections, stats);
         handle_and_cache_new_connection(
             connection,
@@ -505,7 +517,8 @@ async fn setup_connection(
 
                 match params.peer_type {
                     ConnectionPeerType::Staked(stake) => {
-                        let mut connection_table_l = staked_connection_table.lock().unwrap();
+                        let mut connection_table_l = staked_connection_table.lock().await;
+
                         if connection_table_l.total_size >= max_staked_connections {
                             let num_pruned =
                                 connection_table_l.prune_random(PRUNE_RANDOM_SAMPLE_SIZE, stake);
@@ -536,7 +549,9 @@ async fn setup_connection(
                                 &params,
                                 wait_for_chunk_timeout,
                                 stream_load_ema.clone(),
-                            ) {
+                            )
+                            .await
+                            {
                                 stats
                                     .connection_added_from_staked_peer
                                     .fetch_add(1, Ordering::Relaxed);
@@ -558,7 +573,9 @@ async fn setup_connection(
                             &params,
                             wait_for_chunk_timeout,
                             stream_load_ema.clone(),
-                        ) {
+                        )
+                        .await
+                        {
                             stats
                                 .connection_added_from_unstaked_peer
                                 .fetch_add(1, Ordering::Relaxed);
@@ -801,7 +818,7 @@ async fn handle_connection(
         }
     }
 
-    let removed_connection_count = connection_table.lock().unwrap().remove_connection(
+    let removed_connection_count = connection_table.lock().await.remove_connection(
         ConnectionTableKey::new(remote_addr.ip(), params.remote_pubkey),
         remote_addr.port(),
         stable_id,
@@ -1127,7 +1144,7 @@ impl ConnectionTable {
             });
             let new_size = e_ref.len();
             if e_ref.is_empty() {
-                e.remove_entry();
+                e.swap_remove_entry();
             }
             let connections_removed = old_size.saturating_sub(new_size);
             self.total_size = self.total_size.saturating_sub(connections_removed);
@@ -1145,7 +1162,7 @@ pub mod test {
         crate::{
             nonblocking::quic::compute_max_allowed_uni_streams,
             quic::{MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS},
-            tls_certificates::new_self_signed_tls_certificate,
+            tls_certificates::new_dummy_x509_certificate,
         },
         assert_matches::assert_matches,
         async_channel::unbounded as async_unbounded,
@@ -1157,7 +1174,7 @@ pub mod test {
             signature::Keypair,
             signer::Signer,
         },
-        std::{collections::HashMap, net::Ipv4Addr},
+        std::collections::HashMap,
         tokio::time::sleep,
     };
 
@@ -1184,9 +1201,7 @@ pub mod test {
     }
 
     pub fn get_client_config(keypair: &Keypair) -> ClientConfig {
-        let ipaddr = IpAddr::V4(Ipv4Addr::LOCALHOST);
-        let (cert, key) = new_self_signed_tls_certificate(keypair, ipaddr)
-            .expect("Failed to generate client certificate");
+        let (cert, key) = new_dummy_x509_certificate(keypair);
 
         let mut crypto = rustls::ClientConfig::builder()
             .with_safe_defaults()
@@ -1222,14 +1237,12 @@ pub mod test {
         let exit = Arc::new(AtomicBool::new(false));
         let (sender, receiver) = unbounded();
         let keypair = Keypair::new();
-        let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(option_staked_nodes.unwrap_or_default()));
         let (_, stats, t) = spawn_server(
             "quic_streamer_test",
             s,
             &keypair,
-            ip,
             sender,
             exit.clone(),
             max_connections_per_peer,
@@ -1658,14 +1671,12 @@ pub mod test {
         let exit = Arc::new(AtomicBool::new(false));
         let (sender, _) = unbounded();
         let keypair = Keypair::new();
-        let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let (_, _, t) = spawn_server(
             "quic_streamer_test",
             s,
             &keypair,
-            ip,
             sender,
             exit.clone(),
             1,
@@ -1689,14 +1700,12 @@ pub mod test {
         let exit = Arc::new(AtomicBool::new(false));
         let (sender, receiver) = unbounded();
         let keypair = Keypair::new();
-        let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let (_, stats, t) = spawn_server(
             "quic_streamer_test",
             s,
             &keypair,
-            ip,
             sender,
             exit.clone(),
             2,

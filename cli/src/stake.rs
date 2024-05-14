@@ -56,6 +56,7 @@ use {
         },
         stake_history::{Epoch, StakeHistory},
         system_instruction::{self, SystemError},
+        system_program,
         sysvar::{clock, stake_history},
         transaction::Transaction,
     },
@@ -1980,15 +1981,26 @@ pub fn process_split_stake(
 
     let rent_exempt_reserve = if !sign_only {
         if let Ok(stake_account) = rpc_client.get_account(&split_stake_account_address) {
-            let err_msg = if stake_account.owner == stake::program::id() {
-                format!("Stake account {split_stake_account_address} already exists")
+            if stake_account.owner == stake::program::id() {
+                return Err(CliError::BadParameter(format!(
+                    "Stake account {split_stake_account_address} already exists"
+                ))
+                .into());
+            } else if stake_account.owner == system_program::id() {
+                if !stake_account.data.is_empty() {
+                    return Err(CliError::BadParameter(format!(
+                        "Account {split_stake_account_address} has data and cannot be used to split stake"
+                    ))
+                    .into());
+                }
+            // if `stake_account`'s owner is the system_program and its data is
+            // empty, `stake_account` is allowed to receive the stake split
             } else {
-                format!(
-                    "Account {split_stake_account_address} already exists and is not a stake \
-                     account"
-                )
-            };
-            return Err(CliError::BadParameter(err_msg).into());
+                return Err(CliError::BadParameter(format!(
+                    "Account {split_stake_account_address} already exists and cannot be used to split stake"
+                ))
+                .into());
+            }
         }
 
         let minimum_balance =
@@ -2874,7 +2886,7 @@ mod tests {
                     no_wait: false,
                     compute_unit_price: None,
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into(),],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap()),],
             },
         );
         let (withdraw_authority_keypair_file, mut tmp_file) = make_tmp_file();
@@ -2924,13 +2936,9 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&stake_authority_keypair_file)
-                        .unwrap()
-                        .into(),
-                    read_keypair_file(&withdraw_authority_keypair_file)
-                        .unwrap()
-                        .into(),
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&stake_authority_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&withdraw_authority_keypair_file).unwrap()),
                 ],
             },
         );
@@ -2977,10 +2985,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&withdraw_authority_keypair_file)
-                        .unwrap()
-                        .into(),
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&withdraw_authority_keypair_file).unwrap()),
                 ],
             },
         );
@@ -3013,7 +3019,7 @@ mod tests {
                     no_wait: false,
                     compute_unit_price: None,
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into(),],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap()),],
             },
         );
         let test_stake_authorize = test_commands.clone().get_matches_from(vec![
@@ -3048,10 +3054,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&stake_authority_keypair_file)
-                        .unwrap()
-                        .into(),
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&stake_authority_keypair_file).unwrap()),
                 ],
             },
         );
@@ -3088,10 +3092,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&withdraw_authority_keypair_file)
-                        .unwrap()
-                        .into(),
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&withdraw_authority_keypair_file).unwrap()),
                 ],
             },
         );
@@ -3124,7 +3126,7 @@ mod tests {
                     no_wait: false,
                     compute_unit_price: None,
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into(),],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap()),],
             },
         );
         let test_stake_authorize = test_commands.clone().get_matches_from(vec![
@@ -3159,10 +3161,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&withdraw_authority_keypair_file)
-                        .unwrap()
-                        .into(),
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&withdraw_authority_keypair_file).unwrap()),
                 ],
             },
         );
@@ -3198,7 +3198,7 @@ mod tests {
                     no_wait: true,
                     compute_unit_price: None,
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap())],
             }
         );
 
@@ -3246,8 +3246,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&authority_keypair_file).unwrap().into(),
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&authority_keypair_file).unwrap()),
                 ],
             },
         );
@@ -3298,14 +3298,10 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&stake_authority_keypair_file)
-                        .unwrap()
-                        .into(),
-                    read_keypair_file(&authority_keypair_file).unwrap().into(),
-                    read_keypair_file(&withdraw_authority_keypair_file)
-                        .unwrap()
-                        .into(),
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&stake_authority_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&authority_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&withdraw_authority_keypair_file).unwrap()),
                 ],
             },
         );
@@ -3352,11 +3348,9 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&withdraw_authority_keypair_file)
-                        .unwrap()
-                        .into(),
-                    read_keypair_file(&authority_keypair_file).unwrap().into(),
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&withdraw_authority_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&authority_keypair_file).unwrap()),
                 ],
             },
         );
@@ -3390,8 +3384,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&authority_keypair_file).unwrap().into(),
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&authority_keypair_file).unwrap()),
                 ],
             },
         );
@@ -3427,11 +3421,9 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&stake_authority_keypair_file)
-                        .unwrap()
-                        .into(),
-                    read_keypair_file(&authority_keypair_file).unwrap().into(),
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&stake_authority_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&authority_keypair_file).unwrap()),
                 ],
             },
         );
@@ -3468,11 +3460,9 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&withdraw_authority_keypair_file)
-                        .unwrap()
-                        .into(),
-                    read_keypair_file(&authority_keypair_file).unwrap().into(),
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&withdraw_authority_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&authority_keypair_file).unwrap()),
                 ],
             },
         );
@@ -3506,8 +3496,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&authority_keypair_file).unwrap().into(),
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&authority_keypair_file).unwrap()),
                 ],
             },
         );
@@ -3543,11 +3533,9 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&withdraw_authority_keypair_file)
-                        .unwrap()
-                        .into(),
-                    read_keypair_file(&authority_keypair_file).unwrap().into(),
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&withdraw_authority_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&authority_keypair_file).unwrap()),
                 ],
             },
         );
@@ -3584,8 +3572,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&authority_keypair_file).unwrap().into(),
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&authority_keypair_file).unwrap()),
                 ],
             }
         );
@@ -3625,7 +3613,7 @@ mod tests {
                     no_wait: false,
                     compute_unit_price: None,
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap())],
             }
         );
         // Test Authorize Subcommand w/ offline feepayer
@@ -3672,8 +3660,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    Presigner::new(&pubkey, &sig).into()
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(Presigner::new(&pubkey, &sig))
                 ],
             }
         );
@@ -3728,9 +3716,9 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    Presigner::new(&pubkey, &sig).into(),
-                    Presigner::new(&pubkey2, &sig2).into(),
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(Presigner::new(&pubkey, &sig)),
+                    Box::new(Presigner::new(&pubkey2, &sig2)),
                 ],
             }
         );
@@ -3769,7 +3757,7 @@ mod tests {
                     no_wait: false,
                     compute_unit_price: None,
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap())],
             }
         );
         // Test Authorize Subcommand w/ nonce
@@ -3817,8 +3805,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    nonce_authority_keypair.into()
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(nonce_authority_keypair)
                 ],
             }
         );
@@ -3860,8 +3848,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&fee_payer_keypair_file).unwrap().into(),
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&fee_payer_keypair_file).unwrap()),
                 ],
             }
         );
@@ -3907,8 +3895,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    Presigner::new(&fee_payer_pubkey, &sig).into()
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(Presigner::new(&fee_payer_pubkey, &sig))
                 ],
             }
         );
@@ -3958,8 +3946,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    stake_account_keypair.into()
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(stake_account_keypair)
                 ],
             }
         );
@@ -3999,8 +3987,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&keypair_file).unwrap().into()
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&keypair_file).unwrap())
                 ],
             }
         );
@@ -4039,9 +4027,9 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    stake_account_keypair.into(),
-                    withdrawer_keypair.into(),
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(stake_account_keypair),
+                    Box::new(withdrawer_keypair),
                 ],
             }
         );
@@ -4112,8 +4100,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    Presigner::new(&offline_pubkey, &offline_sig).into(),
-                    read_keypair_file(&keypair_file).unwrap().into()
+                    Box::new(Presigner::new(&offline_pubkey, &offline_sig)),
+                    Box::new(read_keypair_file(&keypair_file).unwrap())
                 ],
             }
         );
@@ -4145,7 +4133,7 @@ mod tests {
                     redelegation_stake_account: None,
                     compute_unit_price: None,
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap())],
             }
         );
 
@@ -4179,10 +4167,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&stake_authority_keypair_file)
-                        .unwrap()
-                        .into()
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&stake_authority_keypair_file).unwrap())
                 ],
             }
         );
@@ -4213,7 +4199,7 @@ mod tests {
                     redelegation_stake_account: None,
                     compute_unit_price: None,
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap())],
             }
         );
 
@@ -4249,7 +4235,7 @@ mod tests {
                     redelegation_stake_account: None,
                     compute_unit_price: None,
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap())],
             }
         );
 
@@ -4280,7 +4266,7 @@ mod tests {
                     redelegation_stake_account: None,
                     compute_unit_price: None,
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap())],
             }
         );
 
@@ -4322,8 +4308,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    Presigner::new(&key1, &sig1).into()
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(Presigner::new(&key1, &sig1))
                 ],
             }
         );
@@ -4372,9 +4358,9 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    Presigner::new(&key1, &sig1).into(),
-                    Presigner::new(&key2, &sig2).into(),
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(Presigner::new(&key1, &sig1)),
+                    Box::new(Presigner::new(&key2, &sig2)),
                 ],
             }
         );
@@ -4410,8 +4396,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&fee_payer_keypair_file).unwrap().into()
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&fee_payer_keypair_file).unwrap())
                 ],
             }
         );
@@ -4453,10 +4439,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&redelegation_stake_account_keypair_file)
-                        .unwrap()
-                        .into()
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&redelegation_stake_account_keypair_file).unwrap())
                 ],
             }
         );
@@ -4489,7 +4473,7 @@ mod tests {
                     fee_payer: 0,
                     compute_unit_price: None,
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap())],
             }
         );
 
@@ -4523,7 +4507,7 @@ mod tests {
                     fee_payer: 0,
                     compute_unit_price: Some(99),
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap())],
             }
         );
 
@@ -4558,10 +4542,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&stake_authority_keypair_file)
-                        .unwrap()
-                        .into()
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&stake_authority_keypair_file).unwrap())
                 ],
             }
         );
@@ -4597,8 +4579,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&custodian_keypair_file).unwrap().into()
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&custodian_keypair_file).unwrap())
                 ],
             }
         );
@@ -4647,10 +4629,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&stake_authority_keypair_file)
-                        .unwrap()
-                        .into(),
-                    Presigner::new(&offline_pubkey, &offline_sig).into()
+                    Box::new(read_keypair_file(&stake_authority_keypair_file).unwrap()),
+                    Box::new(Presigner::new(&offline_pubkey, &offline_sig))
                 ],
             }
         );
@@ -4678,7 +4658,7 @@ mod tests {
                     fee_payer: 0,
                     compute_unit_price: None,
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap())],
             }
         );
 
@@ -4706,7 +4686,7 @@ mod tests {
                     fee_payer: 0,
                     compute_unit_price: None,
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap())],
             }
         );
 
@@ -4736,10 +4716,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&stake_authority_keypair_file)
-                        .unwrap()
-                        .into()
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&stake_authority_keypair_file).unwrap())
                 ],
             }
         );
@@ -4774,7 +4752,7 @@ mod tests {
                     fee_payer: 0,
                     compute_unit_price: None,
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap())],
             }
         );
 
@@ -4803,7 +4781,7 @@ mod tests {
                     fee_payer: 0,
                     compute_unit_price: None,
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap())],
             }
         );
 
@@ -4843,8 +4821,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    Presigner::new(&key1, &sig1).into()
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(Presigner::new(&key1, &sig1))
                 ],
             }
         );
@@ -4891,9 +4869,9 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    Presigner::new(&key1, &sig1).into(),
-                    Presigner::new(&key2, &sig2).into(),
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(Presigner::new(&key1, &sig1)),
+                    Box::new(Presigner::new(&key2, &sig2)),
                 ],
             }
         );
@@ -4924,8 +4902,8 @@ mod tests {
                     compute_unit_price: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&fee_payer_keypair_file).unwrap().into()
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&fee_payer_keypair_file).unwrap())
                 ],
             }
         );
@@ -4965,10 +4943,8 @@ mod tests {
                     rent_exempt_reserve: None,
                 },
                 signers: vec![
-                    read_keypair_file(&default_keypair_file).unwrap().into(),
-                    read_keypair_file(&split_stake_account_keypair_file)
-                        .unwrap()
-                        .into()
+                    Box::new(read_keypair_file(&default_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&split_stake_account_keypair_file).unwrap())
                 ],
             }
         );
@@ -5033,11 +5009,9 @@ mod tests {
                     rent_exempt_reserve: None,
                 },
                 signers: vec![
-                    Presigner::new(&stake_auth_pubkey, &stake_sig).into(),
-                    Presigner::new(&nonce_auth_pubkey, &nonce_sig).into(),
-                    read_keypair_file(&split_stake_account_keypair_file)
-                        .unwrap()
-                        .into(),
+                    Box::new(Presigner::new(&stake_auth_pubkey, &stake_sig)),
+                    Box::new(Presigner::new(&nonce_auth_pubkey, &nonce_sig)),
+                    Box::new(read_keypair_file(&split_stake_account_keypair_file).unwrap()),
                 ],
             }
         );
@@ -5070,7 +5044,7 @@ mod tests {
                     fee_payer: 0,
                     compute_unit_price: None,
                 },
-                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into(),],
+                signers: vec![Box::new(read_keypair_file(&default_keypair_file).unwrap()),],
             }
         );
     }

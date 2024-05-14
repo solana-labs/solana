@@ -80,7 +80,6 @@ pub fn load(
     genesis_config: &GenesisConfig,
     blockstore: &Blockstore,
     account_paths: Vec<PathBuf>,
-    shrink_paths: Option<Vec<PathBuf>>,
     snapshot_config: Option<&SnapshotConfig>,
     process_options: ProcessOptions,
     transaction_status_sender: Option<&TransactionStatusSender>,
@@ -93,7 +92,6 @@ pub fn load(
         genesis_config,
         blockstore,
         account_paths,
-        shrink_paths,
         snapshot_config,
         &process_options,
         cache_block_meta_sender,
@@ -121,7 +119,6 @@ pub fn load_bank_forks(
     genesis_config: &GenesisConfig,
     blockstore: &Blockstore,
     account_paths: Vec<PathBuf>,
-    shrink_paths: Option<Vec<PathBuf>>,
     snapshot_config: Option<&SnapshotConfig>,
     process_options: &ProcessOptions,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
@@ -181,7 +178,6 @@ pub fn load_bank_forks(
                 incremental_snapshot_archive_info,
                 genesis_config,
                 account_paths,
-                shrink_paths,
                 snapshot_config,
                 process_options,
                 accounts_update_notifier,
@@ -231,7 +227,6 @@ fn bank_forks_from_snapshot(
     incremental_snapshot_archive_info: Option<IncrementalSnapshotArchiveInfo>,
     genesis_config: &GenesisConfig,
     account_paths: Vec<PathBuf>,
-    shrink_paths: Option<Vec<PathBuf>>,
     snapshot_config: &SnapshotConfig,
     process_options: &ProcessOptions,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
@@ -267,7 +262,7 @@ fn bank_forks_from_snapshot(
         // be released.  They will be released by the account_background_service anyway.  But in the case of the account_paths
         // using memory-mounted file system, they are not released early enough to give space for the new append-vecs from
         // the archives, causing the out-of-memory problem.  So, purge the snapshot dirs upfront before loading from the archive.
-        snapshot_utils::purge_old_bank_snapshots(&snapshot_config.bank_snapshots_dir, 0, None);
+        snapshot_utils::purge_all_bank_snapshots(&snapshot_config.bank_snapshots_dir);
 
         let (bank, _) = snapshot_bank_utils::bank_from_snapshot_archives(
             &account_paths,
@@ -342,12 +337,17 @@ fn bank_forks_from_snapshot(
             source: err,
             path: bank_snapshot.snapshot_path(),
         })?;
+
+        // If the node crashes before taking the next bank snapshot, the next startup will attempt
+        // to load from the same bank snapshot again.  And if `shrink` has run, the account storage
+        // files that are hard linked in bank snapshot will be *different* than what the bank
+        // snapshot expects.  This would cause the node to crash again.  To prevent that, purge all
+        // the bank snapshots here.  In the above scenario, this will cause the node to load from a
+        // snapshot archive next time, which is safe.
+        snapshot_utils::purge_all_bank_snapshots(&snapshot_config.bank_snapshots_dir);
+
         bank
     };
-
-    if let Some(shrink_paths) = shrink_paths {
-        bank.set_shrink_paths(shrink_paths);
-    }
 
     let full_snapshot_hash = FullSnapshotHash((
         full_snapshot_archive_info.slot(),

@@ -1,5 +1,7 @@
 ---
-title: Paper Wallets
+title: Paper Wallets using the Solana CLI
+pagination_label: Paper Wallets using the CLI
+sidebar_label: Paper Wallets
 sidebar_position: 1
 ---
 

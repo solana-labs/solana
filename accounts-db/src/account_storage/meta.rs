@@ -3,7 +3,7 @@ use {
         accounts_hash::AccountHash,
         append_vec::AppendVecStoredAccountMeta,
         storable_accounts::StorableAccounts,
-        tiered_storage::{hot::HotAccountMeta, readable::TieredReadableAccount},
+        tiered_storage::hot::{HotAccount, HotAccountMeta},
     },
     solana_sdk::{account::ReadableAccount, hash::Hash, pubkey::Pubkey, stake_history::Epoch},
     std::{borrow::Borrow, marker::PhantomData},
@@ -114,7 +114,7 @@ impl<
 #[derive(PartialEq, Eq, Debug)]
 pub enum StoredAccountMeta<'storage> {
     AppendVec(AppendVecStoredAccountMeta<'storage>),
-    Hot(TieredReadableAccount<'storage, HotAccountMeta>),
+    Hot(HotAccount<'storage, HotAccountMeta>),
 }
 
 impl<'storage> StoredAccountMeta<'storage> {
@@ -128,7 +128,8 @@ impl<'storage> StoredAccountMeta<'storage> {
     pub fn hash(&self) -> &'storage AccountHash {
         match self {
             Self::AppendVec(av) => av.hash(),
-            Self::Hot(hot) => hot.hash().unwrap_or(&DEFAULT_ACCOUNT_HASH),
+            // tiered-storage has deprecated the use of AccountHash
+            Self::Hot(_) => &DEFAULT_ACCOUNT_HASH,
         }
     }
 
@@ -142,7 +143,7 @@ impl<'storage> StoredAccountMeta<'storage> {
     pub fn offset(&self) -> usize {
         match self {
             Self::AppendVec(av) => av.offset(),
-            Self::Hot(hot) => hot.index(),
+            Self::Hot(hot) => hot.index().0 as usize,
         }
     }
 

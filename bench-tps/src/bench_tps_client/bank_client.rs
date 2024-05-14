@@ -1,5 +1,6 @@
 use {
     crate::bench_tps_client::{BenchTpsClient, BenchTpsError, Result},
+    solana_rpc_client_api::config::RpcBlockConfig,
     solana_runtime::bank_client::BankClient,
     solana_sdk::{
         account::Account,
@@ -10,8 +11,10 @@ use {
         message::Message,
         pubkey::Pubkey,
         signature::Signature,
+        slot_history::Slot,
         transaction::Transaction,
     },
+    solana_transaction_status::UiConfirmedBlock,
 };
 
 impl BenchTpsClient for BankClient {
@@ -110,5 +113,26 @@ impl BenchTpsClient for BankClient {
 
     fn get_multiple_accounts(&self, _pubkeys: &[Pubkey]) -> Result<Vec<Option<Account>>> {
         unimplemented!("BankClient doesn't support get_multiple_accounts");
+    }
+
+    fn get_slot_with_commitment(&self, commitment_config: CommitmentConfig) -> Result<Slot> {
+        SyncClient::get_slot_with_commitment(self, commitment_config).map_err(|err| err.into())
+    }
+
+    fn get_blocks_with_commitment(
+        &self,
+        _start_slot: Slot,
+        _end_slot: Option<Slot>,
+        _commitment_config: CommitmentConfig,
+    ) -> Result<Vec<Slot>> {
+        unimplemented!("BankClient doesn't support get_blocks");
+    }
+
+    fn get_block_with_config(
+        &self,
+        _slot: Slot,
+        _rpc_block_config: RpcBlockConfig,
+    ) -> Result<UiConfirmedBlock> {
+        unimplemented!("BankClient doesn't support get_block_with_config");
     }
 }

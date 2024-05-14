@@ -1,5 +1,8 @@
 ---
-title: Vote Account Management
+title: "Validator Guide: Vote Account Management"
+sidebar_position: 5
+sidebar_label: Vote Account Management
+pagination_label: "Validator Guides: Vote Account Management"
 ---
 
 This page describes how to set up an on-chain _vote account_. Creating a vote

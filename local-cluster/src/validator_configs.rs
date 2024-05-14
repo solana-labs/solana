@@ -13,7 +13,6 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         voting_disabled: config.voting_disabled,
         account_paths: config.account_paths.clone(),
         account_snapshot_paths: config.account_snapshot_paths.clone(),
-        account_shrink_paths: config.account_shrink_paths.clone(),
         rpc_config: config.rpc_config.clone(),
         on_start_geyser_plugin_config_files: config.on_start_geyser_plugin_config_files.clone(),
         rpc_addrs: config.rpc_addrs,
@@ -31,7 +30,6 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         repair_whitelist: config.repair_whitelist.clone(),
         gossip_validators: config.gossip_validators.clone(),
         accounts_hash_interval_slots: config.accounts_hash_interval_slots,
-        accounts_hash_fault_injector: config.accounts_hash_fault_injector,
         max_genesis_archive_unpacked_size: config.max_genesis_archive_unpacked_size,
         wal_recovery_mode: config.wal_recovery_mode.clone(),
         run_verification: config.run_verification,
@@ -70,6 +68,7 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         generator_config: config.generator_config.clone(),
         use_snapshot_archives_at_startup: config.use_snapshot_archives_at_startup,
         wen_restart_proto_path: config.wen_restart_proto_path.clone(),
+        unified_scheduler_handler_threads: config.unified_scheduler_handler_threads,
     }
 }
 

@@ -109,13 +109,13 @@ if [[ ! -e criterion-$version.md || ! -e criterion ]]; then
 fi
 
 # Install platform tools
-version=v1.39
+version=v1.41
 if [[ ! -e platform-tools-$version.md || ! -e platform-tools ]]; then
   (
     set -e
     rm -rf platform-tools*
     job="download \
-           https://github.com/solana-labs/platform-tools/releases/download \
+           https://github.com/anza-xyz/platform-tools/releases/download \
            $version \
            platform-tools-${machine}-${arch}.tar.bz2 \
            platform-tools"

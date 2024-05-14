@@ -1,6 +1,6 @@
 use {
-    crate::consensus::SwitchForkDecision,
-    solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey},
+    crate::consensus::{BlockhashStatus, SwitchForkDecision},
+    solana_sdk::{clock::Slot, pubkey::Pubkey},
     solana_vote_program::vote_state::{
         vote_state_1_14_11::VoteState1_14_11, BlockTimestamp, VoteTransaction,
     },
@@ -19,7 +19,7 @@ pub struct Tower1_14_11 {
     // blockhash of the voted block itself, depending if the vote slot was refreshed.
     // For instance, a vote for slot 5, may be refreshed/resubmitted for inclusion in
     //  block 10, in  which case `last_vote_tx_blockhash` equals the blockhash of 10, not 5.
-    pub(crate) last_vote_tx_blockhash: Option<Hash>,
+    pub(crate) last_vote_tx_blockhash: BlockhashStatus,
     pub(crate) last_timestamp: BlockTimestamp,
     #[serde(skip)]
     // Restored last voted slot which cannot be found in SlotHistory at replayed root

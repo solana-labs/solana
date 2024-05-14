@@ -1,6 +1,5 @@
 use {
     jsonrpc_core::{ErrorCode, Result as JsonRpcResult},
-    jsonrpc_server_utils::tokio::sync::oneshot::Sender as OneShotSender,
     libloading::Library,
     log::*,
     solana_geyser_plugin_interface::geyser_plugin_interface::GeyserPlugin,
@@ -8,6 +7,7 @@ use {
         ops::{Deref, DerefMut},
         path::Path,
     },
+    tokio::sync::oneshot::Sender as OneShotSender,
 };
 
 #[derive(Debug)]
@@ -304,10 +304,10 @@ pub enum GeyserPluginManagerRequest {
 
 #[derive(thiserror::Error, Debug)]
 pub enum GeyserPluginManagerError {
-    #[error("Cannot open the the plugin config file")]
+    #[error("Cannot open the plugin config file")]
     CannotOpenConfigFile(String),
 
-    #[error("Cannot read the the plugin config file")]
+    #[error("Cannot read the plugin config file")]
     CannotReadConfigFile(String),
 
     #[error("The config file is not in a valid Json format")]
@@ -451,9 +451,13 @@ mod tests {
         plugin: P,
         config_path: &'static str,
     ) -> (LoadedGeyserPlugin, Library, &'static str) {
+        #[cfg(unix)]
+        let library = libloading::os::unix::Library::this();
+        #[cfg(windows)]
+        let library = libloading::os::windows::Library::this().unwrap();
         (
             LoadedGeyserPlugin::new(Box::new(plugin), None),
-            Library::from(libloading::os::unix::Library::this()),
+            Library::from(library),
             config_path,
         )
     }

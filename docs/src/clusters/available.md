@@ -1,5 +1,7 @@
 ---
-title: Solana Clusters
+title: Available Solana Clusters
+sidebar_label: Solana Clusters
+pagination_label: Available Solana Clusters
 ---
 
 Solana maintains several different clusters with different purposes.

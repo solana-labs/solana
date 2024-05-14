@@ -8,7 +8,6 @@ use {
     proc_macro::TokenStream,
     proc_macro2::{Delimiter, Span, TokenTree},
     quote::{quote, ToTokens},
-    std::convert::TryFrom,
     syn::{
         bracketed,
         parse::{Parse, ParseStream, Result},

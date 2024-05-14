@@ -3,20 +3,9 @@
 use {
     crate::storable_accounts::StorableAccounts,
     solana_sdk::{
-        account::AccountSharedData, clock::Slot, pubkey::Pubkey, reward_type::RewardType,
+        account::AccountSharedData, clock::Slot, pubkey::Pubkey, reward_info::RewardInfo,
     },
 };
-
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, AbiExample, Clone, Copy)]
-pub struct RewardInfo {
-    pub reward_type: RewardType,
-    /// Reward amount
-    pub lamports: i64,
-    /// Account balance in lamports after `lamports` was applied
-    pub post_balance: u64,
-    /// Vote account commission when the reward was credited, only present for voting and staking rewards
-    pub commission: Option<u8>,
-}
 
 #[derive(AbiExample, Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct StakeReward {
@@ -94,7 +83,7 @@ impl StakeReward {
         Self {
             stake_pubkey: Pubkey::new_unique(),
             stake_reward_info: RewardInfo {
-                reward_type: RewardType::Staking,
+                reward_type: solana_sdk::reward_type::RewardType::Staking,
                 lamports: rng.gen_range(1..200),
                 post_balance: 0,  /* unused atm */
                 commission: None, /* unused atm */

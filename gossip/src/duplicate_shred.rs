@@ -56,6 +56,8 @@ pub enum Error {
     BlockstoreInsertFailed(#[from] BlockstoreError),
     #[error("data chunk mismatch")]
     DataChunkMismatch,
+    #[error("unable to send duplicate slot to state machine")]
+    DuplicateSlotSenderFailure,
     #[error("invalid chunk_index: {chunk_index}, num_chunks: {num_chunks}")]
     InvalidChunkIndex { chunk_index: u8, num_chunks: u8 },
     #[error("invalid duplicate shreds")]
@@ -407,6 +409,8 @@ pub(crate) mod tests {
             keypair,
             &entries,
             is_last_in_slot,
+            // chained_merkle_root
+            Some(Hash::new_from_array(rng.gen())),
             next_shred_index,
             next_code_index, // next_code_index
             merkle_variant,

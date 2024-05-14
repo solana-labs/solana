@@ -18,16 +18,27 @@ pub enum TransactionCost {
 
 impl TransactionCost {
     pub fn sum(&self) -> u64 {
+        #![allow(clippy::assertions_on_constants)]
         match self {
-            Self::SimpleVote { .. } => SIMPLE_VOTE_USAGE_COST,
+            Self::SimpleVote { .. } => {
+                const _: () = assert!(
+                    SIMPLE_VOTE_USAGE_COST
+                        == solana_vote_program::vote_processor::DEFAULT_COMPUTE_UNITS
+                            + block_cost_limits::SIGNATURE_COST
+                            + 2 * block_cost_limits::WRITE_LOCK_UNITS
+                            + 8
+                );
+
+                SIMPLE_VOTE_USAGE_COST
+            }
             Self::Transaction(usage_cost) => usage_cost.sum(),
         }
     }
 
-    pub fn bpf_execution_cost(&self) -> u64 {
+    pub fn programs_execution_cost(&self) -> u64 {
         match self {
-            Self::SimpleVote { .. } => 0,
-            Self::Transaction(usage_cost) => usage_cost.bpf_execution_cost,
+            Self::SimpleVote { .. } => solana_vote_program::vote_processor::DEFAULT_COMPUTE_UNITS,
+            Self::Transaction(usage_cost) => usage_cost.programs_execution_cost,
         }
     }
 
@@ -74,17 +85,31 @@ impl TransactionCost {
         }
     }
 
-    pub fn builtins_execution_cost(&self) -> u64 {
-        match self {
-            Self::SimpleVote { .. } => solana_vote_program::vote_processor::DEFAULT_COMPUTE_UNITS,
-            Self::Transaction(usage_cost) => usage_cost.builtins_execution_cost,
-        }
-    }
-
     pub fn writable_accounts(&self) -> &[Pubkey] {
         match self {
             Self::SimpleVote { writable_accounts } => writable_accounts,
             Self::Transaction(usage_cost) => &usage_cost.writable_accounts,
+        }
+    }
+
+    pub fn num_transaction_signatures(&self) -> u64 {
+        match self {
+            Self::SimpleVote { .. } => 1,
+            Self::Transaction(usage_cost) => usage_cost.num_transaction_signatures,
+        }
+    }
+
+    pub fn num_secp256k1_instruction_signatures(&self) -> u64 {
+        match self {
+            Self::SimpleVote { .. } => 0,
+            Self::Transaction(usage_cost) => usage_cost.num_secp256k1_instruction_signatures,
+        }
+    }
+
+    pub fn num_ed25519_instruction_signatures(&self) -> u64 {
+        match self {
+            Self::SimpleVote { .. } => 0,
+            Self::Transaction(usage_cost) => usage_cost.num_ed25519_instruction_signatures,
         }
     }
 }
@@ -98,10 +123,12 @@ pub struct UsageCostDetails {
     pub signature_cost: u64,
     pub write_lock_cost: u64,
     pub data_bytes_cost: u64,
-    pub builtins_execution_cost: u64,
-    pub bpf_execution_cost: u64,
+    pub programs_execution_cost: u64,
     pub loaded_accounts_data_size_cost: u64,
     pub account_data_size: u64,
+    pub num_transaction_signatures: u64,
+    pub num_secp256k1_instruction_signatures: u64,
+    pub num_ed25519_instruction_signatures: u64,
 }
 
 impl Default for UsageCostDetails {
@@ -111,10 +138,12 @@ impl Default for UsageCostDetails {
             signature_cost: 0u64,
             write_lock_cost: 0u64,
             data_bytes_cost: 0u64,
-            builtins_execution_cost: 0u64,
-            bpf_execution_cost: 0u64,
+            programs_execution_cost: 0u64,
             loaded_accounts_data_size_cost: 0u64,
             account_data_size: 0u64,
+            num_transaction_signatures: 0u64,
+            num_secp256k1_instruction_signatures: 0u64,
+            num_ed25519_instruction_signatures: 0u64,
         }
     }
 }
@@ -129,10 +158,13 @@ impl PartialEq for UsageCostDetails {
         self.signature_cost == other.signature_cost
             && self.write_lock_cost == other.write_lock_cost
             && self.data_bytes_cost == other.data_bytes_cost
-            && self.builtins_execution_cost == other.builtins_execution_cost
-            && self.bpf_execution_cost == other.bpf_execution_cost
+            && self.programs_execution_cost == other.programs_execution_cost
             && self.loaded_accounts_data_size_cost == other.loaded_accounts_data_size_cost
             && self.account_data_size == other.account_data_size
+            && self.num_transaction_signatures == other.num_transaction_signatures
+            && self.num_secp256k1_instruction_signatures
+                == other.num_secp256k1_instruction_signatures
+            && self.num_ed25519_instruction_signatures == other.num_ed25519_instruction_signatures
             && to_hash_set(&self.writable_accounts) == to_hash_set(&other.writable_accounts)
     }
 }
@@ -157,8 +189,7 @@ impl UsageCostDetails {
         self.signature_cost
             .saturating_add(self.write_lock_cost)
             .saturating_add(self.data_bytes_cost)
-            .saturating_add(self.builtins_execution_cost)
-            .saturating_add(self.bpf_execution_cost)
+            .saturating_add(self.programs_execution_cost)
             .saturating_add(self.loaded_accounts_data_size_cost)
     }
 }

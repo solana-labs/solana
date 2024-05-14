@@ -38,7 +38,6 @@ num-derive = { workspace = true }
 num-traits = { workspace = true }
 num_cpus = { workspace = true }
 num_enum = { workspace = true }
-ouroboros = { workspace = true }
 percentage = { workspace = true }
 qualifier_attr = { workspace = true }
 rand = { workspace = true }
@@ -64,6 +63,7 @@ solana-program-runtime = { workspace = true }
 solana-rayon-threadlimit = { workspace = true }
 solana-sdk = { workspace = true }
 solana-stake-program = { workspace = true }
+solana-svm = { workspace = true }
 solana-system-program = { workspace = true }
 solana-version = { workspace = true }
 solana-vote = { workspace = true }

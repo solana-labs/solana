@@ -238,9 +238,11 @@ impl SigVerifyStage {
     pub fn new<T: SigVerifier + 'static + Send>(
         packet_receiver: Receiver<PacketBatch>,
         verifier: T,
-        name: &'static str,
+        thread_name: &'static str,
+        metrics_name: &'static str,
     ) -> Self {
-        let thread_hdl = Self::verifier_services(packet_receiver, verifier, name);
+        let thread_hdl =
+            Self::verifier_service(packet_receiver, verifier, thread_name, metrics_name);
         Self { thread_hdl }
     }
 
@@ -407,7 +409,8 @@ impl SigVerifyStage {
     fn verifier_service<T: SigVerifier + 'static + Send>(
         packet_receiver: Receiver<PacketBatch>,
         mut verifier: T,
-        name: &'static str,
+        thread_name: &'static str,
+        metrics_name: &'static str,
     ) -> JoinHandle<()> {
         let mut stats = SigVerifierStats::default();
         let mut last_print = Instant::now();
@@ -415,7 +418,7 @@ impl SigVerifyStage {
         const DEDUPER_FALSE_POSITIVE_RATE: f64 = 0.001;
         const DEDUPER_NUM_BITS: u64 = 63_999_979;
         Builder::new()
-            .name("solSigVerifier".to_string())
+            .name(thread_name.to_string())
             .spawn(move || {
                 let mut rng = rand::thread_rng();
                 let mut deduper = Deduper::<2, [u8]>::new(&mut rng, DEDUPER_NUM_BITS);
@@ -440,21 +443,13 @@ impl SigVerifyStage {
                         }
                     }
                     if last_print.elapsed().as_secs() > 2 {
-                        stats.report(name);
+                        stats.report(metrics_name);
                         stats = SigVerifierStats::default();
                         last_print = Instant::now();
                     }
                 }
             })
             .unwrap()
-    }
-
-    fn verifier_services<T: SigVerifier + 'static + Send>(
-        packet_receiver: Receiver<PacketBatch>,
-        verifier: T,
-        name: &'static str,
-    ) -> JoinHandle<()> {
-        Self::verifier_service(packet_receiver, verifier, name)
     }
 
     pub fn join(self) -> thread::Result<()> {
@@ -552,7 +547,7 @@ mod tests {
         let (packet_s, packet_r) = unbounded();
         let (verified_s, verified_r) = BankingTracer::channel_for_test();
         let verifier = TransactionSigVerifier::new(verified_s);
-        let stage = SigVerifyStage::new(packet_r, verifier, "test");
+        let stage = SigVerifyStage::new(packet_r, verifier, "solSigVerTest", "test");
 
         let now = Instant::now();
         let packets_per_batch = 128;

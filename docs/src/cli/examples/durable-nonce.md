@@ -1,5 +1,7 @@
 ---
-title: Durable Transaction Nonces
+title: Durable Transaction Nonces in the Solana CLI
+pagination_label: "Solana CLI: Durable Transaction Nonces"
+sidebar_label: Durable Transaction Nonces
 ---
 
 Durable transaction nonces are a mechanism for getting around the typical short

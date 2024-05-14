@@ -2377,7 +2377,7 @@ mod test {
         assert_eq!(repairs[2].slot(), 5);
 
         // Simulate repair on 6 and 5
-        for (shreds, _) in make_chaining_slot_entries(&[5, 6], 100) {
+        for (shreds, _) in make_chaining_slot_entries(&[5, 6], 100, 0) {
             blockstore.insert_shreds(shreds, None, true).unwrap();
         }
 

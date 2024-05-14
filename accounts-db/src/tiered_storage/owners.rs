@@ -1,6 +1,6 @@
 use {
     crate::tiered_storage::{
-        file::TieredStorageFile, footer::TieredStorageFooter, mmap_utils::get_pod,
+        file::TieredWritableFile, footer::TieredStorageFooter, mmap_utils::get_pod,
         TieredStorageResult,
     },
     indexmap::set::IndexSet,
@@ -15,6 +15,10 @@ use {
 /// unique owners in one TieredStorageFile is 2^32.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd)]
 pub struct OwnerOffset(pub u32);
+
+lazy_static! {
+    pub static ref OWNER_NO_OWNER: Pubkey = Pubkey::default();
+}
 
 /// Owner block holds a set of unique addresses of account owners,
 /// and an account meta has a owner_offset field for accessing
@@ -43,7 +47,7 @@ impl OwnersBlockFormat {
     /// Persists the provided owners' addresses into the specified file.
     pub fn write_owners_block(
         &self,
-        file: &TieredStorageFile,
+        file: &mut TieredWritableFile,
         owners_table: &OwnersTable,
     ) -> TieredStorageResult<usize> {
         match self {
@@ -97,12 +101,22 @@ impl<'a> OwnersTable<'a> {
 
         OwnerOffset(offset as u32)
     }
+
+    /// Returns the number of unique owner addresses in the table.
+    pub fn len(&self) -> usize {
+        self.owners_set.len()
+    }
+
+    /// Returns true if the OwnersTable is empty
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use {
-        super::*, crate::tiered_storage::file::TieredStorageFile, memmap2::MmapOptions,
+        super::*, crate::tiered_storage::file::TieredWritableFile, memmap2::MmapOptions,
         std::fs::OpenOptions, tempfile::TempDir,
     };
 
@@ -125,7 +139,7 @@ mod tests {
         };
 
         {
-            let file = TieredStorageFile::new_writable(&path).unwrap();
+            let mut file = TieredWritableFile::new(&path).unwrap();
 
             let mut owners_table = OwnersTable::default();
             addresses.iter().for_each(|owner_address| {
@@ -133,12 +147,12 @@ mod tests {
             });
             footer
                 .owners_block_format
-                .write_owners_block(&file, &owners_table)
+                .write_owners_block(&mut file, &owners_table)
                 .unwrap();
 
             // while the test only focuses on account metas, writing a footer
             // here is necessary to make it a valid tiered-storage file.
-            footer.write_footer_block(&file).unwrap();
+            footer.write_footer_block(&mut file).unwrap();
         }
 
         let file = OpenOptions::new().read(true).open(path).unwrap();

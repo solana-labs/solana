@@ -11,7 +11,7 @@ if [[ -n $4 ]]; then
 fi
 benchTpsExtraArgs="$5"
 clientIndex="$6"
-clientType="${7:-thin-client}"
+clientType="${7:-tpu-client}"
 maybeUseUnstakedConnection="$8"
 
 missing() {
@@ -43,19 +43,12 @@ skip)
   exit 1
 esac
 
-TPU_CLIENT=false
 RPC_CLIENT=false
 case "$clientType" in
-  thin-client)
-    TPU_CLIENT=false
-    RPC_CLIENT=false
-    ;;
   tpu-client)
-    TPU_CLIENT=true
     RPC_CLIENT=false
     ;;
   rpc-client)
-    TPU_CLIENT=false
     RPC_CLIENT=true
     ;;
   *)
@@ -74,12 +67,8 @@ solana-bench-tps)
 
   args=()
 
-  if ${TPU_CLIENT}; then
-    args+=(--use-tpu-client)
-  elif ${RPC_CLIENT}; then
+  if ${RPC_CLIENT}; then
     args+=(--use-rpc-client)
-  else
-    args+=(--entrypoint "$entrypointIp:8001")
   fi
 
   if [[ -z "$maybeUseUnstakedConnection" ]]; then

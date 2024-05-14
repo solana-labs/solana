@@ -398,10 +398,7 @@ fn simulate_process_entries(
     let bank_fork = BankForks::new_rw_arc(bank);
     let bank = bank_fork.read().unwrap().get_with_scheduler(slot).unwrap();
     bank.clone_without_scheduler()
-        .loaded_programs_cache
-        .write()
-        .unwrap()
-        .set_fork_graph(bank_fork.clone());
+        .set_fork_graph_in_program_cache(bank_fork.clone());
 
     for i in 0..(num_accounts / 2) {
         bank.transfer(initial_lamports, mint_keypair, &keypairs[i * 2].pubkey())

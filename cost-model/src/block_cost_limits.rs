@@ -24,6 +24,10 @@ pub const MAX_CONCURRENCY: u64 = 4;
 pub const COMPUTE_UNIT_TO_US_RATIO: u64 = 30;
 /// Number of compute units for one signature verification.
 pub const SIGNATURE_COST: u64 = COMPUTE_UNIT_TO_US_RATIO * 24;
+/// Number of compute units for one secp256k1 signature verification.
+pub const SECP256K1_VERIFY_COST: u64 = COMPUTE_UNIT_TO_US_RATIO * 223;
+/// Number of compute units for one ed25519 signature verification.
+pub const ED25519_VERIFY_COST: u64 = COMPUTE_UNIT_TO_US_RATIO * 76;
 /// Number of compute units for one write lock
 pub const WRITE_LOCK_UNITS: u64 = COMPUTE_UNIT_TO_US_RATIO * 10;
 /// Number of data bytes per compute units
@@ -43,8 +47,8 @@ lazy_static! {
         (bpf_loader::id(), solana_bpf_loader_program::DEFAULT_LOADER_COMPUTE_UNITS),
         (loader_v4::id(), solana_loader_v4_program::DEFAULT_COMPUTE_UNITS),
         // Note: These are precompile, run directly in bank during sanitizing;
-        (secp256k1_program::id(), COMPUTE_UNIT_TO_US_RATIO * 24),
-        (ed25519_program::id(), COMPUTE_UNIT_TO_US_RATIO * 24),
+        (secp256k1_program::id(), 0),
+        (ed25519_program::id(), 0),
     ]
     .iter()
     .cloned()

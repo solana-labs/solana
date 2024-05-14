@@ -31,7 +31,6 @@
 
 #![allow(incomplete_features)]
 #![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(specialization))]
-#![cfg_attr(RUSTC_NEEDS_PROC_MACRO_HYGIENE, feature(proc_macro_hygiene))]
 
 // Allows macro expansion of `use ::solana_sdk::*` to work within this crate
 extern crate self as solana_sdk;
@@ -48,8 +47,8 @@ pub use solana_program::{
     account_info, address_lookup_table, alt_bn128, big_mod_exp, blake3, borsh, borsh0_10, borsh0_9,
     borsh1, bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable, clock, config,
     custom_heap_default, custom_panic_default, debug_account_data, declare_deprecated_sysvar_id,
-    declare_sysvar_id, decode_error, ed25519_program, epoch_rewards, epoch_rewards_partition_data,
-    epoch_schedule, fee_calculator, impl_sysvar_get, incinerator, instruction, keccak, lamports,
+    declare_sysvar_id, decode_error, ed25519_program, epoch_rewards, epoch_schedule,
+    fee_calculator, impl_sysvar_get, incinerator, instruction, keccak, lamports,
     loader_instruction, loader_upgradeable_instruction, loader_v4, loader_v4_instruction, message,
     msg, native_token, nonce, poseidon, program, program_error, program_memory, program_option,
     program_pack, rent, sanitize, sdk_ids, secp256k1_program, secp256k1_recover, serde_varint,
@@ -84,6 +83,7 @@ pub mod log;
 pub mod native_loader;
 pub mod net;
 pub mod nonce_account;
+pub mod nonce_info;
 pub mod offchain_message;
 pub mod packet;
 pub mod poh_config;
@@ -92,6 +92,10 @@ pub mod program_utils;
 pub mod pubkey;
 pub mod quic;
 pub mod recent_blockhashes_account;
+pub mod rent_collector;
+pub mod rent_debits;
+pub mod reserved_account_keys;
+pub mod reward_info;
 pub mod reward_type;
 pub mod rpc_port;
 pub mod secp256k1_instruction;

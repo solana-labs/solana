@@ -6,6 +6,7 @@ use {
     log::*,
 };
 
+#[repr(C)]
 #[derive(Serialize, Deserialize, Default, PartialEq, Eq, Clone, Copy, Debug, AbiExample)]
 #[serde(rename_all = "camelCase")]
 pub struct FeeCalculator {

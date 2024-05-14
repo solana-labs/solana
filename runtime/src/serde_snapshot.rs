@@ -3,7 +3,6 @@ use {
         bank::{Bank, BankFieldsToDeserialize, BankRc},
         builtins::BuiltinPrototype,
         epoch_stakes::EpochStakes,
-        runtime_config::RuntimeConfig,
         serde_snapshot::storage::SerializableAccountStorageEntry,
         snapshot_utils::{
             self, SnapshotError, StorageAndNextAppendVecId, BANK_SNAPSHOT_PRE_FILENAME_EXTENSION,
@@ -26,9 +25,9 @@ use {
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         blockhash_queue::BlockhashQueue,
         epoch_accounts_hash::EpochAccountsHash,
-        rent_collector::RentCollector,
     },
     solana_measure::measure::Measure,
+    solana_program_runtime::runtime_config::RuntimeConfig,
     solana_sdk::{
         clock::{Epoch, Slot, UnixTimestamp},
         deserialize_utils::default_on_eof,
@@ -39,6 +38,7 @@ use {
         hash::Hash,
         inflation::Inflation,
         pubkey::Pubkey,
+        rent_collector::RentCollector,
     },
     std::{
         collections::{HashMap, HashSet},

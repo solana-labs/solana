@@ -20,10 +20,6 @@ use {
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         epoch_accounts_hash::EpochAccountsHash,
-        rent_debits::RentDebits,
-        transaction_results::{
-            TransactionExecutionDetails, TransactionExecutionResult, TransactionResults,
-        },
     },
     solana_cost_model::cost_model::CostModel,
     solana_entry::entry::{
@@ -31,7 +27,10 @@ use {
     },
     solana_measure::{measure, measure::Measure},
     solana_metrics::datapoint_error,
-    solana_program_runtime::timings::{ExecuteTimingType, ExecuteTimings, ThreadExecuteTimings},
+    solana_program_runtime::{
+        runtime_config::RuntimeConfig,
+        timings::{ExecuteTimingType, ExecuteTimings, ThreadExecuteTimings},
+    },
     solana_rayon_threadlimit::{get_max_thread_count, get_thread_count},
     solana_runtime::{
         accounts_background_service::{AbsRequestSender, SnapshotRequestKind},
@@ -41,7 +40,6 @@ use {
         commitment::VOTE_THRESHOLD_SIZE,
         installed_scheduler_pool::BankWithScheduler,
         prioritization_fee_cache::PrioritizationFeeCache,
-        runtime_config::RuntimeConfig,
         transaction_batch::TransactionBatch,
     },
     solana_sdk::{
@@ -50,12 +48,19 @@ use {
         genesis_config::GenesisConfig,
         hash::Hash,
         pubkey::Pubkey,
+        rent_debits::RentDebits,
         saturating_add_assign,
         signature::{Keypair, Signature},
         timing,
         transaction::{
             Result, SanitizedTransaction, TransactionError, TransactionVerificationMode,
             VersionedTransaction,
+        },
+    },
+    solana_svm::{
+        transaction_processor::ExecutionRecordingConfig,
+        transaction_results::{
+            TransactionExecutionDetails, TransactionExecutionResult, TransactionResults,
         },
     },
     solana_transaction_status::token_balances::TransactionTokenBalancesSet,
@@ -82,16 +87,6 @@ pub struct TransactionBatchWithIndexes<'a, 'b> {
 struct ReplayEntry {
     entry: EntryType,
     starting_index: usize,
-}
-
-// get_max_thread_count to match number of threads in the old code.
-// see: https://github.com/solana-labs/solana/pull/24853
-lazy_static! {
-    static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
-        .num_threads(get_max_thread_count())
-        .thread_name(|i| format!("solBstoreProc{i:02}"))
-        .build()
-        .unwrap();
 }
 
 fn first_err(results: &[Result<()>]) -> Result<()> {
@@ -134,6 +129,14 @@ fn get_first_error(
     first_err
 }
 
+fn create_thread_pool(num_threads: usize) -> ThreadPool {
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(num_threads)
+        .thread_name(|i| format!("solReplayTx{i:02}"))
+        .build()
+        .expect("new rayon threadpool")
+}
+
 pub fn execute_batch(
     batch: &TransactionBatchWithIndexes,
     bank: &Arc<Bank>,
@@ -161,9 +164,7 @@ pub fn execute_batch(
         batch,
         MAX_PROCESSING_AGE,
         transaction_status_sender.is_some(),
-        transaction_status_sender.is_some(),
-        transaction_status_sender.is_some(),
-        transaction_status_sender.is_some(),
+        ExecutionRecordingConfig::new_single_setting(transaction_status_sender.is_some()),
         timings,
         log_messages_bytes_limit,
     );
@@ -239,6 +240,7 @@ impl ExecuteBatchesInternalMetrics {
 
 fn execute_batches_internal(
     bank: &Arc<Bank>,
+    replay_tx_thread_pool: &ThreadPool,
     batches: &[TransactionBatchWithIndexes],
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
@@ -250,7 +252,7 @@ fn execute_batches_internal(
         Mutex::new(HashMap::new());
 
     let mut execute_batches_elapsed = Measure::start("execute_batches_elapsed");
-    let results: Vec<Result<()>> = PAR_THREAD_POOL.install(|| {
+    let results: Vec<Result<()>> = replay_tx_thread_pool.install(|| {
         batches
             .into_par_iter()
             .map(|transaction_batch| {
@@ -272,7 +274,7 @@ fn execute_batches_internal(
                     "execute_batch",
                 );
 
-                let thread_index = PAR_THREAD_POOL.current_thread_index().unwrap();
+                let thread_index = replay_tx_thread_pool.current_thread_index().unwrap();
                 execution_timings_per_thread
                     .lock()
                     .unwrap()
@@ -321,6 +323,7 @@ fn execute_batches_internal(
 // invocation).
 fn process_batches(
     bank: &BankWithScheduler,
+    replay_tx_thread_pool: &ThreadPool,
     batches: &[TransactionBatchWithIndexes],
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
@@ -345,6 +348,7 @@ fn process_batches(
         );
         rebatch_and_execute_batches(
             bank,
+            replay_tx_thread_pool,
             batches,
             transaction_status_sender,
             replay_vote_sender,
@@ -395,6 +399,7 @@ fn rebatch_transactions<'a>(
 
 fn rebatch_and_execute_batches(
     bank: &Arc<Bank>,
+    replay_tx_thread_pool: &ThreadPool,
     batches: &[TransactionBatchWithIndexes],
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
@@ -478,6 +483,7 @@ fn rebatch_and_execute_batches(
 
     let execute_batches_internal_metrics = execute_batches_internal(
         bank,
+        replay_tx_thread_pool,
         rebatched_txs,
         transaction_status_sender,
         replay_vote_sender,
@@ -503,6 +509,7 @@ pub fn process_entries_for_tests(
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
 ) -> Result<()> {
+    let replay_tx_thread_pool = create_thread_pool(1);
     let verify_transaction = {
         let bank = bank.clone_with_scheduler();
         move |versioned_tx: VersionedTransaction| -> Result<SanitizedTransaction> {
@@ -530,6 +537,7 @@ pub fn process_entries_for_tests(
     let ignored_prioritization_fee_cache = PrioritizationFeeCache::new(0u64);
     let result = process_entries(
         bank,
+        &replay_tx_thread_pool,
         &mut replay_entries,
         transaction_status_sender,
         replay_vote_sender,
@@ -544,6 +552,7 @@ pub fn process_entries_for_tests(
 
 fn process_entries(
     bank: &BankWithScheduler,
+    replay_tx_thread_pool: &ThreadPool,
     entries: &mut [ReplayEntry],
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
@@ -569,6 +578,7 @@ fn process_entries(
                     // execute the group and register the tick
                     process_batches(
                         bank,
+                        replay_tx_thread_pool,
                         &batches,
                         transaction_status_sender,
                         replay_vote_sender,
@@ -622,6 +632,7 @@ fn process_entries(
                         // execute the current queue and try to process this entry again
                         process_batches(
                             bank,
+                            replay_tx_thread_pool,
                             &batches,
                             transaction_status_sender,
                             replay_vote_sender,
@@ -637,6 +648,7 @@ fn process_entries(
     }
     process_batches(
         bank,
+        replay_tx_thread_pool,
         &batches,
         transaction_status_sender,
         replay_vote_sender,
@@ -674,8 +686,9 @@ pub enum BlockstoreProcessorError {
     RootBankWithMismatchedCapitalization(Slot),
 }
 
-/// Callback for accessing bank state while processing the blockstore
-pub type ProcessCallback = Arc<dyn Fn(&Bank) + Sync + Send>;
+/// Callback for accessing bank state after each slot is confirmed while
+/// processing the blockstore
+pub type ProcessSlotCallback = Arc<dyn Fn(&Bank) + Sync + Send>;
 
 #[derive(Default, Clone)]
 pub struct ProcessOptions {
@@ -683,6 +696,7 @@ pub struct ProcessOptions {
     pub run_verification: bool,
     pub full_leader_cache: bool,
     pub halt_at_slot: Option<Slot>,
+    pub slot_callback: Option<ProcessSlotCallback>,
     pub new_hard_forks: Option<Vec<Slot>>,
     pub debug_keys: Option<Arc<HashSet<Pubkey>>>,
     pub account_indexes: AccountSecondaryIndexes,
@@ -745,7 +759,6 @@ pub fn test_process_blockstore(
         blockstore,
         Vec::new(),
         None,
-        None,
         opts,
         None,
         None,
@@ -801,6 +814,7 @@ pub(crate) fn process_blockstore_for_bank_0(
     let bank_forks = BankForks::new_rw_arc(bank0);
 
     info!("Processing ledger for slot 0...");
+    let replay_tx_thread_pool = create_thread_pool(get_max_thread_count());
     process_bank_0(
         &bank_forks
             .read()
@@ -808,6 +822,7 @@ pub(crate) fn process_blockstore_for_bank_0(
             .get_with_scheduler(bank0_slot)
             .unwrap(),
         blockstore,
+        &replay_tx_thread_pool,
         opts,
         &VerifyRecyclers::default(),
         cache_block_meta_sender,
@@ -867,10 +882,12 @@ pub fn process_blockstore_from_root(
         .meta(start_slot)
         .unwrap_or_else(|_| panic!("Failed to get meta for slot {start_slot}"))
     {
+        let replay_tx_thread_pool = create_thread_pool(get_max_thread_count());
         load_frozen_forks(
             bank_forks,
             &start_slot_meta,
             blockstore,
+            &replay_tx_thread_pool,
             leader_schedule_cache,
             opts,
             transaction_status_sender,
@@ -974,9 +991,11 @@ fn verify_ticks(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn confirm_full_slot(
     blockstore: &Blockstore,
     bank: &BankWithScheduler,
+    replay_tx_thread_pool: &ThreadPool,
     opts: &ProcessOptions,
     recyclers: &VerifyRecyclers,
     progress: &mut ConfirmationProgress,
@@ -992,6 +1011,7 @@ fn confirm_full_slot(
     confirm_slot(
         blockstore,
         bank,
+        replay_tx_thread_pool,
         &mut confirmation_timing,
         progress,
         skip_verification,
@@ -1138,6 +1158,7 @@ impl ConfirmationProgress {
 pub fn confirm_slot(
     blockstore: &Blockstore,
     bank: &BankWithScheduler,
+    replay_tx_thread_pool: &ThreadPool,
     timing: &mut ConfirmationTiming,
     progress: &mut ConfirmationProgress,
     skip_verification: bool,
@@ -1167,6 +1188,7 @@ pub fn confirm_slot(
 
     confirm_slot_entries(
         bank,
+        replay_tx_thread_pool,
         slot_entries_load_result,
         timing,
         progress,
@@ -1183,6 +1205,7 @@ pub fn confirm_slot(
 #[allow(clippy::too_many_arguments)]
 fn confirm_slot_entries(
     bank: &BankWithScheduler,
+    replay_tx_thread_pool: &ThreadPool,
     slot_entries_load_result: (Vec<Entry>, u64, bool),
     timing: &mut ConfirmationTiming,
     progress: &mut ConfirmationProgress,
@@ -1324,6 +1347,7 @@ fn confirm_slot_entries(
         .collect();
     let process_result = process_entries(
         bank,
+        replay_tx_thread_pool,
         &mut replay_entries,
         transaction_status_sender,
         replay_vote_sender,
@@ -1381,6 +1405,7 @@ fn confirm_slot_entries(
 fn process_bank_0(
     bank0: &BankWithScheduler,
     blockstore: &Blockstore,
+    replay_tx_thread_pool: &ThreadPool,
     opts: &ProcessOptions,
     recyclers: &VerifyRecyclers,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
@@ -1391,6 +1416,7 @@ fn process_bank_0(
     confirm_full_slot(
         blockstore,
         bank0,
+        replay_tx_thread_pool,
         opts,
         recyclers,
         &mut progress,
@@ -1475,6 +1501,7 @@ fn load_frozen_forks(
     bank_forks: &RwLock<BankForks>,
     start_slot_meta: &SlotMeta,
     blockstore: &Blockstore,
+    replay_tx_thread_pool: &ThreadPool,
     leader_schedule_cache: &LeaderScheduleCache,
     opts: &ProcessOptions,
     transaction_status_sender: Option<&TransactionStatusSender>,
@@ -1562,6 +1589,7 @@ fn load_frozen_forks(
             if process_single_slot(
                 blockstore,
                 &bank,
+                replay_tx_thread_pool,
                 opts,
                 &recyclers,
                 &mut progress,
@@ -1646,11 +1674,7 @@ fn load_frozen_forks(
                 root = new_root_bank.slot();
 
                 leader_schedule_cache.set_root(new_root_bank);
-                new_root_bank
-                    .loaded_programs_cache
-                    .write()
-                    .unwrap()
-                    .prune(root, new_root_bank.epoch());
+                new_root_bank.prune_program_cache(root, new_root_bank.epoch());
                 let _ = bank_forks.write().unwrap().set_root(
                     root,
                     accounts_background_request_sender,
@@ -1767,6 +1791,7 @@ fn supermajority_root_from_vote_accounts(
 fn process_single_slot(
     blockstore: &Blockstore,
     bank: &BankWithScheduler,
+    replay_tx_thread_pool: &ThreadPool,
     opts: &ProcessOptions,
     recyclers: &VerifyRecyclers,
     progress: &mut ConfirmationProgress,
@@ -1781,6 +1806,7 @@ fn process_single_slot(
     confirm_full_slot(
         blockstore,
         bank,
+        replay_tx_thread_pool,
         opts,
         recyclers,
         progress,
@@ -1809,6 +1835,11 @@ fn process_single_slot(
         result?
     }
     bank.freeze(); // all banks handled by this routine are created from complete slots
+
+    if let Some(slot_callback) = &opts.slot_callback {
+        slot_callback(bank);
+    }
+
     if blockstore.is_primary_access() {
         blockstore.insert_bank_hash(bank.slot(), bank.hash(), false);
     }
@@ -1964,6 +1995,7 @@ pub mod tests {
             system_transaction,
             transaction::{Transaction, TransactionError},
         },
+        solana_svm::transaction_processor::ExecutionRecordingConfig,
         solana_vote::vote_account::VoteAccount,
         solana_vote_program::{
             self,
@@ -3682,7 +3714,16 @@ pub mod tests {
             ..ProcessOptions::default()
         };
         let recyclers = VerifyRecyclers::default();
-        process_bank_0(&bank0, &blockstore, &opts, &recyclers, None, None);
+        let replay_tx_thread_pool = create_thread_pool(1);
+        process_bank_0(
+            &bank0,
+            &blockstore,
+            &replay_tx_thread_pool,
+            &opts,
+            &recyclers,
+            None,
+            None,
+        );
         let bank0_last_blockhash = bank0.last_blockhash();
         let bank1 = bank_forks.write().unwrap().insert(Bank::new_from_parent(
             bank0.clone_without_scheduler(),
@@ -3692,6 +3733,7 @@ pub mod tests {
         confirm_full_slot(
             &blockstore,
             &bank1,
+            &replay_tx_thread_pool,
             &opts,
             &recyclers,
             &mut ConfirmationProgress::new(bank0_last_blockhash),
@@ -3954,9 +3996,7 @@ pub mod tests {
             &batch,
             MAX_PROCESSING_AGE,
             false,
-            false,
-            false,
-            false,
+            ExecutionRecordingConfig::new_single_setting(false),
             &mut ExecuteTimings::default(),
             None,
         );
@@ -4334,8 +4374,10 @@ pub mod tests {
         slot_full: bool,
         prev_entry_hash: Hash,
     ) -> result::Result<(), BlockstoreProcessorError> {
+        let replay_tx_thread_pool = create_thread_pool(1);
         confirm_slot_entries(
             &BankWithScheduler::new_without_scheduler(bank.clone()),
+            &replay_tx_thread_pool,
             (slot_entries, 0, slot_full),
             &mut ConfirmationTiming::default(),
             &mut ConfirmationProgress::new(prev_entry_hash),
@@ -4392,6 +4434,7 @@ pub mod tests {
         let bank = BankWithScheduler::new_without_scheduler(
             Bank::new_with_bank_forks_for_tests(&genesis_config).0,
         );
+        let replay_tx_thread_pool = create_thread_pool(1);
         let mut timing = ConfirmationTiming::default();
         let mut progress = ConfirmationProgress::new(genesis_hash);
         let amount = genesis_config.rent.minimum_balance(0);
@@ -4428,6 +4471,7 @@ pub mod tests {
 
         confirm_slot_entries(
             &bank,
+            &replay_tx_thread_pool,
             (vec![entry], 0, false),
             &mut timing,
             &mut progress,
@@ -4472,6 +4516,7 @@ pub mod tests {
 
         confirm_slot_entries(
             &bank,
+            &replay_tx_thread_pool,
             (vec![entry], 0, false),
             &mut timing,
             &mut progress,
@@ -4584,10 +4629,12 @@ pub mod tests {
             transaction_indexes: (0..txs.len()).collect(),
         };
 
+        let replay_tx_thread_pool = create_thread_pool(1);
         let mut batch_execution_timing = BatchExecutionTiming::default();
         let ignored_prioritization_fee_cache = PrioritizationFeeCache::new(0u64);
         assert!(process_batches(
             &bank,
+            &replay_tx_thread_pool,
             &[batch_with_indexes],
             None,
             None,

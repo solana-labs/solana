@@ -1,0 +1,42 @@
+[package]
+name = "solana-svm"
+description = "Solana SVM"
+documentation = "https://docs.rs/solana-svm"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+itertools = { workspace = true }
+log = { workspace = true }
+percentage = { workspace = true }
+solana-bpf-loader-program = { workspace = true }
+solana-frozen-abi = { workspace = true }
+solana-frozen-abi-macro = { workspace = true }
+solana-loader-v4-program = { workspace = true }
+solana-measure = { workspace = true }
+solana-metrics = { workspace = true }
+solana-program-runtime = { workspace = true }
+solana-sdk = { workspace = true }
+solana-system-program = { workspace = true }
+
+[lib]
+crate-type = ["lib"]
+name = "solana_svm"
+
+[dev-dependencies]
+bincode = { workspace = true }
+solana-logger = { workspace = true }
+solana-sdk = { workspace = true, features = ["dev-context-only-utils"] }
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[build-dependencies]
+rustc_version = { workspace = true }
+
+[features]
+dev-context-only-utils = []

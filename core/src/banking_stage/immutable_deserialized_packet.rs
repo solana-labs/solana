@@ -1,8 +1,6 @@
 use {
     solana_perf::packet::Packet,
-    solana_runtime::transaction_priority_details::{
-        GetTransactionPriorityDetails, TransactionPriorityDetails,
-    },
+    solana_runtime::compute_budget_details::{ComputeBudgetDetails, GetComputeBudgetDetails},
     solana_sdk::{
         feature_set,
         hash::Hash,
@@ -42,7 +40,7 @@ pub struct ImmutableDeserializedPacket {
     transaction: SanitizedVersionedTransaction,
     message_hash: Hash,
     is_simple_vote: bool,
-    priority_details: TransactionPriorityDetails,
+    compute_budget_details: ComputeBudgetDetails,
 }
 
 impl ImmutableDeserializedPacket {
@@ -54,13 +52,13 @@ impl ImmutableDeserializedPacket {
         let is_simple_vote = packet.meta().is_simple_vote_tx();
 
         // drop transaction if prioritization fails.
-        let mut priority_details = sanitized_transaction
-            .get_transaction_priority_details(packet.meta().round_compute_unit_price())
+        let mut compute_budget_details = sanitized_transaction
+            .get_compute_budget_details(packet.meta().round_compute_unit_price())
             .ok_or(DeserializedPacketError::PrioritizationFailure)?;
 
-        // set priority to zero for vote transactions
+        // set compute unit price to zero for vote transactions
         if is_simple_vote {
-            priority_details.priority = 0;
+            compute_budget_details.compute_unit_price = 0;
         };
 
         Ok(Self {
@@ -68,7 +66,7 @@ impl ImmutableDeserializedPacket {
             transaction: sanitized_transaction,
             message_hash,
             is_simple_vote,
-            priority_details,
+            compute_budget_details,
         })
     }
 
@@ -88,16 +86,16 @@ impl ImmutableDeserializedPacket {
         self.is_simple_vote
     }
 
-    pub fn priority(&self) -> u64 {
-        self.priority_details.priority
+    pub fn compute_unit_price(&self) -> u64 {
+        self.compute_budget_details.compute_unit_price
     }
 
     pub fn compute_unit_limit(&self) -> u64 {
-        self.priority_details.compute_unit_limit
+        self.compute_budget_details.compute_unit_limit
     }
 
-    pub fn priority_details(&self) -> TransactionPriorityDetails {
-        self.priority_details.clone()
+    pub fn compute_budget_details(&self) -> ComputeBudgetDetails {
+        self.compute_budget_details.clone()
     }
 
     // This function deserializes packets into transactions, computes the blake3 hash of transaction
@@ -131,7 +129,7 @@ impl PartialOrd for ImmutableDeserializedPacket {
 
 impl Ord for ImmutableDeserializedPacket {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.priority().cmp(&other.priority())
+        self.compute_unit_price().cmp(&other.compute_unit_price())
     }
 }
 

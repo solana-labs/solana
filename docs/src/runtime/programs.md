@@ -1,5 +1,7 @@
 ---
-title: "Native Programs"
+title: "Native Programs in the Solana Runtime"
+pagination_label: Runtime Native Programs
+sidebar_label: Native Programs
 ---
 
 Solana contains a small handful of native programs, which are required to run

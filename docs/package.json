@@ -5,6 +5,7 @@
   "scripts": {
     "start": "docusaurus start",
     "build": "docusaurus build",
+    "serve": "docusaurus serve",
     "clear": "docusaurus clear",
     "help": "docusaurus --help",
     "swizzle": "docusaurus swizzle",
@@ -20,7 +21,7 @@
     "crowdin:upload": "npm run write-i18n && crowdin upload"
   },
   "dependencies": {
-    "@crowdin/cli": "^3.6.1",
+    "@crowdin/cli": "^3.17.0",
     "@docusaurus/core": "^2.2.0",
     "@docusaurus/plugin-google-gtag": "^2.4.0",
     "@docusaurus/preset-classic": "^2.2.0",

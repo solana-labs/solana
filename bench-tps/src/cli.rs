@@ -1,18 +1,19 @@
 use {
-    clap::{crate_description, crate_name, App, Arg, ArgMatches},
+    clap::{crate_description, crate_name, value_t_or_exit, App, Arg, ArgMatches},
     solana_clap_utils::{
         hidden_unless_forced,
         input_validators::{is_keypair, is_url, is_url_or_moniker, is_within_range},
     },
     solana_cli_config::{ConfigInput, CONFIG_FILE},
     solana_sdk::{
+        commitment_config::CommitmentConfig,
         fee_calculator::FeeRateGovernor,
         pubkey::Pubkey,
         signature::{read_keypair_file, Keypair},
     },
     solana_tpu_client::tpu_client::{DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_USE_QUIC},
     std::{
-        net::{IpAddr, Ipv4Addr, SocketAddr},
+        net::{IpAddr, Ipv4Addr},
         time::Duration,
     },
 };
@@ -23,9 +24,6 @@ const NUM_LAMPORTS_PER_ACCOUNT_DEFAULT: u64 = solana_sdk::native_token::LAMPORTS
 pub enum ExternalClientType {
     // Submits transactions to an Rpc node using an RpcClient
     RpcClient,
-    // Submits transactions directly to leaders using a ThinClient, broadcasting to multiple
-    // leaders when num_nodes > 1
-    ThinClient,
     // Submits transactions directly to leaders using a TpuClient, broadcasting to upcoming leaders
     // via TpuClient default configuration
     TpuClient,
@@ -33,7 +31,7 @@ pub enum ExternalClientType {
 
 impl Default for ExternalClientType {
     fn default() -> Self {
-        Self::ThinClient
+        Self::TpuClient
     }
 }
 
@@ -52,12 +50,10 @@ pub enum ComputeUnitPrice {
 /// Holds the configuration for a single run of the benchmark
 #[derive(PartialEq, Debug)]
 pub struct Config {
-    pub entrypoint_addr: SocketAddr,
     pub json_rpc_url: String,
     pub websocket_url: String,
     pub id: Keypair,
     pub threads: usize,
-    pub num_nodes: usize,
     pub duration: Duration,
     pub tx_count: usize,
     pub keypair_multiplier: usize,
@@ -67,19 +63,19 @@ pub struct Config {
     pub write_to_client_file: bool,
     pub read_from_client_file: bool,
     pub target_lamports_per_signature: u64,
-    pub multi_client: bool,
     pub num_lamports_per_account: u64,
     pub target_slots_per_epoch: u64,
-    pub target_node: Option<Pubkey>,
     pub external_client_type: ExternalClientType,
     pub use_quic: bool,
     pub tpu_connection_pool_size: usize,
     pub compute_unit_price: Option<ComputeUnitPrice>,
+    pub skip_tx_account_data_size: bool,
     pub use_durable_nonce: bool,
     pub instruction_padding_config: Option<InstructionPaddingConfig>,
     pub num_conflict_groups: Option<usize>,
     pub bind_address: IpAddr,
     pub client_node_id: Option<Keypair>,
+    pub commitment_config: CommitmentConfig,
 }
 
 impl Eq for Config {}
@@ -87,12 +83,10 @@ impl Eq for Config {}
 impl Default for Config {
     fn default() -> Config {
         Config {
-            entrypoint_addr: SocketAddr::from((Ipv4Addr::LOCALHOST, 8001)),
             json_rpc_url: ConfigInput::default().json_rpc_url,
             websocket_url: ConfigInput::default().websocket_url,
             id: Keypair::new(),
             threads: 4,
-            num_nodes: 1,
             duration: Duration::new(std::u64::MAX, 0),
             tx_count: 50_000,
             keypair_multiplier: 8,
@@ -102,19 +96,19 @@ impl Default for Config {
             write_to_client_file: false,
             read_from_client_file: false,
             target_lamports_per_signature: FeeRateGovernor::default().target_lamports_per_signature,
-            multi_client: true,
             num_lamports_per_account: NUM_LAMPORTS_PER_ACCOUNT_DEFAULT,
             target_slots_per_epoch: 0,
-            target_node: None,
             external_client_type: ExternalClientType::default(),
             use_quic: DEFAULT_TPU_USE_QUIC,
             tpu_connection_pool_size: DEFAULT_TPU_CONNECTION_POOL_SIZE,
             compute_unit_price: None,
+            skip_tx_account_data_size: false,
             use_durable_nonce: false,
             instruction_padding_config: None,
             num_conflict_groups: None,
             bind_address: IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
             client_node_id: None,
+            commitment_config: CommitmentConfig::confirmed(),
         }
     }
 }
@@ -164,20 +158,24 @@ pub fn build_args<'a>(version: &'_ str) -> App<'a, '_> {
                 .long("rpc-addr")
                 .value_name("HOST:PORT")
                 .takes_value(true)
-                .conflicts_with("tpu_client")
                 .conflicts_with("rpc_client")
                 .requires("tpu_addr")
-                .help("Specify custom rpc_addr to create thin_client"),
+                .hidden(hidden_unless_forced())
+                .help("Specify custom rpc_addr to create thin_client. \
+                    Note: ThinClient is deprecated. Argument will not be used. \
+                    Use tpc_client or rpc_client instead"),
         )
         .arg(
             Arg::with_name("tpu_addr")
                 .long("tpu-addr")
                 .value_name("HOST:PORT")
-                .conflicts_with("tpu_client")
                 .conflicts_with("rpc_client")
                 .takes_value(true)
                 .requires("rpc_addr")
-                .help("Specify custom tpu_addr to create thin_client"),
+                .hidden(hidden_unless_forced())
+                .help("Specify custom tpu_addr to create thin_client. \
+                    Note: ThinClient is deprecated. Argument will not be used. \
+                    Use tpc_client or rpc_client instead"),
         )
         .arg(
             Arg::with_name("entrypoint")
@@ -185,7 +183,10 @@ pub fn build_args<'a>(version: &'_ str) -> App<'a, '_> {
                 .long("entrypoint")
                 .value_name("HOST:PORT")
                 .takes_value(true)
-                .help("Rendezvous with the cluster at this entry point; defaults to 127.0.0.1:8001"),
+                .hidden(hidden_unless_forced())
+                .help("Rendezvous with the cluster at this entry point; defaults to 127.0.0.1:8001. \
+                    Note: ThinClient is deprecated. Argument will not be used. \
+                    Use tpc_client or rpc_client instead"),
         )
         .arg(
             Arg::with_name("faucet")
@@ -210,7 +211,10 @@ pub fn build_args<'a>(version: &'_ str) -> App<'a, '_> {
                 .long("num-nodes")
                 .value_name("NUM")
                 .takes_value(true)
-                .help("Wait for NUM nodes to converge"),
+                .hidden(hidden_unless_forced())
+                .help("Wait for NUM nodes to converge. \
+                    Note: ThinClient is deprecated. Argument will not be used. \
+                    Use tpc_client or rpc_client instead"),
         )
         .arg(
             Arg::with_name("threads")
@@ -235,7 +239,10 @@ pub fn build_args<'a>(version: &'_ str) -> App<'a, '_> {
         .arg(
             Arg::with_name("no-multi-client")
                 .long("no-multi-client")
-                .help("Disable multi-client support, only transact with the entrypoint."),
+                .hidden(hidden_unless_forced())
+                .help("Disable multi-client support, only transact with the entrypoint. \
+                    Note: ThinClient is deprecated. Flag will not be used. \
+                    Use tpc_client or rpc_client instead"),
         )
         .arg(
             Arg::with_name("target_node")
@@ -243,7 +250,10 @@ pub fn build_args<'a>(version: &'_ str) -> App<'a, '_> {
                 .requires("no-multi-client")
                 .takes_value(true)
                 .value_name("PUBKEY")
-                .help("Specify an exact node to send transactions to."),
+                .hidden(hidden_unless_forced())
+                .help("Specify an exact node to send transactions to. \
+                    Note: ThinClient is deprecated. Argument will not be used. \
+                    Use tpc_client or rpc_client instead"),
         )
         .arg(
             Arg::with_name("tx_count")
@@ -328,15 +338,13 @@ pub fn build_args<'a>(version: &'_ str) -> App<'a, '_> {
             Arg::with_name("tpu_disable_quic")
                 .long("tpu-disable-quic")
                 .takes_value(false)
-                .help("Do not submit transactions via QUIC; only affects ThinClient (default) \
-                    or TpuClient sends"),
+                .help("Do not submit transactions via QUIC; only affects TpuClient (default) sends"),
         )
         .arg(
             Arg::with_name("tpu_connection_pool_size")
                 .long("tpu-connection-pool-size")
                 .takes_value(true)
-                .help("Controls the connection pool size per remote address; only affects ThinClient (default) \
-                    or TpuClient sends"),
+                .help("Controls the connection pool size per remote address; only affects TpuClient (default) sends"),
         )
         .arg(
             Arg::with_name("compute_unit_price")
@@ -351,6 +359,13 @@ pub fn build_args<'a>(version: &'_ str) -> App<'a, '_> {
                 .takes_value(false)
                 .conflicts_with("compute_unit_price")
                 .help("Sets random compute-unit-price in range [0..100] to transfer transactions"),
+        )
+        .arg(
+            Arg::with_name("skip_tx_account_data_size")
+                .long("skip-tx-account-data-size")
+                .takes_value(false)
+                .conflicts_with("instruction_padding_data_size")
+                .help("Skips setting the account data size for each transaction"),
         )
         .arg(
             Arg::with_name("use_durable_nonce")
@@ -396,6 +411,14 @@ pub fn build_args<'a>(version: &'_ str) -> App<'a, '_> {
                 .validator(is_keypair)
                 .help("File containing the node identity (keypair) of a validator with active stake. This allows communicating with network using staked connection"),
         )
+        .arg(
+            Arg::with_name("commitment_config")
+                .long("commitment-config")
+                .takes_value(true)
+                .possible_values(&["processed", "confirmed", "finalized"])
+                .default_value("confirmed")
+                .help("Block commitment config for getting latest blockhash"),
+        )
 }
 
 /// Parses a clap `ArgMatches` structure into a `Config`
@@ -431,9 +454,7 @@ pub fn parse_args(matches: &ArgMatches) -> Result<Config, &'static str> {
         return Err("could not parse identity path");
     }
 
-    if matches.is_present("tpu_client") {
-        args.external_client_type = ExternalClientType::TpuClient;
-    } else if matches.is_present("rpc_client") {
+    if matches.is_present("rpc_client") {
         args.external_client_type = ExternalClientType::RpcClient;
     }
 
@@ -448,17 +469,8 @@ pub fn parse_args(matches: &ArgMatches) -> Result<Config, &'static str> {
             .map_err(|_| "can't parse tpu-connection-pool-size")?;
     }
 
-    if let Some(addr) = matches.value_of("entrypoint") {
-        args.entrypoint_addr = solana_net_utils::parse_host_port(addr)
-            .map_err(|_| "failed to parse entrypoint address")?;
-    }
-
     if let Some(t) = matches.value_of("threads") {
         args.threads = t.to_string().parse().map_err(|_| "can't parse threads")?;
-    }
-
-    if let Some(n) = matches.value_of("num-nodes") {
-        args.num_nodes = n.to_string().parse().map_err(|_| "can't parse num-nodes")?;
     }
 
     if let Some(duration) = matches.value_of("duration") {
@@ -510,13 +522,6 @@ pub fn parse_args(matches: &ArgMatches) -> Result<Config, &'static str> {
             .map_err(|_| "can't parse target-lamports-per-signature")?;
     }
 
-    args.multi_client = !matches.is_present("no-multi-client");
-    args.target_node = matches
-        .value_of("target_node")
-        .map(|target_str| target_str.parse::<Pubkey>())
-        .transpose()
-        .map_err(|_| "Failed to parse target-node")?;
-
     if let Some(v) = matches.value_of("num_lamports_per_account") {
         args.num_lamports_per_account = v
             .to_string()
@@ -539,6 +544,10 @@ pub fn parse_args(matches: &ArgMatches) -> Result<Config, &'static str> {
 
     if matches.is_present("use_randomized_compute_unit_price") {
         args.compute_unit_price = Some(ComputeUnitPrice::Random);
+    }
+
+    if matches.is_present("skip_tx_account_data_size") {
+        args.skip_tx_account_data_size = true;
     }
 
     if matches.is_present("use_durable_nonce") {
@@ -577,6 +586,8 @@ pub fn parse_args(matches: &ArgMatches) -> Result<Config, &'static str> {
         args.client_node_id = Some(client_node_id);
     }
 
+    args.commitment_config = value_t_or_exit!(matches, "commitment_config", CommitmentConfig);
+
     Ok(args)
 }
 
@@ -586,7 +597,7 @@ mod tests {
         super::*,
         solana_sdk::signature::{read_keypair_file, write_keypair_file, Keypair, Signer},
         std::{
-            net::{IpAddr, Ipv4Addr, SocketAddr},
+            net::{IpAddr, Ipv4Addr},
             time::Duration,
         },
         tempfile::{tempdir, TempDir},
@@ -646,8 +657,6 @@ mod tests {
             "4",
             "--read-client-keys",
             "./client-accounts.yml",
-            "--entrypoint",
-            "192.1.2.3:8001",
         ]);
         let actual = parse_args(&matches).unwrap();
         assert_eq!(
@@ -661,12 +670,11 @@ mod tests {
                 threads: 4,
                 read_from_client_file: true,
                 client_ids_and_stake_file: "./client-accounts.yml".to_string(),
-                entrypoint_addr: SocketAddr::from((Ipv4Addr::new(192, 1, 2, 3), 8001)),
                 ..Config::default()
             }
         );
 
-        // select different client type
+        // select different client type and CommitmentConfig
         let keypair = read_keypair_file(&keypair_file_name).unwrap();
         let matches = build_args("1.0.0").get_matches_from(vec![
             "solana-bench-tps",
@@ -674,7 +682,9 @@ mod tests {
             &keypair_file_name,
             "-u",
             "http://123.4.5.6:8899",
-            "--use-tpu-client",
+            "--use-rpc-client",
+            "--commitment-config",
+            "finalized",
         ]);
         let actual = parse_args(&matches).unwrap();
         assert_eq!(
@@ -683,7 +693,8 @@ mod tests {
                 json_rpc_url: "http://123.4.5.6:8899".to_string(),
                 websocket_url: "ws://123.4.5.6:8900/".to_string(),
                 id: keypair,
-                external_client_type: ExternalClientType::TpuClient,
+                external_client_type: ExternalClientType::RpcClient,
+                commitment_config: CommitmentConfig::finalized(),
                 ..Config::default()
             }
         );

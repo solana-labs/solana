@@ -157,6 +157,7 @@ fn recv_loop(
 }
 
 pub fn receiver(
+    thread_name: String,
     socket: Arc<UdpSocket>,
     exit: Arc<AtomicBool>,
     packet_batch_sender: PacketBatchSender,
@@ -169,7 +170,7 @@ pub fn receiver(
     let res = socket.set_read_timeout(Some(Duration::new(1, 0)));
     assert!(res.is_ok(), "streamer::receiver set_read_timeout error");
     Builder::new()
-        .name("solReceiver".to_string())
+        .name(thread_name)
         .spawn(move || {
             let _ = recv_loop(
                 &socket,
@@ -480,6 +481,7 @@ mod test {
         let (s_reader, r_reader) = unbounded();
         let stats = Arc::new(StreamerReceiveStats::new("test"));
         let t_receiver = receiver(
+            "solRcvrTest".to_string(),
             Arc::new(read),
             exit.clone(),
             s_reader,

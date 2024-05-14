@@ -66,6 +66,8 @@ pub enum Error {
     Blockstore(#[from] solana_ledger::blockstore::BlockstoreError),
     #[error(transparent)]
     ClusterInfo(#[from] solana_gossip::cluster_info::ClusterInfoError),
+    #[error("Invalid Merkle root, slot: {slot}, index: {index}")]
+    InvalidMerkleRoot { slot: Slot, index: u64 },
     #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error(transparent)]
@@ -76,8 +78,14 @@ pub enum Error {
     Send,
     #[error(transparent)]
     Serialize(#[from] std::boxed::Box<bincode::ErrorKind>),
+    #[error("Shred not found, slot: {slot}, index: {index}")]
+    ShredNotFound { slot: Slot, index: u64 },
     #[error(transparent)]
     TransportError(#[from] solana_sdk::transport::TransportError),
+    #[error("Unknown last index, slot: {0}")]
+    UnknownLastIndex(Slot),
+    #[error("Unknown slot meta, slot: {0}")]
+    UnknownSlotMeta(Slot),
 }
 
 type Result<T> = std::result::Result<T, Error>;
@@ -503,6 +511,7 @@ pub mod test {
     use {
         super::*,
         crossbeam_channel::unbounded,
+        rand::Rng,
         solana_entry::entry::create_ticks,
         solana_gossip::cluster_info::{ClusterInfo, Node},
         solana_ledger::{
@@ -544,6 +553,8 @@ pub mod test {
             &Keypair::new(),
             &entries,
             true, // is_last_in_slot
+            // chained_merkle_root
+            Some(Hash::new_from_array(rand::thread_rng().gen())),
             0,    // next_shred_index,
             0,    // next_code_index
             true, // merkle_variant

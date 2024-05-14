@@ -31,6 +31,7 @@ serde_derive = { workspace = true }
 solana-bloom = { workspace = true }
 solana-clap-utils = { workspace = true }
 solana-client = { workspace = true }
+solana-connection-cache = { workspace = true }
 solana-entry = { workspace = true }
 solana-frozen-abi = { workspace = true }
 solana-frozen-abi-macro = { workspace = true }
@@ -44,7 +45,6 @@ solana-rayon-threadlimit = { workspace = true }
 solana-runtime = { workspace = true }
 solana-sdk = { workspace = true }
 solana-streamer = { workspace = true }
-solana-thin-client = { workspace = true }
 solana-tpu-client = { workspace = true }
 solana-version = { workspace = true }
 solana-vote = { workspace = true }

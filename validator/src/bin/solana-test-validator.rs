@@ -285,17 +285,20 @@ fn main() {
     let warp_slot = if matches.is_present("warp_slot") {
         Some(match matches.value_of("warp_slot") {
             Some(_) => value_t_or_exit!(matches, "warp_slot", Slot),
-            None => {
-                cluster_rpc_client.as_ref().unwrap_or_else(|_| {
-                        println!("The --url argument must be provided if --warp-slot/-w is used without an explicit slot");
-                        exit(1);
-
-                }).get_slot()
-                    .unwrap_or_else(|err| {
-                        println!("Unable to get current cluster slot: {err}");
-                        exit(1);
-                    })
-            }
+            None => cluster_rpc_client
+                .as_ref()
+                .unwrap_or_else(|_| {
+                    println!(
+                        "The --url argument must be provided if --warp-slot/-w is used without an \
+                         explicit slot"
+                    );
+                    exit(1);
+                })
+                .get_slot()
+                .unwrap_or_else(|err| {
+                    println!("Unable to get current cluster slot: {err}");
+                    exit(1);
+                }),
         })
     } else {
         None

@@ -236,14 +236,10 @@ impl QosService {
             batched_transaction_details.costs.batched_data_bytes_cost,
             Ordering::Relaxed,
         );
-        self.metrics.stats.estimated_builtins_execute_cu.fetch_add(
+        self.metrics.stats.estimated_programs_execute_cu.fetch_add(
             batched_transaction_details
                 .costs
-                .batched_builtins_execute_cost,
-            Ordering::Relaxed,
-        );
-        self.metrics.stats.estimated_bpf_execute_cu.fetch_add(
-            batched_transaction_details.costs.batched_bpf_execute_cost,
+                .batched_programs_execute_cost,
             Ordering::Relaxed,
         );
 
@@ -297,7 +293,7 @@ impl QosService {
     pub fn accumulate_actual_execute_cu(&self, units: u64) {
         self.metrics
             .stats
-            .actual_bpf_execute_cu
+            .actual_programs_execute_cu
             .fetch_add(units, Ordering::Relaxed);
     }
 
@@ -331,12 +327,8 @@ impl QosService {
                 saturating_add_assign!(
                     batched_transaction_details
                         .costs
-                        .batched_builtins_execute_cost,
-                    cost.builtins_execution_cost()
-                );
-                saturating_add_assign!(
-                    batched_transaction_details.costs.batched_bpf_execute_cost,
-                    cost.bpf_execution_cost()
+                        .batched_programs_execute_cost,
+                    cost.programs_execution_cost()
                 );
             }
             Err(transaction_error) => match transaction_error {
@@ -407,11 +399,11 @@ struct QosServiceMetricsStats {
     /// overhead introduced by cost_model
     compute_cost_time: AtomicU64,
 
-    /// total nummber of transactions in the reporting period to be computed for theit cost. It is
+    /// total number of transactions in the reporting period to be computed for their cost. It is
     /// usually the number of sanitized transactions leader receives.
     compute_cost_count: AtomicU64,
 
-    /// acumulated time in micro-sec spent in tracking each bank's cost. It is the second part of
+    /// accumulated time in micro-sec spent in tracking each bank's cost. It is the second part of
     /// overhead introduced
     cost_tracking_time: AtomicU64,
 
@@ -424,17 +416,14 @@ struct QosServiceMetricsStats {
     /// accumulated estimated write locks Compute Units to be packed into block
     estimated_write_lock_cu: AtomicU64,
 
-    /// accumulated estimated instructino data Compute Units to be packed into block
+    /// accumulated estimated instruction data Compute Units to be packed into block
     estimated_data_bytes_cu: AtomicU64,
 
-    /// accumulated estimated builtin programs Compute Units to be packed into block
-    estimated_builtins_execute_cu: AtomicU64,
-
-    /// accumulated estimated SBF program Compute Units to be packed into block
-    estimated_bpf_execute_cu: AtomicU64,
+    /// accumulated estimated program Compute Units to be packed into block
+    estimated_programs_execute_cu: AtomicU64,
 
     /// accumulated actual program Compute Units that have been packed into block
-    actual_bpf_execute_cu: AtomicU64,
+    actual_programs_execute_cu: AtomicU64,
 
     /// accumulated actual program execute micro-sec that have been packed into block
     actual_execute_time_us: AtomicU64,
@@ -515,22 +504,17 @@ impl QosServiceMetrics {
                     i64
                 ),
                 (
-                    "estimated_builtins_execute_cu",
+                    "estimated_programs_execute_cu",
                     self.stats
-                        .estimated_builtins_execute_cu
+                        .estimated_programs_execute_cu
                         .swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
-                    "estimated_bpf_execute_cu",
+                    "actual_programs_execute_cu",
                     self.stats
-                        .estimated_bpf_execute_cu
+                        .actual_programs_execute_cu
                         .swap(0, Ordering::Relaxed),
-                    i64
-                ),
-                (
-                    "actual_bpf_execute_cu",
-                    self.stats.actual_bpf_execute_cu.swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
@@ -732,17 +716,17 @@ mod tests {
                 bank.read_cost_tracker().unwrap().block_cost()
             );
             // all transactions are committed with actual units more than estimated
-            let commited_status: Vec<CommitTransactionDetails> = qos_cost_results
+            let committed_status: Vec<CommitTransactionDetails> = qos_cost_results
                 .iter()
                 .map(|tx_cost| CommitTransactionDetails::Committed {
-                    compute_units: tx_cost.as_ref().unwrap().bpf_execution_cost()
+                    compute_units: tx_cost.as_ref().unwrap().programs_execution_cost()
                         + execute_units_adjustment,
                 })
                 .collect();
             let final_txs_cost = total_txs_cost + execute_units_adjustment * transaction_count;
 
             // All transactions are committed, no costs should be removed
-            QosService::remove_costs(qos_cost_results.iter(), Some(&commited_status), &bank);
+            QosService::remove_costs(qos_cost_results.iter(), Some(&committed_status), &bank);
             assert_eq!(
                 total_txs_cost,
                 bank.read_cost_tracker().unwrap().block_cost()
@@ -752,7 +736,7 @@ mod tests {
                 bank.read_cost_tracker().unwrap().transaction_count()
             );
 
-            QosService::update_costs(qos_cost_results.iter(), Some(&commited_status), &bank);
+            QosService::update_costs(qos_cost_results.iter(), Some(&committed_status), &bank);
             assert_eq!(
                 final_txs_cost,
                 bank.read_cost_tracker().unwrap().block_cost()
@@ -835,7 +819,7 @@ mod tests {
             .collect();
         let execute_units_adjustment = 10u64;
 
-        // assert only commited tx_costs are applied cost_tracker
+        // assert only committed tx_costs are applied cost_tracker
         {
             let qos_service = QosService::new(1);
             let txs_costs = qos_service.compute_transaction_costs(
@@ -854,7 +838,7 @@ mod tests {
                 bank.read_cost_tracker().unwrap().block_cost()
             );
             // Half of transactions are not committed, the rest with cost adjustment
-            let commited_status: Vec<CommitTransactionDetails> = qos_cost_results
+            let committed_status: Vec<CommitTransactionDetails> = qos_cost_results
                 .iter()
                 .enumerate()
                 .map(|(n, tx_cost)| {
@@ -862,15 +846,15 @@ mod tests {
                         CommitTransactionDetails::NotCommitted
                     } else {
                         CommitTransactionDetails::Committed {
-                            compute_units: tx_cost.as_ref().unwrap().bpf_execution_cost()
+                            compute_units: tx_cost.as_ref().unwrap().programs_execution_cost()
                                 + execute_units_adjustment,
                         }
                     }
                 })
                 .collect();
 
-            QosService::remove_costs(qos_cost_results.iter(), Some(&commited_status), &bank);
-            QosService::update_costs(qos_cost_results.iter(), Some(&commited_status), &bank);
+            QosService::remove_costs(qos_cost_results.iter(), Some(&committed_status), &bank);
+            QosService::update_costs(qos_cost_results.iter(), Some(&committed_status), &bank);
 
             // assert the final block cost
             let mut expected_final_txs_count = 0u64;
@@ -898,8 +882,7 @@ mod tests {
         let signature_cost = 1;
         let write_lock_cost = 2;
         let data_bytes_cost = 3;
-        let builtins_execution_cost = 4;
-        let bpf_execution_cost = 10;
+        let programs_execution_cost = 10;
         let num_txs = 4;
 
         let tx_cost_results: Vec<_> = (0..num_txs)
@@ -909,8 +892,7 @@ mod tests {
                         signature_cost,
                         write_lock_cost,
                         data_bytes_cost,
-                        builtins_execution_cost,
-                        bpf_execution_cost,
+                        programs_execution_cost,
                         ..UsageCostDetails::default()
                     }))
                 } else {
@@ -922,8 +904,7 @@ mod tests {
         let expected_signatures = signature_cost * (num_txs / 2);
         let expected_write_locks = write_lock_cost * (num_txs / 2);
         let expected_data_bytes = data_bytes_cost * (num_txs / 2);
-        let expected_builtins_execution_costs = builtins_execution_cost * (num_txs / 2);
-        let expected_bpf_execution_costs = bpf_execution_cost * (num_txs / 2);
+        let expected_programs_execution_costs = programs_execution_cost * (num_txs / 2);
         let batched_transaction_details =
             QosService::accumulate_batched_transaction_costs(tx_cost_results.iter());
         assert_eq!(
@@ -939,14 +920,10 @@ mod tests {
             batched_transaction_details.costs.batched_data_bytes_cost
         );
         assert_eq!(
-            expected_builtins_execution_costs,
+            expected_programs_execution_costs,
             batched_transaction_details
                 .costs
-                .batched_builtins_execute_cost
-        );
-        assert_eq!(
-            expected_bpf_execution_costs,
-            batched_transaction_details.costs.batched_bpf_execute_cost
+                .batched_programs_execute_cost
         );
     }
 }

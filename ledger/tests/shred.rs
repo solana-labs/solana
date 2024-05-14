@@ -53,6 +53,7 @@ fn test_multi_fec_block_coding() {
         &keypair,
         &entries,
         true,  // is_last_in_slot
+        None,  // chained_merkle_root
         0,     // next_shred_index
         0,     // next_code_index
         false, // merkle_variant
@@ -226,6 +227,7 @@ fn setup_different_sized_fec_blocks(
             &keypair,
             &entries,
             is_last,
+            None, // chained_merkle_root
             next_shred_index,
             next_code_index,
             false, // merkle_variant

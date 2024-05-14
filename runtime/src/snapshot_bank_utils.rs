@@ -2,7 +2,6 @@ use {
     crate::{
         bank::{Bank, BankFieldsToDeserialize, BankSlotDelta},
         builtins::BuiltinPrototype,
-        runtime_config::RuntimeConfig,
         serde_snapshot::{
             bank_from_streams, bank_to_stream, fields_from_streams,
             BankIncrementalSnapshotPersistence, SerdeStyle,
@@ -19,7 +18,7 @@ use {
             get_snapshot_file_name, get_storages_to_serialize, hard_link_storages_to_snapshot,
             rebuild_storages_from_snapshot_dir, serialize_snapshot_data_file,
             verify_and_unarchive_snapshots, verify_unpacked_snapshots_dir_and_version,
-            AddBankSnapshotError, ArchiveFormat, BankSnapshotInfo, BankSnapshotType, SnapshotError,
+            AddBankSnapshotError, ArchiveFormat, BankSnapshotInfo, BankSnapshotKind, SnapshotError,
             SnapshotRootPaths, SnapshotVersion, StorageAndNextAppendVecId,
             UnpackedSnapshotsDirAndVersion, VerifySlotDeltasError,
         },
@@ -38,6 +37,7 @@ use {
         utils::delete_contents_of_path,
     },
     solana_measure::{measure, measure::Measure},
+    solana_program_runtime::runtime_config::RuntimeConfig,
     solana_sdk::{
         clock::Slot,
         feature_set,
@@ -187,7 +187,7 @@ pub fn add_bank_snapshot(
 
         Ok(BankSnapshotInfo {
             slot,
-            snapshot_type: BankSnapshotType::Pre,
+            snapshot_kind: BankSnapshotKind::Pre,
             snapshot_dir: bank_snapshot_dir,
             snapshot_version,
         })
@@ -1236,7 +1236,7 @@ pub fn create_snapshot_dirs_for_tests(
             continue; // leave the snapshot dir at PRE stage
         }
 
-        // Reserialize the snapshot dir to convert it from PRE to POST, because only the POST type can be used
+        // Reserialize the snapshot dir to convert it from PRE to POST, because only the POST kind can be used
         // to construct a bank.
         assert!(
             crate::serde_snapshot::reserialize_bank_with_new_accounts_hash(
@@ -1261,7 +1261,7 @@ mod tests {
             snapshot_utils::{
                 clean_orphaned_account_snapshot_dirs, create_tmp_accounts_dir_for_tests,
                 get_bank_snapshots, get_bank_snapshots_post, get_bank_snapshots_pre,
-                get_highest_bank_snapshot, purge_bank_snapshot,
+                get_highest_bank_snapshot, purge_all_bank_snapshots, purge_bank_snapshot,
                 purge_bank_snapshots_older_than_slot, purge_incomplete_bank_snapshots,
                 purge_old_bank_snapshots, purge_old_bank_snapshots_at_startup,
                 snapshot_storage_rebuilder::get_slot_and_append_vec_id, ArchiveFormat,
@@ -2406,6 +2406,19 @@ mod tests {
     }
 
     #[test]
+    fn test_purge_all_bank_snapshots() {
+        let genesis_config = GenesisConfig::default();
+        let bank_snapshots_dir = tempfile::TempDir::new().unwrap();
+        let _bank = create_snapshot_dirs_for_tests(&genesis_config, &bank_snapshots_dir, 10, 5);
+        // Keep bank in this scope so that its account_paths tmp dirs are not released, and purge_all_bank_snapshots
+        // can clear the account hardlinks correctly.
+
+        assert_eq!(get_bank_snapshots(&bank_snapshots_dir).len(), 10);
+        purge_all_bank_snapshots(&bank_snapshots_dir);
+        assert_eq!(get_bank_snapshots(&bank_snapshots_dir).len(), 0);
+    }
+
+    #[test]
     fn test_purge_old_bank_snapshots() {
         let genesis_config = GenesisConfig::default();
         let bank_snapshots_dir = tempfile::TempDir::new().unwrap();
@@ -2415,10 +2428,10 @@ mod tests {
 
         assert_eq!(get_bank_snapshots(&bank_snapshots_dir).len(), 10);
 
-        purge_old_bank_snapshots(&bank_snapshots_dir, 3, Some(BankSnapshotType::Pre));
+        purge_old_bank_snapshots(&bank_snapshots_dir, 3, Some(BankSnapshotKind::Pre));
         assert_eq!(get_bank_snapshots_pre(&bank_snapshots_dir).len(), 3);
 
-        purge_old_bank_snapshots(&bank_snapshots_dir, 2, Some(BankSnapshotType::Post));
+        purge_old_bank_snapshots(&bank_snapshots_dir, 2, Some(BankSnapshotKind::Post));
         assert_eq!(get_bank_snapshots_post(&bank_snapshots_dir).len(), 2);
 
         assert_eq!(get_bank_snapshots(&bank_snapshots_dir).len(), 5);

@@ -15,7 +15,6 @@ use {
         quic_client::QuicClientConnection as BlockingQuicClientConnection,
     },
     quinn::Endpoint,
-    rcgen::RcgenError,
     solana_connection_cache::{
         connection_cache::{
             BaseClientConnection, ClientError, ConnectionCache, ConnectionManager, ConnectionPool,
@@ -30,20 +29,13 @@ use {
     solana_streamer::{
         nonblocking::quic::{compute_max_allowed_uni_streams, ConnectionPeerType},
         streamer::StakedNodes,
-        tls_certificates::new_self_signed_tls_certificate,
+        tls_certificates::new_dummy_x509_certificate,
     },
     std::{
-        net::{IpAddr, Ipv4Addr, SocketAddr},
+        net::{IpAddr, SocketAddr},
         sync::{Arc, RwLock},
     },
-    thiserror::Error,
 };
-
-#[derive(Error, Debug)]
-pub enum QuicClientError {
-    #[error("Certificate error: {0}")]
-    CertificateError(#[from] RcgenError),
-}
 
 pub struct QuicPool {
     connections: Vec<Arc<Quic>>,
@@ -93,7 +85,6 @@ pub struct QuicConfig {
     // The optional specified endpoint for the quic based client connections
     // If not specified, the connection cache will create as needed.
     client_endpoint: Option<Endpoint>,
-    addr: IpAddr,
 }
 
 impl Clone for QuicConfig {
@@ -104,15 +95,13 @@ impl Clone for QuicConfig {
             maybe_staked_nodes: self.maybe_staked_nodes.clone(),
             maybe_client_pubkey: self.maybe_client_pubkey,
             client_endpoint: self.client_endpoint.clone(),
-            addr: self.addr,
         }
     }
 }
 
 impl NewConnectionConfig for QuicConfig {
     fn new() -> Result<Self, ClientError> {
-        let addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
-        let (cert, priv_key) = new_self_signed_tls_certificate(&Keypair::new(), addr)?;
+        let (cert, priv_key) = new_dummy_x509_certificate(&Keypair::new());
         Ok(Self {
             client_certificate: RwLock::new(Arc::new(QuicClientCertificate {
                 certificate: cert,
@@ -121,7 +110,6 @@ impl NewConnectionConfig for QuicConfig {
             maybe_staked_nodes: None,
             maybe_client_pubkey: None,
             client_endpoint: None,
-            addr,
         })
     }
 }
@@ -150,13 +138,8 @@ impl QuicConfig {
         compute_max_allowed_uni_streams(client_type, total_stake)
     }
 
-    pub fn update_client_certificate(
-        &mut self,
-        keypair: &Keypair,
-        ipaddr: IpAddr,
-    ) -> Result<(), RcgenError> {
-        let (cert, priv_key) = new_self_signed_tls_certificate(keypair, ipaddr)?;
-        self.addr = ipaddr;
+    pub fn update_client_certificate(&mut self, keypair: &Keypair, _ipaddr: IpAddr) {
+        let (cert, priv_key) = new_dummy_x509_certificate(keypair);
 
         let mut cert_guard = self.client_certificate.write().unwrap();
 
@@ -164,11 +147,10 @@ impl QuicConfig {
             certificate: cert,
             key: priv_key,
         });
-        Ok(())
     }
 
-    pub fn update_keypair(&self, keypair: &Keypair) -> Result<(), RcgenError> {
-        let (cert, priv_key) = new_self_signed_tls_certificate(keypair, self.addr)?;
+    pub fn update_keypair(&self, keypair: &Keypair) {
+        let (cert, priv_key) = new_dummy_x509_certificate(keypair);
 
         let mut cert_guard = self.client_certificate.write().unwrap();
 
@@ -176,7 +158,6 @@ impl QuicConfig {
             certificate: cert,
             key: priv_key,
         });
-        Ok(())
     }
 
     pub fn set_staked_nodes(
@@ -243,7 +224,7 @@ impl ConnectionManager for QuicConnectionManager {
     }
 
     fn update_key(&self, key: &Keypair) -> Result<(), Box<dyn std::error::Error>> {
-        self.connection_config.update_keypair(key)?;
+        self.connection_config.update_keypair(key);
         Ok(())
     }
 }
@@ -264,7 +245,7 @@ pub fn new_quic_connection_cache(
     connection_pool_size: usize,
 ) -> Result<QuicConnectionCache, ClientError> {
     let mut config = QuicConfig::new()?;
-    config.update_client_certificate(keypair, ipaddr)?;
+    config.update_client_certificate(keypair, ipaddr);
     config.set_staked_nodes(staked_nodes, &keypair.pubkey());
     let connection_manager = QuicConnectionManager::new_with_connection_config(config);
     ConnectionCache::new(name, connection_manager, connection_pool_size)

@@ -285,8 +285,7 @@ pub struct BatchedTransactionCostDetails {
     pub batched_signature_cost: u64,
     pub batched_write_lock_cost: u64,
     pub batched_data_bytes_cost: u64,
-    pub batched_builtins_execute_cost: u64,
-    pub batched_bpf_execute_cost: u64,
+    pub batched_programs_execute_cost: u64,
 }
 
 #[derive(Debug, Default)]
@@ -659,7 +658,10 @@ impl BankingStage {
         }
         let (decision, make_decision_time) =
             measure!(decision_maker.make_consume_or_forward_decision());
-        let metrics_action = slot_metrics_tracker.check_leader_slot_boundary(decision.bank_start());
+        let metrics_action = slot_metrics_tracker.check_leader_slot_boundary(
+            decision.bank_start(),
+            Some(unprocessed_transaction_storage),
+        );
         slot_metrics_tracker.increment_make_decision_us(make_decision_time.as_us());
 
         match decision {

@@ -143,6 +143,7 @@ impl Tvu {
         repair_quic_endpoint_sender: AsyncSender<LocalRequest>,
         outstanding_repair_requests: Arc<RwLock<OutstandingShredRepairs>>,
         cluster_slots: Arc<ClusterSlots>,
+        wen_restart_repair_slots: Option<Arc<RwLock<Vec<Slot>>>>,
     ) -> Result<Self, String> {
         let TvuSockets {
             repair: repair_socket,
@@ -214,6 +215,7 @@ impl Tvu {
                 repair_whitelist: tvu_config.repair_whitelist,
                 cluster_info: cluster_info.clone(),
                 cluster_slots: cluster_slots.clone(),
+                wen_restart_repair_slots,
             };
             WindowService::new(
                 blockstore.clone(),
@@ -228,7 +230,7 @@ impl Tvu {
                 leader_schedule_cache.clone(),
                 verified_vote_receiver,
                 completed_data_sets_sender,
-                duplicate_slots_sender,
+                duplicate_slots_sender.clone(),
                 ancestor_hashes_replay_update_receiver,
                 dumped_slots_receiver,
                 popular_pruned_forks_sender,
@@ -246,14 +248,12 @@ impl Tvu {
             exit.clone(),
         );
 
-        let (blockstore_cleanup_slot_sender, blockstore_cleanup_slot_receiver) = unbounded();
         let replay_stage_config = ReplayStageConfig {
             vote_account: *vote_account,
             authorized_voter_keypairs,
             exit: exit.clone(),
             rpc_subscriptions: rpc_subscriptions.clone(),
             leader_schedule_cache: leader_schedule_cache.clone(),
-            latest_root_senders: vec![blockstore_cleanup_slot_sender],
             accounts_background_request_sender,
             block_commitment_cache,
             transaction_status_sender,
@@ -322,12 +322,7 @@ impl Tvu {
         )?;
 
         let blockstore_cleanup_service = tvu_config.max_ledger_shreds.map(|max_ledger_shreds| {
-            BlockstoreCleanupService::new(
-                blockstore_cleanup_slot_receiver,
-                blockstore.clone(),
-                max_ledger_shreds,
-                exit.clone(),
-            )
+            BlockstoreCleanupService::new(blockstore.clone(), max_ledger_shreds, exit.clone())
         });
 
         let duplicate_shred_listener = DuplicateShredListener::new(
@@ -337,6 +332,7 @@ impl Tvu {
                 blockstore,
                 leader_schedule_cache.clone(),
                 bank_forks.clone(),
+                duplicate_slots_sender,
             ),
         );
 
@@ -505,6 +501,7 @@ pub mod tests {
             repair_quic_endpoint_sender,
             outstanding_repair_requests,
             cluster_slots,
+            None,
         )
         .expect("assume success");
         exit.store(true, Ordering::Relaxed);

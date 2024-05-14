@@ -19,7 +19,6 @@ use {
     solana_account_decoder::{parse_token::is_known_spl_token_id, UiAccount, UiAccountEncoding},
     solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path},
     solana_measure::measure::Measure,
-    solana_rayon_threadlimit::get_thread_count,
     solana_rpc_client_api::response::{
         ProcessedSignatureResult, ReceivedSignatureResult, Response as RpcResponse, RpcBlockUpdate,
         RpcBlockUpdateError, RpcKeyedAccount, RpcLogsResponse, RpcResponseContext,
@@ -631,41 +630,37 @@ impl RpcSubscriptions {
                 config.queue_capacity_bytes,
             )),
         };
-        let notification_threads = config.notification_threads.unwrap_or_else(get_thread_count);
-        let t_cleanup = if notification_threads == 0 {
-            None
-        } else {
+
+        let t_cleanup = config.notification_threads.map(|notification_threads| {
             let exit = exit.clone();
-            Some(
-                Builder::new()
-                    .name("solRpcNotifier".to_string())
-                    .spawn(move || {
-                        let pool = rayon::ThreadPoolBuilder::new()
-                            .num_threads(notification_threads)
-                            .thread_name(|i| format!("solRpcNotify{i:02}"))
-                            .build()
-                            .unwrap();
-                        pool.install(|| {
-                            if let Some(rpc_notifier_ready) = rpc_notifier_ready {
-                                rpc_notifier_ready.fetch_or(true, Ordering::Relaxed);
-                            }
-                            Self::process_notifications(
-                                exit,
-                                max_complete_transaction_status_slot,
-                                max_complete_rewards_slot,
-                                blockstore,
-                                notifier,
-                                notification_receiver,
-                                subscriptions,
-                                bank_forks,
-                                block_commitment_cache,
-                                optimistically_confirmed_bank,
-                            )
-                        });
-                    })
-                    .unwrap(),
-            )
-        };
+            Builder::new()
+                .name("solRpcNotifier".to_string())
+                .spawn(move || {
+                    let pool = rayon::ThreadPoolBuilder::new()
+                        .num_threads(notification_threads.get())
+                        .thread_name(|i| format!("solRpcNotify{i:02}"))
+                        .build()
+                        .unwrap();
+                    pool.install(|| {
+                        if let Some(rpc_notifier_ready) = rpc_notifier_ready {
+                            rpc_notifier_ready.fetch_or(true, Ordering::Relaxed);
+                        }
+                        Self::process_notifications(
+                            exit,
+                            max_complete_transaction_status_slot,
+                            max_complete_rewards_slot,
+                            blockstore,
+                            notifier,
+                            notification_receiver,
+                            subscriptions,
+                            bank_forks,
+                            block_commitment_cache,
+                            optimistically_confirmed_bank,
+                        )
+                    });
+                })
+                .unwrap()
+        });
 
         let control = SubscriptionControl::new(
             config.max_active_subscriptions,
@@ -674,11 +669,7 @@ impl RpcSubscriptions {
         );
 
         Self {
-            notification_sender: if notification_threads == 0 {
-                None
-            } else {
-                Some(notification_sender)
-            },
+            notification_sender: config.notification_threads.map(|_| notification_sender),
             t_cleanup,
             exit,
             control,

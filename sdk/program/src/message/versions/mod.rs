@@ -79,7 +79,7 @@ impl VersionedMessage {
     /// used in the runtime.
     pub fn is_maybe_writable(&self, index: usize) -> bool {
         match self {
-            Self::Legacy(message) => message.is_writable(index),
+            Self::Legacy(message) => message.is_maybe_writable(index),
             Self::V0(message) => message.is_maybe_writable(index),
         }
     }
@@ -148,7 +148,7 @@ impl VersionedMessage {
         let mut hasher = blake3::Hasher::new();
         hasher.update(b"solana-tx-message-v1");
         hasher.update(message_bytes);
-        Hash(<[u8; crate::hash::HASH_BYTES]>::try_from(hasher.finalize().as_slice()).unwrap())
+        Hash(hasher.finalize().into())
     }
 }
 

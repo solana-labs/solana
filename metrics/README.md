@@ -41,8 +41,8 @@ The cluster telemetry dashboard shows the current state of the cluster:
 
 The fee market dashboard shows:
 
-1. Total Priorization Fees
-2. Block Min Priorization Fees
+1. Total Prioritization Fees
+2. Block Min Prioritization Fees
 3. Cost Tracker Stats
 
 ### Ping Results

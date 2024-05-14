@@ -1,10 +1,10 @@
 //! The account meta and related structs for the tiered storage.
 
 use {
-    crate::{accounts_hash::AccountHash, tiered_storage::owners::OwnerOffset},
+    crate::tiered_storage::owners::OwnerOffset,
     bytemuck::{Pod, Zeroable},
     modular_bitfield::prelude::*,
-    solana_sdk::stake_history::Epoch,
+    solana_sdk::{pubkey::Pubkey, stake_history::Epoch},
 };
 
 /// The struct that handles the account meta flags.
@@ -14,12 +14,10 @@ use {
 pub struct AccountMetaFlags {
     /// whether the account meta has rent epoch
     pub has_rent_epoch: bool,
-    /// whether the account meta has account hash
-    pub has_account_hash: bool,
     /// whether the account is executable
     pub executable: bool,
     /// the reserved bits.
-    reserved: B29,
+    reserved: B30,
 }
 
 // Ensure there are no implicit padding bytes
@@ -70,10 +68,6 @@ pub trait TieredAccountMeta: Sized {
     /// does not persist this optional field.
     fn rent_epoch(&self, _account_block: &[u8]) -> Option<Epoch>;
 
-    /// Returns the account hash by parsing the specified account block.  None
-    /// will be returned if this account does not persist this optional field.
-    fn account_hash<'a>(&self, _account_block: &'a [u8]) -> Option<&'a AccountHash>;
-
     /// Returns the offset of the optional fields based on the specified account
     /// block.
     fn optional_fields_offset(&self, _account_block: &[u8]) -> usize;
@@ -91,7 +85,6 @@ impl AccountMetaFlags {
     pub fn new_from(optional_fields: &AccountMetaOptionalFields) -> Self {
         let mut flags = AccountMetaFlags::default();
         flags.set_has_rent_epoch(optional_fields.rent_epoch.is_some());
-        flags.set_has_account_hash(optional_fields.account_hash.is_some());
         flags.set_executable(false);
         flags
     }
@@ -105,17 +98,12 @@ impl AccountMetaFlags {
 pub struct AccountMetaOptionalFields {
     /// the epoch at which its associated account will next owe rent
     pub rent_epoch: Option<Epoch>,
-    /// the hash of its associated account
-    pub account_hash: Option<AccountHash>,
 }
 
 impl AccountMetaOptionalFields {
     /// The size of the optional fields in bytes (excluding the boolean flags).
     pub fn size(&self) -> usize {
         self.rent_epoch.map_or(0, |_| std::mem::size_of::<Epoch>())
-            + self
-                .account_hash
-                .map_or(0, |_| std::mem::size_of::<AccountHash>())
     }
 
     /// Given the specified AccountMetaFlags, returns the size of its
@@ -124,9 +112,6 @@ impl AccountMetaOptionalFields {
         let mut fields_size = 0;
         if flags.has_rent_epoch() {
             fields_size += std::mem::size_of::<Epoch>();
-        }
-        if flags.has_account_hash() {
-            fields_size += std::mem::size_of::<AccountHash>();
         }
 
         fields_size
@@ -137,29 +122,49 @@ impl AccountMetaOptionalFields {
     pub fn rent_epoch_offset(_flags: &AccountMetaFlags) -> usize {
         0
     }
+}
 
-    /// Given the specified AccountMetaFlags, returns the relative offset
-    /// of its account_hash field to the offset of its optional fields entry.
-    pub fn account_hash_offset(flags: &AccountMetaFlags) -> usize {
-        let mut offset = Self::rent_epoch_offset(flags);
-        // rent_epoch is the previous field to account hash
-        if flags.has_rent_epoch() {
-            offset += std::mem::size_of::<Epoch>();
+const MIN_ACCOUNT_ADDRESS: Pubkey = Pubkey::new_from_array([0x00u8; 32]);
+const MAX_ACCOUNT_ADDRESS: Pubkey = Pubkey::new_from_array([0xFFu8; 32]);
+
+#[derive(Debug)]
+/// A struct that maintains an address-range using its min and max fields.
+pub struct AccountAddressRange<'a> {
+    /// The minimum address observed via update()
+    pub min: &'a Pubkey,
+    /// The maximum address observed via update()
+    pub max: &'a Pubkey,
+}
+
+impl Default for AccountAddressRange<'_> {
+    fn default() -> Self {
+        Self {
+            min: &MAX_ACCOUNT_ADDRESS,
+            max: &MIN_ACCOUNT_ADDRESS,
         }
-        offset
+    }
+}
+
+impl<'a> AccountAddressRange<'a> {
+    pub fn update(&mut self, address: &'a Pubkey) {
+        if *self.min > *address {
+            self.min = address;
+        }
+        if *self.max < *address {
+            self.max = address;
+        }
     }
 }
 
 #[cfg(test)]
 pub mod tests {
-    use {super::*, solana_sdk::hash::Hash};
+    use super::*;
 
     #[test]
     fn test_account_meta_flags_new() {
         let flags = AccountMetaFlags::new();
 
         assert!(!flags.has_rent_epoch());
-        assert!(!flags.has_account_hash());
         assert_eq!(flags.reserved(), 0u32);
 
         assert_eq!(
@@ -179,20 +184,11 @@ pub mod tests {
         flags.set_has_rent_epoch(true);
 
         assert!(flags.has_rent_epoch());
-        assert!(!flags.has_account_hash());
-        assert!(!flags.executable());
-        verify_flags_serialization(&flags);
-
-        flags.set_has_account_hash(true);
-
-        assert!(flags.has_rent_epoch());
-        assert!(flags.has_account_hash());
         assert!(!flags.executable());
         verify_flags_serialization(&flags);
 
         flags.set_executable(true);
         assert!(flags.has_rent_epoch());
-        assert!(flags.has_account_hash());
         assert!(flags.executable());
         verify_flags_serialization(&flags);
 
@@ -203,7 +199,6 @@ pub mod tests {
     fn update_and_verify_flags(opt_fields: &AccountMetaOptionalFields) {
         let flags: AccountMetaFlags = AccountMetaFlags::new_from(opt_fields);
         assert_eq!(flags.has_rent_epoch(), opt_fields.rent_epoch.is_some());
-        assert_eq!(flags.has_account_hash(), opt_fields.account_hash.is_some());
         assert_eq!(flags.reserved(), 0u32);
     }
 
@@ -212,12 +207,7 @@ pub mod tests {
         let test_epoch = 5432312;
 
         for rent_epoch in [None, Some(test_epoch)] {
-            for account_hash in [None, Some(AccountHash(Hash::new_unique()))] {
-                update_and_verify_flags(&AccountMetaOptionalFields {
-                    rent_epoch,
-                    account_hash,
-                });
-            }
+            update_and_verify_flags(&AccountMetaOptionalFields { rent_epoch });
         }
     }
 
@@ -226,23 +216,17 @@ pub mod tests {
         let test_epoch = 5432312;
 
         for rent_epoch in [None, Some(test_epoch)] {
-            for account_hash in [None, Some(AccountHash(Hash::new_unique()))] {
-                let opt_fields = AccountMetaOptionalFields {
-                    rent_epoch,
-                    account_hash,
-                };
-                assert_eq!(
-                    opt_fields.size(),
-                    rent_epoch.map_or(0, |_| std::mem::size_of::<Epoch>())
-                        + account_hash.map_or(0, |_| std::mem::size_of::<AccountHash>())
-                );
-                assert_eq!(
-                    opt_fields.size(),
-                    AccountMetaOptionalFields::size_from_flags(&AccountMetaFlags::new_from(
-                        &opt_fields
-                    ))
-                );
-            }
+            let opt_fields = AccountMetaOptionalFields { rent_epoch };
+            assert_eq!(
+                opt_fields.size(),
+                rent_epoch.map_or(0, |_| std::mem::size_of::<Epoch>()),
+            );
+            assert_eq!(
+                opt_fields.size(),
+                AccountMetaOptionalFields::size_from_flags(&AccountMetaFlags::new_from(
+                    &opt_fields
+                ))
+            );
         }
     }
 
@@ -251,33 +235,65 @@ pub mod tests {
         let test_epoch = 5432312;
 
         for rent_epoch in [None, Some(test_epoch)] {
-            for account_hash in [None, Some(AccountHash(Hash::new_unique()))] {
-                let rent_epoch_offset = 0;
-                let account_hash_offset =
-                    rent_epoch_offset + rent_epoch.as_ref().map(std::mem::size_of_val).unwrap_or(0);
-                let derived_size = account_hash_offset
-                    + account_hash
-                        .as_ref()
-                        .map(std::mem::size_of_val)
-                        .unwrap_or(0);
-                let opt_fields = AccountMetaOptionalFields {
-                    rent_epoch,
-                    account_hash,
-                };
-                let flags = AccountMetaFlags::new_from(&opt_fields);
-                assert_eq!(
-                    AccountMetaOptionalFields::rent_epoch_offset(&flags),
-                    rent_epoch_offset
-                );
-                assert_eq!(
-                    AccountMetaOptionalFields::account_hash_offset(&flags),
-                    account_hash_offset
-                );
-                assert_eq!(
-                    AccountMetaOptionalFields::size_from_flags(&flags),
-                    derived_size
-                );
+            let rent_epoch_offset = 0;
+            let derived_size = if rent_epoch.is_some() {
+                std::mem::size_of::<Epoch>()
+            } else {
+                0
+            };
+            let opt_fields = AccountMetaOptionalFields { rent_epoch };
+            let flags = AccountMetaFlags::new_from(&opt_fields);
+            assert_eq!(
+                AccountMetaOptionalFields::rent_epoch_offset(&flags),
+                rent_epoch_offset
+            );
+            assert_eq!(
+                AccountMetaOptionalFields::size_from_flags(&flags),
+                derived_size
+            );
+        }
+    }
+
+    #[test]
+    fn test_pubkey_range_update_single() {
+        let address = solana_sdk::pubkey::new_rand();
+        let mut address_range = AccountAddressRange::default();
+
+        address_range.update(&address);
+        // For a single update, the min and max should equal to the address
+        assert_eq!(*address_range.min, address);
+        assert_eq!(*address_range.max, address);
+    }
+
+    #[test]
+    fn test_pubkey_range_update_multiple() {
+        const NUM_PUBKEYS: usize = 20;
+
+        let mut address_range = AccountAddressRange::default();
+        let mut addresses = Vec::with_capacity(NUM_PUBKEYS);
+
+        let mut min_index = 0;
+        let mut max_index = 0;
+
+        // Generate random addresses and track expected min and max indices
+        for i in 0..NUM_PUBKEYS {
+            let address = solana_sdk::pubkey::new_rand();
+            addresses.push(address);
+
+            // Update expected min and max indices
+            if address < addresses[min_index] {
+                min_index = i;
+            }
+            if address > addresses[max_index] {
+                max_index = i;
             }
         }
+
+        addresses
+            .iter()
+            .for_each(|address| address_range.update(address));
+
+        assert_eq!(*address_range.min, addresses[min_index]);
+        assert_eq!(*address_range.max, addresses[max_index]);
     }
 }

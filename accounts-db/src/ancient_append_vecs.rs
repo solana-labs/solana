@@ -985,7 +985,7 @@ pub mod tests {
                     create_db_with_storages_and_index, create_storages_and_update_index,
                     get_all_accounts, remove_account_for_tests, CAN_RANDOMLY_SHRINK_FALSE,
                 },
-                ShrinkCollectRefs, MAX_RECYCLE_STORES,
+                ShrinkCollectRefs,
             },
             accounts_index::UpsertReclaim,
             append_vec::{aligned_stored_size, AppendVec, AppendVecStoredAccountMeta},
@@ -1506,11 +1506,9 @@ pub mod tests {
                             if two_refs {
                                 original_results.iter().for_each(|results| {
                                     results.stored_accounts.iter().for_each(|account| {
-                                        let entry = db
-                                            .accounts_index
-                                            .get_account_read_entry(account.pubkey())
-                                            .unwrap();
-                                        entry.addref();
+                                        db.accounts_index.get_and_then(account.pubkey(), |entry| {
+                                            (false, entry.unwrap().addref())
+                                        });
                                     })
                                 });
                             }
@@ -1854,11 +1852,8 @@ pub mod tests {
             );
             original_results.iter().for_each(|results| {
                 results.stored_accounts.iter().for_each(|account| {
-                    let entry = db
-                        .accounts_index
-                        .get_account_read_entry(account.pubkey())
-                        .unwrap();
-                    entry.addref();
+                    db.accounts_index
+                        .get_and_then(account.pubkey(), |entry| (true, entry.unwrap().addref()));
                 })
             });
 
@@ -3028,6 +3023,9 @@ pub mod tests {
 
     #[test]
     fn test_shrink_packed_ancient() {
+        // NOTE: The recycler has been removed.  Creating this many extra storages is no longer
+        // necessary, but also does no harm either.
+        const MAX_RECYCLE_STORES: usize = 1000;
         solana_logger::setup();
 
         // When we pack ancient append vecs, the packed append vecs are recycled first if possible. This means they aren't dropped directly.

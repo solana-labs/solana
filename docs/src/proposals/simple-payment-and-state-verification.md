@@ -117,7 +117,7 @@ https://github.com/solana-labs/solana/blob/b6bfed64cb159ee67bb6bdbaefc7f833bbed3
         let mut hash = hashv(&[
             // bank hash of the parent block
             self.parent_hash.as_ref(),
-            // hash of all the modifed accounts
+            // hash of all the modified accounts
             accounts_delta_hash.hash.as_ref(),
             // Number of signatures processed in this block
             &signature_count_buf,

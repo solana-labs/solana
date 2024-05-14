@@ -1,6 +1,6 @@
 use {
     crate::tiered_storage::{
-        file::TieredStorageFile, footer::TieredStorageFooter, mmap_utils::get_pod,
+        file::TieredWritableFile, footer::TieredStorageFooter, mmap_utils::get_pod,
         TieredStorageResult,
     },
     bytemuck::{Pod, Zeroable},
@@ -59,7 +59,7 @@ impl IndexBlockFormat {
     /// the total number of bytes written.
     pub fn write_index_block(
         &self,
-        file: &TieredStorageFile,
+        file: &mut TieredWritableFile,
         index_entries: &[AccountIndexWriterEntry<impl AccountOffset>],
     ) -> TieredStorageResult<usize> {
         match self {
@@ -147,7 +147,7 @@ mod tests {
     use {
         super::*,
         crate::tiered_storage::{
-            file::TieredStorageFile,
+            file::TieredWritableFile,
             hot::{HotAccountOffset, HOT_ACCOUNT_ALIGNMENT},
         },
         memmap2::MmapOptions,
@@ -181,9 +181,11 @@ mod tests {
             .collect();
 
         {
-            let file = TieredStorageFile::new_writable(&path).unwrap();
+            let mut file = TieredWritableFile::new(&path).unwrap();
             let indexer = IndexBlockFormat::AddressesThenOffsets;
-            let cursor = indexer.write_index_block(&file, &index_entries).unwrap();
+            let cursor = indexer
+                .write_index_block(&mut file, &index_entries)
+                .unwrap();
             footer.owners_block_offset = cursor as u64;
         }
 
@@ -223,8 +225,8 @@ mod tests {
         {
             // we only write a footer here as the test should hit an assert
             // failure before it actually reads the file.
-            let file = TieredStorageFile::new_writable(&path).unwrap();
-            footer.write_footer_block(&file).unwrap();
+            let mut file = TieredWritableFile::new(&path).unwrap();
+            footer.write_footer_block(&mut file).unwrap();
         }
 
         let file = OpenOptions::new()
@@ -259,8 +261,8 @@ mod tests {
         {
             // we only write a footer here as the test should hit an assert
             // failure before it actually reads the file.
-            let file = TieredStorageFile::new_writable(&path).unwrap();
-            footer.write_footer_block(&file).unwrap();
+            let mut file = TieredWritableFile::new(&path).unwrap();
+            footer.write_footer_block(&mut file).unwrap();
         }
 
         let file = OpenOptions::new()
@@ -294,8 +296,8 @@ mod tests {
         {
             // we only write a footer here as the test should hit an assert
             // failure before we actually read the file.
-            let file = TieredStorageFile::new_writable(&path).unwrap();
-            footer.write_footer_block(&file).unwrap();
+            let mut file = TieredWritableFile::new(&path).unwrap();
+            footer.write_footer_block(&mut file).unwrap();
         }
 
         let file = OpenOptions::new()
@@ -334,8 +336,8 @@ mod tests {
         {
             // we only write a footer here as the test should hit an assert
             // failure before we actually read the file.
-            let file = TieredStorageFile::new_writable(&path).unwrap();
-            footer.write_footer_block(&file).unwrap();
+            let mut file = TieredWritableFile::new(&path).unwrap();
+            footer.write_footer_block(&mut file).unwrap();
         }
 
         let file = OpenOptions::new()

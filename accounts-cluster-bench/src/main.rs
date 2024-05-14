@@ -509,6 +509,7 @@ fn run_accounts_bench(
     close_nth_batch: u64,
     maybe_lamports: Option<u64>,
     num_instructions: usize,
+    max_accounts: Option<usize>,
     mint: Option<Pubkey>,
     reclaim_accounts: bool,
     rpc_benches: Option<Vec<RpcBench>>,
@@ -682,7 +683,15 @@ fn run_accounts_bench(
         }
 
         count += 1;
-        if last_log.elapsed().as_millis() > 3000 || (count >= iterations && iterations != 0) {
+        let max_accounts_met = if let Some(max_accounts) = max_accounts {
+            total_accounts_created >= max_accounts
+        } else {
+            false
+        };
+        if last_log.elapsed().as_millis() > 3000
+            || (count >= iterations && iterations != 0)
+            || max_accounts_met
+        {
             info!(
                 "total_accounts_created: {} total_accounts_closed: {} tx_sent_count: {} loop_count: {} balance(s): {:?}",
                 total_accounts_created, total_accounts_closed, tx_sent_count, count, balances
@@ -690,6 +699,14 @@ fn run_accounts_bench(
             last_log = Instant::now();
         }
         if iterations != 0 && count >= iterations {
+            info!("{iterations} iterations reached");
+            break;
+        }
+        if max_accounts_met {
+            info!(
+                "Max account limit of {:?} reached",
+                max_accounts.unwrap_or_default()
+            );
             break;
         }
         if executor.num_outstanding() >= batch_size {
@@ -873,15 +890,22 @@ fn main() {
             Arg::with_name("num_instructions")
                 .long("num-instructions")
                 .takes_value(true)
-                .value_name("NUM")
+                .value_name("NUM_INSTRUCTIONS")
                 .help("Number of accounts to create on each transaction"),
         )
         .arg(
             Arg::with_name("iterations")
                 .long("iterations")
                 .takes_value(true)
-                .value_name("NUM")
+                .value_name("NUM_ITERATIONS")
                 .help("Number of iterations to make. 0 = unlimited iterations."),
+        )
+        .arg(
+            Arg::with_name("max_accounts")
+                .long("max-accounts")
+                .takes_value(true)
+                .value_name("NUM_ACCOUNTS")
+                .help("Halt after client has created this number of accounts. Does not count closed accounts."),
         )
         .arg(
             Arg::with_name("check_gossip")
@@ -892,6 +916,7 @@ fn main() {
             Arg::with_name("mint")
                 .long("mint")
                 .takes_value(true)
+                .value_name("MINT_ADDRESS")
                 .help("Mint address to initialize account"),
         )
         .arg(
@@ -904,12 +929,14 @@ fn main() {
             Arg::with_name("num_rpc_bench_threads")
                 .long("num-rpc-bench-threads")
                 .takes_value(true)
+                .value_name("NUM_THREADS")
                 .help("Spawn this many RPC benching threads for each type passed by --rpc-bench"),
         )
         .arg(
             Arg::with_name("rpc_bench")
                 .long("rpc-bench")
                 .takes_value(true)
+                .value_name("RPC_BENCH_TYPE(S)")
                 .multiple(true)
                 .help("Spawn a thread which calls a specific RPC method in a loop to benchmark it"),
         )
@@ -922,6 +949,7 @@ fn main() {
     let batch_size = value_t!(matches, "batch_size", usize).unwrap_or(4);
     let close_nth_batch = value_t!(matches, "close_nth_batch", u64).unwrap_or(0);
     let iterations = value_t!(matches, "iterations", usize).unwrap_or(10);
+    let max_accounts = value_t!(matches, "max_accounts", usize).ok();
     let num_instructions = value_t!(matches, "num_instructions", usize).unwrap_or(1);
     if num_instructions == 0 || num_instructions > 500 {
         eprintln!("bad num_instructions: {num_instructions}");
@@ -1015,6 +1043,7 @@ fn main() {
         close_nth_batch,
         lamports,
         num_instructions,
+        max_accounts,
         mint,
         matches.is_present("reclaim_accounts"),
         rpc_benches,
@@ -1091,6 +1120,58 @@ pub mod test {
             close_nth_batch,
             maybe_lamports,
             num_instructions,
+            None,
+            mint,
+            reclaim_accounts,
+            Some(vec![RpcBench::ProgramAccounts]),
+            1,
+        );
+        let post_txs = client.get_transaction_count().unwrap();
+        start.stop();
+        info!("{} pre {} post {}", start, pre_txs, post_txs);
+    }
+
+    #[test]
+    fn test_halt_accounts_creation_at_max() {
+        solana_logger::setup();
+        let mut validator_config = ValidatorConfig::default_for_test();
+        let num_nodes = 1;
+        add_secondary_indexes(&mut validator_config.account_indexes);
+        add_secondary_indexes(&mut validator_config.rpc_config.account_indexes);
+        let mut config = ClusterConfig {
+            cluster_lamports: 10_000_000,
+            poh_config: PohConfig::new_sleep(Duration::from_millis(50)),
+            node_stakes: vec![100; num_nodes],
+            validator_configs: make_identical_validator_configs(&validator_config, num_nodes),
+            ..ClusterConfig::default()
+        };
+
+        let cluster = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
+        let iterations = 100;
+        let maybe_space = None;
+        let batch_size = 20;
+        let close_nth_batch = 0;
+        let maybe_lamports = None;
+        let num_instructions = 2;
+        let mut start = Measure::start("total accounts run");
+        let rpc_addr = cluster.entry_point_info.rpc().unwrap();
+        let client = Arc::new(RpcClient::new_socket_with_commitment(
+            rpc_addr,
+            CommitmentConfig::confirmed(),
+        ));
+        let mint = None;
+        let reclaim_accounts = false;
+        let pre_txs = client.get_transaction_count().unwrap();
+        run_accounts_bench(
+            client.clone(),
+            &[&cluster.funding_keypair],
+            iterations,
+            maybe_space,
+            batch_size,
+            close_nth_batch,
+            maybe_lamports,
+            num_instructions,
+            Some(90),
             mint,
             reclaim_accounts,
             Some(vec![RpcBench::ProgramAccounts]),
@@ -1190,6 +1271,7 @@ pub mod test {
             close_nth_batch,
             Some(minimum_balance),
             num_instructions,
+            None,
             Some(spl_mint_keypair.pubkey()),
             true,
             None,

@@ -11,7 +11,7 @@ fi
 
 source ci/rust-version.sh stable
 
-ci/docker-run.sh $rust_nightly_docker_image ci/dependabot-updater.sh
+ci/docker-run-default-image.sh ci/dependabot-updater.sh
 
 if [[ $(git status --short :**/Cargo.lock | wc -l) -eq 0 ]]; then
   echo --- ok

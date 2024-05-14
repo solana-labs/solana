@@ -71,7 +71,7 @@ fn load_accounts(path: &Path) -> Result<Input> {
 
 fn load_blockstore(ledger_path: &Path, arg_matches: &ArgMatches<'_>) -> Arc<Bank> {
     let process_options = parse_process_options(ledger_path, arg_matches);
-    let snapshot_archive_path = value_t!(arg_matches, "snapshot_archive_path", String)
+    let snapshot_archive_path = value_t!(arg_matches, "snapshots", String)
         .ok()
         .map(PathBuf::from);
     let incremental_snapshot_archive_path =
@@ -514,16 +514,11 @@ pub fn program(ledger_path: &Path, matches: &ArgMatches<'_>) {
     with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
 
     // Adding `DELAY_VISIBILITY_SLOT_OFFSET` to slots to accommodate for delay visibility of the program
-    let mut loaded_programs = LoadedProgramsForTxBatch::new(
-        bank.slot() + DELAY_VISIBILITY_SLOT_OFFSET,
-        bank.loaded_programs_cache
-            .read()
-            .unwrap()
-            .environments
-            .clone(),
-    );
+    let slot = bank.slot() + DELAY_VISIBILITY_SLOT_OFFSET;
+    let mut loaded_programs =
+        LoadedProgramsForTxBatch::new(slot, bank.get_runtime_environments_for_slot(slot));
     for key in cached_account_keys {
-        loaded_programs.replenish(key, bank.load_program(&key, false, None));
+        loaded_programs.replenish(key, bank.load_program(&key, false, bank.epoch()));
         debug!("Loaded program {}", key);
     }
     invoke_context.programs_loaded_for_tx_batch = &loaded_programs;
@@ -545,7 +540,6 @@ pub fn program(ledger_path: &Path, matches: &ArgMatches<'_>) {
             .get_current_instruction_context()
             .unwrap(),
         true, // copy_account_data
-        &invoke_context.feature_set,
     )
     .unwrap();
 

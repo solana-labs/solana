@@ -418,9 +418,10 @@ impl SnapshotStorageRebuilder {
     /// Builds thread pool to rebuild with
     fn build_thread_pool(&self) -> ThreadPool {
         ThreadPoolBuilder::default()
+            .thread_name(|i| format!("solRbuildSnap{i:02}"))
             .num_threads(self.num_threads)
             .build()
-            .unwrap()
+            .expect("new rayon threadpool")
     }
 }
 

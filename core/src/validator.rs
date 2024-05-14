@@ -3,7 +3,7 @@
 pub use solana_perf::report_target_features;
 use {
     crate::{
-        accounts_hash_verifier::{AccountsHashFaultInjector, AccountsHashVerifier},
+        accounts_hash_verifier::AccountsHashVerifier,
         admin_rpc_post_init::AdminRpcRequestMetadataPostInit,
         banking_trace::{self, BankingTracer},
         cache_block_meta_service::{CacheBlockMetaSender, CacheBlockMetaService},
@@ -35,6 +35,7 @@ use {
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
+        utils::{move_and_async_delete_path, move_and_async_delete_path_contents},
     },
     solana_client::connection_cache::{ConnectionCache, Protocol},
     solana_entry::poh::compute_hash_time_ns,
@@ -72,6 +73,7 @@ use {
         poh_recorder::PohRecorder,
         poh_service::{self, PohService},
     },
+    solana_program_runtime::runtime_config::RuntimeConfig,
     solana_rpc::{
         max_slots::MaxSlots,
         optimistically_confirmed_bank_tracker::{
@@ -95,14 +97,11 @@ use {
         bank_forks::BankForks,
         commitment::BlockCommitmentCache,
         prioritization_fee_cache::PrioritizationFeeCache,
-        runtime_config::RuntimeConfig,
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_bank_utils::{self, DISABLED_SNAPSHOT_ARCHIVE_INTERVAL},
         snapshot_config::SnapshotConfig,
         snapshot_hash::StartingSnapshotHashes,
-        snapshot_utils::{
-            self, clean_orphaned_account_snapshot_dirs, move_and_async_delete_path_contents,
-        },
+        snapshot_utils::{self, clean_orphaned_account_snapshot_dirs},
     },
     solana_sdk::{
         clock::Slot,
@@ -139,6 +138,11 @@ use {
 
 const MAX_COMPLETED_DATA_SETS_IN_CHANNEL: usize = 100_000;
 const WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT: u64 = 80;
+// Right now since we reuse the wait for supermajority code, the
+// following threshold should always greater than or equal to
+// WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT.
+const WAIT_FOR_WEN_RESTART_SUPERMAJORITY_THRESHOLD_PERCENT: u64 =
+    WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT;
 
 #[derive(Clone, EnumString, EnumVariantNames, Default, IntoStaticStr, Display)]
 #[strum(serialize_all = "kebab-case")]
@@ -205,7 +209,6 @@ pub struct ValidatorConfig {
     pub voting_disabled: bool,
     pub account_paths: Vec<PathBuf>,
     pub account_snapshot_paths: Vec<PathBuf>,
-    pub account_shrink_paths: Option<Vec<PathBuf>>,
     pub rpc_config: JsonRpcConfig,
     /// Specifies which plugins to start up with
     pub on_start_geyser_plugin_config_files: Option<Vec<PathBuf>>,
@@ -223,7 +226,6 @@ pub struct ValidatorConfig {
     pub repair_validators: Option<HashSet<Pubkey>>, // None = repair from all
     pub repair_whitelist: Arc<RwLock<HashSet<Pubkey>>>, // Empty = repair with all
     pub gossip_validators: Option<HashSet<Pubkey>>, // None = gossip with all
-    pub accounts_hash_fault_injector: Option<AccountsHashFaultInjector>,
     pub accounts_hash_interval_slots: u64,
     pub max_genesis_archive_unpacked_size: u64,
     pub wal_recovery_mode: Option<BlockstoreRecoveryMode>,
@@ -265,6 +267,7 @@ pub struct ValidatorConfig {
     pub generator_config: Option<GeneratorConfig>,
     pub use_snapshot_archives_at_startup: UseSnapshotArchivesAtStartup,
     pub wen_restart_proto_path: Option<PathBuf>,
+    pub unified_scheduler_handler_threads: Option<usize>,
 }
 
 impl Default for ValidatorConfig {
@@ -278,7 +281,6 @@ impl Default for ValidatorConfig {
             max_ledger_shreds: None,
             account_paths: Vec::new(),
             account_snapshot_paths: Vec::new(),
-            account_shrink_paths: None,
             rpc_config: JsonRpcConfig::default(),
             on_start_geyser_plugin_config_files: None,
             rpc_addrs: None,
@@ -294,7 +296,6 @@ impl Default for ValidatorConfig {
             repair_validators: None,
             repair_whitelist: Arc::new(RwLock::new(HashSet::default())),
             gossip_validators: None,
-            accounts_hash_fault_injector: None,
             accounts_hash_interval_slots: std::u64::MAX,
             max_genesis_archive_unpacked_size: MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
             wal_recovery_mode: None,
@@ -334,6 +335,7 @@ impl Default for ValidatorConfig {
             generator_config: None,
             use_snapshot_archives_at_startup: UseSnapshotArchivesAtStartup::default(),
             wen_restart_proto_path: None,
+            unified_scheduler_handler_threads: None,
         }
     }
 }
@@ -343,6 +345,7 @@ impl ValidatorConfig {
         Self {
             enforce_ulimit_nofile: false,
             rpc_config: JsonRpcConfig::default_for_test(),
+            block_production_method: BlockProductionMethod::ThreadLocalMultiIterator,
             ..Self::default()
         }
     }
@@ -626,7 +629,7 @@ impl Validator {
         ];
         for old_accounts_hash_cache_dir in old_accounts_hash_cache_dirs {
             if old_accounts_hash_cache_dir.exists() {
-                snapshot_utils::move_and_async_delete_path(old_accounts_hash_cache_dir);
+                move_and_async_delete_path(old_accounts_hash_cache_dir);
             }
         }
 
@@ -777,8 +780,6 @@ impl Validator {
             accounts_package_receiver,
             snapshot_package_sender,
             exit.clone(),
-            cluster_info.clone(),
-            config.accounts_hash_fault_injector,
             config.snapshot_config.clone(),
         );
 
@@ -819,9 +820,16 @@ impl Validator {
         match &config.block_verification_method {
             BlockVerificationMethod::BlockstoreProcessor => {
                 info!("no scheduler pool is installed for block verification...");
+                if let Some(count) = config.unified_scheduler_handler_threads {
+                    warn!(
+                        "--unified-scheduler-handler-threads={count} is ignored because unified \
+                         scheduler isn't enabled"
+                    );
+                }
             }
             BlockVerificationMethod::UnifiedScheduler => {
                 let scheduler_pool = DefaultSchedulerPool::new_dyn(
+                    config.unified_scheduler_handler_threads,
                     config.runtime_config.log_messages_bytes_limit,
                     transaction_status_sender.clone(),
                     Some(replay_vote_sender.clone()),
@@ -1196,10 +1204,6 @@ impl Validator {
                     .unwrap_or_else(|| current_runtime_handle.as_ref().unwrap()),
                 &identity_keypair,
                 node.sockets.tvu_quic,
-                node.info
-                    .tvu(Protocol::QUIC)
-                    .map_err(|err| format!("Invalid QUIC TVU address: {err:?}"))?
-                    .ip(),
                 turbine_quic_endpoint_sender,
                 bank_forks.clone(),
             )
@@ -1229,10 +1233,6 @@ impl Validator {
                         .unwrap_or_else(|| current_runtime_handle.as_ref().unwrap()),
                     &identity_keypair,
                     node.sockets.serve_repair_quic,
-                    node.info
-                        .serve_repair(Protocol::QUIC)
-                        .map_err(|err| format!("Invalid QUIC serve-repair address: {err:?}"))?
-                        .ip(),
                     repair_quic_endpoint_sender,
                     bank_forks.clone(),
                 )
@@ -1241,6 +1241,11 @@ impl Validator {
             };
 
         let in_wen_restart = config.wen_restart_proto_path.is_some() && !waited_for_supermajority;
+        let wen_restart_repair_slots = if in_wen_restart {
+            Some(Arc::new(RwLock::new(Vec::new())))
+        } else {
+            None
+        };
         let tower = match process_blockstore.process_to_create_tower() {
             Ok(tower) => {
                 info!("Tower state: {:?}", tower);
@@ -1315,6 +1320,7 @@ impl Validator {
             repair_quic_endpoint_sender,
             outstanding_repair_requests.clone(),
             cluster_slots.clone(),
+            wen_restart_repair_slots.clone(),
         )?;
 
         if in_wen_restart {
@@ -1324,6 +1330,10 @@ impl Validator {
                 last_vote,
                 blockstore.clone(),
                 cluster_info.clone(),
+                bank_forks.clone(),
+                wen_restart_repair_slots.clone(),
+                WAIT_FOR_WEN_RESTART_SUPERMAJORITY_THRESHOLD_PERCENT,
+                exit.clone(),
             ) {
                 Ok(()) => {
                     return Err("wen_restart phase one completedy".to_string());
@@ -1380,6 +1390,8 @@ impl Validator {
             ("id", id.to_string(), String),
             ("version", solana_version::version!(), String),
             ("cluster_type", genesis_config.cluster_type as u32, i64),
+            ("waited_for_supermajority", waited_for_supermajority, bool),
+            ("expected_shred_version", config.expected_shred_version, Option<i64>),
         );
 
         *start_progress.write().unwrap() = ValidatorStartProgress::Running;
@@ -1849,7 +1861,6 @@ fn load_blockstore(
             &genesis_config,
             &blockstore,
             config.account_paths.clone(),
-            config.account_shrink_paths.clone(),
             Some(&config.snapshot_config),
             &process_options,
             transaction_history_services
@@ -1876,11 +1887,6 @@ fn load_blockstore(
         let mut bank_forks = bank_forks.write().unwrap();
         bank_forks.set_snapshot_config(Some(config.snapshot_config.clone()));
         bank_forks.set_accounts_hash_interval_slots(config.accounts_hash_interval_slots);
-        if let Some(ref shrink_paths) = config.account_shrink_paths {
-            bank_forks
-                .working_bank()
-                .set_shrink_paths(shrink_paths.clone());
-        }
     }
 
     Ok((
@@ -2117,12 +2123,13 @@ fn maybe_warp_slot(
     Ok(())
 }
 
-/// Searches the blockstore for data shreds with the incorrect shred version.
-fn blockstore_contains_bad_shred_version(
+/// Searches the blockstore for data shreds with a shred version that differs
+/// from the passed `expected_shred_version`
+fn blockstore_contains_incorrect_shred_version(
     blockstore: &Blockstore,
     start_slot: Slot,
     expected_shred_version: u16,
-) -> Result<bool, BlockstoreError> {
+) -> Result<Option<u16>, BlockstoreError> {
     const TIMEOUT: Duration = Duration::from_secs(60);
     let timer = Instant::now();
     // Search for shreds with incompatible version in blockstore
@@ -2133,7 +2140,7 @@ fn blockstore_contains_bad_shred_version(
         let shreds = blockstore.get_data_shreds_for_slot(slot, 0)?;
         for shred in &shreds {
             if shred.version() != expected_shred_version {
-                return Ok(true);
+                return Ok(Some(shred.version()));
             }
         }
         if timer.elapsed() > TIMEOUT {
@@ -2141,7 +2148,7 @@ fn blockstore_contains_bad_shred_version(
             break;
         }
     }
-    Ok(false)
+    Ok(None)
 }
 
 /// If the blockstore contains any shreds with the incorrect shred version,
@@ -2154,10 +2161,13 @@ fn backup_and_clear_blockstore(
 ) -> Result<(), BlockstoreError> {
     let blockstore =
         Blockstore::open_with_options(ledger_path, blockstore_options_from_config(config))?;
-    let do_copy_and_clear =
-        blockstore_contains_bad_shred_version(&blockstore, start_slot, expected_shred_version)?;
+    let incorrect_shred_version = blockstore_contains_incorrect_shred_version(
+        &blockstore,
+        start_slot,
+        expected_shred_version,
+    )?;
 
-    if do_copy_and_clear {
+    if let Some(incorrect_shred_version) = incorrect_shred_version {
         // .unwrap() safe because getting to this point implies blockstore has slots/shreds
         let end_slot = blockstore.highest_slot()?.unwrap();
 
@@ -2169,7 +2179,7 @@ fn backup_and_clear_blockstore(
                 .ledger_column_options
                 .shred_storage_type
                 .blockstore_directory(),
-            expected_shred_version,
+            incorrect_shred_version,
             start_slot,
             end_slot
         );
@@ -2459,12 +2469,16 @@ fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: boo
 }
 
 fn cleanup_accounts_paths(config: &ValidatorConfig) {
-    for accounts_path in &config.account_paths {
-        move_and_async_delete_path_contents(accounts_path);
+    for account_path in &config.account_paths {
+        move_and_async_delete_path_contents(account_path);
     }
-    if let Some(ref shrink_paths) = config.account_shrink_paths {
-        for accounts_path in shrink_paths {
-            move_and_async_delete_path_contents(accounts_path);
+    if let Some(shrink_paths) = config
+        .accounts_db_config
+        .as_ref()
+        .and_then(|config| config.shrink_paths.as_ref())
+    {
+        for shrink_path in shrink_paths {
+            move_and_async_delete_path_contents(shrink_path);
         }
     }
 }

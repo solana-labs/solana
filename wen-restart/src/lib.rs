@@ -4,4 +4,5 @@ pub(crate) mod solana {
     }
 }
 
+pub(crate) mod last_voted_fork_slots_aggregate;
 pub mod wen_restart;
