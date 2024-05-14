@@ -689,6 +689,7 @@ mod tests {
     mod skip_should_be_same {
         #[frozen_abi(digest = "4LbuvQLX78XPbm4hqqZcHFHpseDJcw4qZL9EUZXSi2Ss")]
         #[derive(Serialize, AbiExample)]
+        #[allow(dead_code)]
         struct TestTupleStruct(i8, i8, #[serde(skip)] i8);
 
         #[frozen_abi(digest = "Hk7BYjZ71upWQJAx2PqoNcapggobPmFbMJd34xVdvRso")]
