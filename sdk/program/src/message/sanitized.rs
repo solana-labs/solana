@@ -222,7 +222,7 @@ impl SanitizedMessage {
 
     /// Returns true if the account at the specified index is an input to some
     /// program instruction in this message.
-    fn is_key_passed_to_program(&self, key_index: usize) -> bool {
+    pub fn is_key_passed_to_program(&self, key_index: usize) -> bool {
         if let Ok(key_index) = u8::try_from(key_index) {
             self.instructions()
                 .iter()
@@ -243,6 +243,10 @@ impl SanitizedMessage {
 
     /// Returns true if the account at the specified index is not invoked as a
     /// program or, if invoked, is passed to a program.
+    #[deprecated(
+        since = "2.0.0",
+        note = "Please use `is_invoked` and `is_key_passed_to_program` instead"
+    )]
     pub fn is_non_loader_key(&self, key_index: usize) -> bool {
         !self.is_invoked(key_index) || self.is_key_passed_to_program(key_index)
     }
@@ -457,6 +461,7 @@ mod tests {
 
     #[test]
     fn test_is_non_loader_key() {
+        #![allow(deprecated)]
         let key0 = Pubkey::new_unique();
         let key1 = Pubkey::new_unique();
         let loader_key = Pubkey::new_unique();

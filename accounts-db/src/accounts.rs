@@ -15,7 +15,10 @@ use {
         account_utils::StateMut,
         address_lookup_table::{self, error::AddressLookupError, state::AddressLookupTable},
         clock::{BankId, Slot},
-        message::v0::{LoadedAddresses, MessageAddressTableLookup},
+        message::{
+            v0::{LoadedAddresses, MessageAddressTableLookup},
+            SanitizedMessage,
+        },
         nonce::{
             state::{DurableNonce, Versions as NonceVersions},
             State as NonceState,
@@ -32,10 +35,7 @@ use {
     },
     std::{
         cmp::Reverse,
-        collections::{
-            hash_map::{self},
-            BinaryHeap, HashMap, HashSet,
-        },
+        collections::{hash_map, BinaryHeap, HashMap, HashSet},
         ops::RangeBounds,
         sync::{
             atomic::{AtomicUsize, Ordering},
@@ -729,11 +729,27 @@ impl Accounts {
                 }
             };
 
+            // Accounts that are invoked and also not passed to a program don't
+            // need to be stored because it's assumed to be impossible for a
+            // committable transaction to modify an invoked account if said
+            // account isn't passed to some program.
+            //
+            // Note that this assumption might not hold in the future after
+            // SIMD-0082 is implemented because we may decide to commit
+            // transactions that incorrectly attempt to invoke a fee payer or
+            // durable nonce account. If that happens, we would NOT want to use
+            // this filter because we always NEED to store those accounts even
+            // if they aren't passed to any programs (because they are mutated
+            // outside of the VM).
+            let is_storable_account = |message: &SanitizedMessage, key_index: usize| -> bool {
+                !message.is_invoked(key_index) || message.is_key_passed_to_program(key_index)
+            };
+
             let message = tx.message();
             let loaded_transaction = tx_load_result.as_mut().unwrap();
             for (i, (address, account)) in (0..message.account_keys().len())
                 .zip(loaded_transaction.accounts.iter_mut())
-                .filter(|(i, _)| message.is_non_loader_key(*i))
+                .filter(|(i, _)| is_storable_account(message, *i))
             {
                 if message.is_writable(i) {
                     let is_fee_payer = i == 0;

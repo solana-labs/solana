@@ -547,6 +547,10 @@ impl Message {
         }
     }
 
+    #[deprecated(
+        since = "2.0.0",
+        note = "Please use `is_key_called_as_program` and `is_key_passed_to_program` directly"
+    )]
     pub fn is_non_loader_key(&self, key_index: usize) -> bool {
         !self.is_key_called_as_program(key_index) || self.is_key_passed_to_program(key_index)
     }
@@ -938,6 +942,7 @@ mod tests {
 
     #[test]
     fn test_is_non_loader_key() {
+        #![allow(deprecated)]
         let key0 = Pubkey::new_unique();
         let key1 = Pubkey::new_unique();
         let loader2 = Pubkey::new_unique();
