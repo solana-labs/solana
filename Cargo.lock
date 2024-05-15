@@ -5715,6 +5715,7 @@ dependencies = [
  "clap 3.2.23",
  "itertools",
  "log",
+ "regex",
  "solana-logger",
 ]
 

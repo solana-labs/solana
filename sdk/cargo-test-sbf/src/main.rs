@@ -2,6 +2,7 @@ use {
     clap::{crate_description, crate_name, crate_version, Arg},
     itertools::Itertools,
     log::*,
+    regex::Regex,
     std::{
         env,
         ffi::OsStr,
@@ -15,6 +16,7 @@ use {
 struct Config<'a> {
     sbf_sdk: Option<String>,
     sbf_out_dir: Option<String>,
+    platform_tools_version: Option<String>,
     cargo: PathBuf,
     cargo_build_sbf: PathBuf,
     extra_cargo_test_args: Vec<String>,
@@ -36,6 +38,7 @@ impl Default for Config<'_> {
         Self {
             sbf_sdk: None,
             sbf_out_dir: None,
+            platform_tools_version: None,
             cargo: PathBuf::from("cargo"),
             cargo_build_sbf: PathBuf::from("cargo-build-sbf"),
             extra_cargo_test_args: vec![],
@@ -100,6 +103,14 @@ where
     }
 }
 
+pub fn is_version_string(arg: &str) -> Result<(), String> {
+    let semver_re = Regex::new(r"^v[0-9]+\.[0-9]+(\.[0-9]+)?").unwrap();
+    if semver_re.is_match(arg) {
+        return Ok(());
+    }
+    Err("a version string starts with 'v' and contains major and minor version numbers separated by a dot, e.g. v1.32".to_string())
+}
+
 fn test_solana_package(
     config: &Config,
     target_directory: &Path,
@@ -138,6 +149,11 @@ fn test_solana_package(
 
     build_sbf_args.push("--arch");
     build_sbf_args.push(config.arch);
+
+    if let Some(tools_version) = config.platform_tools_version.as_ref() {
+        build_sbf_args.push("--tools-version");
+        build_sbf_args.push(tools_version);
+    }
 
     if !config.packages.is_empty() {
         build_sbf_args.push("--");
@@ -372,6 +388,16 @@ fn main() {
                 .multiple_values(true)
                 .help("All extra arguments are passed through to cargo test"),
         )
+        .arg(
+            Arg::new("tools_version")
+                .long("tools-version")
+                .value_name("STRING")
+                .takes_value(true)
+                .validator(is_version_string)
+                .help(
+                    "platform-tools version to use or to install, a version string, e.g. \"v1.32\"",
+                ),
+        )
         .get_matches_from(args);
 
     let mut config = Config {
@@ -381,6 +407,7 @@ fn main() {
             .values_of_t("extra_cargo_test_args")
             .ok()
             .unwrap_or_default(),
+        platform_tools_version: matches.value_of_t("tools_version").ok(),
         features: matches.values_of_t("features").ok().unwrap_or_default(),
         packages: matches.values_of_t("packages").ok().unwrap_or_default(),
         generate_child_script_on_failure: matches.is_present("generate_child_script_on_failure"),
