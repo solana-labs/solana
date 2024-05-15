@@ -245,6 +245,15 @@ impl QosService {
             batched_transaction_details.costs.batched_data_bytes_cost,
             Ordering::Relaxed,
         );
+        self.metrics
+            .stats
+            .estimated_loaded_accounts_data_size_cu
+            .fetch_add(
+                batched_transaction_details
+                    .costs
+                    .batched_loaded_accounts_data_size_cost,
+                Ordering::Relaxed,
+            );
         self.metrics.stats.estimated_programs_execute_cu.fetch_add(
             batched_transaction_details
                 .costs
@@ -332,6 +341,12 @@ impl QosService {
                 saturating_add_assign!(
                     batched_transaction_details.costs.batched_data_bytes_cost,
                     cost.data_bytes_cost()
+                );
+                saturating_add_assign!(
+                    batched_transaction_details
+                        .costs
+                        .batched_loaded_accounts_data_size_cost,
+                    cost.loaded_accounts_data_size_cost()
                 );
                 saturating_add_assign!(
                     batched_transaction_details
@@ -428,6 +443,9 @@ struct QosServiceMetricsStats {
     /// accumulated estimated instruction data Compute Units to be packed into block
     estimated_data_bytes_cu: AtomicU64,
 
+    /// accumulated estimated loaded accounts data size cost to be packed into block
+    estimated_loaded_accounts_data_size_cu: AtomicU64,
+
     /// accumulated estimated program Compute Units to be packed into block
     estimated_programs_execute_cu: AtomicU64,
 
@@ -509,6 +527,13 @@ impl QosServiceMetrics {
                     "estimated_data_bytes_cu",
                     self.stats
                         .estimated_data_bytes_cu
+                        .swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "estimated_loaded_accounts_data_size_cu",
+                    self.stats
+                        .estimated_loaded_accounts_data_size_cu
                         .swap(0, Ordering::Relaxed),
                     i64
                 ),

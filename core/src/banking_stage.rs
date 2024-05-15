@@ -285,6 +285,7 @@ pub struct BatchedTransactionCostDetails {
     pub batched_signature_cost: u64,
     pub batched_write_lock_cost: u64,
     pub batched_data_bytes_cost: u64,
+    pub batched_loaded_accounts_data_size_cost: u64,
     pub batched_programs_execute_cost: u64,
 }
 
