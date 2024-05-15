@@ -1,8 +1,11 @@
 use {
     crate::{
-        nonblocking::stream_throttle::{
-            ConnectionStreamCounter, StakedStreamLoadEMA, STREAM_THROTTLING_INTERVAL,
-            STREAM_THROTTLING_INTERVAL_MS,
+        nonblocking::{
+            connection_rate_limiter::{ConnectionRateLimiter, TotalConnectionRateLimiter},
+            stream_throttle::{
+                ConnectionStreamCounter, StakedStreamLoadEMA, STREAM_THROTTLING_INTERVAL,
+                STREAM_THROTTLING_INTERVAL_MS,
+            },
         },
         quic::{configure_server, QuicServerError, StreamStats},
         streamer::StakedNodes,
@@ -79,6 +82,21 @@ const CONNECTION_CLOSE_REASON_TOO_MANY: &[u8] = b"too_many";
 /// Limit to 250K PPS
 pub const DEFAULT_MAX_STREAMS_PER_MS: u64 = 250;
 
+/// The new connections per minute from a particular IP address.
+/// Heuristically set to the default maximum concurrent connections
+/// per IP address. Might be adjusted later.
+pub const DEFAULT_MAX_CONNECTIONS_PER_IPADDR_PER_MINUTE: u64 = 8;
+
+/// Total new connection counts per second. Heuristically taken from
+/// the default staked and unstaked connection limits. Might be adjusted
+/// later.
+const TOTAL_CONNECTIONS_PER_SECOND: u64 = 2500;
+
+/// The threshold of the size of the connection rate limiter map. When
+/// the map size is above this, we will trigger a cleanup of older
+/// entries used by past requests.
+const CONNECITON_RATE_LIMITER_CLEANUP_SIZE_THRESHOLD: usize = 100_000;
+
 // A sequence of bytes that is part of a packet
 // along with where in the packet it is
 struct PacketChunk {
@@ -135,6 +153,7 @@ pub fn spawn_server(
     max_staked_connections: usize,
     max_unstaked_connections: usize,
     max_streams_per_ms: u64,
+    max_connections_per_ipaddr_per_min: u64,
     wait_for_chunk_timeout: Duration,
     coalesce: Duration,
 ) -> Result<SpawnNonBlockingServerResult, QuicServerError> {
@@ -162,6 +181,7 @@ pub fn spawn_server(
         max_staked_connections,
         max_unstaked_connections,
         max_streams_per_ms,
+        max_connections_per_ipaddr_per_min,
         stats.clone(),
         wait_for_chunk_timeout,
         coalesce,
@@ -185,10 +205,15 @@ async fn run_server(
     max_staked_connections: usize,
     max_unstaked_connections: usize,
     max_streams_per_ms: u64,
+    max_connections_per_ipaddr_per_min: u64,
     stats: Arc<StreamStats>,
     wait_for_chunk_timeout: Duration,
     coalesce: Duration,
 ) {
+    let rate_limiter = ConnectionRateLimiter::new(max_connections_per_ipaddr_per_min);
+    let mut overall_connection_rate_limiter =
+        TotalConnectionRateLimiter::new(TOTAL_CONNECTIONS_PER_SECOND);
+
     const WAIT_FOR_CONNECTION_TIMEOUT: Duration = Duration::from_secs(1);
     debug!("spawn quic server");
     let mut last_datapoint = Instant::now();
@@ -218,7 +243,37 @@ async fn run_server(
         }
 
         if let Ok(Some(connection)) = timeout_connection {
-            info!("Got a connection {:?}", connection.remote_address());
+            let remote_address = connection.remote_address();
+
+            // first check overall connection rate limit:
+            if !overall_connection_rate_limiter.is_allowed() {
+                debug!(
+                    "Reject connection from {:?} -- total rate limiting exceeded",
+                    remote_address.ip()
+                );
+                stats
+                    .connection_throttled_across_all
+                    .fetch_add(1, Ordering::Relaxed);
+                continue;
+            }
+
+            if rate_limiter.len() > CONNECITON_RATE_LIMITER_CLEANUP_SIZE_THRESHOLD {
+                rate_limiter.retain_recent();
+            }
+            stats
+                .connection_rate_limiter_length
+                .store(rate_limiter.len(), Ordering::Relaxed);
+            info!("Got a connection {remote_address:?}");
+            if !rate_limiter.is_allowed(&remote_address.ip()) {
+                info!(
+                    "Reject connection from {:?} -- rate limiting exceeded",
+                    remote_address
+                );
+                stats
+                    .connection_throttled_per_ipaddr
+                    .fetch_add(1, Ordering::Relaxed);
+                continue;
+            }
             tokio::spawn(setup_connection(
                 connection,
                 unstaked_connection_table.clone(),
@@ -1362,6 +1417,7 @@ pub mod test {
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
             DEFAULT_MAX_STREAMS_PER_MS,
+            DEFAULT_MAX_CONNECTIONS_PER_IPADDR_PER_MINUTE,
             Duration::from_secs(2),
             DEFAULT_TPU_COALESCE,
         )
@@ -1803,6 +1859,7 @@ pub mod test {
             MAX_STAKED_CONNECTIONS,
             0, // Do not allow any connection from unstaked clients/nodes
             DEFAULT_MAX_STREAMS_PER_MS,
+            DEFAULT_MAX_CONNECTIONS_PER_IPADDR_PER_MINUTE,
             DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
             DEFAULT_TPU_COALESCE,
         )
@@ -1838,6 +1895,7 @@ pub mod test {
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
             DEFAULT_MAX_STREAMS_PER_MS,
+            DEFAULT_MAX_CONNECTIONS_PER_IPADDR_PER_MINUTE,
             DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
             DEFAULT_TPU_COALESCE,
         )

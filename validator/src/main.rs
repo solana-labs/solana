@@ -1085,6 +1085,8 @@ pub fn main() {
     };
 
     let tpu_connection_pool_size = value_t_or_exit!(matches, "tpu_connection_pool_size", usize);
+    let tpu_max_connections_per_ipaddr_per_minute =
+        value_t_or_exit!(matches, "tpu_max_connections_per_ipaddr_per_minute", u64);
 
     let shrink_ratio = value_t_or_exit!(matches, "accounts_shrink_ratio", f64);
     if !(0.0..=1.0).contains(&shrink_ratio) {
@@ -1980,6 +1982,7 @@ pub fn main() {
         tpu_use_quic,
         tpu_connection_pool_size,
         tpu_enable_udp,
+        tpu_max_connections_per_ipaddr_per_minute,
         admin_service_post_init,
     )
     .unwrap_or_else(|e| {

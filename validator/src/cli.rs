@@ -53,7 +53,10 @@ use {
 };
 
 pub mod thread_args;
-use thread_args::{thread_args, DefaultThreadArgs};
+use {
+    solana_streamer::nonblocking::quic::DEFAULT_MAX_CONNECTIONS_PER_IPADDR_PER_MINUTE,
+    thread_args::{thread_args, DefaultThreadArgs},
+};
 
 const EXCLUDE_KEY: &str = "account-index-exclude-key";
 const INCLUDE_KEY: &str = "account-index-include-key";
@@ -880,6 +883,15 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .default_value(&default_args.tpu_connection_pool_size)
                 .validator(is_parsable::<usize>)
                 .help("Controls the TPU connection pool size per remote address"),
+        )
+        .arg(
+            Arg::with_name("tpu_max_connections_per_ipaddr_per_minute")
+                .long("tpu-max-connections-per-ipaddr-per-minute")
+                .takes_value(true)
+                .default_value(&default_args.tpu_max_connections_per_ipaddr_per_minute)
+                .validator(is_parsable::<u32>)
+                .hidden(hidden_unless_forced())
+                .help("Controls the rate of the clients connections per IpAddr per minute."),
         )
         .arg(
             Arg::with_name("staked_nodes_overrides")
@@ -2206,6 +2218,7 @@ pub struct DefaultArgs {
     pub accounts_shrink_optimize_total_space: String,
     pub accounts_shrink_ratio: String,
     pub tpu_connection_pool_size: String,
+    pub tpu_max_connections_per_ipaddr_per_minute: String,
 
     // Exit subcommand
     pub exit_min_idle_time: String,
@@ -2295,6 +2308,8 @@ impl DefaultArgs {
                 .to_string(),
             accounts_shrink_ratio: DEFAULT_ACCOUNTS_SHRINK_RATIO.to_string(),
             tpu_connection_pool_size: DEFAULT_TPU_CONNECTION_POOL_SIZE.to_string(),
+            tpu_max_connections_per_ipaddr_per_minute:
+                DEFAULT_MAX_CONNECTIONS_PER_IPADDR_PER_MINUTE.to_string(),
             rpc_max_request_body_size: MAX_REQUEST_BODY_SIZE.to_string(),
             exit_min_idle_time: "10".to_string(),
             exit_max_delinquent_stake: "5".to_string(),

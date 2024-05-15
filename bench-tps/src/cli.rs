@@ -11,6 +11,7 @@ use {
         pubkey::Pubkey,
         signature::{read_keypair_file, Keypair},
     },
+    solana_streamer::nonblocking::quic::DEFAULT_MAX_CONNECTIONS_PER_IPADDR_PER_MINUTE,
     solana_tpu_client::tpu_client::{DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_USE_QUIC},
     std::{
         net::{IpAddr, Ipv4Addr},
@@ -68,6 +69,7 @@ pub struct Config {
     pub external_client_type: ExternalClientType,
     pub use_quic: bool,
     pub tpu_connection_pool_size: usize,
+    pub tpu_max_connections_per_ipaddr_per_minute: u64,
     pub compute_unit_price: Option<ComputeUnitPrice>,
     pub skip_tx_account_data_size: bool,
     pub use_durable_nonce: bool,
@@ -103,6 +105,8 @@ impl Default for Config {
             external_client_type: ExternalClientType::default(),
             use_quic: DEFAULT_TPU_USE_QUIC,
             tpu_connection_pool_size: DEFAULT_TPU_CONNECTION_POOL_SIZE,
+            tpu_max_connections_per_ipaddr_per_minute:
+                DEFAULT_MAX_CONNECTIONS_PER_IPADDR_PER_MINUTE,
             compute_unit_price: None,
             skip_tx_account_data_size: false,
             use_durable_nonce: false,

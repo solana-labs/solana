@@ -338,6 +338,7 @@ impl LocalCluster {
             DEFAULT_TPU_USE_QUIC,
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
             DEFAULT_TPU_ENABLE_UDP,
+            32, // max connections per IpAddr per minute
             Arc::new(RwLock::new(None)),
         )
         .expect("assume successful validator start");
@@ -543,6 +544,7 @@ impl LocalCluster {
             DEFAULT_TPU_USE_QUIC,
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
             DEFAULT_TPU_ENABLE_UDP,
+            32, // max connections per IpAddr per mintute
             Arc::new(RwLock::new(None)),
         )
         .expect("assume successful validator start");
@@ -1013,6 +1015,7 @@ impl Cluster for LocalCluster {
             DEFAULT_TPU_USE_QUIC,
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
             DEFAULT_TPU_ENABLE_UDP,
+            32, // max connections per IpAddr per minute, use higher value because of tests
             Arc::new(RwLock::new(None)),
         )
         .expect("assume successful validator start");

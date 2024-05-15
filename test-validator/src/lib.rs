@@ -1053,6 +1053,7 @@ impl TestValidator {
             DEFAULT_TPU_USE_QUIC,
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
             config.tpu_enable_udp,
+            32, // max connections per IpAddr per minute for test
             config.admin_rpc_service_post_init.clone(),
         )?);
 
