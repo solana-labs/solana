@@ -291,8 +291,8 @@ pub mod test {
         );
 
         let offsets = Ed25519SignatureOffsets {
-            message_data_offset: std::u16::MAX,
-            message_data_size: std::u16::MAX,
+            message_data_offset: u16::MAX,
+            message_data_size: u16::MAX,
             ..Ed25519SignatureOffsets::default()
         };
         assert_eq!(
@@ -304,7 +304,7 @@ pub mod test {
     #[test]
     fn test_pubkey_offset() {
         let offsets = Ed25519SignatureOffsets {
-            public_key_offset: std::u16::MAX,
+            public_key_offset: u16::MAX,
             ..Ed25519SignatureOffsets::default()
         };
         assert_eq!(
@@ -325,7 +325,7 @@ pub mod test {
     #[test]
     fn test_signature_offset() {
         let offsets = Ed25519SignatureOffsets {
-            signature_offset: std::u16::MAX,
+            signature_offset: u16::MAX,
             ..Ed25519SignatureOffsets::default()
         };
         assert_eq!(

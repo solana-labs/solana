@@ -32,7 +32,7 @@ fn bench_pubkey_validity(c: &mut Criterion) {
 }
 
 fn bench_range_proof_u64(c: &mut Criterion) {
-    let amount = std::u64::MAX;
+    let amount = u64::MAX;
     let (commitment, opening) = Pedersen::new(amount);
     let proof_data = RangeProofU64Data::new(&commitment, amount, &opening).unwrap();
 

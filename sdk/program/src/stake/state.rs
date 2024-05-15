@@ -24,7 +24,7 @@ pub type StakeActivationStatus = StakeHistoryEntry;
 // epoch
 pub const DEFAULT_WARMUP_COOLDOWN_RATE: f64 = 0.25;
 pub const NEW_WARMUP_COOLDOWN_RATE: f64 = 0.09;
-pub const DEFAULT_SLASH_PENALTY: u8 = ((5 * std::u8::MAX as usize) / 100) as u8;
+pub const DEFAULT_SLASH_PENALTY: u8 = ((5 * u8::MAX as usize) / 100) as u8;
 
 pub fn warmup_cooldown_rate(current_epoch: Epoch, new_rate_activation_epoch: Option<Epoch>) -> f64 {
     if current_epoch < new_rate_activation_epoch.unwrap_or(u64::MAX) {
@@ -622,7 +622,7 @@ impl Default for Delegation {
             voter_pubkey: Pubkey::default(),
             stake: 0,
             activation_epoch: 0,
-            deactivation_epoch: std::u64::MAX,
+            deactivation_epoch: u64::MAX,
             warmup_cooldown_rate: DEFAULT_WARMUP_COOLDOWN_RATE,
         }
     }
@@ -638,7 +638,7 @@ impl Delegation {
         }
     }
     pub fn is_bootstrap(&self) -> bool {
-        self.activation_epoch == std::u64::MAX
+        self.activation_epoch == u64::MAX
     }
 
     pub fn stake(
@@ -950,7 +950,7 @@ impl Stake {
     }
 
     pub fn deactivate(&mut self, epoch: Epoch) -> Result<(), StakeError> {
-        if self.delegation.deactivation_epoch != std::u64::MAX {
+        if self.delegation.deactivation_epoch != u64::MAX {
             Err(StakeError::AlreadyDeactivated)
         } else {
             self.delegation.deactivation_epoch = epoch;

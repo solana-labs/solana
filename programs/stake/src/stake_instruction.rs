@@ -2269,7 +2269,7 @@ mod tests {
                     voter_pubkey: vote_address,
                     stake: stake_lamports,
                     activation_epoch: clock.epoch,
-                    deactivation_epoch: std::u64::MAX,
+                    deactivation_epoch: u64::MAX,
                     ..Delegation::default()
                 },
                 credits_observed: vote_state_credits,
@@ -2332,7 +2332,7 @@ mod tests {
         );
         // verify that deactivation has been cleared
         let stake = stake_from(&accounts_2[0]).unwrap();
-        assert_eq!(stake.delegation.deactivation_epoch, std::u64::MAX);
+        assert_eq!(stake.delegation.deactivation_epoch, u64::MAX);
 
         // verify that delegate to a different vote account fails
         // if stake is still active
@@ -2368,7 +2368,7 @@ mod tests {
                     voter_pubkey: vote_address_2,
                     stake: stake_lamports,
                     activation_epoch: clock.epoch,
-                    deactivation_epoch: std::u64::MAX,
+                    deactivation_epoch: u64::MAX,
                     ..Delegation::default()
                 },
                 credits_observed: vote_state_credits,

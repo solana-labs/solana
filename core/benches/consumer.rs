@@ -119,7 +119,7 @@ fn setup(apply_cost_tracker_during_replay: bool) -> BenchFrame {
     // set cost tracker limits to MAX so it will not filter out TXs
     bank.write_cost_tracker()
         .unwrap()
-        .set_limits(std::u64::MAX, std::u64::MAX, std::u64::MAX);
+        .set_limits(u64::MAX, u64::MAX, u64::MAX);
     let bank = bank.wrap_with_bank_forks_for_tests().0;
 
     let ledger_path = TempDir::new().unwrap();

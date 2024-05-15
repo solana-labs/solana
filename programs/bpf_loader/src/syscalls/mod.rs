@@ -765,8 +765,8 @@ declare_builtin_function!(
             invoke_context.get_check_aligned(),
         )?;
 
-        let mut bump_seed = [std::u8::MAX];
-        for _ in 0..std::u8::MAX {
+        let mut bump_seed = [u8::MAX];
+        for _ in 0..u8::MAX {
             {
                 let mut seeds_with_bump = seeds.to_vec();
                 seeds_with_bump.push(&bump_seed);

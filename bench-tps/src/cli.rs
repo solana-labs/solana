@@ -91,7 +91,7 @@ impl Default for Config {
             websocket_url: ConfigInput::default().websocket_url,
             id: Keypair::new(),
             threads: 4,
-            duration: Duration::new(std::u64::MAX, 0),
+            duration: Duration::new(u64::MAX, 0),
             tx_count: 50_000,
             keypair_multiplier: 8,
             thread_batch_sleep_ms: 1000,

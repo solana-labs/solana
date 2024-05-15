@@ -1432,7 +1432,7 @@ mod tests {
             ..
         } = create_slow_genesis_config(10_000);
         let mut bank = Bank::new_for_tests(&genesis_config);
-        bank.ns_per_slot = std::u128::MAX;
+        bank.ns_per_slot = u128::MAX;
         if !apply_cost_tracker_during_replay_enabled {
             bank.deactivate_feature(&feature_set::apply_cost_tracker_during_replay::id());
         }
@@ -1665,7 +1665,7 @@ mod tests {
         // set cost tracker limits to MAX so it will not filter out TXs
         bank.write_cost_tracker()
             .unwrap()
-            .set_limits(std::u64::MAX, std::u64::MAX, std::u64::MAX);
+            .set_limits(u64::MAX, u64::MAX, u64::MAX);
 
         // Transfer more than the balance of the mint keypair, should cause a
         // InstructionError::InsufficientFunds that is then committed. Needs to be
@@ -1726,7 +1726,7 @@ mod tests {
         // set cost tracker limits to MAX so it will not filter out TXs
         bank.write_cost_tracker()
             .unwrap()
-            .set_limits(std::u64::MAX, std::u64::MAX, std::u64::MAX);
+            .set_limits(u64::MAX, u64::MAX, u64::MAX);
 
         // Make all repetitive transactions that conflict on the `mint_keypair`, so only 1 should be executed
         let mut transactions = vec![

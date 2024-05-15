@@ -142,7 +142,7 @@ fn bench_program_alu(bencher: &mut Bencher) {
 
     println!("Interpreted:");
     vm.context_object_pointer
-        .mock_set_remaining(std::i64::MAX as u64);
+        .mock_set_remaining(i64::MAX as u64);
     let (instructions, result) = vm.execute_program(&executable, true);
     assert_eq!(SUCCESS, result.unwrap());
     assert_eq!(ARMSTRONG_LIMIT, LittleEndian::read_u64(&inner_iter));
@@ -153,7 +153,7 @@ fn bench_program_alu(bencher: &mut Bencher) {
 
     bencher.iter(|| {
         vm.context_object_pointer
-            .mock_set_remaining(std::i64::MAX as u64);
+            .mock_set_remaining(i64::MAX as u64);
         vm.execute_program(&executable, true).1.unwrap();
     });
     let summary = bencher.bench(|_bencher| Ok(())).unwrap().unwrap();
@@ -174,7 +174,7 @@ fn bench_program_alu(bencher: &mut Bencher) {
 
     bencher.iter(|| {
         vm.context_object_pointer
-            .mock_set_remaining(std::i64::MAX as u64);
+            .mock_set_remaining(i64::MAX as u64);
         vm.execute_program(&executable, false).1.unwrap();
     });
     let summary = bencher.bench(|_bencher| Ok(())).unwrap().unwrap();

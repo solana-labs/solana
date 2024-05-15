@@ -13,7 +13,6 @@ use {
         alloc::{alloc, Layout},
         mem::{align_of, size_of},
         ptr::null_mut,
-        usize,
     },
 };
 

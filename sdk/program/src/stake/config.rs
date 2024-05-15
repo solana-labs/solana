@@ -19,7 +19,7 @@ crate::declare_deprecated_id!("StakeConfig11111111111111111111111111111111");
 pub struct Config {
     /// how much stake we can activate/deactivate per-epoch as a fraction of currently effective stake
     pub warmup_cooldown_rate: f64,
-    /// percentage of stake lost when slash, expressed as a portion of std::u8::MAX
+    /// percentage of stake lost when slash, expressed as a portion of u8::MAX
     pub slash_penalty: u8,
 }
 

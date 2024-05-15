@@ -51,7 +51,7 @@ pub fn create_and_add_stakes(
     // the largest each stake account should be, in lamports
     granularity: Option<u64>,
 ) -> u64 {
-    let granularity = granularity.unwrap_or(std::u64::MAX);
+    let granularity = granularity.unwrap_or(u64::MAX);
     let staker = &staker_info
         .staker
         .parse::<Pubkey>()
@@ -268,7 +268,7 @@ mod tests {
         );
 
         // huge granularity doesn't blow up
-        let granularity = std::u64::MAX;
+        let granularity = u64::MAX;
         let total_lamports = staker_reserve + reserve * 2 + 1;
         create_and_check_stakes(
             &mut GenesisConfig {

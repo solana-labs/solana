@@ -1320,7 +1320,7 @@ pub mod tests {
             // wrap AppendVec in ManuallyDrop to ensure we do not remove the backing file when dropped
             let av = ManuallyDrop::new(AppendVec::new(path, true, 1024 * 1024));
 
-            let too_large_data_len = u64::max_value();
+            let too_large_data_len = u64::MAX;
             av.append_account_test(&create_test_account(10)).unwrap();
 
             av.get_stored_account_meta_callback(0, |account| {
@@ -1359,7 +1359,7 @@ pub mod tests {
                 av.append_account_test(&executable_account).unwrap()
             };
 
-            let crafted_executable = u8::max_value() - 1;
+            let crafted_executable = u8::MAX - 1;
 
             // reload accounts
             // ensure false is 0u8 and true is 1u8 actually

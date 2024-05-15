@@ -440,7 +440,7 @@ impl RemoteWallet<hidapi::DeviceInfo> for LedgerWallet {
         } else {
             extend_and_serialize_multiple(&[derivation_path])
         };
-        if data.len() > u16::max_value() as usize {
+        if data.len() > u16::MAX as usize {
             return Err(RemoteWalletError::InvalidInput(
                 "Message to sign is too long".to_string(),
             ));

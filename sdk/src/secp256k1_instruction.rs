@@ -666,7 +666,7 @@
 //!     signatures: &[SecpSignature],
 //!     instruction_index: u8,
 //! ) -> Result<Vec<u8>> {
-//!     assert!(signatures.len() <= u8::max_value().into());
+//!     assert!(signatures.len() <= u8::MAX.into());
 //!
 //!     // We're going to pack all the signatures into the secp256k1 instruction data.
 //!     // Before our signatures though is the signature offset structures
@@ -1142,8 +1142,8 @@ pub mod test {
         );
 
         let offsets = SecpSignatureOffsets {
-            message_data_offset: std::u16::MAX,
-            message_data_size: std::u16::MAX,
+            message_data_offset: u16::MAX,
+            message_data_size: u16::MAX,
             ..SecpSignatureOffsets::default()
         };
         assert_eq!(
@@ -1155,7 +1155,7 @@ pub mod test {
     #[test]
     fn test_eth_offset() {
         let offsets = SecpSignatureOffsets {
-            eth_address_offset: std::u16::MAX,
+            eth_address_offset: u16::MAX,
             ..SecpSignatureOffsets::default()
         };
         assert_eq!(
@@ -1176,7 +1176,7 @@ pub mod test {
     #[test]
     fn test_signature_offset() {
         let offsets = SecpSignatureOffsets {
-            signature_offset: std::u16::MAX,
+            signature_offset: u16::MAX,
             ..SecpSignatureOffsets::default()
         };
         assert_eq!(

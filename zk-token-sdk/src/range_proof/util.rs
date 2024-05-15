@@ -65,7 +65,7 @@ impl Iterator for ScalarExp {
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        (usize::max_value(), None)
+        (usize::MAX, None)
     }
 }
 

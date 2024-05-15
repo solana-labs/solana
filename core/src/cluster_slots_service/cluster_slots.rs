@@ -283,7 +283,7 @@ mod tests {
         let mut map = HashMap::new();
         let k1 = solana_sdk::pubkey::new_rand();
         let k2 = solana_sdk::pubkey::new_rand();
-        map.insert(k1, std::u64::MAX / 2);
+        map.insert(k1, u64::MAX / 2);
         map.insert(k2, 0);
         cs.cluster_slots
             .write()
@@ -291,7 +291,7 @@ mod tests {
             .insert(0, Arc::new(RwLock::new(map)));
         c1.set_pubkey(k1);
         c2.set_pubkey(k2);
-        assert_eq!(cs.compute_weights(0, &[c1, c2]), vec![std::u64::MAX / 4, 1]);
+        assert_eq!(cs.compute_weights(0, &[c1, c2]), vec![u64::MAX / 4, 1]);
     }
 
     #[test]
@@ -311,7 +311,7 @@ mod tests {
         let validator_stakes: HashMap<_, _> = vec![(
             k1,
             NodeVoteAccounts {
-                total_stake: std::u64::MAX / 2,
+                total_stake: u64::MAX / 2,
                 vote_accounts: vec![Pubkey::default()],
             },
         )]
@@ -320,10 +320,7 @@ mod tests {
         *cs.validator_stakes.write().unwrap() = Arc::new(validator_stakes);
         c1.set_pubkey(k1);
         c2.set_pubkey(k2);
-        assert_eq!(
-            cs.compute_weights(0, &[c1, c2]),
-            vec![std::u64::MAX / 4 + 1, 1]
-        );
+        assert_eq!(cs.compute_weights(0, &[c1, c2]), vec![u64::MAX / 4 + 1, 1]);
     }
 
     #[test]
@@ -345,7 +342,7 @@ mod tests {
         let validator_stakes: HashMap<_, _> = vec![(
             *contact_infos[1].pubkey(),
             NodeVoteAccounts {
-                total_stake: std::u64::MAX / 2,
+                total_stake: u64::MAX / 2,
                 vote_accounts: vec![Pubkey::default()],
             },
         )]

@@ -57,7 +57,7 @@ impl ClientOptimizer {
             cur_index: AtomicUsize::new(0),
             experiment_index: AtomicUsize::new(0),
             experiment_done: AtomicBool::new(false),
-            times: RwLock::new(vec![std::u64::MAX; num_clients]),
+            times: RwLock::new(vec![u64::MAX; num_clients]),
             num_clients,
         }
     }
@@ -77,7 +77,7 @@ impl ClientOptimizer {
 
     fn report(&self, index: usize, time_ms: u64) {
         if self.num_clients > 1
-            && (!self.experiment_done.load(Ordering::Relaxed) || time_ms == std::u64::MAX)
+            && (!self.experiment_done.load(Ordering::Relaxed) || time_ms == u64::MAX)
         {
             trace!(
                 "report {} with {} exp: {}",
@@ -88,7 +88,7 @@ impl ClientOptimizer {
 
             self.times.write().unwrap()[index] = time_ms;
 
-            if index == (self.num_clients - 1) || time_ms == std::u64::MAX {
+            if index == (self.num_clients - 1) || time_ms == u64::MAX {
                 let times = self.times.read().unwrap();
                 let (min_time, min_index) = min_index(&times);
                 trace!(
@@ -441,7 +441,7 @@ where
                 Ok((value.0, value.1, value.2))
             }
             Err(e) => {
-                self.optimizer.report(index, std::u64::MAX);
+                self.optimizer.report(index, u64::MAX);
                 Err(e.into())
             }
         }
@@ -531,7 +531,7 @@ where
                 Ok(transaction_count)
             }
             Err(e) => {
-                self.optimizer.report(index, std::u64::MAX);
+                self.optimizer.report(index, u64::MAX);
                 Err(e.into())
             }
         }
@@ -552,7 +552,7 @@ where
                 Ok(transaction_count)
             }
             Err(e) => {
-                self.optimizer.report(index, std::u64::MAX);
+                self.optimizer.report(index, u64::MAX);
                 Err(e.into())
             }
         }
@@ -600,7 +600,7 @@ where
                 Ok((blockhash, last_valid_block_height))
             }
             Err(e) => {
-                self.optimizer.report(index, std::u64::MAX);
+                self.optimizer.report(index, u64::MAX);
                 Err(e.into())
             }
         }
@@ -656,7 +656,7 @@ where
 }
 
 fn min_index(array: &[u64]) -> (u64, usize) {
-    let mut min_time = std::u64::MAX;
+    let mut min_time = u64::MAX;
     let mut min_index = 0;
     for (i, time) in array.iter().enumerate() {
         if *time < min_time {
@@ -686,7 +686,7 @@ mod tests {
         optimizer.report(index, 50);
         assert_eq!(optimizer.best(), NUM_CLIENTS - 1);
 
-        optimizer.report(optimizer.best(), std::u64::MAX);
+        optimizer.report(optimizer.best(), u64::MAX);
         assert_eq!(optimizer.best(), NUM_CLIENTS - 2);
     }
 }

@@ -210,7 +210,7 @@ pub fn load_bank_forks(
     let mut leader_schedule_cache =
         LeaderScheduleCache::new_from_bank(&bank_forks.read().unwrap().root_bank());
     if process_options.full_leader_cache {
-        leader_schedule_cache.set_max_schedules(std::usize::MAX);
+        leader_schedule_cache.set_max_schedules(usize::MAX);
     }
 
     if let Some(ref new_hard_forks) = process_options.new_hard_forks {

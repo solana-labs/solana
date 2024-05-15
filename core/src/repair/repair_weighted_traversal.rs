@@ -344,7 +344,7 @@ pub mod test {
             &blockstore,
             &mut slot_meta_cache,
             &mut repairs,
-            std::usize::MAX,
+            usize::MAX,
         );
         let last_shred = blockstore.meta(0).unwrap().unwrap().received;
         assert_eq!(

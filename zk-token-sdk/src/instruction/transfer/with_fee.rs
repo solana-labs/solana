@@ -859,7 +859,7 @@ mod test {
         assert!(fee_data.verify_proof().is_ok());
 
         // Case 2: transfer max amount
-        let spendable_balance: u64 = u64::max_value();
+        let spendable_balance: u64 = u64::MAX;
         let spendable_ciphertext = source_keypair.pubkey().encrypt(spendable_balance);
 
         let transfer_amount: u64 =

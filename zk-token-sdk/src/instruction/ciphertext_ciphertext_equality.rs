@@ -190,7 +190,7 @@ mod test {
 
         assert!(proof_data.verify_proof().is_ok());
 
-        let amount = u64::max_value();
+        let amount = u64::MAX;
         let source_ciphertext = source_keypair.pubkey().encrypt(amount);
 
         let destination_opening = PedersenOpening::new_rand();

@@ -7577,7 +7577,7 @@ pub mod tests {
         rpc.block_commitment_cache
             .write()
             .unwrap()
-            .set_highest_super_majority_root(std::u64::MAX);
+            .set_highest_super_majority_root(u64::MAX);
 
         let request = create_test_request(
             "getBlocks",

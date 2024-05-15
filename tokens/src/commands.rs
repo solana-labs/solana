@@ -434,7 +434,7 @@ fn send_messages(
         let signers = unique_signers(signers);
         let result: ClientResult<(Transaction, u64)> = {
             if args.dry_run {
-                Ok((Transaction::new_unsigned(message), std::u64::MAX))
+                Ok((Transaction::new_unsigned(message), u64::MAX))
             } else {
                 let (blockhash, last_valid_block_height) =
                     client.get_latest_blockhash_with_commitment(CommitmentConfig::default())?;
@@ -2496,7 +2496,7 @@ mod tests {
             new_stake_account_address: None,
             finalized_date: None,
             transaction: Transaction::new_unsigned(message),
-            last_valid_block_height: std::u64::MAX,
+            last_valid_block_height: u64::MAX,
             lockup_date: None,
         }));
 

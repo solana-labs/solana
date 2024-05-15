@@ -224,7 +224,7 @@ mod tests {
             native_token::sol_to_lamports(10_000_000f64),
             &Pubkey::default(),
             &vote_state,
-            std::u64::MAX,
+            u64::MAX,
         );
 
         let epoch_slots: u128 = 14 * 24 * 3600 * 160;

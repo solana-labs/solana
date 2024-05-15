@@ -3027,7 +3027,7 @@ pub mod tests {
         };
         let (_bank_forks, leader_schedule) =
             test_process_blockstore(&genesis_config, &blockstore, &opts, Arc::default());
-        assert_eq!(leader_schedule.max_schedules(), std::usize::MAX);
+        assert_eq!(leader_schedule.max_schedules(), usize::MAX);
     }
 
     #[test]

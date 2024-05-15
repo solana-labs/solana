@@ -57,7 +57,7 @@ impl Shredder {
         reference_tick: u8,
         version: u16,
     ) -> Result<Self, Error> {
-        if slot < parent_slot || slot - parent_slot > u64::from(std::u16::MAX) {
+        if slot < parent_slot || slot - parent_slot > u64::from(u16::MAX) {
             Err(Error::InvalidParentSlot { slot, parent_slot })
         } else {
             Ok(Self {
@@ -710,7 +710,7 @@ mod tests {
         let keypair = Arc::new(Keypair::new());
         let slot = 1;
         let parent_slot = 0;
-        let shredder = Shredder::new(slot, parent_slot, u8::max_value(), 0).unwrap();
+        let shredder = Shredder::new(slot, parent_slot, u8::MAX, 0).unwrap();
         let entries: Vec<_> = (0..5)
             .map(|_| {
                 let keypair0 = Keypair::new();

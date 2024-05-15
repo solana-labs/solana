@@ -1522,7 +1522,7 @@ mod tests {
             assert_eq!(stats.bad_parent_offset, 1);
         }
         {
-            let index = std::u32::MAX - 10;
+            let index = u32::MAX - 10;
             {
                 let mut cursor = Cursor::new(packet.buffer_mut());
                 cursor

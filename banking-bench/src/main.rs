@@ -352,7 +352,7 @@ fn main() {
     // set cost tracker limits to MAX so it will not filter out TXs
     bank.write_cost_tracker()
         .unwrap()
-        .set_limits(std::u64::MAX, std::u64::MAX, std::u64::MAX);
+        .set_limits(u64::MAX, u64::MAX, u64::MAX);
 
     let mut all_packets: Vec<PacketsPerIteration> = std::iter::from_fn(|| {
         Some(PacketsPerIteration::new(
@@ -553,11 +553,9 @@ fn main() {
             insert_time.stop();
 
             // set cost tracker limits to MAX so it will not filter out TXs
-            bank.write_cost_tracker().unwrap().set_limits(
-                std::u64::MAX,
-                std::u64::MAX,
-                std::u64::MAX,
-            );
+            bank.write_cost_tracker()
+                .unwrap()
+                .set_limits(u64::MAX, u64::MAX, u64::MAX);
 
             assert!(poh_recorder.read().unwrap().bank().is_none());
             poh_recorder

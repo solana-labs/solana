@@ -2362,12 +2362,12 @@ pub fn build_stake_state(
                 } else {
                     None
                 },
-                activation_epoch: Some(if stake.delegation.activation_epoch < std::u64::MAX {
+                activation_epoch: Some(if stake.delegation.activation_epoch < u64::MAX {
                     stake.delegation.activation_epoch
                 } else {
                     0
                 }),
-                deactivation_epoch: if stake.delegation.deactivation_epoch < std::u64::MAX {
+                deactivation_epoch: if stake.delegation.deactivation_epoch < u64::MAX {
                     Some(stake.delegation.deactivation_epoch)
                 } else {
                     None
@@ -2622,10 +2622,10 @@ pub fn process_show_stake_history(
         })?;
 
     let limit_results = match config.output_format {
-        OutputFormat::Json | OutputFormat::JsonCompact => std::usize::MAX,
+        OutputFormat::Json | OutputFormat::JsonCompact => usize::MAX,
         _ => {
             if limit_results == 0 {
-                std::usize::MAX
+                usize::MAX
             } else {
                 limit_results
             }

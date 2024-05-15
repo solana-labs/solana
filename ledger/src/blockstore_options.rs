@@ -212,7 +212,7 @@ pub struct BlockstoreRocksFifoOptions {
     pub shred_code_cf_size: u64,
 }
 
-pub const MAX_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES: u64 = std::u64::MAX;
+pub const MAX_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES: u64 = u64::MAX;
 
 impl BlockstoreRocksFifoOptions {
     /// Returns a BlockstoreRocksFifoOptions where the specified

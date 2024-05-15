@@ -6561,7 +6561,7 @@ impl AccountsDb {
     fn report_store_stats(&self) {
         let mut total_count = 0;
         let mut newest_slot = 0;
-        let mut oldest_slot = std::u64::MAX;
+        let mut oldest_slot = u64::MAX;
         let mut total_bytes = 0;
         let mut total_alive_bytes = 0;
         for (slot, store) in self.storage.iter() {
@@ -13252,7 +13252,7 @@ pub mod tests {
     #[should_panic(expected = "overflow is detected while summing capitalization")]
     fn test_checked_sum_for_capitalization_overflow() {
         assert_eq!(
-            AccountsDb::checked_sum_for_capitalization(vec![1, u64::max_value()].into_iter()),
+            AccountsDb::checked_sum_for_capitalization(vec![1, u64::MAX].into_iter()),
             3
         );
     }

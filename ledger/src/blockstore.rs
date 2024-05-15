@@ -5352,7 +5352,7 @@ pub mod tests {
                     let meta = blockstore.meta(num_slots + 1).unwrap().unwrap();
                     assert_eq!(meta.consumed, 1);
                     assert_eq!(meta.received, 1);
-                    assert_eq!(meta.last_index, std::u64::MAX);
+                    assert_eq!(meta.last_index, u64::MAX);
                     assert_eq!(meta.parent_slot, num_slots);
                     assert!(meta.next_slots.is_empty());
 
@@ -10501,7 +10501,7 @@ pub mod tests {
             .map(|i| Reward {
                 pubkey: solana_sdk::pubkey::new_rand().to_string(),
                 lamports: 42 + i,
-                post_balance: std::u64::MAX,
+                post_balance: u64::MAX,
                 reward_type: Some(RewardType::Fee),
                 commission: None,
             })
@@ -10823,7 +10823,7 @@ pub mod tests {
         let even_smaller_last_shred_duplicate = {
             let mut payload = shreds[smaller_last_shred_index - 1].payload().clone();
             // Flip a byte to create a duplicate shred
-            payload[0] = std::u8::MAX - payload[0];
+            payload[0] = u8::MAX - payload[0];
             let mut shred = Shred::new_from_serialized_shred(payload).unwrap();
             shred.set_last_in_slot();
             shred

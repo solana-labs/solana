@@ -5,7 +5,7 @@ use {
     std::time::{Duration, Instant},
 };
 
-const LOW_POWER_MODE: u64 = std::u64::MAX;
+const LOW_POWER_MODE: u64 = u64::MAX;
 
 pub struct Poh {
     pub hash: Hash,

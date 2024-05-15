@@ -608,8 +608,7 @@ mod tests {
         batches[0][0].buffer_mut()[..shred.payload().len()].copy_from_slice(shred.payload());
         batches[0][0].meta_mut().size = shred.payload().len();
 
-        let leader_slots =
-            HashMap::from([(std::u64::MAX, Pubkey::default()), (slot, keypair.pubkey())]);
+        let leader_slots = HashMap::from([(u64::MAX, Pubkey::default()), (slot, keypair.pubkey())]);
         let rv = verify_shreds_gpu(
             thread_pool,
             &batches,
@@ -621,7 +620,7 @@ mod tests {
 
         let wrong_keypair = Keypair::new();
         let leader_slots = HashMap::from([
-            (std::u64::MAX, Pubkey::default()),
+            (u64::MAX, Pubkey::default()),
             (slot, wrong_keypair.pubkey()),
         ]);
         let rv = verify_shreds_gpu(
@@ -633,7 +632,7 @@ mod tests {
         );
         assert_eq!(rv, vec![vec![0]]);
 
-        let leader_slots = HashMap::from([(std::u64::MAX, Pubkey::default())]);
+        let leader_slots = HashMap::from([(u64::MAX, Pubkey::default())]);
         let rv = verify_shreds_gpu(
             thread_pool,
             &batches,
@@ -644,8 +643,7 @@ mod tests {
         assert_eq!(rv, vec![vec![0]]);
 
         batches[0][0].meta_mut().size = 0;
-        let leader_slots =
-            HashMap::from([(std::u64::MAX, Pubkey::default()), (slot, keypair.pubkey())]);
+        let leader_slots = HashMap::from([(u64::MAX, Pubkey::default()), (slot, keypair.pubkey())]);
         let rv = verify_shreds_gpu(
             thread_pool,
             &batches,
@@ -689,7 +687,7 @@ mod tests {
         let keypair = Keypair::new();
         let pinned_keypair = sign_shreds_gpu_pinned_keypair(&keypair, &recycler_cache);
         let pinned_keypair = Some(Arc::new(pinned_keypair));
-        let pubkeys = HashMap::from([(std::u64::MAX, Pubkey::default()), (slot, keypair.pubkey())]);
+        let pubkeys = HashMap::from([(u64::MAX, Pubkey::default()), (slot, keypair.pubkey())]);
         //unsigned
         let rv = verify_shreds_gpu(thread_pool, &batches, &pubkeys, &recycler_cache, &cache);
         assert_eq!(rv, vec![vec![0; num_packets]; num_batches]);
@@ -734,7 +732,7 @@ mod tests {
         batches[0][0].buffer_mut()[..shred.payload().len()].copy_from_slice(shred.payload());
         batches[0][0].meta_mut().size = shred.payload().len();
 
-        let pubkeys = HashMap::from([(slot, keypair.pubkey()), (std::u64::MAX, Pubkey::default())]);
+        let pubkeys = HashMap::from([(slot, keypair.pubkey()), (u64::MAX, Pubkey::default())]);
         //unsigned
         let rv = verify_shreds_cpu(thread_pool, &batches, &pubkeys, &cache);
         assert_eq!(rv, vec![vec![0]]);

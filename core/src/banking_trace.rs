@@ -432,7 +432,7 @@ mod tests {
         let path = temp_dir.path().join("banking-trace");
         let exit = Arc::<AtomicBool>::default();
         let (tracer, tracer_thread) =
-            BankingTracer::new(Some((&path, exit.clone(), DirByteLimit::max_value()))).unwrap();
+            BankingTracer::new(Some((&path, exit.clone(), DirByteLimit::MAX))).unwrap();
         let (non_vote_sender, non_vote_receiver) = tracer.create_channel_non_vote();
 
         let exit_for_dummy_thread = Arc::<AtomicBool>::default();
@@ -473,7 +473,7 @@ mod tests {
         let path = temp_dir.path().join("banking-trace");
         let exit = Arc::<AtomicBool>::default();
         let (tracer, tracer_thread) =
-            BankingTracer::new(Some((&path, exit.clone(), DirByteLimit::max_value()))).unwrap();
+            BankingTracer::new(Some((&path, exit.clone(), DirByteLimit::MAX))).unwrap();
         let (non_vote_sender, non_vote_receiver) = tracer.create_channel_non_vote();
 
         let dummy_main_thread = thread::spawn(move || {

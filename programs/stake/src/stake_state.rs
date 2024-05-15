@@ -113,7 +113,7 @@ fn redelegate_stake(
             && clock.epoch == stake.delegation.deactivation_epoch
             && stake_lamports_ok
         {
-            stake.delegation.deactivation_epoch = std::u64::MAX;
+            stake.delegation.deactivation_epoch = u64::MAX;
             return Ok(());
         } else {
             // can't redelegate to another pubkey if stake is active.
@@ -126,7 +126,7 @@ fn redelegate_stake(
 
     stake.delegation.stake = stake_lamports;
     stake.delegation.activation_epoch = clock.epoch;
-    stake.delegation.deactivation_epoch = std::u64::MAX;
+    stake.delegation.deactivation_epoch = u64::MAX;
     stake.delegation.voter_pubkey = *voter_pubkey;
     stake.credits_observed = vote_state.credits();
     Ok(())
@@ -1237,7 +1237,7 @@ pub fn create_stake_history_from_delegations(
 
     let bootstrap_delegation = if let Some(bootstrap) = bootstrap {
         vec![Delegation {
-            activation_epoch: std::u64::MAX,
+            activation_epoch: u64::MAX,
             stake: bootstrap,
             ..Delegation::default()
         }]
@@ -1516,7 +1516,7 @@ mod tests {
     #[test]
     fn test_stake_is_bootstrap() {
         assert!(Delegation {
-            activation_epoch: std::u64::MAX,
+            activation_epoch: u64::MAX,
             ..Delegation::default()
         }
         .is_bootstrap());
@@ -2000,7 +2000,7 @@ mod tests {
             Delegation {
                 // never deactivates
                 stake: 1_000,
-                activation_epoch: std::u64::MAX,
+                activation_epoch: u64::MAX,
                 ..Delegation::default()
             },
             Delegation {

@@ -766,8 +766,8 @@ mod test {
             new_erasure_meta
         );
 
-        new_erasure_meta.first_received_coding_index = u64::from(u32::max_value());
-        old_erasure_meta.__unused_size = usize::try_from(u32::max_value()).unwrap();
+        new_erasure_meta.first_received_coding_index = u64::from(u32::MAX);
+        old_erasure_meta.__unused_size = usize::try_from(u32::MAX).unwrap();
 
         assert_eq!(
             bincode::deserialize::<OldErasureMeta>(&bincode::serialize(&new_erasure_meta).unwrap())

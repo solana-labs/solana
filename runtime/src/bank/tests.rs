@@ -3961,7 +3961,7 @@ fn test_bank_epoch_vote_accounts() {
     let leader_stake = Stake {
         delegation: Delegation {
             stake: leader_lamports,
-            activation_epoch: std::u64::MAX, // bootstrap
+            activation_epoch: u64::MAX, // bootstrap
             ..Delegation::default()
         },
         ..Stake::default()

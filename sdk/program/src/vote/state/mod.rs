@@ -585,7 +585,7 @@ impl VoteState {
 
         VoteState {
             votes: VecDeque::from(vec![LandedVote::default(); MAX_LOCKOUT_HISTORY]),
-            root_slot: Some(std::u64::MAX),
+            root_slot: Some(u64::MAX),
             epoch_credits: vec![(0, 0, 0); MAX_EPOCH_CREDITS_HISTORY],
             authorized_voters,
             ..Self::default()
@@ -1165,7 +1165,7 @@ mod tests {
         assert_eq!(vote_state.commission_split(1), (0, 1, false));
 
         let mut vote_state = VoteState {
-            commission: std::u8::MAX,
+            commission: u8::MAX,
             ..VoteState::default()
         };
         assert_eq!(vote_state.commission_split(1), (1, 0, false));

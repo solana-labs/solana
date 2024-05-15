@@ -504,8 +504,8 @@ impl Pubkey {
         // not supported
         #[cfg(not(target_os = "solana"))]
         {
-            let mut bump_seed = [std::u8::MAX];
-            for _ in 0..std::u8::MAX {
+            let mut bump_seed = [u8::MAX];
+            for _ in 0..u8::MAX {
                 {
                     let mut seeds_with_bump = seeds.to_vec();
                     seeds_with_bump.push(&bump_seed);
@@ -523,7 +523,7 @@ impl Pubkey {
         #[cfg(target_os = "solana")]
         {
             let mut bytes = [0; 32];
-            let mut bump_seed = std::u8::MAX;
+            let mut bump_seed = u8::MAX;
             let result = unsafe {
                 crate::syscalls::sol_try_find_program_address(
                     seeds as *const _ as *const u8,

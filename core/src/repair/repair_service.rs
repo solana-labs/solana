@@ -237,7 +237,7 @@ impl Default for RepairSlotRange {
     fn default() -> Self {
         RepairSlotRange {
             start: 0,
-            end: std::u64::MAX,
+            end: u64::MAX,
         }
     }
 }
@@ -1355,7 +1355,7 @@ mod test {
                 assert_eq!(
                     RepairService::generate_repairs_in_range(
                         &blockstore,
-                        std::usize::MAX,
+                        usize::MAX,
                         &repair_slot_range,
                     ),
                     expected
@@ -1397,11 +1397,7 @@ mod test {
         let repair_slot_range = RepairSlotRange { start: 2, end };
 
         assert_eq!(
-            RepairService::generate_repairs_in_range(
-                &blockstore,
-                std::usize::MAX,
-                &repair_slot_range,
-            ),
+            RepairService::generate_repairs_in_range(&blockstore, usize::MAX, &repair_slot_range,),
             expected
         );
     }
@@ -1461,7 +1457,7 @@ mod test {
         let receive_socket = &UdpSocket::bind("0.0.0.0:0").unwrap();
         let duplicate_status = DuplicateSlotRepairStatus {
             correct_ancestor_to_repair: (dead_slot, Hash::default()),
-            start_ts: std::u64::MAX,
+            start_ts: u64::MAX,
             repair_pubkey_and_addr: None,
         };
 
@@ -1480,7 +1476,7 @@ mod test {
         duplicate_slot_repair_statuses.insert(dead_slot, duplicate_status);
 
         // There is no repair_addr, so should not get filtered because the timeout
-        // `std::u64::MAX` has not expired
+        // `u64::MAX` has not expired
         RepairService::generate_and_send_duplicate_repairs(
             &mut duplicate_slot_repair_statuses,
             &cluster_slots,
@@ -1568,7 +1564,7 @@ mod test {
         // address
         let mut duplicate_status = DuplicateSlotRepairStatus {
             correct_ancestor_to_repair: (dead_slot, Hash::default()),
-            start_ts: std::u64::MAX,
+            start_ts: u64::MAX,
             repair_pubkey_and_addr: dummy_addr,
         };
         RepairService::update_duplicate_slot_repair_addr(
@@ -1583,7 +1579,7 @@ mod test {
         // If the repair address is None, should try to update
         let mut duplicate_status = DuplicateSlotRepairStatus {
             correct_ancestor_to_repair: (dead_slot, Hash::default()),
-            start_ts: std::u64::MAX,
+            start_ts: u64::MAX,
             repair_pubkey_and_addr: None,
         };
         RepairService::update_duplicate_slot_repair_addr(

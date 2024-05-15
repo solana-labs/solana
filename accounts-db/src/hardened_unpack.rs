@@ -1006,11 +1006,8 @@ mod tests {
         let result = checked_total_size_sum(500, 500, MAX_SNAPSHOT_ARCHIVE_UNPACKED_ACTUAL_SIZE);
         assert_matches!(result, Ok(1000));
 
-        let result = checked_total_size_sum(
-            u64::max_value() - 2,
-            2,
-            MAX_SNAPSHOT_ARCHIVE_UNPACKED_ACTUAL_SIZE,
-        );
+        let result =
+            checked_total_size_sum(u64::MAX - 2, 2, MAX_SNAPSHOT_ARCHIVE_UNPACKED_ACTUAL_SIZE);
         assert_matches!(
             result,
             Err(UnpackError::Archive(ref message))

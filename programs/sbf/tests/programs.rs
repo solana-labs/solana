@@ -154,7 +154,7 @@ fn execute_transactions(
         },
     ) = bank.load_execute_and_commit_transactions(
         &batch,
-        std::usize::MAX,
+        usize::MAX,
         true,
         ExecutionRecordingConfig::new_single_setting(true),
         &mut timings,
