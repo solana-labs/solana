@@ -16,8 +16,6 @@ use {
 pub struct SampleStats {
     /// Maximum TPS reported by this node
     pub tps: f32,
-    /// Total time taken for those txs
-    pub elapsed: Duration,
     /// Total transactions reported by this node
     pub txs: u64,
 }
@@ -78,7 +76,6 @@ pub fn sample_txs<T>(
         if exit_signal.load(Ordering::Relaxed) {
             let stats = SampleStats {
                 tps: max_tps,
-                elapsed: total_elapsed,
                 txs: total_txs,
             };
             sample_stats.write().unwrap().push((client.addr(), stats));
