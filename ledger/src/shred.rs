@@ -139,6 +139,8 @@ pub enum Error {
     InvalidErasureShardIndex(/*headers:*/ Box<dyn Debug + Send>),
     #[error("Invalid merkle proof")]
     InvalidMerkleProof,
+    #[error("Invalid Merkle root")]
+    InvalidMerkleRoot,
     #[error("Invalid num coding shreds: {0}")]
     InvalidNumCodingShreds(u16),
     #[error("Invalid parent_offset: {parent_offset}, slot: {slot}")]
@@ -602,6 +604,11 @@ pub mod layout {
         packet.data(..size)
     }
 
+    pub fn get_shred_mut(packet: &mut Packet) -> Option<&mut [u8]> {
+        let size = get_shred_size(packet)?;
+        packet.buffer_mut().get_mut(..size)
+    }
+
     pub(crate) fn get_signature(shred: &[u8]) -> Option<Signature> {
         shred
             .get(..SIZE_OF_SIGNATURE)
@@ -776,6 +783,45 @@ pub mod layout {
         let Some(buffer) = shred.get_mut(offset..offset + SIZE_OF_SIGNATURE) else {
             return Err(Error::InvalidPayloadSize(shred.len()));
         };
+        buffer.copy_from_slice(signature.as_ref());
+        Ok(())
+    }
+
+    /// Resigns the shred's Merkle root as the retransmitter node in the
+    /// Turbine broadcast tree. This signature is in addition to leader's
+    /// signature which is left intact.
+    pub fn resign_shred(shred: &mut [u8], keypair: &Keypair) -> Result<(), Error> {
+        let (offset, merkle_root) = match get_shred_variant(shred)? {
+            ShredVariant::LegacyCode | ShredVariant::LegacyData => {
+                return Err(Error::InvalidShredVariant)
+            }
+            ShredVariant::MerkleCode {
+                proof_size,
+                chained,
+                resigned,
+            } => (
+                merkle::ShredCode::get_retransmitter_signature_offset(
+                    proof_size, chained, resigned,
+                )?,
+                merkle::ShredCode::get_merkle_root(shred, proof_size, chained, resigned)
+                    .ok_or(Error::InvalidMerkleRoot)?,
+            ),
+            ShredVariant::MerkleData {
+                proof_size,
+                chained,
+                resigned,
+            } => (
+                merkle::ShredData::get_retransmitter_signature_offset(
+                    proof_size, chained, resigned,
+                )?,
+                merkle::ShredData::get_merkle_root(shred, proof_size, chained, resigned)
+                    .ok_or(Error::InvalidMerkleRoot)?,
+            ),
+        };
+        let Some(buffer) = shred.get_mut(offset..offset + SIZE_OF_SIGNATURE) else {
+            return Err(Error::InvalidPayloadSize(shred.len()));
+        };
+        let signature = keypair.sign_message(merkle_root.as_ref());
         buffer.copy_from_slice(signature.as_ref());
         Ok(())
     }

@@ -10,7 +10,11 @@ use {
     solana_perf::{self, deduper::Deduper, packet::PacketBatch, recycler_cache::RecyclerCache},
     solana_rayon_threadlimit::get_thread_count,
     solana_runtime::{bank::Bank, bank_forks::BankForks},
-    solana_sdk::{clock::Slot, pubkey::Pubkey},
+    solana_sdk::{
+        clock::Slot,
+        pubkey::Pubkey,
+        signature::{Keypair, Signer},
+    },
     std::{
         collections::HashMap,
         sync::{Arc, RwLock},
@@ -56,11 +60,12 @@ pub fn spawn_shred_sigverify(
             if deduper.maybe_reset(&mut rng, DEDUPER_FALSE_POSITIVE_RATE, DEDUPER_RESET_CYCLE) {
                 stats.num_deduper_saturations += 1;
             }
+            // We can't store the keypair outside the loop
+            // because the identity might be hot swapped.
+            let keypair: Arc<Keypair> = cluster_info.keypair().clone();
             match run_shred_sigverify(
                 &thread_pool,
-                // We can't store the pubkey outside the loop
-                // because the identity might be hot swapped.
-                &cluster_info.id(),
+                &keypair,
                 &bank_forks,
                 &leader_schedule_cache,
                 &recycler_cache,
@@ -88,7 +93,7 @@ pub fn spawn_shred_sigverify(
 #[allow(clippy::too_many_arguments)]
 fn run_shred_sigverify<const K: usize>(
     thread_pool: &ThreadPool,
-    self_pubkey: &Pubkey,
+    keypair: &Keypair,
     bank_forks: &RwLock<BankForks>,
     leader_schedule_cache: &LeaderScheduleCache,
     recycler_cache: &RecyclerCache,
@@ -125,7 +130,7 @@ fn run_shred_sigverify<const K: usize>(
     });
     verify_packets(
         thread_pool,
-        self_pubkey,
+        &keypair.pubkey(),
         bank_forks,
         leader_schedule_cache,
         recycler_cache,
@@ -133,6 +138,28 @@ fn run_shred_sigverify<const K: usize>(
         cache,
     );
     stats.num_discards_post += count_discards(&packets);
+    // Resign shreds Merkle root as the retransmitter node.
+    let resign_start = Instant::now();
+    thread_pool.install(|| {
+        packets
+            .par_iter_mut()
+            .flatten()
+            .filter(|packet| !packet.meta().discard())
+            .for_each(|packet| {
+                if let Some(shred) = shred::layout::get_shred_mut(packet) {
+                    // We can ignore Error::InvalidShredVariant because that
+                    // basically means that the shred is of a variant which
+                    // cannot be signed by the retransmitter node.
+                    if !matches!(
+                        shred::layout::resign_shred(shred, keypair),
+                        Ok(()) | Err(shred::Error::InvalidShredVariant)
+                    ) {
+                        packet.meta_mut().set_discard(true);
+                    }
+                }
+            })
+    });
+    stats.resign_micros += resign_start.elapsed().as_micros() as u64;
     // Exclude repair packets from retransmit.
     let shreds: Vec<_> = packets
         .iter()
@@ -237,6 +264,7 @@ struct ShredSigVerifyStats {
     num_duplicates: usize,
     num_retransmit_shreds: usize,
     elapsed_micros: u64,
+    resign_micros: u64,
 }
 
 impl ShredSigVerifyStats {
@@ -254,6 +282,7 @@ impl ShredSigVerifyStats {
             num_duplicates: 0usize,
             num_retransmit_shreds: 0usize,
             elapsed_micros: 0u64,
+            resign_micros: 0u64,
         }
     }
 
@@ -272,6 +301,7 @@ impl ShredSigVerifyStats {
             ("num_duplicates", self.num_duplicates, i64),
             ("num_retransmit_shreds", self.num_retransmit_shreds, i64),
             ("elapsed_micros", self.elapsed_micros, i64),
+            ("resign_micros", self.resign_micros, i64),
         );
         *self = Self::new(Instant::now());
     }
