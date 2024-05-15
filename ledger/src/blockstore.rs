@@ -2559,8 +2559,13 @@ impl Blockstore {
         slot: Slot,
         require_previous_blockhash: bool,
     ) -> Result<VersionedConfirmedBlock> {
-        self.get_complete_block_with_entries(slot, require_previous_blockhash, false)
-            .map(|result| result.block)
+        self.do_get_complete_block_with_entries(
+            slot,
+            require_previous_blockhash,
+            false,
+            /*allow_dead_slots:*/ false,
+        )
+        .map(|result| result.block)
     }
 
     pub fn get_rooted_block_with_entries(
@@ -2574,23 +2579,49 @@ impl Blockstore {
         let _lock = self.check_lowest_cleanup_slot(slot)?;
 
         if self.is_root(slot) {
-            return self.get_complete_block_with_entries(slot, require_previous_blockhash, true);
+            return self.do_get_complete_block_with_entries(
+                slot,
+                require_previous_blockhash,
+                true,
+                /*allow_dead_slots:*/ false,
+            );
         }
         Err(BlockstoreError::SlotNotRooted)
     }
 
-    fn get_complete_block_with_entries(
+    #[cfg(feature = "dev-context-only-utils")]
+    pub fn get_complete_block_with_entries(
         &self,
         slot: Slot,
         require_previous_blockhash: bool,
         populate_entries: bool,
+        allow_dead_slots: bool,
+    ) -> Result<VersionedConfirmedBlockWithEntries> {
+        self.do_get_complete_block_with_entries(
+            slot,
+            require_previous_blockhash,
+            populate_entries,
+            allow_dead_slots,
+        )
+    }
+
+    fn do_get_complete_block_with_entries(
+        &self,
+        slot: Slot,
+        require_previous_blockhash: bool,
+        populate_entries: bool,
+        allow_dead_slots: bool,
     ) -> Result<VersionedConfirmedBlockWithEntries> {
         let Some(slot_meta) = self.meta_cf.get(slot)? else {
-            info!("SlotMeta not found for slot {}", slot);
+            trace!("do_get_complete_block_with_entries() failed for {slot} (missing SlotMeta)");
             return Err(BlockstoreError::SlotUnavailable);
         };
         if slot_meta.is_full() {
-            let slot_entries = self.get_slot_entries(slot, 0)?;
+            let (slot_entries, _, _) = self.get_slot_entries_with_shred_info(
+                slot,
+                /*shred_start_index:*/ 0,
+                allow_dead_slots,
+            )?;
             if !slot_entries.is_empty() {
                 let blockhash = slot_entries
                     .last()
@@ -2630,8 +2661,13 @@ impl Blockstore {
                 let parent_slot_entries = slot_meta
                     .parent_slot
                     .and_then(|parent_slot| {
-                        self.get_slot_entries(parent_slot, /*shred_start_index:*/ 0)
-                            .ok()
+                        self.get_slot_entries_with_shred_info(
+                            parent_slot,
+                            /*shred_start_index:*/ 0,
+                            allow_dead_slots,
+                        )
+                        .ok()
+                        .map(|(entries, _, _)| entries)
                     })
                     .unwrap_or_default();
                 if parent_slot_entries.is_empty() && require_previous_blockhash {
@@ -2670,6 +2706,7 @@ impl Blockstore {
                 return Ok(VersionedConfirmedBlockWithEntries { block, entries });
             }
         }
+        trace!("do_get_complete_block_with_entries() failed for {slot} (slot not full)");
         Err(BlockstoreError::SlotUnavailable)
     }
 

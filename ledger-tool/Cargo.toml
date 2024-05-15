@@ -36,7 +36,7 @@ solana-cost-model = { workspace = true }
 solana-entry = { workspace = true }
 solana-geyser-plugin-manager = { workspace = true }
 solana-gossip = { workspace = true }
-solana-ledger = { workspace = true }
+solana-ledger = { workspace = true, features = ["dev-context-only-utils"] }
 solana-logger = { workspace = true }
 solana-measure = { workspace = true }
 solana-program-runtime = { workspace = true }

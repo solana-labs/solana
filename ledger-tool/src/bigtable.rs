@@ -2,7 +2,10 @@
 use {
     crate::{
         ledger_path::canonicalize_ledger_path,
-        output::{CliBlockWithEntries, CliEntries, EncodedConfirmedBlockWithEntries},
+        output::{
+            encode_confirmed_block, CliBlockWithEntries, CliEntries,
+            EncodedConfirmedBlockWithEntries,
+        },
     },
     clap::{
         value_t, value_t_or_exit, values_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand,
@@ -25,10 +28,7 @@ use {
     },
     solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature},
     solana_storage_bigtable::CredentialType,
-    solana_transaction_status::{
-        BlockEncodingOptions, ConfirmedBlock, EncodeError, EncodedConfirmedBlock,
-        TransactionDetails, UiTransactionEncoding, VersionedConfirmedBlock,
-    },
+    solana_transaction_status::{ConfirmedBlock, UiTransactionEncoding, VersionedConfirmedBlock},
     std::{
         cmp::min,
         collections::HashSet,
@@ -124,21 +124,7 @@ async fn block(
         .map_err(|err| format!("Failed to connect to storage: {err:?}"))?;
 
     let confirmed_block = bigtable.get_confirmed_block(slot).await?;
-    let encoded_block = confirmed_block
-        .encode_with_options(
-            UiTransactionEncoding::Base64,
-            BlockEncodingOptions {
-                transaction_details: TransactionDetails::Full,
-                show_rewards: true,
-                max_supported_transaction_version: Some(0),
-            },
-        )
-        .map_err(|err| match err {
-            EncodeError::UnsupportedTransactionVersion(version) => {
-                format!("Failed to process unsupported transaction version ({version}) in block")
-            }
-        })?;
-    let encoded_block: EncodedConfirmedBlock = encoded_block.into();
+    let encoded_block = encode_confirmed_block(confirmed_block)?;
 
     if show_entries {
         let entries = bigtable.get_entries(slot).await?;

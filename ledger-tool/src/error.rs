@@ -11,7 +11,13 @@ pub enum LedgerToolError {
     SerdeJson(#[from] serde_json::Error),
 
     #[error("{0}")]
+    TransactionEncode(#[from] solana_transaction_status::EncodeError),
+
+    #[error("{0}")]
     Io(#[from] std::io::Error),
+
+    #[error("{0}")]
+    Generic(String),
 
     #[error("{0}")]
     BadArgument(String),

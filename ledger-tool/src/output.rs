@@ -1,5 +1,8 @@
 use {
-    crate::ledger_utils::get_program_ids,
+    crate::{
+        error::{LedgerToolError, Result},
+        ledger_utils::get_program_ids,
+    },
     chrono::{Local, TimeZone},
     serde::ser::{Impossible, SerializeSeq, SerializeStruct, Serializer},
     serde_derive::{Deserialize, Serialize},
@@ -9,8 +12,7 @@ use {
         display::writeln_transaction, CliAccount, CliAccountNewConfig, OutputFormat, QuietDisplay,
         VerboseDisplay,
     },
-    solana_entry::entry::Entry,
-    solana_ledger::blockstore::Blockstore,
+    solana_ledger::blockstore::{Blockstore, BlockstoreError},
     solana_runtime::bank::{Bank, TotalAccountsStats},
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
@@ -20,7 +22,10 @@ use {
         pubkey::Pubkey,
     },
     solana_transaction_status::{
-        EncodedConfirmedBlock, EncodedTransactionWithStatusMeta, EntrySummary, Rewards,
+        BlockEncodingOptions, ConfirmedBlock, EncodeError, EncodedConfirmedBlock,
+        EncodedTransactionWithStatusMeta, EntrySummary, Rewards, TransactionDetails,
+        UiTransactionEncoding, VersionedConfirmedBlockWithEntries,
+        VersionedTransactionWithStatusMeta,
     },
     std::{
         cell::RefCell,
@@ -28,7 +33,6 @@ use {
         fmt::{self, Display, Formatter},
         io::{stdout, Write},
         rc::Rc,
-        result::Result,
         sync::Arc,
     },
 };
@@ -291,20 +295,20 @@ pub struct EncodedConfirmedBlockWithEntries {
 impl EncodedConfirmedBlockWithEntries {
     pub fn try_from(
         block: EncodedConfirmedBlock,
-        entries_iterator: impl Iterator<Item = EntrySummary>,
-    ) -> Result<Self, String> {
+        entries_iterator: impl IntoIterator<Item = EntrySummary>,
+    ) -> Result<Self> {
         let mut entries = vec![];
-        for (i, entry) in entries_iterator.enumerate() {
+        for (i, entry) in entries_iterator.into_iter().enumerate() {
             let ending_transaction_index = entry
                 .starting_transaction_index
                 .saturating_add(entry.num_transactions as usize);
             let transactions = block
                 .transactions
                 .get(entry.starting_transaction_index..ending_transaction_index)
-                .ok_or(format!(
+                .ok_or(LedgerToolError::Generic(format!(
                     "Mismatched entry data and transactions: entry {:?}",
                     i
-                ))?;
+                )))?;
             entries.push(CliPopulatedEntry {
                 num_hashes: entry.num_hashes,
                 hash: entry.hash.to_string(),
@@ -325,162 +329,116 @@ impl EncodedConfirmedBlockWithEntries {
     }
 }
 
-pub fn output_slot_rewards(blockstore: &Blockstore, slot: Slot, method: &OutputFormat) {
-    // Note: rewards are not output in JSON yet
-    if *method == OutputFormat::Display {
-        if let Ok(Some(rewards)) = blockstore.read_rewards(slot) {
-            if !rewards.is_empty() {
-                println!("  Rewards:");
-                println!(
-                    "    {:<44}  {:^15}  {:<15}  {:<20}  {:>10}",
-                    "Address", "Type", "Amount", "New Balance", "Commission",
-                );
-
-                for reward in rewards {
-                    let sign = if reward.lamports < 0 { "-" } else { "" };
-                    println!(
-                        "    {:<44}  {:^15}  {}◎{:<14.9}  ◎{:<18.9}   {}",
-                        reward.pubkey,
-                        if let Some(reward_type) = reward.reward_type {
-                            format!("{reward_type}")
-                        } else {
-                            "-".to_string()
-                        },
-                        sign,
-                        lamports_to_sol(reward.lamports.unsigned_abs()),
-                        lamports_to_sol(reward.post_balance),
-                        reward
-                            .commission
-                            .map(|commission| format!("{commission:>9}%"))
-                            .unwrap_or_else(|| "    -".to_string())
-                    );
-                }
-            }
-        }
-    }
-}
-
-pub fn output_entry(
-    blockstore: &Blockstore,
-    method: &OutputFormat,
-    slot: Slot,
-    entry_index: usize,
-    entry: Entry,
-) {
-    match method {
-        OutputFormat::Display => {
-            println!(
-                "  Entry {} - num_hashes: {}, hash: {}, transactions: {}",
-                entry_index,
-                entry.num_hashes,
-                entry.hash,
-                entry.transactions.len()
-            );
-            for (transactions_index, transaction) in entry.transactions.into_iter().enumerate() {
-                println!("    Transaction {transactions_index}");
-                let tx_signature = transaction.signatures[0];
-                let tx_status_meta = blockstore
-                    .read_transaction_status((tx_signature, slot))
-                    .unwrap_or_else(|err| {
-                        eprintln!(
-                            "Failed to read transaction status for {} at slot {}: {}",
-                            transaction.signatures[0], slot, err
-                        );
-                        None
-                    })
-                    .map(|meta| meta.into());
-
-                solana_cli_output::display::println_transaction(
-                    &transaction,
-                    tx_status_meta.as_ref(),
-                    "      ",
-                    None,
-                    None,
-                );
-            }
-        }
-        OutputFormat::Json => {
-            // Note: transaction status is not output in JSON yet
-            serde_json::to_writer(stdout(), &entry).expect("serialize entry");
-            stdout().write_all(b",\n").expect("newline");
-        }
-        _ => unreachable!(),
-    }
+pub(crate) fn encode_confirmed_block(
+    confirmed_block: ConfirmedBlock,
+) -> Result<EncodedConfirmedBlock> {
+    let encoded_block = confirmed_block
+        .encode_with_options(
+            UiTransactionEncoding::Base64,
+            BlockEncodingOptions {
+                transaction_details: TransactionDetails::Full,
+                show_rewards: true,
+                max_supported_transaction_version: Some(0),
+            },
+        )
+        .map_err(|err| match err {
+            EncodeError::UnsupportedTransactionVersion(version) => LedgerToolError::Generic(
+                format!("Failed to process unsupported transaction version ({version}) in block"),
+            ),
+        })?;
+    let encoded_block: EncodedConfirmedBlock = encoded_block.into();
+    Ok(encoded_block)
 }
 
 pub fn output_slot(
     blockstore: &Blockstore,
     slot: Slot,
     allow_dead_slots: bool,
-    method: &OutputFormat,
+    output_format: &OutputFormat,
     verbose_level: u64,
     all_program_ids: &mut HashMap<Pubkey, u64>,
-) -> Result<(), String> {
+) -> Result<()> {
     if blockstore.is_dead(slot) {
         if allow_dead_slots {
-            if *method == OutputFormat::Display {
+            if *output_format == OutputFormat::Display {
                 println!(" Slot is dead");
             }
         } else {
-            return Err("Dead slot".to_string());
+            return Err(LedgerToolError::from(BlockstoreError::DeadSlot));
         }
     }
 
-    let (entries, num_shreds, is_full) = blockstore
-        .get_slot_entries_with_shred_info(slot, 0, allow_dead_slots)
-        .map_err(|err| format!("Failed to load entries for slot {slot}: {err:?}"))?;
+    let Some(meta) = blockstore.meta(slot)? else {
+        return Ok(());
+    };
+    let VersionedConfirmedBlockWithEntries { block, entries } = blockstore
+        .get_complete_block_with_entries(
+            slot,
+            /*require_previous_blockhash:*/ false,
+            /*populate_entries:*/ true,
+            allow_dead_slots,
+        )?;
 
-    if *method == OutputFormat::Display {
-        if let Ok(Some(meta)) = blockstore.meta(slot) {
-            if verbose_level >= 1 {
-                println!("  {meta:?} is_full: {is_full}");
-            } else {
-                println!(
-                    "  num_shreds: {}, parent_slot: {:?}, next_slots: {:?}, num_entries: {}, \
-                     is_full: {}",
-                    num_shreds,
-                    meta.parent_slot,
-                    meta.next_slots,
-                    entries.len(),
-                    is_full,
-                );
+    if verbose_level == 0 {
+        if *output_format == OutputFormat::Display {
+            // Given that Blockstore::get_complete_block_with_entries() returned Ok(_), we know
+            // that we have a full block so meta.consumed is the number of shreds in the block
+            println!(
+                "  num_shreds: {}, parent_slot: {:?}, next_slots: {:?}, num_entries: {}, \
+                 is_full: {}",
+                meta.consumed,
+                meta.parent_slot,
+                meta.next_slots,
+                entries.len(),
+                meta.is_full(),
+            );
+        }
+    } else if verbose_level == 1 {
+        if *output_format == OutputFormat::Display {
+            println!("  {meta:?} is_full: {}", meta.is_full());
+
+            let mut num_hashes = 0;
+            for entry in entries.iter() {
+                num_hashes += entry.num_hashes;
             }
-        }
-    }
 
-    if verbose_level >= 2 {
-        for (entry_index, entry) in entries.into_iter().enumerate() {
-            output_entry(blockstore, method, slot, entry_index, entry);
-        }
+            let blockhash = if let Some(entry) = entries.last() {
+                entry.hash
+            } else {
+                Hash::default()
+            };
 
-        output_slot_rewards(blockstore, slot, method);
-    } else if verbose_level >= 1 {
-        let mut transactions = 0;
-        let mut num_hashes = 0;
-        let mut program_ids = HashMap::new();
-        let blockhash = if let Some(entry) = entries.last() {
-            entry.hash
-        } else {
-            Hash::default()
-        };
-
-        for entry in entries {
-            transactions += entry.transactions.len();
-            num_hashes += entry.num_hashes;
-            for transaction in entry.transactions {
-                for program_id in get_program_ids(&transaction) {
+            let transactions = block.transactions.len();
+            let mut program_ids = HashMap::new();
+            for VersionedTransactionWithStatusMeta { transaction, .. } in block.transactions.iter()
+            {
+                for program_id in get_program_ids(transaction) {
                     *program_ids.entry(*program_id).or_insert(0) += 1;
                 }
             }
-        }
 
-        println!("  Transactions: {transactions}, hashes: {num_hashes}, block_hash: {blockhash}",);
-        for (pubkey, count) in program_ids.iter() {
-            *all_program_ids.entry(*pubkey).or_insert(0) += count;
+            println!(
+                "  Transactions: {transactions}, hashes: {num_hashes}, block_hash: {blockhash}",
+            );
+            for (pubkey, count) in program_ids.iter() {
+                *all_program_ids.entry(*pubkey).or_insert(0) += count;
+            }
+            println!("  Programs:");
+            output_sorted_program_ids(program_ids);
         }
-        println!("  Programs:");
-        output_sorted_program_ids(program_ids);
+    } else {
+        let encoded_block = encode_confirmed_block(ConfirmedBlock::from(block))?;
+        let cli_block = CliBlockWithEntries {
+            encoded_confirmed_block: EncodedConfirmedBlockWithEntries::try_from(
+                encoded_block,
+                entries,
+            )?,
+            slot,
+        };
+
+        println!("{}", output_format.formatted_string(&cli_block));
     }
+
     Ok(())
 }
 
@@ -489,20 +447,15 @@ pub fn output_ledger(
     starting_slot: Slot,
     ending_slot: Slot,
     allow_dead_slots: bool,
-    method: OutputFormat,
+    output_format: OutputFormat,
     num_slots: Option<Slot>,
     verbose_level: u64,
     only_rooted: bool,
-) {
-    let slot_iterator = blockstore
-        .slot_meta_iterator(starting_slot)
-        .unwrap_or_else(|err| {
-            eprintln!("Failed to load entries starting from slot {starting_slot}: {err:?}");
-            std::process::exit(1);
-        });
+) -> Result<()> {
+    let slot_iterator = blockstore.slot_meta_iterator(starting_slot)?;
 
-    if method == OutputFormat::Json {
-        stdout().write_all(b"{\"ledger\":[\n").expect("open array");
+    if output_format == OutputFormat::Json {
+        stdout().write_all(b"{\"ledger\":[\n")?;
     }
 
     let num_slots = num_slots.unwrap_or(Slot::MAX);
@@ -516,13 +469,13 @@ pub fn output_ledger(
             break;
         }
 
-        match method {
+        match output_format {
             OutputFormat::Display => {
                 println!("Slot {} root?: {}", slot, blockstore.is_root(slot))
             }
             OutputFormat::Json => {
-                serde_json::to_writer(stdout(), &slot_meta).expect("serialize slot_meta");
-                stdout().write_all(b",\n").expect("newline");
+                serde_json::to_writer(stdout(), &slot_meta)?;
+                stdout().write_all(b",\n")?;
             }
             _ => unreachable!(),
         }
@@ -531,7 +484,7 @@ pub fn output_ledger(
             &blockstore,
             slot,
             allow_dead_slots,
-            &method,
+            &output_format,
             verbose_level,
             &mut all_program_ids,
         ) {
@@ -543,12 +496,13 @@ pub fn output_ledger(
         }
     }
 
-    if method == OutputFormat::Json {
-        stdout().write_all(b"\n]}\n").expect("close array");
+    if output_format == OutputFormat::Json {
+        stdout().write_all(b"\n]}\n")?;
     } else {
         println!("Summary of Programs:");
         output_sorted_program_ids(all_program_ids);
     }
+    Ok(())
 }
 
 pub fn output_sorted_program_ids(program_ids: HashMap<Pubkey, u64>) {
@@ -600,7 +554,7 @@ impl AccountsOutputStreamer {
         }
     }
 
-    pub fn output(&self) -> Result<(), String> {
+    pub fn output(&self) -> std::result::Result<(), String> {
         match self.output_format {
             OutputFormat::Json | OutputFormat::JsonCompact => {
                 let mut serializer = serde_json::Serializer::new(stdout());
@@ -741,7 +695,7 @@ impl AccountsScanner {
 }
 
 impl serde::Serialize for AccountsScanner {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: Serializer,
     {

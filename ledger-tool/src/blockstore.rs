@@ -848,7 +848,7 @@ fn do_blockstore_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) -
                 num_slots,
                 verbose_level,
                 only_rooted,
-            );
+            )?;
         }
         ("print-file-metadata", Some(arg_matches)) => {
             let blockstore =
@@ -1019,20 +1019,20 @@ fn do_blockstore_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) -
         ("slot", Some(arg_matches)) => {
             let slots = values_t_or_exit!(arg_matches, "slots", Slot);
             let allow_dead_slots = arg_matches.is_present("allow_dead_slots");
+            let output_format = OutputFormat::from_matches(arg_matches, "output_format", false);
+
             let blockstore =
                 crate::open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
             for slot in slots {
                 println!("Slot {slot}");
-                if let Err(err) = output_slot(
+                output_slot(
                     &blockstore,
                     slot,
                     allow_dead_slots,
-                    &OutputFormat::Display,
+                    &output_format,
                     verbose_level,
                     &mut HashMap::new(),
-                ) {
-                    eprintln!("{err}");
-                }
+                )?;
             }
         }
         _ => unreachable!(),
