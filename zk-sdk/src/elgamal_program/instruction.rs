@@ -27,7 +27,7 @@
 //!
 //! The `CloseContextState` instruction closes a context state account. A transaction containing
 //! this instruction must be signed by the context account's owner. This instruction can be used by
-//! the account owner to relcaim lamports for storage.
+//! the account owner to reclaim lamports for storage.
 //!
 //! [`ZK ElGamal proof`]: https://docs.solanalabs.com/runtime/zk-token-proof
 //! [`context-state`]: https://docs.solanalabs.com/runtime/zk-token-proof#context-data

@@ -450,7 +450,7 @@ fn configure_banking_trace_dir_byte_limit(
     matches: &ArgMatches,
 ) {
     validator_config.banking_trace_dir_byte_limit = if matches.is_present("disable_banking_trace") {
-        // disable with an explicit flag; This effectively becomes `opt-out` by reseting to
+        // disable with an explicit flag; This effectively becomes `opt-out` by resetting to
         // DISABLED_BAKING_TRACE_DIR, while allowing us to specify a default sensible limit in clap
         // configuration for cli help.
         DISABLED_BAKING_TRACE_DIR

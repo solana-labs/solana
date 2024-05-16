@@ -95,7 +95,7 @@ impl PubkeyValidityProof {
     ) -> Result<(), PubkeyValidityProofVerificationError> {
         transcript.pubkey_proof_domain_separator();
 
-        // extract the relvant scalar and Ristretto points from the input
+        // extract the relevant scalar and Ristretto points from the input
         let P = elgamal_pubkey.get_point();
 
         // include Y to transcript and extract challenge
