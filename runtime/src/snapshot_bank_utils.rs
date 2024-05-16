@@ -7,7 +7,7 @@ use {
         runtime_config::RuntimeConfig,
         serde_snapshot::{
             bank_from_streams, bank_to_stream, fields_from_streams,
-            BankIncrementalSnapshotPersistence, SerdeStyle,
+            BankIncrementalSnapshotPersistence,
         },
         snapshot_archive_info::{
             FullSnapshotArchiveInfo, IncrementalSnapshotArchiveInfo, SnapshotArchiveInfoGetter,
@@ -121,11 +121,7 @@ pub fn add_bank_snapshot(
 
         let bank_snapshot_serializer =
             move |stream: &mut BufWriter<std::fs::File>| -> snapshot_utils::Result<()> {
-                let serde_style = match snapshot_version {
-                    SnapshotVersion::V1_2_0 => SerdeStyle::Newer,
-                };
                 bank_to_stream(
-                    serde_style,
                     stream.by_ref(),
                     bank,
                     &get_storages_to_serialize(snapshot_storages),
@@ -673,7 +669,7 @@ fn bank_fields_from_snapshots(
     deserialize_snapshot_data_files(&snapshot_root_paths, |snapshot_streams| {
         Ok(
             match incremental_snapshot_version.unwrap_or(full_snapshot_version) {
-                SnapshotVersion::V1_2_0 => fields_from_streams(SerdeStyle::Newer, snapshot_streams)
+                SnapshotVersion::V1_2_0 => fields_from_streams(snapshot_streams)
                     .map(|(bank_fields, _accountsdb_fields)| bank_fields.collapse_into()),
             }?,
         )
@@ -750,7 +746,6 @@ fn rebuild_bank_from_unarchived_snapshots(
         Ok(
             match incremental_snapshot_version.unwrap_or(full_snapshot_version) {
                 SnapshotVersion::V1_2_0 => bank_from_streams(
-                    SerdeStyle::Newer,
                     snapshot_streams,
                     account_paths,
                     storage_and_next_append_vec_id,
@@ -827,7 +822,6 @@ fn rebuild_bank_from_snapshot(
 
     let bank = deserialize_snapshot_data_files(&snapshot_root_paths, |snapshot_streams| {
         Ok(bank_from_streams(
-            SerdeStyle::Newer,
             snapshot_streams,
             account_paths,
             storage_and_next_append_vec_id,

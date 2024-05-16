@@ -9,7 +9,7 @@ mod tests {
             runtime_config::RuntimeConfig,
             serde_snapshot::{
                 reserialize_bank_with_new_accounts_hash, BankIncrementalSnapshotPersistence,
-                SerdeAccountsHash, SerdeIncrementalAccountsHash, SerdeStyle, SnapshotStreams,
+                SerdeAccountsHash, SerdeIncrementalAccountsHash, SnapshotStreams,
             },
             snapshot_bank_utils,
             snapshot_utils::{
@@ -92,7 +92,6 @@ mod tests {
     }
 
     fn test_bank_serialize_style(
-        serde_style: SerdeStyle,
         reserialize_accounts_hash: bool,
         update_accounts_hash: bool,
         incremental_snapshot_persistence: bool,
@@ -158,7 +157,6 @@ mod tests {
         }
 
         crate::serde_snapshot::bank_to_stream(
-            serde_style,
             &mut std::io::BufWriter::new(&mut writer),
             &bank2,
             &get_storages_to_serialize(&snapshot_storages),
@@ -265,7 +263,6 @@ mod tests {
             incremental_snapshot_stream: None,
         };
         let mut dbank = crate::serde_snapshot::bank_from_streams(
-            serde_style,
             &mut snapshot_streams,
             &dbank_paths,
             storage_and_next_append_vec_id,
@@ -322,7 +319,6 @@ mod tests {
             for incremental_snapshot_persistence in parameters.clone() {
                 for initial_epoch_accounts_hash in [false, true] {
                     test_bank_serialize_style(
-                        SerdeStyle::Newer,
                         reserialize_accounts_hash,
                         update_accounts_hash,
                         incremental_snapshot_persistence,
@@ -367,7 +363,6 @@ mod tests {
         let mut writer = Cursor::new(&mut buf);
 
         crate::serde_snapshot::bank_to_stream(
-            SerdeStyle::Newer,
             &mut std::io::BufWriter::new(&mut writer),
             &bank,
             &get_storages_to_serialize(&snapshot_storages),
@@ -390,7 +385,6 @@ mod tests {
         )
         .unwrap();
         let dbank = crate::serde_snapshot::bank_from_streams(
-            SerdeStyle::Newer,
             &mut snapshot_streams,
             &dbank_paths,
             storage_and_next_append_vec_id,
@@ -502,7 +496,6 @@ mod tests {
         let mut writer = Cursor::new(&mut buf);
 
         crate::serde_snapshot::bank_to_stream_no_extra_fields(
-            SerdeStyle::Newer,
             &mut std::io::BufWriter::new(&mut writer),
             &bank,
             &get_storages_to_serialize(&snapshot_storages),
@@ -525,7 +518,6 @@ mod tests {
         )
         .unwrap();
         let dbank = crate::serde_snapshot::bank_from_streams(
-            SerdeStyle::Newer,
             &mut snapshot_streams,
             &dbank_paths,
             storage_and_next_append_vec_id,
@@ -557,14 +549,14 @@ mod tests {
 
         // This some what long test harness is required to freeze the ABI of
         // Bank's serialization due to versioned nature
-        #[frozen_abi(digest = "8pZwgyMdvxExLgN9GMKnCdofb5CQJgsZ8Dt88hfVd9bf")]
+        #[frozen_abi(digest = "7Cze6NqwQMsqcEjtkMSQhLPykCW8dYffwkHpNuysjwTN")]
         #[derive(Serialize, AbiExample)]
         pub struct BankAbiTestWrapperNewer {
-            #[serde(serialize_with = "wrapper_newer")]
+            #[serde(serialize_with = "wrapper")]
             bank: Bank,
         }
 
-        pub fn wrapper_newer<S>(bank: &Bank, s: S) -> std::result::Result<S::Ok, S::Error>
+        pub fn wrapper<S>(bank: &Bank, s: S) -> std::result::Result<S::Ok, S::Error>
         where
             S: serde::Serializer,
         {

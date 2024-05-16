@@ -4,7 +4,7 @@ use {
     super::{snapshot_version_from_file, SnapshotError, SnapshotFrom, SnapshotVersion},
     crate::serde_snapshot::{
         self, reconstruct_single_storage, remap_and_reconstruct_single_storage,
-        snapshot_storage_lengths_from_fields, SerdeStyle, SerializedAccountsFileId,
+        snapshot_storage_lengths_from_fields, SerializedAccountsFileId,
     },
     crossbeam_channel::{select, unbounded, Receiver, Sender},
     dashmap::DashMap,
@@ -194,7 +194,7 @@ impl SnapshotStorageRebuilder {
         match snapshot_version {
             SnapshotVersion::V1_2_0 => {
                 let (_bank_fields, accounts_fields) =
-                    serde_snapshot::fields_from_stream(SerdeStyle::Newer, &mut snapshot_stream)?;
+                    serde_snapshot::fields_from_stream(&mut snapshot_stream)?;
 
                 Ok(snapshot_storage_lengths_from_fields(&accounts_fields))
             }
