@@ -37,7 +37,6 @@ env:
 
 jobs:
   check:
-    if: false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -52,13 +51,11 @@ jobs:
 
       - shell: bash
         run: |
-          source .github/scripts/downstream-project-spl-common.sh
           source .github/scripts/downstream-project-spl-install-deps.sh
-
+          source .github/scripts/downstream-project-spl-common.sh
           cargo check
 
   test:
-    if: false
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -71,6 +68,7 @@ jobs:
                   "token/program",
                   "token/program-2022",
                   "associated-token-account/program",
+                  "instruction-padding/program",
                 ],
             },
             {
@@ -101,8 +99,8 @@ jobs:
 
       - shell: bash
         run: |
-          source .github/scripts/downstream-project-spl-common.sh
           source .github/scripts/downstream-project-spl-install-deps.sh
+          source .github/scripts/downstream-project-spl-common.sh
 
           programStr="${{ tojson(matrix.arrays.required_programs) }}"
           IFS=', ' read -ra programs <<<"${programStr//[\[\]$'\n'$'\r' ]/}"
