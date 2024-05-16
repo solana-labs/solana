@@ -15,6 +15,7 @@ log = { workspace = true }
 percentage = { workspace = true }
 serde = { workspace = true, features = ["rc"] }
 serde_derive = { workspace = true }
+solana-bpf-loader-program = { workspace = true }
 solana-frozen-abi = { workspace = true }
 solana-frozen-abi-macro = { workspace = true }
 solana-loader-v4-program = { workspace = true }

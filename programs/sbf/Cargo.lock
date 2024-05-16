@@ -6352,6 +6352,7 @@ dependencies = [
  "rustc_version",
  "serde",
  "serde_derive",
+ "solana-bpf-loader-program",
  "solana-frozen-abi",
  "solana-frozen-abi-macro",
  "solana-loader-v4-program",

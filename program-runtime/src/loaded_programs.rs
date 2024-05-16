@@ -609,7 +609,7 @@ enum IndexImplementation {
 /// - also keeps the compiled executables around, but only for the most used programs.
 /// - supports various kinds of tombstones to avoid loading programs which can not be loaded.
 /// - cleans up entries on orphan branches when the block store is rerooted.
-/// - supports the recompilation phase before feature activations which can change cached programs.
+/// - supports the cache preparation phase before feature activations which can change cached programs.
 /// - manages the environments of the programs and upcoming environments for the next epoch.
 /// - allows for cooperative loading of TX batches which hit the same missing programs simultaneously.
 /// - enforces that all programs used in a batch are eagerly loaded ahead of execution.
@@ -626,7 +626,7 @@ pub struct ProgramCache<FG: ForkGraph> {
     /// Anticipated replacement for `environments` at the next epoch
     ///
     /// This is `None` during most of an epoch, and only `Some` around the boundaries (at the end and beginning of an epoch).
-    /// More precisely, it starts with the recompilation phase a few hundred slots before the epoch boundary,
+    /// More precisely, it starts with the cache preparation phase a few hundred slots before the epoch boundary,
     /// and it ends with the first rerooting after the epoch boundary.
     pub upcoming_environments: Option<ProgramRuntimeEnvironments>,
     /// List of loaded programs which should be recompiled before the next epoch (but don't have to).
@@ -665,7 +665,7 @@ pub struct ProgramCacheForTxBatch {
     /// Anticipated replacement for `environments` at the next epoch.
     ///
     /// This is `None` during most of an epoch, and only `Some` around the boundaries (at the end and beginning of an epoch).
-    /// More precisely, it starts with the recompilation phase a few hundred slots before the epoch boundary,
+    /// More precisely, it starts with the cache preparation phase a few hundred slots before the epoch boundary,
     /// and it ends with the first rerooting after the epoch boundary.
     /// Needed when a program is deployed at the last slot of an epoch, becomes effective in the next epoch.
     /// So needs to be compiled with the environment for the next epoch.
@@ -830,7 +830,7 @@ impl<FG: ForkGraph> ProgramCache<FG> {
             ProgramCacheEntryType::DelayVisibility
         ));
         // This function always returns `true` during normal operation.
-        // Only during the recompilation phase this can return `false`
+        // Only during the cache preparation phase this can return `false`
         // for entries with `upcoming_environments`.
         fn is_current_env(
             environments: &ProgramRuntimeEnvironments,
@@ -852,7 +852,7 @@ impl<FG: ForkGraph> ProgramCache<FG> {
                         .then(at.deployment_slot.cmp(&entry.deployment_slot))
                         .then(
                             // This `.then()` has no effect during normal operation.
-                            // Only during the recompilation phase this does allow entries
+                            // Only during the cache preparation phase this does allow entries
                             // which only differ in their environment to be interleaved in `slot_versions`.
                             is_current_env(&self.environments, at.program.get_environment()).cmp(
                                 &is_current_env(
@@ -924,11 +924,11 @@ impl<FG: ForkGraph> ProgramCache<FG> {
             error!("Failed to lock fork graph for reading.");
             return;
         };
-        let mut recompilation_phase_ends = false;
+        let mut preparation_phase_ends = false;
         if self.latest_root_epoch != new_root_epoch {
             self.latest_root_epoch = new_root_epoch;
             if let Some(upcoming_environments) = self.upcoming_environments.take() {
-                recompilation_phase_ends = true;
+                preparation_phase_ends = true;
                 self.environments = upcoming_environments;
                 self.programs_to_recompile.clear();
             }
@@ -977,7 +977,7 @@ impl<FG: ForkGraph> ProgramCache<FG> {
                         })
                         .filter(|entry| {
                             // Remove outdated environment of previous feature set
-                            if recompilation_phase_ends
+                            if preparation_phase_ends
                                 && !Self::matches_environment(entry, &self.environments)
                             {
                                 self.stats

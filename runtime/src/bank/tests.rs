@@ -11964,7 +11964,7 @@ fn test_is_in_slot_hashes_history() {
 }
 
 #[test]
-fn test_feature_activation_loaded_programs_recompilation_phase() {
+fn test_feature_activation_loaded_programs_cache_preparation_phase() {
     solana_logger::setup();
 
     // Bank Setup
