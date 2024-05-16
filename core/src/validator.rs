@@ -471,7 +471,7 @@ pub struct Validator {
     stats_reporter_service: StatsReporterService,
     gossip_service: GossipService,
     serve_repair_service: ServeRepairService,
-    completed_data_sets_service: CompletedDataSetsService,
+    completed_data_sets_service: Option<CompletedDataSetsService>,
     snapshot_packager_service: Option<SnapshotPackagerService>,
     poh_recorder: Arc<RwLock<PohRecorder>>,
     poh_service: PohService,
@@ -927,15 +927,6 @@ impl Validator {
         ));
 
         let max_slots = Arc::new(MaxSlots::default());
-        let (completed_data_sets_sender, completed_data_sets_receiver) =
-            bounded(MAX_COMPLETED_DATA_SETS_IN_CHANNEL);
-        let completed_data_sets_service = CompletedDataSetsService::new(
-            completed_data_sets_receiver,
-            blockstore.clone(),
-            rpc_subscriptions.clone(),
-            exit.clone(),
-            max_slots.clone(),
-        );
 
         let startup_verification_complete;
         let (poh_recorder, entry_receiver, record_receiver) = {
@@ -988,6 +979,8 @@ impl Validator {
         let (
             json_rpc_service,
             pubsub_service,
+            completed_data_sets_sender,
+            completed_data_sets_service,
             optimistically_confirmed_bank_tracker,
             bank_notification_sender,
         ) = if let Some((rpc_addr, rpc_pubsub_addr)) = config.rpc_addrs {
@@ -1033,24 +1026,43 @@ impl Validator {
                 prioritization_fee_cache.clone(),
             )?;
 
-            (
-                Some(json_rpc_service),
-                if !config.rpc_config.full_api {
-                    None
-                } else {
-                    let (trigger, pubsub_service) = PubSubService::new(
-                        config.pubsub_config.clone(),
-                        &rpc_subscriptions,
-                        rpc_pubsub_addr,
-                    );
-                    config
-                        .validator_exit
-                        .write()
-                        .unwrap()
-                        .register_exit(Box::new(move || trigger.cancel()));
+            let pubsub_service = if !config.rpc_config.full_api {
+                None
+            } else {
+                let (trigger, pubsub_service) = PubSubService::new(
+                    config.pubsub_config.clone(),
+                    &rpc_subscriptions,
+                    rpc_pubsub_addr,
+                );
+                config
+                    .validator_exit
+                    .write()
+                    .unwrap()
+                    .register_exit(Box::new(move || trigger.cancel()));
 
-                    Some(pubsub_service)
-                },
+                Some(pubsub_service)
+            };
+
+            let (completed_data_sets_sender, completed_data_sets_service) =
+                if !config.rpc_config.full_api {
+                    (None, None)
+                } else {
+                    let (completed_data_sets_sender, completed_data_sets_receiver) =
+                        bounded(MAX_COMPLETED_DATA_SETS_IN_CHANNEL);
+                    let completed_data_sets_service = CompletedDataSetsService::new(
+                        completed_data_sets_receiver,
+                        blockstore.clone(),
+                        rpc_subscriptions.clone(),
+                        exit.clone(),
+                        max_slots.clone(),
+                    );
+                    (
+                        Some(completed_data_sets_sender),
+                        Some(completed_data_sets_service),
+                    )
+                };
+
+            let optimistically_confirmed_bank_tracker =
                 Some(OptimisticallyConfirmedBankTracker::new(
                     bank_notification_receiver,
                     exit.clone(),
@@ -1059,14 +1071,21 @@ impl Validator {
                     rpc_subscriptions.clone(),
                     confirmed_bank_subscribers,
                     prioritization_fee_cache.clone(),
-                )),
-                Some(BankNotificationSenderConfig {
-                    sender: bank_notification_sender,
-                    should_send_parents: geyser_plugin_service.is_some(),
-                }),
+                ));
+            let bank_notification_sender_config = Some(BankNotificationSenderConfig {
+                sender: bank_notification_sender,
+                should_send_parents: geyser_plugin_service.is_some(),
+            });
+            (
+                Some(json_rpc_service),
+                pubsub_service,
+                completed_data_sets_sender,
+                completed_data_sets_service,
+                optimistically_confirmed_bank_tracker,
+                bank_notification_sender_config,
             )
         } else {
-            (None, None, None, None)
+            (None, None, None, None, None, None)
         };
 
         if config.halt_at_slot.is_some() {
@@ -1610,9 +1629,11 @@ impl Validator {
                 .transpose()
                 .unwrap();
         }
-        self.completed_data_sets_service
-            .join()
-            .expect("completed_data_sets_service");
+        if let Some(completed_data_sets_service) = self.completed_data_sets_service {
+            completed_data_sets_service
+                .join()
+                .expect("completed_data_sets_service");
+        }
         if let Some(ip_echo_server) = self.ip_echo_server {
             ip_echo_server.shutdown_background();
         }

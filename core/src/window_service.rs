@@ -298,7 +298,7 @@ fn run_insert<F>(
     handle_duplicate: F,
     metrics: &mut BlockstoreInsertionMetrics,
     ws_metrics: &mut WindowServiceMetrics,
-    completed_data_sets_sender: &CompletedDataSetsSender,
+    completed_data_sets_sender: Option<&CompletedDataSetsSender>,
     retransmit_sender: &Sender<Vec<ShredPayload>>,
     outstanding_requests: &RwLock<OutstandingShredRepairs>,
     reed_solomon_cache: &ReedSolomonCache,
@@ -373,7 +373,10 @@ where
         metrics,
     )?;
 
-    completed_data_sets_sender.try_send(completed_data_sets)?;
+    if let Some(sender) = completed_data_sets_sender {
+        sender.try_send(completed_data_sets)?;
+    }
+
     Ok(())
 }
 
@@ -401,7 +404,7 @@ impl WindowService {
         repair_info: RepairInfo,
         leader_schedule_cache: Arc<LeaderScheduleCache>,
         verified_vote_receiver: VerifiedVoteReceiver,
-        completed_data_sets_sender: CompletedDataSetsSender,
+        completed_data_sets_sender: Option<CompletedDataSetsSender>,
         duplicate_slots_sender: DuplicateSlotSender,
         ancestor_hashes_replay_update_receiver: AncestorHashesReplayUpdateReceiver,
         dumped_slots_receiver: DumpedSlotsReceiver,
@@ -497,7 +500,7 @@ impl WindowService {
         leader_schedule_cache: Arc<LeaderScheduleCache>,
         verified_receiver: Receiver<Vec<PacketBatch>>,
         check_duplicate_sender: Sender<PossibleDuplicateShred>,
-        completed_data_sets_sender: CompletedDataSetsSender,
+        completed_data_sets_sender: Option<CompletedDataSetsSender>,
         retransmit_sender: Sender<Vec<ShredPayload>>,
         outstanding_requests: Arc<RwLock<OutstandingShredRepairs>>,
         accept_repairs_only: bool,
@@ -529,7 +532,7 @@ impl WindowService {
                         handle_duplicate,
                         &mut metrics,
                         &mut ws_metrics,
-                        &completed_data_sets_sender,
+                        completed_data_sets_sender.as_ref(),
                         &retransmit_sender,
                         &outstanding_requests,
                         &reed_solomon_cache,

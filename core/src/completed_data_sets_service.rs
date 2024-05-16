@@ -37,18 +37,22 @@ impl CompletedDataSetsService {
     ) -> Self {
         let thread_hdl = Builder::new()
             .name("solComplDataSet".to_string())
-            .spawn(move || loop {
-                if exit.load(Ordering::Relaxed) {
-                    break;
+            .spawn(move || {
+                info!("CompletedDataSetsService has started");
+                loop {
+                    if exit.load(Ordering::Relaxed) {
+                        break;
+                    }
+                    if let Err(RecvTimeoutError::Disconnected) = Self::recv_completed_data_sets(
+                        &completed_sets_receiver,
+                        &blockstore,
+                        &rpc_subscriptions,
+                        &max_slots,
+                    ) {
+                        break;
+                    }
                 }
-                if let Err(RecvTimeoutError::Disconnected) = Self::recv_completed_data_sets(
-                    &completed_sets_receiver,
-                    &blockstore,
-                    &rpc_subscriptions,
-                    &max_slots,
-                ) {
-                    break;
-                }
+                info!("CompletedDataSetsService has stopped");
             })
             .unwrap();
         Self { thread_hdl }
