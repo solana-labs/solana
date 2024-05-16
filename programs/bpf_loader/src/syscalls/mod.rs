@@ -7,6 +7,7 @@ pub use self::{
     sysvar::{
         SyscallGetClockSysvar, SyscallGetEpochRewardsSysvar, SyscallGetEpochScheduleSysvar,
         SyscallGetFeesSysvar, SyscallGetLastRestartSlotSysvar, SyscallGetRentSysvar,
+        SyscallGetSysvar,
     },
 };
 #[allow(deprecated)]
@@ -38,8 +39,9 @@ use {
             disable_deploy_of_alloc_free_syscall, disable_fees_sysvar,
             enable_alt_bn128_compression_syscall, enable_alt_bn128_syscall,
             enable_big_mod_exp_syscall, enable_partitioned_epoch_reward, enable_poseidon_syscall,
-            error_on_syscall_bpf_function_hash_collisions, last_restart_slot_sysvar,
-            reject_callx_r10, remaining_compute_units_syscall_enabled, switch_to_new_elf_parser,
+            error_on_syscall_bpf_function_hash_collisions, get_sysvar_syscall_enabled,
+            last_restart_slot_sysvar, reject_callx_r10, remaining_compute_units_syscall_enabled,
+            switch_to_new_elf_parser,
         },
         hash::{Hash, Hasher},
         instruction::{AccountMeta, InstructionError, ProcessedSiblingInstruction},
@@ -278,6 +280,7 @@ pub fn create_program_runtime_environment_v1<'a>(
     let enable_poseidon_syscall = feature_set.is_active(&enable_poseidon_syscall::id());
     let remaining_compute_units_syscall_enabled =
         feature_set.is_active(&remaining_compute_units_syscall_enabled::id());
+    let get_sysvar_syscall_enabled = feature_set.is_active(&get_sysvar_syscall_enabled::id());
     // !!! ATTENTION !!!
     // When adding new features for RBPF here,
     // also add them to `Bank::apply_builtin_program_feature_transitions()`.
@@ -462,6 +465,14 @@ pub fn create_program_runtime_environment_v1<'a>(
         enable_alt_bn128_compression_syscall,
         *b"sol_alt_bn128_compression",
         SyscallAltBn128Compression::vm,
+    )?;
+
+    // Sysvar getter
+    register_feature_gated_function!(
+        result,
+        get_sysvar_syscall_enabled,
+        *b"sol_get_sysvar",
+        SyscallGetSysvar::vm,
     )?;
 
     // Log data
@@ -2019,12 +2030,16 @@ mod tests {
             hash::{hashv, HASH_BYTES},
             instruction::Instruction,
             program::check_type_assumptions,
+            slot_hashes::{self, SlotHashes},
             stable_layout::stable_instruction::StableInstruction,
+            stake_history::{self, StakeHistory, StakeHistoryEntry},
             sysvar::{
                 self, clock::Clock, epoch_rewards::EpochRewards, epoch_schedule::EpochSchedule,
+                last_restart_slot::LastRestartSlot,
             },
         },
         std::{mem, str::FromStr},
+        test_case::test_case,
     };
 
     macro_rules! assert_access_violation {
@@ -3358,6 +3373,7 @@ mod tests {
     fn are_bytes_equal<T>(first: &T, second: &T) -> bool {
         let p_first = first as *const _ as *const u8;
         let p_second = second as *const _ as *const u8;
+
         for i in 0..(size_of::<T>() as isize) {
             unsafe {
                 if *p_first.offset(i) != *p_second.offset(i) {
@@ -3379,16 +3395,19 @@ mod tests {
         src_clock.epoch = 3;
         src_clock.leader_schedule_epoch = 4;
         src_clock.unix_timestamp = 5;
+
         let mut src_epochschedule = create_filled_type::<EpochSchedule>(false);
         src_epochschedule.slots_per_epoch = 1;
         src_epochschedule.leader_schedule_slot_offset = 2;
         src_epochschedule.warmup = false;
         src_epochschedule.first_normal_epoch = 3;
         src_epochschedule.first_normal_slot = 4;
+
         let mut src_fees = create_filled_type::<Fees>(false);
         src_fees.fee_calculator = FeeCalculator {
             lamports_per_signature: 1,
         };
+
         let mut src_rent = create_filled_type::<Rent>(false);
         src_rent.lamports_per_byte_year = 1;
         src_rent.exemption_threshold = 2.0;
@@ -3402,6 +3421,9 @@ mod tests {
         src_rewards.total_rewards = 100;
         src_rewards.distributed_rewards = 10;
         src_rewards.active = true;
+
+        let mut src_restart = create_filled_type::<LastRestartSlot>(false);
+        src_restart.last_restart_slot = 1;
 
         let transaction_accounts = vec![
             (
@@ -3424,19 +3446,28 @@ mod tests {
                 sysvar::epoch_rewards::id(),
                 create_account_shared_data_for_test(&src_rewards),
             ),
+            (
+                sysvar::last_restart_slot::id(),
+                create_account_shared_data_for_test(&src_restart),
+            ),
         ];
         with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
 
         // Test clock sysvar
         {
-            let mut got_clock = Clock::default();
-            let got_clock_va = 0x100000000;
+            let mut got_clock_obj = Clock::default();
+            let got_clock_obj_va = 0x100000000;
+
+            let mut got_clock_buf = vec![0; Clock::size_of()];
+            let got_clock_buf_va = 0x200000000;
+            let clock_id_va = 0x300000000;
 
             let mut memory_mapping = MemoryMapping::new(
-                vec![MemoryRegion::new_writable(
-                    bytes_of_mut(&mut got_clock),
-                    got_clock_va,
-                )],
+                vec![
+                    MemoryRegion::new_writable(bytes_of_mut(&mut got_clock_obj), got_clock_obj_va),
+                    MemoryRegion::new_writable(&mut got_clock_buf, got_clock_buf_va),
+                    MemoryRegion::new_readonly(&Clock::id().to_bytes(), clock_id_va),
+                ],
                 &config,
                 &SBPFVersion::V2,
             )
@@ -3444,7 +3475,7 @@ mod tests {
 
             let result = SyscallGetClockSysvar::rust(
                 &mut invoke_context,
-                got_clock_va,
+                got_clock_obj_va,
                 0,
                 0,
                 0,
@@ -3452,7 +3483,7 @@ mod tests {
                 &mut memory_mapping,
             );
             result.unwrap();
-            assert_eq!(got_clock, src_clock);
+            assert_eq!(got_clock_obj, src_clock);
 
             let mut clean_clock = create_filled_type::<Clock>(true);
             clean_clock.slot = src_clock.slot;
@@ -3460,19 +3491,49 @@ mod tests {
             clean_clock.epoch = src_clock.epoch;
             clean_clock.leader_schedule_epoch = src_clock.leader_schedule_epoch;
             clean_clock.unix_timestamp = src_clock.unix_timestamp;
-            assert!(are_bytes_equal(&got_clock, &clean_clock));
+            assert!(are_bytes_equal(&got_clock_obj, &clean_clock));
+
+            let result = SyscallGetSysvar::rust(
+                &mut invoke_context,
+                clock_id_va,
+                got_clock_buf_va,
+                0,
+                Clock::size_of() as u64,
+                0,
+                &mut memory_mapping,
+            );
+            result.unwrap();
+
+            let clock_from_buf = bincode::deserialize::<Clock>(&got_clock_buf).unwrap();
+
+            assert_eq!(clock_from_buf, src_clock);
+            assert!(are_bytes_equal(&clock_from_buf, &clean_clock));
         }
 
         // Test epoch_schedule sysvar
         {
-            let mut got_epochschedule = EpochSchedule::default();
-            let got_epochschedule_va = 0x100000000;
+            let mut got_epochschedule_obj = EpochSchedule::default();
+            let got_epochschedule_obj_va = 0x100000000;
+
+            let mut got_epochschedule_buf = vec![0; EpochSchedule::size_of()];
+            let got_epochschedule_buf_va = 0x200000000;
+            let epochschedule_id_va = 0x300000000;
 
             let mut memory_mapping = MemoryMapping::new(
-                vec![MemoryRegion::new_writable(
-                    bytes_of_mut(&mut got_epochschedule),
-                    got_epochschedule_va,
-                )],
+                vec![
+                    MemoryRegion::new_writable(
+                        bytes_of_mut(&mut got_epochschedule_obj),
+                        got_epochschedule_obj_va,
+                    ),
+                    MemoryRegion::new_writable(
+                        &mut got_epochschedule_buf,
+                        got_epochschedule_buf_va,
+                    ),
+                    MemoryRegion::new_readonly(
+                        &EpochSchedule::id().to_bytes(),
+                        epochschedule_id_va,
+                    ),
+                ],
                 &config,
                 &SBPFVersion::V2,
             )
@@ -3480,7 +3541,7 @@ mod tests {
 
             let result = SyscallGetEpochScheduleSysvar::rust(
                 &mut invoke_context,
-                got_epochschedule_va,
+                got_epochschedule_obj_va,
                 0,
                 0,
                 0,
@@ -3488,7 +3549,7 @@ mod tests {
                 &mut memory_mapping,
             );
             result.unwrap();
-            assert_eq!(got_epochschedule, src_epochschedule);
+            assert_eq!(got_epochschedule_obj, src_epochschedule);
 
             let mut clean_epochschedule = create_filled_type::<EpochSchedule>(true);
             clean_epochschedule.slots_per_epoch = src_epochschedule.slots_per_epoch;
@@ -3497,7 +3558,32 @@ mod tests {
             clean_epochschedule.warmup = src_epochschedule.warmup;
             clean_epochschedule.first_normal_epoch = src_epochschedule.first_normal_epoch;
             clean_epochschedule.first_normal_slot = src_epochschedule.first_normal_slot;
-            assert!(are_bytes_equal(&got_epochschedule, &clean_epochschedule));
+            assert!(are_bytes_equal(
+                &got_epochschedule_obj,
+                &clean_epochschedule
+            ));
+
+            let result = SyscallGetSysvar::rust(
+                &mut invoke_context,
+                epochschedule_id_va,
+                got_epochschedule_buf_va,
+                0,
+                EpochSchedule::size_of() as u64,
+                0,
+                &mut memory_mapping,
+            );
+            result.unwrap();
+
+            let epochschedule_from_buf =
+                bincode::deserialize::<EpochSchedule>(&got_epochschedule_buf).unwrap();
+
+            assert_eq!(epochschedule_from_buf, src_epochschedule);
+
+            // clone is to zero the alignment padding
+            assert!(are_bytes_equal(
+                &epochschedule_from_buf.clone(),
+                &clean_epochschedule
+            ));
         }
 
         // Test fees sysvar
@@ -3530,18 +3616,25 @@ mod tests {
             let mut clean_fees = create_filled_type::<Fees>(true);
             clean_fees.fee_calculator = src_fees.fee_calculator;
             assert!(are_bytes_equal(&got_fees, &clean_fees));
+
+            // fees sysvar is not accessible via sol_get_sysvar so nothing further to test
         }
 
         // Test rent sysvar
         {
-            let mut got_rent = create_filled_type::<Rent>(true);
-            let got_rent_va = 0x100000000;
+            let mut got_rent_obj = create_filled_type::<Rent>(true);
+            let got_rent_obj_va = 0x100000000;
+
+            let mut got_rent_buf = vec![0; Rent::size_of()];
+            let got_rent_buf_va = 0x200000000;
+            let rent_id_va = 0x300000000;
 
             let mut memory_mapping = MemoryMapping::new(
-                vec![MemoryRegion::new_writable(
-                    bytes_of_mut(&mut got_rent),
-                    got_rent_va,
-                )],
+                vec![
+                    MemoryRegion::new_writable(bytes_of_mut(&mut got_rent_obj), got_rent_obj_va),
+                    MemoryRegion::new_writable(&mut got_rent_buf, got_rent_buf_va),
+                    MemoryRegion::new_readonly(&Rent::id().to_bytes(), rent_id_va),
+                ],
                 &config,
                 &SBPFVersion::V2,
             )
@@ -3549,7 +3642,7 @@ mod tests {
 
             let result = SyscallGetRentSysvar::rust(
                 &mut invoke_context,
-                got_rent_va,
+                got_rent_obj_va,
                 0,
                 0,
                 0,
@@ -3557,25 +3650,51 @@ mod tests {
                 &mut memory_mapping,
             );
             result.unwrap();
-            assert_eq!(got_rent, src_rent);
+            assert_eq!(got_rent_obj, src_rent);
 
             let mut clean_rent = create_filled_type::<Rent>(true);
             clean_rent.lamports_per_byte_year = src_rent.lamports_per_byte_year;
             clean_rent.exemption_threshold = src_rent.exemption_threshold;
             clean_rent.burn_percent = src_rent.burn_percent;
-            assert!(are_bytes_equal(&got_rent, &clean_rent));
+            assert!(are_bytes_equal(&got_rent_obj, &clean_rent));
+
+            let result = SyscallGetSysvar::rust(
+                &mut invoke_context,
+                rent_id_va,
+                got_rent_buf_va,
+                0,
+                Rent::size_of() as u64,
+                0,
+                &mut memory_mapping,
+            );
+            result.unwrap();
+
+            let rent_from_buf = bincode::deserialize::<Rent>(&got_rent_buf).unwrap();
+
+            assert_eq!(rent_from_buf, src_rent);
+
+            // clone is to zero the alignment padding
+            assert!(are_bytes_equal(&rent_from_buf.clone(), &clean_rent));
         }
 
         // Test epoch rewards sysvar
         {
-            let mut got_rewards = create_filled_type::<EpochRewards>(true);
-            let got_rewards_va = 0x100000000;
+            let mut got_rewards_obj = create_filled_type::<EpochRewards>(true);
+            let got_rewards_obj_va = 0x100000000;
+
+            let mut got_rewards_buf = vec![0; EpochRewards::size_of()];
+            let got_rewards_buf_va = 0x200000000;
+            let rewards_id_va = 0x300000000;
 
             let mut memory_mapping = MemoryMapping::new(
-                vec![MemoryRegion::new_writable(
-                    bytes_of_mut(&mut got_rewards),
-                    got_rewards_va,
-                )],
+                vec![
+                    MemoryRegion::new_writable(
+                        bytes_of_mut(&mut got_rewards_obj),
+                        got_rewards_obj_va,
+                    ),
+                    MemoryRegion::new_writable(&mut got_rewards_buf, got_rewards_buf_va),
+                    MemoryRegion::new_readonly(&EpochRewards::id().to_bytes(), rewards_id_va),
+                ],
                 &config,
                 &SBPFVersion::V2,
             )
@@ -3583,7 +3702,7 @@ mod tests {
 
             let result = SyscallGetEpochRewardsSysvar::rust(
                 &mut invoke_context,
-                got_rewards_va,
+                got_rewards_obj_va,
                 0,
                 0,
                 0,
@@ -3591,7 +3710,7 @@ mod tests {
                 &mut memory_mapping,
             );
             result.unwrap();
-            assert_eq!(got_rewards, src_rewards);
+            assert_eq!(got_rewards_obj, src_rewards);
 
             let mut clean_rewards = create_filled_type::<EpochRewards>(true);
             clean_rewards.distribution_starting_block_height =
@@ -3602,7 +3721,376 @@ mod tests {
             clean_rewards.total_rewards = src_rewards.total_rewards;
             clean_rewards.distributed_rewards = src_rewards.distributed_rewards;
             clean_rewards.active = src_rewards.active;
-            assert!(are_bytes_equal(&got_rewards, &clean_rewards));
+            assert!(are_bytes_equal(&got_rewards_obj, &clean_rewards));
+
+            let result = SyscallGetSysvar::rust(
+                &mut invoke_context,
+                rewards_id_va,
+                got_rewards_buf_va,
+                0,
+                EpochRewards::size_of() as u64,
+                0,
+                &mut memory_mapping,
+            );
+            result.unwrap();
+
+            let rewards_from_buf = bincode::deserialize::<EpochRewards>(&got_rewards_buf).unwrap();
+
+            assert_eq!(rewards_from_buf, src_rewards);
+
+            // clone is to zero the alignment padding
+            assert!(are_bytes_equal(&rewards_from_buf.clone(), &clean_rewards));
+        }
+
+        // Test last restart slot sysvar
+        {
+            let mut got_restart_obj = LastRestartSlot::default();
+            let got_restart_obj_va = 0x100000000;
+
+            let mut got_restart_buf = vec![0; LastRestartSlot::size_of()];
+            let got_restart_buf_va = 0x200000000;
+            let restart_id_va = 0x300000000;
+
+            let mut memory_mapping = MemoryMapping::new(
+                vec![
+                    MemoryRegion::new_writable(
+                        bytes_of_mut(&mut got_restart_obj),
+                        got_restart_obj_va,
+                    ),
+                    MemoryRegion::new_writable(&mut got_restart_buf, got_restart_buf_va),
+                    MemoryRegion::new_readonly(&LastRestartSlot::id().to_bytes(), restart_id_va),
+                ],
+                &config,
+                &SBPFVersion::V2,
+            )
+            .unwrap();
+
+            let result = SyscallGetLastRestartSlotSysvar::rust(
+                &mut invoke_context,
+                got_restart_obj_va,
+                0,
+                0,
+                0,
+                0,
+                &mut memory_mapping,
+            );
+            result.unwrap();
+            assert_eq!(got_restart_obj, src_restart);
+
+            let mut clean_restart = create_filled_type::<LastRestartSlot>(true);
+            clean_restart.last_restart_slot = src_restart.last_restart_slot;
+            assert!(are_bytes_equal(&got_restart_obj, &clean_restart));
+
+            let result = SyscallGetSysvar::rust(
+                &mut invoke_context,
+                restart_id_va,
+                got_restart_buf_va,
+                0,
+                LastRestartSlot::size_of() as u64,
+                0,
+                &mut memory_mapping,
+            );
+            result.unwrap();
+
+            let restart_from_buf =
+                bincode::deserialize::<LastRestartSlot>(&got_restart_buf).unwrap();
+
+            assert_eq!(restart_from_buf, src_restart);
+            assert!(are_bytes_equal(&restart_from_buf, &clean_restart));
+        }
+    }
+
+    #[test_case(false; "partial")]
+    #[test_case(true; "full")]
+    fn test_syscall_get_stake_history(filled: bool) {
+        let config = Config::default();
+
+        let mut src_history = StakeHistory::default();
+
+        let epochs = if filled {
+            stake_history::MAX_ENTRIES + 1
+        } else {
+            stake_history::MAX_ENTRIES / 2
+        } as u64;
+
+        for epoch in 1..epochs {
+            src_history.add(
+                epoch,
+                StakeHistoryEntry {
+                    effective: epoch * 2,
+                    activating: epoch * 3,
+                    deactivating: epoch * 5,
+                },
+            );
+        }
+
+        let src_history = src_history;
+
+        let mut src_history_buf = vec![0; StakeHistory::size_of()];
+        bincode::serialize_into(&mut src_history_buf, &src_history).unwrap();
+
+        let transaction_accounts = vec![(
+            sysvar::stake_history::id(),
+            create_account_shared_data_for_test(&src_history),
+        )];
+        with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
+
+        {
+            let mut got_history_buf = vec![0; StakeHistory::size_of()];
+            let got_history_buf_va = 0x100000000;
+            let history_id_va = 0x200000000;
+
+            let mut memory_mapping = MemoryMapping::new(
+                vec![
+                    MemoryRegion::new_writable(&mut got_history_buf, got_history_buf_va),
+                    MemoryRegion::new_readonly(&StakeHistory::id().to_bytes(), history_id_va),
+                ],
+                &config,
+                &SBPFVersion::V2,
+            )
+            .unwrap();
+
+            let result = SyscallGetSysvar::rust(
+                &mut invoke_context,
+                history_id_va,
+                got_history_buf_va,
+                0,
+                StakeHistory::size_of() as u64,
+                0,
+                &mut memory_mapping,
+            );
+            result.unwrap();
+
+            let history_from_buf = bincode::deserialize::<StakeHistory>(&got_history_buf).unwrap();
+            assert_eq!(history_from_buf, src_history);
+        }
+    }
+
+    #[test_case(false; "partial")]
+    #[test_case(true; "full")]
+    fn test_syscall_get_slot_hashes(filled: bool) {
+        let config = Config::default();
+
+        let mut src_hashes = SlotHashes::default();
+
+        let slots = if filled {
+            slot_hashes::MAX_ENTRIES + 1
+        } else {
+            slot_hashes::MAX_ENTRIES / 2
+        } as u64;
+
+        for slot in 1..slots {
+            src_hashes.add(slot, hashv(&[&slot.to_le_bytes()]));
+        }
+
+        let src_hashes = src_hashes;
+
+        let mut src_hashes_buf = vec![0; SlotHashes::size_of()];
+        bincode::serialize_into(&mut src_hashes_buf, &src_hashes).unwrap();
+
+        let transaction_accounts = vec![(
+            sysvar::slot_hashes::id(),
+            create_account_shared_data_for_test(&src_hashes),
+        )];
+        with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
+
+        {
+            let mut got_hashes_buf = vec![0; SlotHashes::size_of()];
+            let got_hashes_buf_va = 0x100000000;
+            let hashes_id_va = 0x200000000;
+
+            let mut memory_mapping = MemoryMapping::new(
+                vec![
+                    MemoryRegion::new_writable(&mut got_hashes_buf, got_hashes_buf_va),
+                    MemoryRegion::new_readonly(&SlotHashes::id().to_bytes(), hashes_id_va),
+                ],
+                &config,
+                &SBPFVersion::V2,
+            )
+            .unwrap();
+
+            let result = SyscallGetSysvar::rust(
+                &mut invoke_context,
+                hashes_id_va,
+                got_hashes_buf_va,
+                0,
+                SlotHashes::size_of() as u64,
+                0,
+                &mut memory_mapping,
+            );
+            result.unwrap();
+
+            let hashes_from_buf = bincode::deserialize::<SlotHashes>(&got_hashes_buf).unwrap();
+            assert_eq!(hashes_from_buf, src_hashes);
+        }
+    }
+
+    #[test]
+    fn test_syscall_get_sysvar_errors() {
+        let config = Config::default();
+
+        let mut src_clock = create_filled_type::<Clock>(false);
+        src_clock.slot = 1;
+        src_clock.epoch_start_timestamp = 2;
+        src_clock.epoch = 3;
+        src_clock.leader_schedule_epoch = 4;
+        src_clock.unix_timestamp = 5;
+
+        let clock_id_va = 0x100000000;
+
+        let mut got_clock_buf_rw = vec![0; Clock::size_of()];
+        let got_clock_buf_rw_va = 0x200000000;
+
+        let got_clock_buf_ro = vec![0; Clock::size_of()];
+        let got_clock_buf_ro_va = 0x300000000;
+
+        let mut memory_mapping = MemoryMapping::new(
+            vec![
+                MemoryRegion::new_readonly(&Clock::id().to_bytes(), clock_id_va),
+                MemoryRegion::new_writable(&mut got_clock_buf_rw, got_clock_buf_rw_va),
+                MemoryRegion::new_readonly(&got_clock_buf_ro, got_clock_buf_ro_va),
+            ],
+            &config,
+            &SBPFVersion::V2,
+        )
+        .unwrap();
+
+        let access_violation_err =
+            std::mem::discriminant(&EbpfError::AccessViolation(AccessType::Load, 0, 0, ""));
+
+        let got_clock_empty = vec![0; Clock::size_of()];
+
+        {
+            // start without the clock sysvar because we expect to hit specific errors before loading it
+            with_mock_invoke_context!(invoke_context, transaction_context, vec![]);
+
+            // Abort: "Not all bytes in VM memory range `[sysvar_id, sysvar_id + 32)` are readable."
+            let e = SyscallGetSysvar::rust(
+                &mut invoke_context,
+                clock_id_va + 1,
+                got_clock_buf_rw_va,
+                0,
+                Clock::size_of() as u64,
+                0,
+                &mut memory_mapping,
+            )
+            .unwrap_err();
+
+            assert_eq!(
+                std::mem::discriminant(e.downcast_ref::<EbpfError>().unwrap()),
+                access_violation_err,
+            );
+            assert_eq!(got_clock_buf_rw, got_clock_empty);
+
+            // Abort: "Not all bytes in VM memory range `[var_addr, var_addr + length)` are writable."
+            let e = SyscallGetSysvar::rust(
+                &mut invoke_context,
+                clock_id_va,
+                got_clock_buf_rw_va + 1,
+                0,
+                Clock::size_of() as u64,
+                0,
+                &mut memory_mapping,
+            )
+            .unwrap_err();
+
+            assert_eq!(
+                std::mem::discriminant(e.downcast_ref::<EbpfError>().unwrap()),
+                access_violation_err,
+            );
+            assert_eq!(got_clock_buf_rw, got_clock_empty);
+
+            let e = SyscallGetSysvar::rust(
+                &mut invoke_context,
+                clock_id_va,
+                got_clock_buf_ro_va,
+                0,
+                Clock::size_of() as u64,
+                0,
+                &mut memory_mapping,
+            )
+            .unwrap_err();
+
+            assert_eq!(
+                std::mem::discriminant(e.downcast_ref::<EbpfError>().unwrap()),
+                access_violation_err,
+            );
+            assert_eq!(got_clock_buf_rw, got_clock_empty);
+
+            // Abort: "`offset + length` is not in `[0, 2^64)`."
+            let e = SyscallGetSysvar::rust(
+                &mut invoke_context,
+                clock_id_va,
+                got_clock_buf_rw_va,
+                u64::MAX - Clock::size_of() as u64 / 2,
+                Clock::size_of() as u64,
+                0,
+                &mut memory_mapping,
+            )
+            .unwrap_err();
+
+            assert_eq!(
+                *e.downcast_ref::<InstructionError>().unwrap(),
+                InstructionError::ArithmeticOverflow,
+            );
+            assert_eq!(got_clock_buf_rw, got_clock_empty);
+
+            // "`var_addr + length` is not in `[0, 2^64)`" is theoretically impossible to trigger
+            // because if the sum extended outside u64::MAX then it would not be writable and translate would fail
+
+            // "`2` if the sysvar data is not present in the Sysvar Cache."
+            let result = SyscallGetSysvar::rust(
+                &mut invoke_context,
+                clock_id_va,
+                got_clock_buf_rw_va,
+                0,
+                Clock::size_of() as u64,
+                0,
+                &mut memory_mapping,
+            )
+            .unwrap();
+
+            assert_eq!(result, 2);
+            assert_eq!(got_clock_buf_rw, got_clock_empty);
+        }
+
+        {
+            let transaction_accounts = vec![(
+                sysvar::clock::id(),
+                create_account_shared_data_for_test(&src_clock),
+            )];
+            with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
+
+            // "`1` if `offset + length` is greater than the length of the sysvar data."
+            let result = SyscallGetSysvar::rust(
+                &mut invoke_context,
+                clock_id_va,
+                got_clock_buf_rw_va,
+                1,
+                Clock::size_of() as u64,
+                0,
+                &mut memory_mapping,
+            )
+            .unwrap();
+
+            assert_eq!(result, 1);
+            assert_eq!(got_clock_buf_rw, got_clock_empty);
+
+            // and now lets succeed
+            SyscallGetSysvar::rust(
+                &mut invoke_context,
+                clock_id_va,
+                got_clock_buf_rw_va,
+                0,
+                Clock::size_of() as u64,
+                0,
+                &mut memory_mapping,
+            )
+            .unwrap();
+
+            let clock_from_buf = bincode::deserialize::<Clock>(&got_clock_buf_rw).unwrap();
+
+            assert_eq!(clock_from_buf, src_clock);
         }
     }
 

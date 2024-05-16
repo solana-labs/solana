@@ -321,3 +321,40 @@ pub mod get_sysvar_with_account_check {
         invoke_context.get_sysvar_cache().get_last_restart_slot()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use {super::*, test_case::test_case};
+
+    // sysvar cache provides the full account data of a sysvar
+    // the setters MUST NOT be changed to serialize an object representation
+    // it is required that the syscall be able to access the full buffer as it exists onchain
+    // this is meant to cover the cases:
+    // * account data is larger than struct sysvar
+    // * vector sysvar has fewer than its maximum entries
+    // if at any point the data is roundtripped through bincode, the vector will shrink
+    #[test_case(Clock::default(); "clock")]
+    #[test_case(EpochSchedule::default(); "epoch_schedule")]
+    #[test_case(EpochRewards::default(); "epoch_rewards")]
+    #[test_case(Rent::default(); "rent")]
+    #[test_case(SlotHashes::default(); "slot_hashes")]
+    #[test_case(StakeHistory::default(); "stake_history")]
+    #[test_case(LastRestartSlot::default(); "last_restart_slot")]
+    fn test_sysvar_cache_preserves_bytes<T: Sysvar>(_: T) {
+        let id = T::id();
+        let size = T::size_of().saturating_mul(2);
+        let in_buf = vec![0; size];
+
+        let mut sysvar_cache = SysvarCache::default();
+        sysvar_cache.fill_missing_entries(|pubkey, callback| {
+            if *pubkey == id {
+                callback(&in_buf)
+            }
+        });
+        let sysvar_cache = sysvar_cache;
+
+        let out_buf = sysvar_cache.sysvar_id_to_buffer(&id).clone().unwrap();
+
+        assert_eq!(out_buf, in_buf);
+    }
+}

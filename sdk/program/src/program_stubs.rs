@@ -43,6 +43,15 @@ pub trait SyscallStubs: Sync + Send {
         sol_log("SyscallStubs: sol_invoke_signed() not available");
         Ok(())
     }
+    fn sol_get_sysvar(
+        &self,
+        _sysvar_id_addr: *const u8,
+        _var_addr: *mut u8,
+        _offset: u64,
+        _length: u64,
+    ) -> u64 {
+        UNSUPPORTED_SYSVAR
+    }
     fn sol_get_clock_sysvar(&self, _var_addr: *mut u8) -> u64 {
         UNSUPPORTED_SYSVAR
     }
@@ -143,6 +152,19 @@ pub(crate) fn sol_invoke_signed(
         .read()
         .unwrap()
         .sol_invoke_signed(instruction, account_infos, signers_seeds)
+}
+
+#[allow(dead_code)]
+pub(crate) fn sol_get_sysvar(
+    sysvar_id_addr: *const u8,
+    var_addr: *mut u8,
+    offset: u64,
+    length: u64,
+) -> u64 {
+    SYSCALL_STUBS
+        .read()
+        .unwrap()
+        .sol_get_sysvar(sysvar_id_addr, var_addr, offset, length)
 }
 
 pub(crate) fn sol_get_clock_sysvar(var_addr: *mut u8) -> u64 {
