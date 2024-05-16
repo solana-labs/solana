@@ -729,10 +729,10 @@ impl Accounts {
                 }
             };
 
-            // Accounts that are invoked and also not passed to a program don't
-            // need to be stored because it's assumed to be impossible for a
-            // committable transaction to modify an invoked account if said
-            // account isn't passed to some program.
+            // Accounts that are invoked and also not passed as an instruction
+            // account to a program don't need to be stored because it's assumed
+            // to be impossible for a committable transaction to modify an
+            // invoked account if said account isn't passed to some program.
             //
             // Note that this assumption might not hold in the future after
             // SIMD-0082 is implemented because we may decide to commit
@@ -742,7 +742,7 @@ impl Accounts {
             // if they aren't passed to any programs (because they are mutated
             // outside of the VM).
             let is_storable_account = |message: &SanitizedMessage, key_index: usize| -> bool {
-                !message.is_invoked(key_index) || message.is_key_passed_to_program(key_index)
+                !message.is_invoked(key_index) || message.is_instruction_account(key_index)
             };
 
             let message = tx.message();
