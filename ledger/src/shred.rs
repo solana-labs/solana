@@ -313,6 +313,14 @@ impl ErasureSetId {
     }
 }
 
+/// To be used with the [`Shred`] enum.
+///
+/// Writes a function implementation that forwards the invocation to an identically defined function
+/// in one of the two enum branches.
+///
+/// Due to an inability of a macro to match on the `self` shorthand syntax, this macro has 3
+/// branches.  But they are only different in the `self` argument matching.  Make sure to keep the
+/// identical otherwise.
 macro_rules! dispatch {
     ($vis:vis fn $name:ident(&self $(, $arg:ident : $ty:ty)?) $(-> $out:ty)?) => {
         #[inline]
