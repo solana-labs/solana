@@ -591,6 +591,8 @@ impl AccountsDb {
             let shrink_in_progress = write_ancient_accounts.shrinks_in_progress.remove(&slot);
             if shrink_in_progress.is_none() {
                 dropped_roots.push(slot);
+            } else {
+                self.reopen_storage_as_readonly_shrinking_in_progress_ok(slot);
             }
             self.remove_old_stores_shrink(
                 &shrink_collect,

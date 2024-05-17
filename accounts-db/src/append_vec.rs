@@ -356,6 +356,13 @@ impl AppendVec {
         self.current_len.store(0, Ordering::Release);
     }
 
+    /// when we can use file i/o as opposed to mmap, this is the trigger to tell us
+    /// that no more appending will occur and we can close the initial mmap.
+    pub(crate) fn reopen_as_readonly(&self) -> Option<Self> {
+        // this is a no-op when we are already a mmap
+        None
+    }
+
     /// how many more bytes can be stored in this append vec
     pub fn remaining_bytes(&self) -> u64 {
         self.capacity()

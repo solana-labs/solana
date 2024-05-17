@@ -1111,6 +1111,19 @@ impl AccountStorageEntry {
         }
     }
 
+    /// open a new instance of the storage that is readonly
+    fn reopen_as_readonly(&self) -> Option<Self> {
+        let count_and_status = self.count_and_status.lock_write();
+        self.accounts.reopen_as_readonly().map(|accounts| Self {
+            id: self.id,
+            slot: self.slot,
+            count_and_status: SeqLock::new(*count_and_status),
+            approx_store_count: AtomicUsize::new(self.approx_stored_count()),
+            alive_bytes: AtomicUsize::new(self.alive_bytes()),
+            accounts,
+        })
+    }
+
     pub fn new_existing(
         slot: Slot,
         id: AccountsFileId,
@@ -3992,6 +4005,8 @@ impl AccountsDb {
         let (_, drop_storage_entries_elapsed) = measure_us!(drop(dead_storages));
         time.stop();
 
+        self.reopen_storage_as_readonly_shrinking_in_progress_ok(shrink_collect.slot);
+
         self.stats
             .dropped_stores
             .fetch_add(dead_storages_len as u64, Ordering::Relaxed);
@@ -4181,6 +4196,26 @@ impl AccountsDb {
         }
 
         dead_storages
+    }
+
+    /// we are done writing to the storage at `slot`. It can be re-opened as read-only if that would help
+    /// system performance.
+    pub(crate) fn reopen_storage_as_readonly_shrinking_in_progress_ok(&self, slot: Slot) {
+        if let Some(storage) = self
+            .storage
+            .get_slot_storage_entry_shrinking_in_progress_ok(slot)
+        {
+            if let Some(new_storage) = storage.reopen_as_readonly() {
+                // consider here the race condition of tx processing having looked up something in the index,
+                // which could return (slot, append vec id). We want the lookup for the storage to get a storage
+                // that works whether the lookup occurs before or after the replace call here.
+                // So, the two storages have to be exactly equivalent wrt offsets, counts, len, id, etc.
+                assert_eq!(storage.append_vec_id(), new_storage.append_vec_id());
+                assert_eq!(storage.accounts.len(), new_storage.accounts.len());
+                self.storage
+                    .replace_storage_with_equivalent(slot, Arc::new(new_storage));
+            }
+        }
     }
 
     /// return a store that can contain 'aligned_total' bytes
@@ -4593,6 +4628,9 @@ impl AccountsDb {
             // Assert: it cannot be the case that we already had an ancient append vec at this slot and
             // yet that ancient append vec does not have room for the accounts stored at this slot currently
             assert_ne!(slot, current_ancient.slot());
+
+            // we filled one up
+            self.reopen_storage_as_readonly_shrinking_in_progress_ok(current_ancient.slot());
 
             // Now we create an ancient append vec at `slot` to store the overflows.
             let (shrink_in_progress_overflow, time_us) = measure_us!(current_ancient
@@ -6458,6 +6496,7 @@ impl AccountsDb {
             // If the above sizing function is correct, just one AppendVec is enough to hold
             // all the data for the slot
             assert!(self.storage.get_slot_storage_entry(slot).is_some());
+            self.reopen_storage_as_readonly_shrinking_in_progress_ok(slot);
         }
 
         // Remove this slot from the cache, which will to AccountsDb's new readers should look like an

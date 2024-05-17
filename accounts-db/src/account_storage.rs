@@ -82,6 +82,18 @@ impl AccountStorage {
         self.get_slot_storage_entry_shrinking_in_progress_ok(slot)
     }
 
+    pub(crate) fn replace_storage_with_equivalent(
+        &self,
+        slot: Slot,
+        storage: Arc<AccountStorageEntry>,
+    ) {
+        assert_eq!(storage.slot(), slot);
+        if let Some(mut existing_storage) = self.map.get_mut(&slot) {
+            assert_eq!(slot, existing_storage.value().storage.slot());
+            existing_storage.value_mut().storage = storage;
+        }
+    }
+
     /// return the append vec for 'slot' if it exists
     pub(crate) fn get_slot_storage_entry_shrinking_in_progress_ok(
         &self,

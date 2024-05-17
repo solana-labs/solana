@@ -89,6 +89,14 @@ impl AccountsFile {
         }
     }
 
+    /// if storage is not readonly, reopen another instance that is read only
+    pub(crate) fn reopen_as_readonly(&self) -> Option<Self> {
+        match self {
+            Self::AppendVec(av) => av.reopen_as_readonly().map(Self::AppendVec),
+            Self::TieredStorage(_) => None,
+        }
+    }
+
     pub fn flush(&self) -> Result<()> {
         match self {
             Self::AppendVec(av) => av.flush(),
