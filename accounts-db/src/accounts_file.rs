@@ -289,6 +289,24 @@ impl AccountsFile {
                 .data_for_archive(),
         }
     }
+
+    /// Returns the way to access this accounts file when archiving
+    pub fn internals_for_archive(&self) -> InternalsForArchive {
+        // Figure out if the backing access to this accounts file is Mmap or File I/O.
+        // For now, let `can_append()` fill the gap.
+        if self.can_append() {
+            match self {
+                Self::AppendVec(av) => InternalsForArchive::Mmap(av.data_for_archive()),
+                Self::TieredStorage(ts) => InternalsForArchive::Mmap(
+                    ts.reader()
+                        .expect("must be a reader when archiving")
+                        .data_for_archive(),
+                ),
+            }
+        } else {
+            InternalsForArchive::FileIo(self.path())
+        }
+    }
 }
 
 /// An enum that creates AccountsFile instance with the specified format.
@@ -308,6 +326,15 @@ impl AccountsFileProvider {
             Self::HotStorage => AccountsFile::TieredStorage(TieredStorage::new_writable(path)),
         }
     }
+}
+
+/// The access method to use when archiving an AccountsFile
+#[derive(Debug)]
+pub enum InternalsForArchive<'a> {
+    /// Accessing the internals is done via Mmap
+    Mmap(&'a [u8]),
+    /// Accessing the internals is done via File I/O
+    FileIo(&'a Path),
 }
 
 /// Information after storing accounts

@@ -20,7 +20,7 @@ use {
     solana_accounts_db::{
         account_storage::AccountStorageMap,
         accounts_db::{AccountStorageEntry, AtomicAccountsFileId},
-        accounts_file::{AccountsFile, AccountsFileError, StorageAccess},
+        accounts_file::{AccountsFile, AccountsFileError, InternalsForArchive, StorageAccess},
         hardened_unpack::{self, ParallelSelector, UnpackError},
         shared_buffer_reader::{SharedBuffer, SharedBufferReader},
         utils::{move_and_async_delete_path, ACCOUNTS_RUN_DIR, ACCOUNTS_SNAPSHOT_DIR},
@@ -823,17 +823,21 @@ pub fn archive_snapshot_package(
                     storage.slot(),
                     storage.append_vec_id(),
                 ));
-                let mut header = tar::Header::new_gnu();
-                header.set_path(path_in_archive).map_err(|err| {
-                    E::ArchiveAccountStorageFile(err, storage.path().to_path_buf())
-                })?;
-                header.set_size(storage.capacity());
-                header.set_cksum();
-                archive
-                    .append(&header, storage.accounts.data_for_archive())
-                    .map_err(|err| {
-                        E::ArchiveAccountStorageFile(err, storage.path().to_path_buf())
-                    })?;
+                match storage.accounts.internals_for_archive() {
+                    InternalsForArchive::Mmap(data) => {
+                        let mut header = tar::Header::new_gnu();
+                        header.set_path(path_in_archive).map_err(|err| {
+                            E::ArchiveAccountStorageFile(err, storage.path().to_path_buf())
+                        })?;
+                        header.set_size(storage.capacity());
+                        header.set_cksum();
+                        archive.append(&header, data)
+                    }
+                    InternalsForArchive::FileIo(path) => {
+                        archive.append_path_with_name(path, path_in_archive)
+                    }
+                }
+                .map_err(|err| E::ArchiveAccountStorageFile(err, storage.path().to_path_buf()))?;
             }
 
             archive.into_inner().map_err(E::FinishArchive)?;
