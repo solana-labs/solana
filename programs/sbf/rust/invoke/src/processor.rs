@@ -67,9 +67,9 @@ fn do_nested_invokes(num_nested_invokes: u64, accounts: &[AccountInfo]) -> Progr
 }
 
 solana_program::entrypoint!(process_instruction);
-fn process_instruction(
+fn process_instruction<'a>(
     program_id: &Pubkey,
-    accounts: &[AccountInfo],
+    accounts: &[AccountInfo<'a>],
     instruction_data: &[u8],
 ) -> ProgramResult {
     msg!("invoke Rust program");
@@ -1158,7 +1158,7 @@ fn process_instruction(
             let mut lamports = account.lamports();
             account
                 .lamports
-                .replace(unsafe { mem::transmute(&mut lamports) });
+                .replace(unsafe { mem::transmute::<&'_ mut u64, &'a mut u64>(&mut lamports) });
             let callee_program_id = accounts[CALLEE_PROGRAM_INDEX].key;
 
             invoke(

@@ -316,8 +316,8 @@ mod utils {
         #[cfg_attr(miri, ignore)]
         fn test_ub_illegally_created_multiple_tokens() {
             // Unauthorized token minting!
-            let mut token1 = unsafe { mem::transmute(()) };
-            let mut token2 = unsafe { mem::transmute(()) };
+            let mut token1 = unsafe { mem::transmute::<(), Token<FakeQueue>>(()) };
+            let mut token2 = unsafe { mem::transmute::<(), Token<FakeQueue>>(()) };
 
             let queue = TokenCell::new(FakeQueue {
                 v: Vec::with_capacity(20),

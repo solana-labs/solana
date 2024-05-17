@@ -90,8 +90,9 @@ thread_local! {
     static INVOKE_CONTEXT: RefCell<Option<usize>> = const { RefCell::new(None) };
 }
 fn set_invoke_context(new: &mut InvokeContext) {
-    INVOKE_CONTEXT
-        .with(|invoke_context| unsafe { invoke_context.replace(Some(transmute::<_, usize>(new))) });
+    INVOKE_CONTEXT.with(|invoke_context| unsafe {
+        invoke_context.replace(Some(transmute::<&mut InvokeContext, usize>(new)))
+    });
 }
 fn get_invoke_context<'a, 'b>() -> &'a mut InvokeContext<'b> {
     let ptr = INVOKE_CONTEXT.with(|invoke_context| match *invoke_context.borrow() {
