@@ -528,6 +528,7 @@ impl From<Stakes<Delegation>> for StakesEnum {
 // Therefore, if one side is Stakes<StakeAccount> and the other is a
 // Stakes<Delegation> we convert the former one to Stakes<Delegation> before
 // comparing for equality.
+#[cfg(feature = "dev-context-only-utils")]
 impl PartialEq<StakesEnum> for StakesEnum {
     fn eq(&self, other: &StakesEnum) -> bool {
         match (self, other) {

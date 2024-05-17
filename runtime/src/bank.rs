@@ -450,7 +450,8 @@ impl TransactionLogCollector {
 /// Since it is difficult to insert fields to serialize/deserialize against existing code already deployed,
 /// new fields can be optionally serialized and optionally deserialized. At some point, the serialization and
 /// deserialization will use a new mechanism or otherwise be in sync more clearly.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "dev-context-only-utils", derive(PartialEq))]
 pub struct BankFieldsToDeserialize {
     pub(crate) blockhash_queue: BlockhashQueue,
     pub(crate) ancestors: AncestorsForSerialization,
@@ -531,6 +532,7 @@ pub(crate) struct BankFieldsToSerialize<'a> {
 }
 
 // Can't derive PartialEq because RwLock doesn't implement PartialEq
+#[cfg(feature = "dev-context-only-utils")]
 impl PartialEq for Bank {
     fn eq(&self, other: &Self) -> bool {
         if std::ptr::eq(self, other) {
