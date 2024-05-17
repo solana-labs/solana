@@ -203,26 +203,11 @@ struct AccountOffsets {
     stored_size_aligned: usize,
 }
 
-#[derive(Debug)]
-enum InternalFileOrMmap<'a> {
-    /// A file-backed block of memory that is used to store the data for each appended item.
-    Mmap(&'a MmapMut),
-}
-
 #[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
 #[derive(Debug)]
 enum AppendVecFileBacking {
     /// A file-backed block of memory that is used to store the data for each appended item.
     MmapOnly(MmapMut),
-}
-
-impl AppendVecFileBacking {
-    /// access the backing
-    fn get<T>(&self, mut callback: impl for<'local> FnMut(InternalFileOrMmap<'local>) -> T) -> T {
-        match self {
-            AppendVecFileBacking::MmapOnly(mmap) => callback(InternalFileOrMmap::Mmap(mmap)),
-        }
-    }
 }
 
 /// A thread-safe, file-backed block of memory used to store `Account` instances. Append operations
@@ -344,9 +329,9 @@ impl AppendVec {
     }
 
     pub fn flush(&self) -> Result<()> {
-        self.backing.get(|file_or_mmap| match file_or_mmap {
-            InternalFileOrMmap::Mmap(mmap) => Ok(mmap.flush()?),
-        })
+        match &self.backing {
+            AppendVecFileBacking::MmapOnly(mmap) => Ok(mmap.flush()?),
+        }
     }
 
     pub fn reset(&self) {
@@ -470,29 +455,27 @@ impl AppendVec {
         if overflow || next > self.len() {
             return None;
         }
-        self.backing.get(|file_or_mmap| {
-            match file_or_mmap {
-                InternalFileOrMmap::Mmap(mmap) => {
-                    let data = &mmap[offset..next];
-                    let next = u64_align!(next);
+        match &self.backing {
+            AppendVecFileBacking::MmapOnly(mmap) => {
+                let data = &mmap[offset..next];
+                let next = u64_align!(next);
 
-                    Some((
-                        //UNSAFE: This unsafe creates a slice that represents a chunk of self.map memory
-                        //The lifetime of this slice is tied to &self, since it points to self.map memory
-                        unsafe { std::slice::from_raw_parts(data.as_ptr(), size) },
-                        next,
-                    ))
-                }
+                Some((
+                    //UNSAFE: This unsafe creates a slice that represents a chunk of self.map memory
+                    //The lifetime of this slice is tied to &self, since it points to self.map memory
+                    unsafe { std::slice::from_raw_parts(data.as_ptr(), size) },
+                    next,
+                ))
             }
-        })
+        }
     }
 
     /// Copy `len` bytes from `src` to the first 64-byte boundary after position `offset` of
     /// the internal buffer. Then update `offset` to the first byte after the copied data.
     fn append_ptr(&self, offset: &mut usize, src: *const u8, len: usize) {
         let pos = u64_align!(*offset);
-        self.backing.get(|file_or_mmap| match file_or_mmap {
-            InternalFileOrMmap::Mmap(mmap) => {
+        match &self.backing {
+            AppendVecFileBacking::MmapOnly(mmap) => {
                 let data = &mmap[pos..(pos + len)];
                 //UNSAFE: This mut append is safe because only 1 thread can append at a time
                 //Mutex<()> guarantees exclusive write access to the memory occupied in
@@ -503,7 +486,7 @@ impl AppendVec {
                 };
                 *offset = pos + len;
             }
-        })
+        }
     }
 
     /// Copy each value in `vals`, in order, to the first 64-byte boundary after position `offset`.
