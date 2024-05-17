@@ -173,7 +173,7 @@ bzip2 = "0.4.4"
 caps = "0.5.5"
 cargo_metadata = "0.15.4"
 cc = "1.0.94"
-chrono = { version = "0.4.37", default-features = false }
+chrono = { version = "0.4.38", default-features = false }
 chrono-humanize = "0.2.3"
 clap = "2.33.1"
 console = "0.15.8"
