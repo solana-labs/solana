@@ -860,7 +860,10 @@ fn test_cli_program_upgrade_auto_extend() {
          RPC response error -32002: \
          Transaction simulation failed: \
          Error processing Instruction 0: \
-         account data too small for instruction [3 log messages]",
+         account data too small for instruction; 3 log messages:\n  \
+         Program BPFLoaderUpgradeab1e11111111111111111111111 invoke [1]\n  \
+         ProgramData account not large enough\n  \
+         Program BPFLoaderUpgradeab1e11111111111111111111111 failed: account data too small for instruction\n",
     );
 
     // Attempt to upgrade the program with a larger program, this time without
@@ -1147,7 +1150,10 @@ fn test_cli_program_extend_program() {
          RPC response error -32002: \
          Transaction simulation failed: \
          Error processing Instruction 0: \
-         account data too small for instruction [3 log messages]",
+         account data too small for instruction; 3 log messages:\n  \
+         Program BPFLoaderUpgradeab1e11111111111111111111111 invoke [1]\n  \
+         ProgramData account not large enough\n  \
+         Program BPFLoaderUpgradeab1e11111111111111111111111 failed: account data too small for instruction\n",
     );
 
     // Wait one slot to avoid "Program was deployed in this block already" error

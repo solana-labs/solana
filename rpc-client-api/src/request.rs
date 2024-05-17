@@ -243,8 +243,11 @@ impl fmt::Display for RpcResponseErrorData {
                 if logs.is_empty() {
                     Ok(())
                 } else {
-                    // Give the user a hint that there is more useful logging information available...
-                    write!(f, "[{} log messages]", logs.len())
+                    writeln!(f, "{} log messages:", logs.len())?;
+                    for log in logs {
+                        writeln!(f, "  {log}")?;
+                    }
+                    Ok(())
                 }
             }
             _ => Ok(()),
@@ -256,7 +259,7 @@ impl fmt::Display for RpcResponseErrorData {
 pub enum RpcError {
     #[error("RPC request error: {0}")]
     RpcRequestError(String),
-    #[error("RPC response error {code}: {message} {data}")]
+    #[error("RPC response error {code}: {message}; {data}")]
     RpcResponseError {
         code: i64,
         message: String,
