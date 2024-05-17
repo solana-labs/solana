@@ -129,9 +129,8 @@ impl Bank {
     /// cache.
     ///
     /// Invoking the loader's `direct_deploy_program` function will update the
-    /// program cache in the currently executing context (ie. `programs_loaded`
-    /// and `programs_modified`), but the runtime must also propagate those
-    /// updates to the currently active cache.
+    /// program cache in the currently executing context, but the runtime must
+    /// also propagate those updates to the currently active cache.
     fn directly_invoke_loader_v3_deploy(
         &self,
         builtin_program_id: &Pubkey,
@@ -142,16 +141,16 @@ impl Bank {
         let elf = &programdata[progradata_metadata_size..];
         // Set up the two `LoadedProgramsForTxBatch` instances, as if
         // processing a new transaction batch.
-        let programs_loaded = ProgramCacheForTxBatch::new_from_cache(
+        let program_cache_for_tx_batch = ProgramCacheForTxBatch::new_from_cache(
             self.slot,
             self.epoch,
             &self.transaction_processor.program_cache.read().unwrap(),
         );
         let mut programs_modified = ProgramCacheForTxBatch::new(
             self.slot,
-            programs_loaded.environments.clone(),
-            programs_loaded.upcoming_environments.clone(),
-            programs_loaded.latest_root_epoch,
+            program_cache_for_tx_batch.environments.clone(),
+            program_cache_for_tx_batch.upcoming_environments.clone(),
+            program_cache_for_tx_batch.latest_root_epoch,
         );
 
         // Configure a dummy `InvokeContext` from the runtime's current
@@ -175,10 +174,10 @@ impl Bank {
 
             let mut dummy_invoke_context = InvokeContext::new(
                 &mut dummy_transaction_context,
+                &program_cache_for_tx_batch,
                 EnvironmentConfig::new(Hash::default(), self.feature_set.clone(), 0, &sysvar_cache),
                 None,
                 compute_budget,
-                &programs_loaded,
                 &mut programs_modified,
             );
 

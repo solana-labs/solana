@@ -204,13 +204,13 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
             program_accounts_map.insert(*builtin_program, 0);
         }
 
-        let programs_loaded_for_tx_batch = Rc::new(RefCell::new(self.replenish_program_cache(
+        let program_cache_for_tx_batch = Rc::new(RefCell::new(self.replenish_program_cache(
             callbacks,
             &program_accounts_map,
             limit_to_load_programs,
         )));
 
-        if programs_loaded_for_tx_batch.borrow().hit_max_limit {
+        if program_cache_for_tx_batch.borrow().hit_max_limit {
             const ERROR: TransactionError = TransactionError::ProgramCacheHitMaxLimit;
             let loaded_transactions = vec![(Err(ERROR), None); sanitized_txs.len()];
             let execution_results =
@@ -230,7 +230,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
             error_counters,
             &self.fee_structure,
             account_overrides,
-            &programs_loaded_for_tx_batch.borrow(),
+            &program_cache_for_tx_batch.borrow(),
         );
         load_time.stop();
 
@@ -274,7 +274,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                         timings,
                         error_counters,
                         log_messages_bytes_limit,
-                        &programs_loaded_for_tx_batch.borrow(),
+                        &program_cache_for_tx_batch.borrow(),
                     );
 
                     if let TransactionExecutionResult::Executed {
@@ -285,7 +285,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                         // Update batch specific cache of the loaded programs with the modifications
                         // made by the transaction, if it executed successfully.
                         if details.status.is_ok() {
-                            programs_loaded_for_tx_batch
+                            program_cache_for_tx_batch
                                 .borrow_mut()
                                 .merge(programs_modified_by_tx);
                         }
@@ -302,8 +302,8 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         // ProgramCache entries. Note that loaded_missing is deliberately defined, so that there's
         // still at least one other batch, which will evict the program cache, even after the
         // occurrences of cooperative loading.
-        if programs_loaded_for_tx_batch.borrow().loaded_missing
-            || programs_loaded_for_tx_batch.borrow().merged_modified
+        if program_cache_for_tx_batch.borrow().loaded_missing
+            || program_cache_for_tx_batch.borrow().merged_modified
         {
             const SHRINK_LOADED_PROGRAMS_TO_PERCENTAGE: u8 = 90;
             self.program_cache
@@ -559,7 +559,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         timings: &mut ExecuteTimings,
         error_counters: &mut TransactionErrorMetrics,
         log_messages_bytes_limit: Option<usize>,
-        programs_loaded_for_tx_batch: &ProgramCacheForTxBatch,
+        program_cache_for_tx_batch: &ProgramCacheForTxBatch,
     ) -> TransactionExecutionResult {
         let transaction_accounts = std::mem::take(&mut loaded_transaction.accounts);
 
@@ -610,14 +610,15 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         let mut executed_units = 0u64;
         let mut programs_modified_by_tx = ProgramCacheForTxBatch::new(
             self.slot,
-            programs_loaded_for_tx_batch.environments.clone(),
-            programs_loaded_for_tx_batch.upcoming_environments.clone(),
-            programs_loaded_for_tx_batch.latest_root_epoch,
+            program_cache_for_tx_batch.environments.clone(),
+            program_cache_for_tx_batch.upcoming_environments.clone(),
+            program_cache_for_tx_batch.latest_root_epoch,
         );
         let sysvar_cache = &self.sysvar_cache.read().unwrap();
 
         let mut invoke_context = InvokeContext::new(
             &mut transaction_context,
+            program_cache_for_tx_batch,
             EnvironmentConfig::new(
                 blockhash,
                 callback.get_feature_set(),
@@ -626,7 +627,6 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
             ),
             log_collector.clone(),
             compute_budget,
-            programs_loaded_for_tx_batch,
             &mut programs_modified_by_tx,
         );
 
@@ -975,7 +975,7 @@ mod tests {
         };
 
         let sanitized_message = new_unchecked_sanitized_message(message);
-        let loaded_programs = ProgramCacheForTxBatch::default();
+        let program_cache_for_tx_batch = ProgramCacheForTxBatch::default();
         let mock_bank = MockBankCallback::default();
         let batch_processor = TransactionBatchProcessor::<TestForkGraph>::default();
 
@@ -1008,7 +1008,7 @@ mod tests {
             &mut ExecuteTimings::default(),
             &mut TransactionErrorMetrics::default(),
             None,
-            &loaded_programs,
+            &program_cache_for_tx_batch,
         );
 
         let TransactionExecutionResult::Executed {
@@ -1030,7 +1030,7 @@ mod tests {
             &mut ExecuteTimings::default(),
             &mut TransactionErrorMetrics::default(),
             Some(2),
-            &loaded_programs,
+            &program_cache_for_tx_batch,
         );
 
         let TransactionExecutionResult::Executed {
@@ -1061,7 +1061,7 @@ mod tests {
             &mut ExecuteTimings::default(),
             &mut TransactionErrorMetrics::default(),
             None,
-            &loaded_programs,
+            &program_cache_for_tx_batch,
         );
 
         let TransactionExecutionResult::Executed {
@@ -1099,7 +1099,7 @@ mod tests {
         };
 
         let sanitized_message = new_unchecked_sanitized_message(message);
-        let loaded_programs = ProgramCacheForTxBatch::default();
+        let program_cache_for_tx_batch = ProgramCacheForTxBatch::default();
         let mock_bank = MockBankCallback::default();
         let batch_processor = TransactionBatchProcessor::<TestForkGraph>::default();
 
@@ -1134,7 +1134,7 @@ mod tests {
             &mut ExecuteTimings::default(),
             &mut error_metrics,
             None,
-            &loaded_programs,
+            &program_cache_for_tx_batch,
         );
 
         assert_eq!(error_metrics.instruction_error, 1);

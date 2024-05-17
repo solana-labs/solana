@@ -536,17 +536,17 @@ pub fn program(ledger_path: &Path, matches: &ArgMatches<'_>) {
     with_mock_invoke_context!(invoke_context, transaction_context, transaction_accounts);
 
     // Adding `DELAY_VISIBILITY_SLOT_OFFSET` to slots to accommodate for delay visibility of the program
-    let mut loaded_programs =
+    let mut program_cache_for_tx_batch =
         bank.new_program_cache_for_tx_batch_for_slot(bank.slot() + DELAY_VISIBILITY_SLOT_OFFSET);
     for key in cached_account_keys {
-        loaded_programs.replenish(
+        program_cache_for_tx_batch.replenish(
             key,
             bank.load_program(&key, false, bank.epoch())
                 .expect("Couldn't find program account"),
         );
         debug!("Loaded program {}", key);
     }
-    invoke_context.programs_loaded_for_tx_batch = &loaded_programs;
+    invoke_context.program_cache_for_tx_batch = &mut program_cache_for_tx_batch;
 
     invoke_context
         .transaction_context
