@@ -1228,7 +1228,8 @@ pub enum ZeroLamportAccounts {
 
 /// Hash of an account
 #[repr(transparent)]
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Pod, Zeroable, AbiExample)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Pod, Zeroable)]
 pub struct AccountHash(pub Hash);
 
 // Ensure the newtype wrapper never changes size from the underlying Hash
@@ -1273,7 +1274,8 @@ pub struct IncrementalAccountsHash(pub Hash);
 pub struct AccountsDeltaHash(pub Hash);
 
 /// Snapshot serde-safe accounts delta hash
-#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq, Eq, AbiExample)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SerdeAccountsDeltaHash(pub Hash);
 
 impl From<SerdeAccountsDeltaHash> for AccountsDeltaHash {
@@ -1288,7 +1290,8 @@ impl From<AccountsDeltaHash> for SerdeAccountsDeltaHash {
 }
 
 /// Snapshot serde-safe accounts hash
-#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq, Eq, AbiExample)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SerdeAccountsHash(pub Hash);
 
 impl From<SerdeAccountsHash> for AccountsHash {
@@ -1303,7 +1306,8 @@ impl From<AccountsHash> for SerdeAccountsHash {
 }
 
 /// Snapshot serde-safe incremental accounts hash
-#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq, Eq, AbiExample)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SerdeIncrementalAccountsHash(pub Hash);
 
 impl From<SerdeIncrementalAccountsHash> for IncrementalAccountsHash {

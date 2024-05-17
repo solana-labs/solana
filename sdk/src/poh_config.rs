@@ -5,7 +5,8 @@ use {
     std::time::Duration,
 };
 
-#[derive(Serialize, Deserialize, Clone, Debug, AbiExample, Eq, PartialEq)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct PohConfig {
     /// The target tick rate of the cluster.
     pub target_tick_duration: Duration,

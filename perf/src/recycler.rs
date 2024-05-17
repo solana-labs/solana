@@ -57,7 +57,7 @@ impl<T: Default> Default for RecyclerX<T> {
     }
 }
 
-#[cfg(RUSTC_WITH_SPECIALIZATION)]
+#[cfg(all(RUSTC_WITH_SPECIALIZATION, feature = "frozen-abi"))]
 impl solana_frozen_abi::abi_example::AbiExample
     for RecyclerX<crate::cuda_runtime::PinnedVec<solana_sdk::packet::Packet>>
 {

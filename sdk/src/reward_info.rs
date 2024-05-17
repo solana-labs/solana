@@ -1,6 +1,7 @@
 use crate::reward_type::RewardType;
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, AbiExample, Clone, Copy)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone, Copy)]
 pub struct RewardInfo {
     pub reward_type: RewardType,
     /// Reward amount

@@ -185,7 +185,8 @@ pub struct ClusterInfo {
     socket_addr_space: SocketAddrSpace,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize, AbiExample)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub(crate) struct PruneData {
     /// Pubkey of the node that sent this prune data
     pubkey: Pubkey,
@@ -269,8 +270,12 @@ struct PullData {
 pub(crate) type Ping = ping_pong::Ping<[u8; GOSSIP_PING_TOKEN_SIZE]>;
 
 // TODO These messages should go through the gpu pipeline for spam filtering
-#[frozen_abi(digest = "ogEqvffeEkPpojAaSiUbCv2HdJcdXDQ1ykgYyvKvLo2")]
-#[derive(Serialize, Deserialize, Debug, AbiEnumVisitor, AbiExample)]
+#[cfg_attr(
+    feature = "frozen-abi",
+    derive(AbiExample, AbiEnumVisitor),
+    frozen_abi(digest = "ogEqvffeEkPpojAaSiUbCv2HdJcdXDQ1ykgYyvKvLo2")
+)]
+#[derive(Serialize, Deserialize, Debug)]
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum Protocol {
     /// Gossip protocol messages

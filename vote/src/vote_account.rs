@@ -16,7 +16,8 @@ use {
     thiserror::Error,
 };
 
-#[derive(Clone, Debug, PartialEq, AbiExample, Deserialize)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+#[derive(Clone, Debug, PartialEq, Deserialize)]
 #[serde(try_from = "AccountSharedData")]
 pub struct VoteAccount(Arc<VoteAccountInner>);
 
@@ -28,7 +29,8 @@ pub enum Error {
     InvalidOwner(/*owner:*/ Pubkey),
 }
 
-#[derive(Debug, AbiExample)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+#[derive(Debug)]
 struct VoteAccountInner {
     account: AccountSharedData,
     vote_state: OnceLock<Result<VoteState, Error>>,
@@ -36,7 +38,8 @@ struct VoteAccountInner {
 
 pub type VoteAccountsHashMap = HashMap<Pubkey, (/*stake:*/ u64, VoteAccount)>;
 
-#[derive(Clone, Debug, Deserialize, AbiExample)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(from = "Arc<VoteAccountsHashMap>")]
 pub struct VoteAccounts {
     vote_accounts: Arc<VoteAccountsHashMap>,

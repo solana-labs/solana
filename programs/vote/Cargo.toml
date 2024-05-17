@@ -16,8 +16,8 @@ num-derive = { workspace = true }
 num-traits = { workspace = true }
 serde = { workspace = true }
 serde_derive = { workspace = true }
-solana-frozen-abi = { workspace = true }
-solana-frozen-abi-macro = { workspace = true }
+solana-frozen-abi = { workspace = true, optional = true }
+solana-frozen-abi-macro = { workspace = true, optional = true }
 solana-metrics = { workspace = true }
 solana-program = { workspace = true }
 solana-program-runtime = { workspace = true }
@@ -38,3 +38,12 @@ name = "solana_vote_program"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
+
+[features]
+frozen-abi = [
+    "dep:solana-frozen-abi",
+    "dep:solana-frozen-abi-macro",
+    "solana-program/frozen-abi",
+    "solana-program-runtime/frozen-abi",
+    "solana-sdk/frozen-abi",
+]

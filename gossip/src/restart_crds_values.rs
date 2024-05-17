@@ -13,7 +13,8 @@ use {
     thiserror::Error,
 };
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, AbiExample, Debug)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct RestartLastVotedForkSlots {
     pub from: Pubkey,
     pub wallclock: u64,
@@ -29,7 +30,8 @@ pub enum RestartLastVotedForkSlotsError {
     LastVotedForkEmpty,
 }
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, AbiExample, Debug)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct RestartHeaviestFork {
     pub from: Pubkey,
     pub wallclock: u64,
@@ -39,21 +41,25 @@ pub struct RestartHeaviestFork {
     pub shred_version: u16,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, AbiExample, AbiEnumVisitor)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample, AbiEnumVisitor))]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 enum SlotsOffsets {
     RunLengthEncoding(RunLengthEncoding),
     RawOffsets(RawOffsets),
 }
 
-#[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq, AbiExample)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq)]
 struct U16(#[serde(with = "serde_varint")] u16);
 
 // The vector always starts with 1. Encode number of 1's and 0's consecutively.
 // For example, 110000111 is [2, 4, 3].
-#[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq, AbiExample)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq)]
 struct RunLengthEncoding(Vec<U16>);
 
-#[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq, AbiExample)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq)]
 struct RawOffsets(BitVec<u8>);
 
 impl Sanitize for RestartLastVotedForkSlots {

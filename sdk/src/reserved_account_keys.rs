@@ -24,7 +24,7 @@ mod zk_token_proof_program {
 
 // ReservedAccountKeys is not serialized into or deserialized from bank
 // snapshots but the bank requires this trait to be implemented anyways.
-#[cfg(RUSTC_WITH_SPECIALIZATION)]
+#[cfg(all(RUSTC_WITH_SPECIALIZATION, feature = "frozen-abi"))]
 impl ::solana_frozen_abi::abi_example::AbiExample for ReservedAccountKeys {
     fn example() -> Self {
         // ReservedAccountKeys is not Serialize so just rely on Default.

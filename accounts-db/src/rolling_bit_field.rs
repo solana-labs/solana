@@ -8,7 +8,8 @@ use {
     solana_sdk::clock::Slot,
 };
 
-#[derive(Debug, AbiExample, Clone)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+#[derive(Debug, Clone)]
 pub struct RollingBitField {
     max_width: u64,
     min: u64,

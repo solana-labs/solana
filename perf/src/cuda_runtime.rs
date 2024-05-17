@@ -54,7 +54,8 @@ fn unpin<T>(mem: *mut T) {
 // A vector wrapper where the underlying memory can be
 // page-pinned. Controlled by flags in case user only wants
 // to pin in certain circumstances.
-#[derive(Debug, Default, Serialize, Deserialize, AbiExample)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct PinnedVec<T: Default + Clone + Sized> {
     x: Vec<T>,
     pinned: bool,

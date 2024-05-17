@@ -261,7 +261,8 @@ impl<'a> ShrinkInProgress<'a> {
     }
 }
 
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Deserialize, Serialize, AbiExample, AbiEnumVisitor)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample, AbiEnumVisitor))]
+#[derive(Debug, Eq, PartialEq, Copy, Clone, Deserialize, Serialize)]
 pub enum AccountStorageStatus {
     Available = 0,
     Full = 1,

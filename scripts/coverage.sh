@@ -57,7 +57,7 @@ TEST_ARGS=(
 # redirecting the stderr altogether on CI, where all tests are run unlike
 # developing.
 RUST_LOG="solana=trace,agave=trace,$RUST_LOG" INTERCEPT_OUTPUT=/dev/null "$here/../ci/intercept.sh" \
-  cargo +"$rust_nightly" test --target-dir "$here/../target/cov" "${PACKAGES[@]}" -- "${TEST_ARGS[@]}"
+  cargo +"$rust_nightly" test --features frozen-abi --target-dir "$here/../target/cov" "${PACKAGES[@]}" -- "${TEST_ARGS[@]}"
 
 # Generate test reports
 echo "--- grcov"

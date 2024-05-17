@@ -8,7 +8,8 @@ use {
     std::collections::HashMap,
 };
 
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, AbiExample)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 struct HashAge {
     fee_calculator: FeeCalculator,
     hash_index: u64,
@@ -16,8 +17,12 @@ struct HashAge {
 }
 
 /// Low memory overhead, so can be cloned for every checkpoint
-#[frozen_abi(digest = "8upYCMG37Awf4FGQ5kKtZARHP1QfD2GMpQCPnwCCsxhu")]
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, AbiExample)]
+#[cfg_attr(
+    feature = "frozen-abi",
+    derive(AbiExample),
+    frozen_abi(digest = "8upYCMG37Awf4FGQ5kKtZARHP1QfD2GMpQCPnwCCsxhu")
+)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BlockhashQueue {
     /// index of last hash to be registered
     last_hash_index: u64,

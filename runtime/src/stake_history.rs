@@ -6,7 +6,8 @@ use std::{
 };
 
 /// The SDK's stake history with clone-on-write semantics
-#[derive(Default, Clone, PartialEq, Eq, Debug, Deserialize, Serialize, AbiExample)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+#[derive(Default, Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
 pub struct StakeHistory(Arc<StakeHistoryInner>);
 
 impl Deref for StakeHistory {

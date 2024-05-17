@@ -53,8 +53,8 @@ solana-bucket-map = { workspace = true }
 solana-compute-budget-program = { workspace = true }
 solana-config-program = { workspace = true }
 solana-cost-model = { workspace = true }
-solana-frozen-abi = { workspace = true }
-solana-frozen-abi-macro = { workspace = true }
+solana-frozen-abi = { workspace = true, optional = true }
+solana-frozen-abi-macro = { workspace = true, optional = true }
 solana-inline-spl = { workspace = true }
 solana-loader-v4-program = { workspace = true }
 solana-measure = { workspace = true }
@@ -106,6 +106,19 @@ rustc_version = { workspace = true }
 
 [features]
 dev-context-only-utils = []
+frozen-abi = [
+    "dep:solana-frozen-abi",
+    "dep:solana-frozen-abi-macro",
+    "solana-accounts-db/frozen-abi",
+    "solana-cost-model/frozen-abi",
+    "solana-perf/frozen-abi",
+    "solana-program-runtime/frozen-abi",
+    "solana-sdk/frozen-abi",
+    "solana-svm/frozen-abi",
+    "solana-version/frozen-abi",
+    "solana-vote/frozen-abi",
+    "solana-vote-program/frozen-abi",
+]
 
 [[bench]]
 name = "prioritization_fee_cache"

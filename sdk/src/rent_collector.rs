@@ -11,7 +11,8 @@ use solana_sdk::{
     rent::{Rent, RentDue},
 };
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, Debug, AbiExample)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 pub struct RentCollector {
     pub epoch: Epoch,
     pub epoch_schedule: EpochSchedule,

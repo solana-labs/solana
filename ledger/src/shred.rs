@@ -170,19 +170,9 @@ pub enum Error {
 }
 
 #[repr(u8)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample, AbiEnumVisitor))]
 #[derive(
-    Clone,
-    Copy,
-    Debug,
-    Eq,
-    Hash,
-    PartialEq,
-    AbiEnumVisitor,
-    AbiExample,
-    Deserialize,
-    IntoPrimitive,
-    Serialize,
-    TryFromPrimitive,
+    Clone, Copy, Debug, Eq, Hash, PartialEq, Deserialize, IntoPrimitive, Serialize, TryFromPrimitive,
 )]
 #[serde(into = "u8", try_from = "u8")]
 pub enum ShredType {

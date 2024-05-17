@@ -3,7 +3,7 @@ use {
     solana_sdk::{instruction::CompiledInstruction, pubkey::Pubkey, transaction::Result},
 };
 
-#[cfg(RUSTC_WITH_SPECIALIZATION)]
+#[cfg(all(RUSTC_WITH_SPECIALIZATION, feature = "frozen-abi"))]
 impl ::solana_frozen_abi::abi_example::AbiExample for ComputeBudget {
     fn example() -> Self {
         // ComputeBudget is not Serialize so just rely on Default.

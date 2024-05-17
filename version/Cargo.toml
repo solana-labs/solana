@@ -14,12 +14,17 @@ log = { workspace = true }
 semver = { workspace = true }
 serde = { workspace = true }
 serde_derive = { workspace = true }
-solana-frozen-abi = { workspace = true }
-solana-frozen-abi-macro = { workspace = true }
+solana-frozen-abi = { workspace = true, optional = true }
+solana-frozen-abi-macro = { workspace = true, optional = true }
 solana-sdk = { workspace = true }
 
 [features]
 dummy-for-ci-check = []
+frozen-abi = [
+    "dep:solana-frozen-abi",
+    "dep:solana-frozen-abi-macro",
+    "solana-sdk/frozen-abi",
+]
 
 [lib]
 name = "solana_version"

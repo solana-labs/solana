@@ -5460,8 +5460,6 @@ dependencies = [
  "num-derive",
  "num-traits",
  "rustc_version 0.4.0",
- "solana-frozen-abi",
- "solana-frozen-abi-macro",
  "solana-program",
  "solana-program-runtime",
  "solana-sdk",

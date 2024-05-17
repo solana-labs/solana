@@ -18,14 +18,16 @@ use {
 
 const PING_PONG_HASH_PREFIX: &[u8] = "SOLANA_PING_PONG".as_bytes();
 
-#[derive(AbiExample, Debug, Deserialize, Serialize)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Ping<T> {
     from: Pubkey,
     token: T,
     signature: Signature,
 }
 
-#[derive(AbiExample, Debug, Deserialize, Serialize)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Pong {
     from: Pubkey,
     hash: Hash, // Hash of received ping token.

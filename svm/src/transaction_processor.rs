@@ -84,7 +84,7 @@ impl ExecutionRecordingConfig {
     }
 }
 
-#[derive(AbiExample)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
 pub struct TransactionBatchProcessor<FG: ForkGraph> {
     /// Bank slot (i.e. block)
     slot: Slot,

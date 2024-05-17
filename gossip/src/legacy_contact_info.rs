@@ -16,7 +16,8 @@ use {
 };
 
 /// Structure representing a node on the network
-#[derive(Clone, Debug, Eq, PartialEq, AbiExample, Deserialize, Serialize)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub(crate) struct LegacyContactInfo {
     id: Pubkey,
     /// gossip address

@@ -178,7 +178,8 @@ extern crate serde_derive;
 pub extern crate bs58;
 extern crate log as logger;
 
-#[macro_use]
+#[cfg_attr(feature = "frozen-abi", macro_use)]
+#[cfg(feature = "frozen-abi")]
 extern crate solana_frozen_abi_macro;
 
 #[cfg(test)]

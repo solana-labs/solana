@@ -21,8 +21,8 @@ log = { workspace = true }
 rand = { workspace = true }
 rayon = { workspace = true }
 serde = { workspace = true }
-solana-frozen-abi = { workspace = true }
-solana-frozen-abi-macro = { workspace = true }
+solana-frozen-abi = { workspace = true, optional = true }
+solana-frozen-abi-macro = { workspace = true, optional = true }
 solana-metrics = { workspace = true }
 solana-rayon-threadlimit = { workspace = true }
 solana-sdk = { workspace = true }
@@ -44,6 +44,14 @@ test-case = { workspace = true }
 
 [build-dependencies]
 rustc_version = { workspace = true }
+
+[features]
+frozen-abi = [
+    "dep:solana-frozen-abi",
+    "dep:solana-frozen-abi-macro",
+    "solana-sdk/frozen-abi",
+    "solana-vote-program/frozen-abi",
+]
 
 [[bench]]
 name = "sigverify"

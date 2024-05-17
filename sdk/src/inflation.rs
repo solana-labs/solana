@@ -1,6 +1,7 @@
 //! configuration for network inflation
 
-#[derive(Serialize, Deserialize, PartialEq, Clone, Debug, Copy, AbiExample)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+#[derive(Serialize, Deserialize, PartialEq, Clone, Debug, Copy)]
 #[serde(rename_all = "camelCase")]
 pub struct Inflation {
     /// Initial inflation percentage, from time=0

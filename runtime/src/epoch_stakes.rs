@@ -9,13 +9,15 @@ use {
 pub type NodeIdToVoteAccounts = HashMap<Pubkey, NodeVoteAccounts>;
 pub type EpochAuthorizedVoters = HashMap<Pubkey, Pubkey>;
 
-#[derive(Clone, Serialize, Debug, Deserialize, Default, PartialEq, Eq, AbiExample)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+#[derive(Clone, Serialize, Debug, Deserialize, Default, PartialEq, Eq)]
 pub struct NodeVoteAccounts {
     pub vote_accounts: Vec<Pubkey>,
     pub total_stake: u64,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, AbiExample, PartialEq)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct EpochStakes {
     #[serde(with = "crate::stakes::serde_stakes_enum_compat")]
     stakes: Arc<StakesEnum>,

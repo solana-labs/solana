@@ -34,7 +34,8 @@ type SlotDeltaMap<T> = HashMap<Slot, Status<T>>;
 // construct a new one. Usually derived from a status cache's `SlotDeltaMap`
 pub type SlotDelta<T> = (Slot, bool, Status<T>);
 
-#[derive(Clone, Debug, AbiExample)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+#[derive(Clone, Debug)]
 pub struct StatusCache<T: Serialize + Clone> {
     cache: KeyStatusMap<T>,
     roots: HashSet<Slot>,

@@ -86,7 +86,8 @@ pub struct ContactInfo {
     cache: [SocketAddr; SOCKET_CACHE_SIZE],
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, AbiExample, Deserialize, Serialize)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 struct SocketEntry {
     key: u8,   // Protocol identifier, e.g. tvu, tpu, etc
     index: u8, // IpAddr index in the accompanying addrs vector.
@@ -592,7 +593,7 @@ pub(crate) fn get_quic_socket(socket: &SocketAddr) -> Result<SocketAddr, Error> 
     ))
 }
 
-#[cfg(all(test, RUSTC_WITH_SPECIALIZATION))]
+#[cfg(all(test, RUSTC_WITH_SPECIALIZATION, feature = "frozen-abi"))]
 impl solana_frozen_abi::abi_example::AbiExample for ContactInfo {
     fn example() -> Self {
         Self {

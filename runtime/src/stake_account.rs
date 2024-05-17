@@ -1,4 +1,4 @@
-#[cfg(RUSTC_WITH_SPECIALIZATION)]
+#[cfg(all(RUSTC_WITH_SPECIALIZATION, feature = "frozen-abi"))]
 use solana_frozen_abi::abi_example::AbiExample;
 use {
     solana_sdk::{
@@ -91,7 +91,7 @@ impl<S, T> PartialEq<StakeAccount<S>> for StakeAccount<T> {
     }
 }
 
-#[cfg(RUSTC_WITH_SPECIALIZATION)]
+#[cfg(all(RUSTC_WITH_SPECIALIZATION, feature = "frozen-abi"))]
 impl AbiExample for StakeAccount<Delegation> {
     fn example() -> Self {
         use solana_sdk::{

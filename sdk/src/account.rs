@@ -27,8 +27,12 @@ use {
 
 /// An Account with data that is stored on chain
 #[repr(C)]
-#[frozen_abi(digest = "HawRVHh7t4d3H3bitWHFt25WhhoDmbJMCfWdESQQoYEy")]
-#[derive(Deserialize, PartialEq, Eq, Clone, Default, AbiExample)]
+#[cfg_attr(
+    feature = "frozen-abi",
+    derive(AbiExample),
+    frozen_abi(digest = "HawRVHh7t4d3H3bitWHFt25WhhoDmbJMCfWdESQQoYEy")
+)]
+#[derive(Deserialize, PartialEq, Eq, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Account {
     /// lamports in the account
@@ -51,8 +55,12 @@ mod account_serialize {
         serde::{ser::Serializer, Serialize},
     };
     #[repr(C)]
-    #[frozen_abi(digest = "HawRVHh7t4d3H3bitWHFt25WhhoDmbJMCfWdESQQoYEy")]
-    #[derive(Serialize, AbiExample)]
+    #[cfg_attr(
+        feature = "frozen-abi",
+        derive(AbiExample),
+        frozen_abi(digest = "HawRVHh7t4d3H3bitWHFt25WhhoDmbJMCfWdESQQoYEy")
+    )]
+    #[derive(Serialize)]
     #[serde(rename_all = "camelCase")]
     struct Account<'a> {
         lamports: u64,
@@ -104,7 +112,8 @@ impl Serialize for AccountSharedData {
 /// An Account with data that is stored on chain
 /// This will be the in-memory representation of the 'Account' struct data.
 /// The existing 'Account' structure cannot easily change due to downstream projects.
-#[derive(PartialEq, Eq, Clone, Default, AbiExample, Deserialize)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+#[derive(PartialEq, Eq, Clone, Default, Deserialize)]
 #[serde(from = "Account")]
 pub struct AccountSharedData {
     /// lamports in the account

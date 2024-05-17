@@ -18,7 +18,7 @@ use {
 #[derive(Debug, Default, Clone, serde_derive::Deserialize, serde_derive::Serialize)]
 pub struct MessageProcessor {}
 
-#[cfg(RUSTC_WITH_SPECIALIZATION)]
+#[cfg(all(RUSTC_WITH_SPECIALIZATION, feature = "frozen-abi"))]
 impl ::solana_frozen_abi::abi_example::AbiExample for MessageProcessor {
     fn example() -> Self {
         // MessageProcessor's fields are #[serde(skip)]-ed and not Serialize

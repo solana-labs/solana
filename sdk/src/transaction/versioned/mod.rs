@@ -47,7 +47,8 @@ impl TransactionVersion {
 
 // NOTE: Serialization-related changes must be paired with the direct read at sigverify.
 /// An atomic transaction
-#[derive(Debug, PartialEq, Default, Eq, Clone, Serialize, Deserialize, AbiExample)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+#[derive(Debug, PartialEq, Default, Eq, Clone, Serialize, Deserialize)]
 pub struct VersionedTransaction {
     /// List of signatures
     #[serde(with = "short_vec")]

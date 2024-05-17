@@ -5,4 +5,4 @@
 
 here=$(dirname "$0")
 set -x
-exec "${here}/cargo" nightly test --lib -- test_abi_ --nocapture
+exec "${here}/cargo" nightly test --features frozen-abi --lib -- test_abi_ --nocapture

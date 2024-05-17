@@ -35,8 +35,8 @@ serde = { workspace = true, features = ["rc"] }
 serde_derive = { workspace = true }
 smallvec = { workspace = true, features = ["const_generics"] }
 solana-bucket-map = { workspace = true }
-solana-frozen-abi = { workspace = true }
-solana-frozen-abi-macro = { workspace = true }
+solana-frozen-abi = { workspace = true, optional = true }
+solana-frozen-abi-macro = { workspace = true, optional = true }
 solana-inline-spl = { workspace = true }
 solana-measure = { workspace = true }
 solana-metrics = { workspace = true }
@@ -81,6 +81,14 @@ rustc_version = { workspace = true }
 
 [features]
 dev-context-only-utils = ["dep:qualifier_attr", "dep:solana-stake-program", "dep:solana-vote-program"]
+frozen-abi = [
+    "dep:solana-frozen-abi",
+    "dep:solana-frozen-abi-macro",
+    "solana-program-runtime/frozen-abi",
+    "solana-sdk/frozen-abi",
+    "solana-svm/frozen-abi",
+    "solana-vote-program/frozen-abi",
+]
 
 [[bench]]
 name = "bench_accounts_file"

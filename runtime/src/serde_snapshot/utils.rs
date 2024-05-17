@@ -2,7 +2,7 @@ use serde::{
     ser::{SerializeSeq, SerializeTuple},
     Serialize, Serializer,
 };
-#[cfg(all(test, RUSTC_WITH_SPECIALIZATION))]
+#[cfg(all(test, RUSTC_WITH_SPECIALIZATION, feature = "frozen-abi"))]
 use solana_frozen_abi::abi_example::IgnoreAsHelper;
 
 // consumes an iterator and returns an object that will serialize as a serde seq
@@ -17,7 +17,7 @@ where
         iter: std::cell::RefCell<Option<I>>,
     }
 
-    #[cfg(all(test, RUSTC_WITH_SPECIALIZATION))]
+    #[cfg(all(test, RUSTC_WITH_SPECIALIZATION, feature = "frozen-abi"))]
     impl<I> IgnoreAsHelper for SerializableSequencedIterator<I> {}
 
     impl<I> Serialize for SerializableSequencedIterator<I>
@@ -56,7 +56,7 @@ where
         iter: std::cell::RefCell<Option<I>>,
     }
 
-    #[cfg(all(test, RUSTC_WITH_SPECIALIZATION))]
+    #[cfg(all(test, RUSTC_WITH_SPECIALIZATION, feature = "frozen-abi"))]
     impl<I> IgnoreAsHelper for SerializableSequencedIterator<I> {}
 
     impl<I> Serialize for SerializableSequencedIterator<I>
@@ -95,7 +95,7 @@ where
         iter: std::cell::RefCell<Option<I>>,
     }
 
-    #[cfg(all(test, RUSTC_WITH_SPECIALIZATION))]
+    #[cfg(all(test, RUSTC_WITH_SPECIALIZATION, feature = "frozen-abi"))]
     impl<I> IgnoreAsHelper for SerializableMappedIterator<I> {}
 
     impl<K, V, I> Serialize for SerializableMappedIterator<I>

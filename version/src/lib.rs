@@ -7,7 +7,8 @@ use {
     solana_sdk::{sanitize::Sanitize, serde_varint},
     std::{convert::TryInto, fmt},
 };
-#[macro_use]
+#[cfg_attr(feature = "frozen-abi", macro_use)]
+#[cfg(feature = "frozen-abi")]
 extern crate solana_frozen_abi_macro;
 
 mod legacy;
@@ -22,7 +23,8 @@ enum ClientId {
     Unknown(u16),
 }
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, AbiExample)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct Version {
     #[serde(with = "serde_varint")]
     pub major: u16,

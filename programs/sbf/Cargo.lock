@@ -4660,8 +4660,6 @@ dependencies = [
  "serde_derive",
  "smallvec",
  "solana-bucket-map",
- "solana-frozen-abi",
- "solana-frozen-abi-macro",
  "solana-inline-spl",
  "solana-measure",
  "solana-metrics",
@@ -4686,8 +4684,6 @@ dependencies = [
  "num-derive",
  "num-traits",
  "rustc_version",
- "solana-frozen-abi",
- "solana-frozen-abi-macro",
  "solana-program",
  "solana-program-runtime",
  "solana-sdk",
@@ -4749,8 +4745,6 @@ dependencies = [
  "rustc_version",
  "serde",
  "serde_derive",
- "solana-frozen-abi",
- "solana-frozen-abi-macro",
  "solana-sdk",
 ]
 
@@ -4959,8 +4953,6 @@ dependencies = [
  "solana-client",
  "solana-cost-model",
  "solana-entry",
- "solana-frozen-abi",
- "solana-frozen-abi-macro",
  "solana-geyser-plugin-manager",
  "solana-gossip",
  "solana-ledger",
@@ -5009,8 +5001,6 @@ dependencies = [
  "solana-bpf-loader-program",
  "solana-compute-budget-program",
  "solana-config-program",
- "solana-frozen-abi",
- "solana-frozen-abi-macro",
  "solana-loader-v4-program",
  "solana-metrics",
  "solana-program-runtime",
@@ -5072,34 +5062,6 @@ dependencies = [
  "spl-memo",
  "thiserror",
  "tokio",
-]
-
-[[package]]
-name = "solana-frozen-abi"
-version = "2.0.0"
-dependencies = [
- "bs58",
- "bv",
- "generic-array 0.14.7",
- "im",
- "log",
- "memmap2",
- "rustc_version",
- "serde",
- "serde_derive",
- "sha2 0.10.8",
- "solana-frozen-abi-macro",
- "thiserror",
-]
-
-[[package]]
-name = "solana-frozen-abi-macro"
-version = "2.0.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "rustc_version",
- "syn 2.0.58",
 ]
 
 [[package]]
@@ -5166,8 +5128,6 @@ dependencies = [
  "solana-client",
  "solana-connection-cache",
  "solana-entry",
- "solana-frozen-abi",
- "solana-frozen-abi-macro",
  "solana-ledger",
  "solana-logger",
  "solana-measure",
@@ -5235,8 +5195,6 @@ dependencies = [
  "solana-bpf-loader-program",
  "solana-cost-model",
  "solana-entry",
- "solana-frozen-abi",
- "solana-frozen-abi-macro",
  "solana-measure",
  "solana-metrics",
  "solana-perf",
@@ -5358,8 +5316,6 @@ dependencies = [
  "rayon",
  "rustc_version",
  "serde",
- "solana-frozen-abi",
- "solana-frozen-abi-macro",
  "solana-metrics",
  "solana-rayon-threadlimit",
  "solana-sdk",
@@ -5446,8 +5402,6 @@ dependencies = [
  "rand 0.8.5",
  "rustc_version",
  "serde",
- "solana-frozen-abi",
- "solana-frozen-abi-macro",
  "solana-measure",
  "solana-metrics",
  "solana-sdk",
@@ -5719,8 +5673,6 @@ dependencies = [
  "solana-compute-budget-program",
  "solana-config-program",
  "solana-cost-model",
- "solana-frozen-abi",
- "solana-frozen-abi-macro",
  "solana-inline-spl",
  "solana-loader-v4-program",
  "solana-measure",
@@ -6210,8 +6162,6 @@ dependencies = [
  "sha2 0.10.8",
  "sha3 0.10.8",
  "siphasher",
- "solana-frozen-abi",
- "solana-frozen-abi-macro",
  "solana-program",
  "solana-sdk-macro",
  "thiserror",
@@ -6353,8 +6303,6 @@ dependencies = [
  "serde",
  "serde_derive",
  "solana-bpf-loader-program",
- "solana-frozen-abi",
- "solana-frozen-abi-macro",
  "solana-loader-v4-program",
  "solana-measure",
  "solana-metrics",
@@ -6562,8 +6510,6 @@ dependencies = [
  "semver",
  "serde",
  "serde_derive",
- "solana-frozen-abi",
- "solana-frozen-abi-macro",
  "solana-sdk",
 ]
 
@@ -6577,8 +6523,6 @@ dependencies = [
  "rustc_version",
  "serde",
  "serde_derive",
- "solana-frozen-abi",
- "solana-frozen-abi-macro",
  "solana-sdk",
  "thiserror",
 ]
@@ -6594,8 +6538,6 @@ dependencies = [
  "rustc_version",
  "serde",
  "serde_derive",
- "solana-frozen-abi",
- "solana-frozen-abi-macro",
  "solana-metrics",
  "solana-program",
  "solana-program-runtime",

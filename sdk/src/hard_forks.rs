@@ -8,7 +8,8 @@ use {
     solana_sdk::clock::Slot,
 };
 
-#[derive(Default, Clone, Debug, Deserialize, Serialize, AbiExample, PartialEq, Eq)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+#[derive(Default, Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct HardForks {
     hard_forks: Vec<(Slot, usize)>,
 }

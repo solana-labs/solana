@@ -33,8 +33,8 @@ solana-clap-utils = { workspace = true }
 solana-client = { workspace = true }
 solana-connection-cache = { workspace = true }
 solana-entry = { workspace = true }
-solana-frozen-abi = { workspace = true }
-solana-frozen-abi-macro = { workspace = true }
+solana-frozen-abi = { workspace = true, optional = true }
+solana-frozen-abi-macro = { workspace = true, optional = true }
 solana-ledger = { workspace = true }
 solana-logger = { workspace = true }
 solana-measure = { workspace = true }
@@ -60,6 +60,20 @@ test-case = { workspace = true }
 
 [build-dependencies]
 rustc_version = { workspace = true }
+
+[features]
+frozen-abi = [
+    "dep:solana-frozen-abi",
+    "dep:solana-frozen-abi-macro",
+    "solana-bloom/frozen-abi",
+    "solana-ledger/frozen-abi",
+    "solana-perf/frozen-abi",
+    "solana-runtime/frozen-abi",
+    "solana-sdk/frozen-abi",
+    "solana-version/frozen-abi",
+    "solana-vote/frozen-abi",
+    "solana-vote-program/frozen-abi",
+]
 
 [[bench]]
 name = "crds"

@@ -7,7 +7,8 @@ use {
 
 pub type AncestorsForSerialization = HashMap<Slot, usize>;
 
-#[derive(Clone, PartialEq, AbiExample)]
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+#[derive(Clone, PartialEq)]
 pub struct Ancestors {
     ancestors: RollingBitField,
 }

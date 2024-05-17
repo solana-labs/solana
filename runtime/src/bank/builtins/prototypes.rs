@@ -23,7 +23,7 @@ impl std::fmt::Debug for BuiltinPrototype {
     }
 }
 
-#[cfg(RUSTC_WITH_SPECIALIZATION)]
+#[cfg(all(RUSTC_WITH_SPECIALIZATION, feature = "frozen-abi"))]
 impl solana_frozen_abi::abi_example::AbiExample for BuiltinPrototype {
     fn example() -> Self {
         // BuiltinPrototype isn't serializable by definition.
