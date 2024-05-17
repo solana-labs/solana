@@ -150,8 +150,9 @@ mod tests_core_bpf_migration {
         let upgrade_authority_address = Some(Pubkey::new_unique());
 
         // Add the feature to the bank's inactive feature set.
+        // Note this will add the feature ID if it doesn't exist.
         let mut feature_set = FeatureSet::all_enabled();
-        feature_set.inactive.insert(*feature_id);
+        feature_set.deactivate(feature_id);
         root_bank.feature_set = Arc::new(feature_set);
 
         // Initialize the source buffer account.
