@@ -489,7 +489,6 @@ fn svm_integration() {
     // The SVM does not commit the account changes in MockBank
     let recipient_key = transactions[1].message().account_keys()[2];
     let recipient_data = result.loaded_transactions[1]
-        .0
         .as_ref()
         .unwrap()
         .accounts

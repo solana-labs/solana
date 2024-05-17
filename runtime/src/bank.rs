@@ -3373,7 +3373,7 @@ impl Bank {
         let post_simulation_accounts = loaded_transactions
             .into_iter()
             .next()
-            .and_then(|(loaded_transactions_res, _)| loaded_transactions_res.ok())
+            .and_then(|loaded_transactions_res| loaded_transactions_res.ok())
             .map(|loaded_transaction| {
                 loaded_transaction
                     .accounts
@@ -4162,7 +4162,7 @@ impl Bank {
         let rent_debits: Vec<_> = loaded_txs
             .iter_mut()
             .zip(execution_results)
-            .map(|((load_result, _nonce), execution_result)| {
+            .map(|(load_result, execution_result)| {
                 if let (Ok(loaded_transaction), true) =
                     (load_result, execution_result.was_executed_successfully())
                 {
@@ -6102,7 +6102,7 @@ impl Bank {
         let new_warmup_cooldown_rate_epoch = self.new_warmup_cooldown_rate_epoch();
         izip!(txs, execution_results, loaded_txs)
             .filter(|(_, execution_result, _)| execution_result.was_executed_successfully())
-            .flat_map(|(tx, _, (load_result, _))| {
+            .flat_map(|(tx, _, load_result)| {
                 load_result.iter().flat_map(|loaded_transaction| {
                     let num_account_keys = tx.message().account_keys().len();
                     loaded_transaction.accounts.iter().take(num_account_keys)
