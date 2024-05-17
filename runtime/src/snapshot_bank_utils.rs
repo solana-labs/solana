@@ -498,7 +498,6 @@ pub fn bank_from_snapshot_dir(
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     exit: Arc<AtomicBool>,
-    storage_access: StorageAccess,
 ) -> snapshot_utils::Result<(Bank, BankFromDirTimings)> {
     info!(
         "Loading bank from snapshot dir: {}",
@@ -512,6 +511,10 @@ pub fn bank_from_snapshot_dir(
     }
 
     let next_append_vec_id = Arc::new(AtomicAccountsFileId::new(0));
+    let storage_access = accounts_db_config
+        .as_ref()
+        .map(|config| config.storage_access)
+        .unwrap_or_default();
 
     let (storage, measure_rebuild_storages) = measure!(
         rebuild_storages_from_snapshot_dir(
@@ -587,10 +590,6 @@ pub fn bank_from_latest_snapshot_dir(
     let bank_snapshot = get_highest_bank_snapshot_post(&bank_snapshots_dir).ok_or_else(|| {
         SnapshotError::NoSnapshotSlotDir(bank_snapshots_dir.as_ref().to_path_buf())
     })?;
-    let storage_access = accounts_db_config
-        .as_ref()
-        .map(|config| config.storage_access)
-        .unwrap_or_default();
     let (bank, _) = bank_from_snapshot_dir(
         account_paths,
         &bank_snapshot,
@@ -605,7 +604,6 @@ pub fn bank_from_latest_snapshot_dir(
         accounts_db_config,
         accounts_update_notifier,
         exit,
-        storage_access,
     )?;
 
     Ok(bank)
@@ -2370,10 +2368,12 @@ mod tests {
             None,
             AccountShrinkThreshold::default(),
             false,
-            Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
+            Some(AccountsDbConfig {
+                storage_access,
+                ..ACCOUNTS_DB_CONFIG_FOR_TESTING
+            }),
             None,
             Arc::default(),
-            storage_access,
         )
         .unwrap();
 
