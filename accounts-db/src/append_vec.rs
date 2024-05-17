@@ -10,8 +10,8 @@ use {
             AccountMeta, StoredAccountMeta, StoredMeta, StoredMetaWriteVersion,
         },
         accounts_file::{
-            AccountsFileError, MatchAccountOwnerError, Result, StorageAccess, StoredAccountsInfo,
-            ALIGN_BOUNDARY_OFFSET,
+            AccountsFileError, InternalsForArchive, MatchAccountOwnerError, Result, StorageAccess,
+            StoredAccountsInfo, ALIGN_BOUNDARY_OFFSET,
         },
         accounts_hash::AccountHash,
         accounts_index::ZeroLamport,
@@ -844,10 +844,10 @@ impl AppendVec {
         true
     }
 
-    /// Returns a slice suitable for use when archiving append vecs
-    pub fn data_for_archive(&self) -> &[u8] {
+    /// Returns the way to access this accounts file when archiving
+    pub(crate) fn internals_for_archive(&self) -> InternalsForArchive {
         match &self.backing {
-            AppendVecFileBacking::MmapOnly(mmap) => mmap.as_ref(),
+            AppendVecFileBacking::MmapOnly(mmap) => InternalsForArchive::Mmap(mmap),
         }
     }
 }

@@ -11,7 +11,6 @@ use {
     },
     solana_sdk::{account::AccountSharedData, clock::Slot, pubkey::Pubkey},
     std::{
-        io::Read,
         mem,
         path::{Path, PathBuf},
     },
@@ -287,32 +286,15 @@ impl AccountsFile {
         }
     }
 
-    /// Returns a Read implementation suitable for use when archiving accounts files
-    pub fn data_for_archive(&self) -> impl Read + '_ {
-        match self {
-            Self::AppendVec(av) => av.data_for_archive(),
-            Self::TieredStorage(ts) => ts
-                .reader()
-                .expect("must be a reader when archiving")
-                .data_for_archive(),
-        }
-    }
-
     /// Returns the way to access this accounts file when archiving
     pub fn internals_for_archive(&self) -> InternalsForArchive {
-        // Figure out if the backing access to this accounts file is Mmap or File I/O.
-        // For now, let `can_append()` fill the gap.
-        if self.can_append() {
-            match self {
-                Self::AppendVec(av) => InternalsForArchive::Mmap(av.data_for_archive()),
-                Self::TieredStorage(ts) => InternalsForArchive::Mmap(
-                    ts.reader()
-                        .expect("must be a reader when archiving")
-                        .data_for_archive(),
-                ),
-            }
-        } else {
-            InternalsForArchive::FileIo(self.path())
+        match self {
+            Self::AppendVec(av) => av.internals_for_archive(),
+            Self::TieredStorage(ts) => InternalsForArchive::Mmap(
+                ts.reader()
+                    .expect("must be a reader when archiving")
+                    .data_for_archive(),
+            ),
         }
     }
 }
