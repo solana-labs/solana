@@ -692,6 +692,9 @@ pub enum BlockstoreProcessorError {
 
     #[error("set root error {0}")]
     SetRootError(#[from] SetRootError),
+
+    #[error("incomplete final fec set")]
+    IncompleteFinalFecSet,
 }
 
 /// Callback for accessing bank state after each slot is confirmed while

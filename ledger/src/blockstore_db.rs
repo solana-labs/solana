@@ -153,6 +153,12 @@ pub enum BlockstoreError {
     TransactionIndexOverflow,
     #[error("invalid erasure config")]
     InvalidErasureConfig,
+    #[error("last shred index missing slot {0}")]
+    UnknownLastIndex(Slot),
+    #[error("missing shred slot {0}, index {1}")]
+    MissingShred(Slot, u64),
+    #[error("legacy shred slot {0}, index {1}")]
+    LegacyShred(Slot, u64),
 }
 pub type Result<T> = std::result::Result<T, BlockstoreError>;
 

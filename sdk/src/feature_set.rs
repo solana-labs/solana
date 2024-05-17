@@ -809,6 +809,10 @@ pub mod migrate_feature_gate_program_to_core_bpf {
     solana_sdk::declare_id!("4eohviozzEeivk1y9UbrnekbAFMDQyJz5JjA9Y6gyvky");
 }
 
+pub mod vote_only_full_fec_sets {
+    solana_sdk::declare_id!("ffecLRhhakKSGhMuc6Fz2Lnfq4uT9q3iu9ZsNaPLxPc");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -1006,6 +1010,7 @@ lazy_static! {
         (abort_on_invalid_curve::id(), "Abort when elliptic curve syscalls invoked on invalid curve id SIMD-0137"),
         (get_sysvar_syscall_enabled::id(), "Enable syscall for fetching Sysvar bytes #615"),
         (migrate_feature_gate_program_to_core_bpf::id(), "Migrate Feature Gate program to Core BPF (programify) #1003"),
+        (vote_only_full_fec_sets::id(), "vote only full fec sets"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

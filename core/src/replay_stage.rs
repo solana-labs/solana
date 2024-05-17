@@ -2963,6 +2963,7 @@ impl ReplayStage {
         block_metadata_notifier: Option<BlockMetadataNotifierArc>,
         replay_result_vec: &[ReplaySlotFromBlockstore],
         purge_repair_slot_counter: &mut PurgeRepairSlotCounter,
+        my_pubkey: &Pubkey,
     ) -> bool {
         // TODO: See if processing of blockstore replay results and bank completion can be made thread safe.
         let mut did_complete_bank = false;
@@ -3043,6 +3044,52 @@ impl ReplayStage {
                         );
                         // don't try to run the remaining normal processing for the completed bank
                         continue;
+                    }
+                }
+
+                if bank.collector_id() != my_pubkey {
+                    // If the block does not have at least DATA_SHREDS_PER_FEC_BLOCK shreds in the last FEC set,
+                    // mark it dead. No reason to perform this check on our leader block.
+                    if !blockstore
+                        .is_last_fec_set_full(bank.slot())
+                        .inspect_err(|e| {
+                            warn!(
+                                "Unable to determine if last fec set is full for slot {} {},
+                                marking as dead: {e:?}",
+                                bank.slot(),
+                                bank.hash()
+                            )
+                        })
+                        .unwrap_or(false)
+                    {
+                        // Update metric regardless of feature flag
+                        datapoint_warn!(
+                            "incomplete_final_fec_set",
+                            ("slot", bank_slot, i64),
+                            ("hash", bank.hash().to_string(), String)
+                        );
+                        if bank
+                            .feature_set
+                            .is_active(&solana_sdk::feature_set::vote_only_full_fec_sets::id())
+                        {
+                            let root = bank_forks.read().unwrap().root();
+                            Self::mark_dead_slot(
+                                blockstore,
+                                bank,
+                                root,
+                                &BlockstoreProcessorError::IncompleteFinalFecSet,
+                                rpc_subscriptions,
+                                duplicate_slots_tracker,
+                                duplicate_confirmed_slots,
+                                epoch_slots_frozen_slots,
+                                progress,
+                                heaviest_subtree_fork_choice,
+                                duplicate_slots_to_repair,
+                                ancestor_hashes_replay_update_sender,
+                                purge_repair_slot_counter,
+                            );
+                            continue;
+                        }
                     }
                 }
 
@@ -3300,6 +3347,7 @@ impl ReplayStage {
             block_metadata_notifier,
             &replay_result_vec,
             purge_repair_slot_counter,
+            my_pubkey,
         )
     }
 
