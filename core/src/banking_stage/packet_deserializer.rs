@@ -1,7 +1,10 @@
 //! Deserializes packets from sigverify stage. Owned by banking stage.
 
 use {
-    super::immutable_deserialized_packet::ImmutableDeserializedPacket,
+    super::{
+        immutable_deserialized_packet::{DeserializedPacketError, ImmutableDeserializedPacket},
+        packet_filter::PacketFilterFailure,
+    },
     crate::{
         banking_trace::{BankingPacketBatch, BankingPacketReceiver},
         sigverify::SigverifyTracerPacketStats,
@@ -9,6 +12,7 @@ use {
     crossbeam_channel::RecvTimeoutError,
     solana_perf::packet::PacketBatch,
     solana_runtime::bank_forks::BankForks,
+    solana_sdk::saturating_add_assign,
     std::{
         sync::{Arc, RwLock},
         time::{Duration, Instant},
@@ -21,10 +25,9 @@ pub struct ReceivePacketResults {
     pub deserialized_packets: Vec<ImmutableDeserializedPacket>,
     /// Aggregate tracer stats for all received packet batches
     pub new_tracer_stats_option: Option<SigverifyTracerPacketStats>,
-    /// Number of packets passing sigverify
-    pub passed_sigverify_count: u64,
-    /// Number of packets failing sigverify
-    pub failed_sigverify_count: u64,
+    /// Counts of packets received and errors recorded during deserialization
+    /// and filtering
+    pub packet_stats: PacketReceiverStats,
 }
 
 pub struct PacketDeserializer {
@@ -32,6 +35,51 @@ pub struct PacketDeserializer {
     packet_batch_receiver: BankingPacketReceiver,
     /// Provides working bank for deserializer to check feature activation
     bank_forks: Arc<RwLock<BankForks>>,
+}
+
+#[derive(Default, Debug, PartialEq)]
+pub struct PacketReceiverStats {
+    /// Number of packets passing sigverify
+    pub passed_sigverify_count: u64,
+    /// Number of packets failing sigverify
+    pub failed_sigverify_count: u64,
+    /// Number of packets dropped due to sanitization error
+    pub failed_sanitization_count: u64,
+    /// Number of packets dropped due to prioritization error
+    pub failed_prioritization_count: u64,
+    /// Number of vote packets dropped
+    pub invalid_vote_count: u64,
+    /// Number of packets dropped due to excessive precompiles
+    pub excessive_precompile_count: u64,
+    /// Number of packets dropped due to insufficient compute limit
+    pub insufficient_compute_limit_count: u64,
+}
+
+impl PacketReceiverStats {
+    pub fn increment_error_count(&mut self, err: &DeserializedPacketError) {
+        match err {
+            DeserializedPacketError::ShortVecError(..)
+            | DeserializedPacketError::DeserializationError(..)
+            | DeserializedPacketError::SignatureOverflowed(..)
+            | DeserializedPacketError::SanitizeError(..) => {
+                saturating_add_assign!(self.failed_sanitization_count, 1);
+            }
+            DeserializedPacketError::PrioritizationFailure => {
+                saturating_add_assign!(self.failed_prioritization_count, 1);
+            }
+            DeserializedPacketError::VoteTransactionError => {
+                saturating_add_assign!(self.invalid_vote_count, 1);
+            }
+            DeserializedPacketError::FailedFilter(PacketFilterFailure::ExcessivePrecompiles) => {
+                saturating_add_assign!(self.excessive_precompile_count, 1);
+            }
+            DeserializedPacketError::FailedFilter(
+                PacketFilterFailure::InsufficientComputeLimit,
+            ) => {
+                saturating_add_assign!(self.insufficient_compute_limit_count, 1);
+            }
+        }
+    }
 }
 
 impl PacketDeserializer {
@@ -50,7 +98,9 @@ impl PacketDeserializer {
         &self,
         recv_timeout: Duration,
         capacity: usize,
-        packet_filter: impl Fn(&ImmutableDeserializedPacket) -> bool,
+        packet_filter: impl Fn(
+            ImmutableDeserializedPacket,
+        ) -> Result<ImmutableDeserializedPacket, PacketFilterFailure>,
     ) -> Result<ReceivePacketResults, RecvTimeoutError> {
         let (packet_count, packet_batches) = self.receive_until(recv_timeout, capacity)?;
 
@@ -63,7 +113,7 @@ impl PacketDeserializer {
             packet_count,
             &packet_batches,
             round_compute_unit_price_enabled,
-            &packet_filter,
+            packet_filter,
         ))
     }
 
@@ -73,10 +123,11 @@ impl PacketDeserializer {
         packet_count: usize,
         banking_batches: &[BankingPacketBatch],
         round_compute_unit_price_enabled: bool,
-        packet_filter: &impl Fn(&ImmutableDeserializedPacket) -> bool,
+        packet_filter: impl Fn(
+            ImmutableDeserializedPacket,
+        ) -> Result<ImmutableDeserializedPacket, PacketFilterFailure>,
     ) -> ReceivePacketResults {
-        let mut passed_sigverify_count: usize = 0;
-        let mut failed_sigverify_count: usize = 0;
+        let mut packet_stats = PacketReceiverStats::default();
         let mut deserialized_packets = Vec::with_capacity(packet_count);
         let mut aggregated_tracer_packet_stats_option = None::<SigverifyTracerPacketStats>;
 
@@ -84,14 +135,21 @@ impl PacketDeserializer {
             for packet_batch in &banking_batch.0 {
                 let packet_indexes = Self::generate_packet_indexes(packet_batch);
 
-                passed_sigverify_count += packet_indexes.len();
-                failed_sigverify_count += packet_batch.len().saturating_sub(packet_indexes.len());
+                saturating_add_assign!(
+                    packet_stats.passed_sigverify_count,
+                    packet_indexes.len() as u64
+                );
+                saturating_add_assign!(
+                    packet_stats.failed_sigverify_count,
+                    packet_batch.len().saturating_sub(packet_indexes.len()) as u64
+                );
 
                 deserialized_packets.extend(Self::deserialize_packets(
                     packet_batch,
                     &packet_indexes,
                     round_compute_unit_price_enabled,
-                    packet_filter,
+                    &mut packet_stats,
+                    &packet_filter,
                 ));
             }
 
@@ -111,8 +169,7 @@ impl PacketDeserializer {
         ReceivePacketResults {
             deserialized_packets,
             new_tracer_stats_option: aggregated_tracer_packet_stats_option,
-            passed_sigverify_count: passed_sigverify_count as u64,
-            failed_sigverify_count: failed_sigverify_count as u64,
+            packet_stats,
         }
     }
 
@@ -162,16 +219,26 @@ impl PacketDeserializer {
         packet_batch: &'a PacketBatch,
         packet_indexes: &'a [usize],
         round_compute_unit_price_enabled: bool,
-        packet_filter: &'a (impl Fn(&ImmutableDeserializedPacket) -> bool + 'a),
+        packet_stats: &'a mut PacketReceiverStats,
+        packet_filter: &'a impl Fn(
+            ImmutableDeserializedPacket,
+        ) -> Result<ImmutableDeserializedPacket, PacketFilterFailure>,
     ) -> impl Iterator<Item = ImmutableDeserializedPacket> + 'a {
         packet_indexes.iter().filter_map(move |packet_index| {
             let mut packet_clone = packet_batch[*packet_index].clone();
             packet_clone
                 .meta_mut()
                 .set_round_compute_unit_price(round_compute_unit_price_enabled);
-            ImmutableDeserializedPacket::new(packet_clone)
-                .ok()
-                .filter(packet_filter)
+
+            match ImmutableDeserializedPacket::new(packet_clone)
+                .and_then(|packet| packet_filter(packet).map_err(Into::into))
+            {
+                Ok(packet) => Some(packet),
+                Err(err) => {
+                    packet_stats.increment_error_count(&err);
+                    None
+                }
+            }
         })
     }
 }
@@ -193,11 +260,11 @@ mod tests {
 
     #[test]
     fn test_deserialize_and_collect_packets_empty() {
-        let results = PacketDeserializer::deserialize_and_collect_packets(0, &[], false, &|_| true);
+        let results = PacketDeserializer::deserialize_and_collect_packets(0, &[], false, Ok);
         assert_eq!(results.deserialized_packets.len(), 0);
         assert!(results.new_tracer_stats_option.is_none());
-        assert_eq!(results.passed_sigverify_count, 0);
-        assert_eq!(results.failed_sigverify_count, 0);
+        assert_eq!(results.packet_stats.passed_sigverify_count, 0);
+        assert_eq!(results.packet_stats.failed_sigverify_count, 0);
     }
 
     #[test]
@@ -211,12 +278,12 @@ mod tests {
             packet_count,
             &[BankingPacketBatch::new((packet_batches, None))],
             false,
-            &|_| true,
+            Ok,
         );
         assert_eq!(results.deserialized_packets.len(), 2);
         assert!(results.new_tracer_stats_option.is_none());
-        assert_eq!(results.passed_sigverify_count, 2);
-        assert_eq!(results.failed_sigverify_count, 0);
+        assert_eq!(results.packet_stats.passed_sigverify_count, 2);
+        assert_eq!(results.packet_stats.failed_sigverify_count, 0);
     }
 
     #[test]
@@ -231,11 +298,11 @@ mod tests {
             packet_count,
             &[BankingPacketBatch::new((packet_batches, None))],
             false,
-            &|_| true,
+            Ok,
         );
         assert_eq!(results.deserialized_packets.len(), 1);
         assert!(results.new_tracer_stats_option.is_none());
-        assert_eq!(results.passed_sigverify_count, 1);
-        assert_eq!(results.failed_sigverify_count, 1);
+        assert_eq!(results.packet_stats.passed_sigverify_count, 1);
+        assert_eq!(results.packet_stats.failed_sigverify_count, 1);
     }
 }

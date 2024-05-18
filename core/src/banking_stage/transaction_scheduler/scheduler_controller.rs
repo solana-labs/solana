@@ -272,7 +272,10 @@ impl SchedulerController {
 
         let (received_packet_results, receive_time_us) = measure_us!(self
             .packet_receiver
-            .receive_packets(recv_timeout, remaining_queue_capacity, |_| true));
+            .receive_packets(recv_timeout, remaining_queue_capacity, |packet| {
+                packet.check_excessive_precompiles()?;
+                Ok(packet)
+            }));
         saturating_add_assign!(self.timing_metrics.receive_time_us, receive_time_us);
 
         match received_packet_results {
