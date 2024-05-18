@@ -677,8 +677,13 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                     (false, entry)
                 } else {
                     // Something is wrong, I can feel it ...
+                    let existing = existing.clone();
+                    error!(
+                        "ProgramCache::assign_program() failed key={:?} existing={:?} entry={:?}",
+                        key, slot_versions, entry
+                    );
                     self.stats.replacements.fetch_add(1, Ordering::Relaxed);
-                    (true, existing.clone())
+                    (true, existing)
                 }
             }
             Err(index) => {
@@ -699,7 +704,7 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
         entry: Arc<LoadedProgram>,
     ) -> (bool, Arc<LoadedProgram>) {
         let (was_occupied, entry) = self.replenish(key, entry);
-        debug_assert!(!was_occupied);
+        debug_assert!(!was_occupied, "Unexpected replacement of an entry");
         (was_occupied, entry)
     }
 
