@@ -139,7 +139,8 @@ mod test {
     };
 
     #[test]
-    fn test_parse_account_data() {
+
+fn test_parse_account_data() {
         let account_pubkey = solana_sdk::pubkey::new_rand();
         let other_program = solana_sdk::pubkey::new_rand();
         let data = vec![0; 4];
