@@ -59,6 +59,7 @@ mod latest_unprocessed_votes;
 mod leader_slot_timing_metrics;
 mod multi_iterator_scanner;
 mod packet_deserializer;
+mod packet_filter;
 mod packet_receiver;
 mod read_write_account_set;
 #[allow(dead_code)]

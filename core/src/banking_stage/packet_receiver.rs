@@ -49,7 +49,11 @@ impl PacketReceiver {
                 .receive_packets(
                     recv_timeout,
                     unprocessed_transaction_storage.max_receive_size(),
-                    |packet| packet.compute_unit_limit_above_static_builtins(),
+                    |packet| {
+                        packet.check_insufficent_compute_unit_limit()?;
+                        packet.check_excessive_precompiles()?;
+                        Ok(packet)
+                    },
                 )
                 // Consumes results if Ok, otherwise we keep the Err
                 .map(|receive_packet_results| {
@@ -95,8 +99,7 @@ impl PacketReceiver {
         ReceivePacketResults {
             deserialized_packets,
             new_tracer_stats_option,
-            passed_sigverify_count,
-            failed_sigverify_count,
+            packet_stats,
         }: ReceivePacketResults,
         unprocessed_transaction_storage: &mut UnprocessedTransactionStorage,
         banking_stage_stats: &mut BankingStageStats,
@@ -106,13 +109,10 @@ impl PacketReceiver {
         let packet_count = deserialized_packets.len();
         debug!("@{:?} txs: {} id: {}", timestamp(), packet_count, self.id);
 
+        slot_metrics_tracker.increment_received_packet_counts(packet_stats);
         if let Some(new_sigverify_stats) = &new_tracer_stats_option {
             tracer_packet_stats.aggregate_sigverify_tracer_packet_stats(new_sigverify_stats);
         }
-
-        // Track all the packets incoming from sigverify, both valid and invalid
-        slot_metrics_tracker.increment_total_new_valid_packets(passed_sigverify_count);
-        slot_metrics_tracker.increment_newly_failed_sigverify_count(failed_sigverify_count);
 
         let mut dropped_packets_count = 0;
         let mut newly_buffered_packets_count = 0;

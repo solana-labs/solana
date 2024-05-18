@@ -1,6 +1,7 @@
 use {
     super::{
         leader_slot_timing_metrics::{LeaderExecuteAndCommitTimings, LeaderSlotTimingMetrics},
+        packet_deserializer::PacketReceiverStats,
         unprocessed_transaction_storage::InsertPacketBatchSummary,
     },
     solana_accounts_db::transaction_error_metrics::*,
@@ -63,6 +64,21 @@ struct LeaderSlotPacketCountMetrics {
 
     // total number of packets TPU received from sigverify that failed signature verification.
     newly_failed_sigverify_count: u64,
+
+    // total number of packets filtered due to sanitization failures during receiving from sigverify
+    failed_sanitization_count: u64,
+
+    // total number of packets filtered due to prioritization failures during receiving from sigverify
+    failed_prioritization_count: u64,
+
+    // total number of packets filtered due to insufficient compute limits during receiving from sigverify
+    insufficient_compute_limit_count: u64,
+
+    // total number of packets filtered due to excessive precompile signatures during receiving from sigverify
+    excessive_precompile_count: u64,
+
+    // total number of invalid vote packets filtered out during receiving from sigverify
+    invalid_votes_count: u64,
 
     // total number of dropped packet due to the thread's buffered packets capacity being reached.
     exceeded_buffer_limit_dropped_packets_count: u64,
@@ -149,110 +165,123 @@ impl LeaderSlotPacketCountMetrics {
         datapoint_info!(
             "banking_stage-leader_slot_packet_counts",
             ("id", id as i64, i64),
-            ("slot", slot as i64, i64),
-            (
-                "total_new_valid_packets",
-                self.total_new_valid_packets as i64,
-                i64
-            ),
+            ("slot", slot, i64),
+            ("total_new_valid_packets", self.total_new_valid_packets, i64),
             (
                 "newly_failed_sigverify_count",
-                self.newly_failed_sigverify_count as i64,
+                self.newly_failed_sigverify_count,
                 i64
             ),
             (
+                "failed_sanitization_count",
+                self.failed_sanitization_count,
+                i64
+            ),
+            (
+                "failed_prioritization_count",
+                self.failed_prioritization_count,
+                i64
+            ),
+            (
+                "insufficient_compute_limit_count",
+                self.insufficient_compute_limit_count,
+                i64
+            ),
+            (
+                "excessive_precompile_count",
+                self.excessive_precompile_count,
+                i64
+            ),
+            ("invalid_votes_count", self.invalid_votes_count, i64),
+            (
                 "exceeded_buffer_limit_dropped_packets_count",
-                self.exceeded_buffer_limit_dropped_packets_count as i64,
+                self.exceeded_buffer_limit_dropped_packets_count,
                 i64
             ),
             (
                 "newly_buffered_packets_count",
-                self.newly_buffered_packets_count as i64,
+                self.newly_buffered_packets_count,
                 i64
             ),
             (
                 "retryable_packets_filtered_count",
-                self.retryable_packets_filtered_count as i64,
+                self.retryable_packets_filtered_count,
                 i64
             ),
             (
                 "transactions_attempted_execution_count",
-                self.transactions_attempted_execution_count as i64,
+                self.transactions_attempted_execution_count,
                 i64
             ),
             (
                 "committed_transactions_count",
-                self.committed_transactions_count as i64,
+                self.committed_transactions_count,
                 i64
             ),
             (
                 "committed_transactions_with_successful_result_count",
-                self.committed_transactions_with_successful_result_count as i64,
+                self.committed_transactions_with_successful_result_count,
                 i64
             ),
             (
                 "retryable_errored_transaction_count",
-                self.retryable_errored_transaction_count as i64,
+                self.retryable_errored_transaction_count,
                 i64
             ),
-            (
-                "retryable_packets_count",
-                self.retryable_packets_count as i64,
-                i64
-            ),
+            ("retryable_packets_count", self.retryable_packets_count, i64),
             (
                 "nonretryable_errored_transactions_count",
-                self.nonretryable_errored_transactions_count as i64,
+                self.nonretryable_errored_transactions_count,
                 i64
             ),
             (
                 "executed_transactions_failed_commit_count",
-                self.executed_transactions_failed_commit_count as i64,
+                self.executed_transactions_failed_commit_count,
                 i64
             ),
             (
                 "account_lock_throttled_transactions_count",
-                self.account_lock_throttled_transactions_count as i64,
+                self.account_lock_throttled_transactions_count,
                 i64
             ),
             (
                 "account_locks_limit_throttled_transactions_count",
-                self.account_locks_limit_throttled_transactions_count as i64,
+                self.account_locks_limit_throttled_transactions_count,
                 i64
             ),
             (
                 "cost_model_throttled_transactions_count",
-                self.cost_model_throttled_transactions_count as i64,
+                self.cost_model_throttled_transactions_count,
                 i64
             ),
             (
                 "failed_forwarded_packets_count",
-                self.failed_forwarded_packets_count as i64,
+                self.failed_forwarded_packets_count,
                 i64
             ),
             (
                 "successful_forwarded_packets_count",
-                self.successful_forwarded_packets_count as i64,
+                self.successful_forwarded_packets_count,
                 i64
             ),
             (
                 "packet_batch_forward_failure_count",
-                self.packet_batch_forward_failure_count as i64,
+                self.packet_batch_forward_failure_count,
                 i64
             ),
             (
                 "cleared_from_buffer_after_forward_count",
-                self.cleared_from_buffer_after_forward_count as i64,
+                self.cleared_from_buffer_after_forward_count,
                 i64
             ),
             (
                 "forwardable_batches_count",
-                self.forwardable_batches_count as i64,
+                self.forwardable_batches_count,
                 i64
             ),
             (
                 "end_of_slot_unprocessed_buffer_len",
-                self.end_of_slot_unprocessed_buffer_len as i64,
+                self.end_of_slot_unprocessed_buffer_len,
                 i64
             ),
         );
@@ -559,24 +588,34 @@ impl LeaderSlotMetricsTracker {
     }
 
     // Packet inflow/outflow/processing metrics
-    pub(crate) fn increment_total_new_valid_packets(&mut self, count: u64) {
+    pub(crate) fn increment_received_packet_counts(&mut self, stats: PacketReceiverStats) {
         if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
-            saturating_add_assign!(
-                leader_slot_metrics
-                    .packet_count_metrics
-                    .total_new_valid_packets,
-                count
-            );
-        }
-    }
+            let metrics = &mut leader_slot_metrics.packet_count_metrics;
+            let PacketReceiverStats {
+                passed_sigverify_count,
+                failed_sigverify_count,
+                invalid_vote_count,
+                failed_prioritization_count,
+                failed_sanitization_count,
+                excessive_precompile_count,
+                insufficient_compute_limit_count,
+            } = stats;
 
-    pub(crate) fn increment_newly_failed_sigverify_count(&mut self, count: u64) {
-        if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
+            saturating_add_assign!(metrics.total_new_valid_packets, passed_sigverify_count);
+            saturating_add_assign!(metrics.newly_failed_sigverify_count, failed_sigverify_count);
+            saturating_add_assign!(metrics.invalid_votes_count, invalid_vote_count);
             saturating_add_assign!(
-                leader_slot_metrics
-                    .packet_count_metrics
-                    .newly_failed_sigverify_count,
-                count
+                metrics.failed_prioritization_count,
+                failed_prioritization_count
+            );
+            saturating_add_assign!(metrics.failed_sanitization_count, failed_sanitization_count);
+            saturating_add_assign!(
+                metrics.excessive_precompile_count,
+                excessive_precompile_count
+            );
+            saturating_add_assign!(
+                metrics.insufficient_compute_limit_count,
+                insufficient_compute_limit_count
             );
         }
     }

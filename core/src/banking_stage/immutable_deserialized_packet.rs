@@ -1,5 +1,5 @@
 use {
-    solana_cost_model::block_cost_limits::BUILT_IN_INSTRUCTION_COSTS,
+    super::packet_filter::PacketFilterFailure,
     solana_perf::packet::Packet,
     solana_runtime::transaction_priority_details::{
         GetTransactionPriorityDetails, TransactionPriorityDetails,
@@ -9,7 +9,6 @@ use {
         hash::Hash,
         message::Message,
         sanitize::SanitizeError,
-        saturating_add_assign,
         short_vec::decode_shortu16_len,
         signature::Signature,
         transaction::{
@@ -36,6 +35,8 @@ pub enum DeserializedPacketError {
     PrioritizationFailure,
     #[error("vote transaction failure")]
     VoteTransactionError,
+    #[error("Packet filter failure: {0}")]
+    FailedFilter(#[from] PacketFilterFailure),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -96,22 +97,6 @@ impl ImmutableDeserializedPacket {
 
     pub fn compute_unit_limit(&self) -> u64 {
         self.priority_details.compute_unit_limit
-    }
-
-    /// Returns true if the transaction's compute unit limit is at least as
-    /// large as the sum of the static builtins' costs.
-    /// This is a simple sanity check so the leader can discard transactions
-    /// which are statically known to exceed the compute budget, and will
-    /// result in no useful state-change.
-    pub fn compute_unit_limit_above_static_builtins(&self) -> bool {
-        let mut static_builtin_cost_sum: u64 = 0;
-        for (program_id, _) in self.transaction.get_message().program_instructions_iter() {
-            if let Some(ix_cost) = BUILT_IN_INSTRUCTION_COSTS.get(program_id) {
-                saturating_add_assign!(static_builtin_cost_sum, *ix_cost);
-            }
-        }
-
-        self.compute_unit_limit() >= static_builtin_cost_sum
     }
 
     // This function deserializes packets into transactions, computes the blake3 hash of transaction
@@ -192,7 +177,11 @@ mod tests {
         // 1. compute_unit_limit under static builtins
         // 2. compute_unit_limit equal to static builtins
         // 3. compute_unit_limit above static builtins
-        for (cu_limit, expectation) in [(250, false), (300, true), (350, true)] {
+        for (cu_limit, expectation) in [
+            (250, Err(PacketFilterFailure::InsufficientComputeLimit)),
+            (300, Ok(())),
+            (350, Ok(())),
+        ] {
             let keypair = Keypair::new();
             let bpf_program_id = Pubkey::new_unique();
             let ixs = vec![
@@ -209,7 +198,7 @@ mod tests {
             let packet = Packet::from_data(None, tx).unwrap();
             let deserialized_packet = ImmutableDeserializedPacket::new(packet).unwrap();
             assert_eq!(
-                deserialized_packet.compute_unit_limit_above_static_builtins(),
+                deserialized_packet.check_insufficent_compute_unit_limit(),
                 expectation
             );
         }
