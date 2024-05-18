@@ -766,6 +766,10 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
                     false
                 } else {
                     // Something is wrong, I can feel it ...
+                    error!(
+                        "ProgramCache::assign_program() failed key={:?} existing={:?} entry={:?}",
+                        key, slot_versions, entry
+                    );
                     self.stats.replacements.fetch_add(1, Ordering::Relaxed);
                     true
                 }
@@ -1036,6 +1040,7 @@ impl<FG: ForkGraph> LoadedPrograms<FG> {
             self.stats.lost_insertions.fetch_add(1, Ordering::Relaxed);
         }
         let was_occupied = self.assign_program(key, loaded_program);
+        debug_assert!(!was_occupied, "Unexpected replacement of an entry");
         self.loading_task_waiter.notify();
         was_occupied
     }

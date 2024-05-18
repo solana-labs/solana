@@ -5144,6 +5144,7 @@ impl Bank {
         ));
 
         if programs_loaded_for_tx_batch.borrow().hit_max_limit {
+            error!("Discarding TX batch {:#?}", batch.sanitized_transactions());
             return LoadAndExecuteTransactionsOutput {
                 loaded_transactions: vec![],
                 execution_results: vec![],
