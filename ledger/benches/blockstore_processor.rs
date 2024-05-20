@@ -117,9 +117,8 @@ fn bench_execute_batch(
     assert_eq!(
         TRANSACTIONS_PER_ITERATION % batch_size,
         0,
-        "batch_size must be a factor of \
-        `TRANSACTIONS_PER_ITERATION` ({TRANSACTIONS_PER_ITERATION}) \
-        so that bench results are easily comparable"
+        "batch_size must be a factor of `TRANSACTIONS_PER_ITERATION` \
+         ({TRANSACTIONS_PER_ITERATION}) so that bench results are easily comparable"
     );
     let batches_per_iteration = TRANSACTIONS_PER_ITERATION / batch_size;
 

@@ -60,8 +60,8 @@ impl BlockstoreCleanupService {
             .name("solBstoreClean".to_string())
             .spawn(move || {
                 info!(
-                    "BlockstoreCleanupService has started with max \
-                    ledger shreds={max_ledger_shreds}",
+                    "BlockstoreCleanupService has started with max ledger \
+                     shreds={max_ledger_shreds}",
                 );
                 loop {
                     if exit.load(Ordering::Relaxed) {
@@ -142,8 +142,8 @@ impl BlockstoreCleanupService {
             .unwrap_or(lowest_slot);
         if highest_slot < lowest_slot {
             error!(
-                "Skipping Blockstore cleanup: \
-                highest slot {highest_slot} < lowest slot {lowest_slot}",
+                "Skipping Blockstore cleanup: highest slot {highest_slot} < lowest slot \
+                 {lowest_slot}",
             );
             return (false, 0, num_shreds);
         }
@@ -153,7 +153,7 @@ impl BlockstoreCleanupService {
         let mean_shreds_per_slot = num_shreds / num_slots;
         info!(
             "Blockstore has {num_shreds} alive shreds in slots [{lowest_slot}, {highest_slot}], \
-            mean of {mean_shreds_per_slot} shreds per slot",
+             mean of {mean_shreds_per_slot} shreds per slot",
         );
 
         if num_shreds <= max_ledger_shreds {

@@ -38,7 +38,7 @@ pub enum BankForksUtilsError {
 
     #[error(
         "failed to load bank: {source}, full snapshot archive: {full_snapshot_archive}, \
-        incremental snapshot archive: {incremental_snapshot_archive}"
+         incremental snapshot archive: {incremental_snapshot_archive}"
     )]
     BankFromSnapshotsArchive {
         source: snapshot_utils::SnapshotError,
@@ -47,8 +47,8 @@ pub enum BankForksUtilsError {
     },
 
     #[error(
-        "there is no local state to startup from. \
-        Ensure --{flag} is NOT set to \"{value}\" and restart"
+        "there is no local state to startup from. Ensure --{flag} is NOT set to \"{value}\" and \
+         restart"
     )]
     NoBankSnapshotDirectory { flag: String, value: String },
 
@@ -260,9 +260,9 @@ fn bank_forks_from_snapshot(
             // higher than the local state we will load.  Did the user intend for this?
             if bank_snapshot.slot < latest_snapshot_archive_slot {
                 warn!(
-                    "Starting up from local state at slot {}, which is *older* than \
-                    the latest snapshot archive at slot {}. If this is not desired, \
-                    change the --{} CLI option to *not* \"{}\" and restart.",
+                    "Starting up from local state at slot {}, which is *older* than the latest \
+                     snapshot archive at slot {}. If this is not desired, change the --{} CLI \
+                     option to *not* \"{}\" and restart.",
                     bank_snapshot.slot,
                     latest_snapshot_archive_slot,
                     use_snapshot_archives_at_startup::cli::LONG_ARG,
