@@ -489,7 +489,7 @@ pub struct BankFieldsToDeserialize {
 }
 
 /// Bank's common fields shared by all supported snapshot versions for serialization.
-/// This is separated from BankFieldsToDeserialize to avoid cloning by using refs.
+/// This was separated from BankFieldsToDeserialize to avoid cloning by using refs.
 /// So, sync fields with BankFieldsToDeserialize!
 /// all members are made public to keep Bank private and to make versioned serializer workable on this.
 /// Note that some fields are missing from the serializer struct. This is because of fields added later.
@@ -497,13 +497,13 @@ pub struct BankFieldsToDeserialize {
 /// new fields can be optionally serialized and optionally deserialized. At some point, the serialization and
 /// deserialization will use a new mechanism or otherwise be in sync more clearly.
 #[derive(Debug)]
-pub(crate) struct BankFieldsToSerialize<'a> {
-    pub(crate) blockhash_queue: &'a RwLock<BlockhashQueue>,
+pub(crate) struct BankFieldsToSerialize {
+    pub(crate) blockhash_queue: BlockhashQueue,
     pub(crate) ancestors: AncestorsForSerialization,
     pub(crate) hash: Hash,
     pub(crate) parent_hash: Hash,
     pub(crate) parent_slot: Slot,
-    pub(crate) hard_forks: &'a RwLock<HardForks>,
+    pub(crate) hard_forks: HardForks,
     pub(crate) transaction_count: u64,
     pub(crate) tick_height: u64,
     pub(crate) signature_count: u64,
@@ -525,8 +525,8 @@ pub(crate) struct BankFieldsToSerialize<'a> {
     pub(crate) rent_collector: RentCollector,
     pub(crate) epoch_schedule: EpochSchedule,
     pub(crate) inflation: Inflation,
-    pub(crate) stakes: &'a StakesCache,
-    pub(crate) epoch_stakes: &'a HashMap<Epoch, EpochStakes>,
+    pub(crate) stakes: StakesEnum,
+    pub(crate) epoch_stakes: HashMap<Epoch, EpochStakes>,
     pub(crate) is_delta: bool,
     pub(crate) accounts_data_len: u64,
 }
@@ -1665,12 +1665,12 @@ impl Bank {
     /// Return subset of bank fields representing serializable state
     pub(crate) fn get_fields_to_serialize(&self) -> BankFieldsToSerialize {
         BankFieldsToSerialize {
-            blockhash_queue: &self.blockhash_queue,
+            blockhash_queue: self.blockhash_queue.read().unwrap().clone(),
             ancestors: AncestorsForSerialization::from(&self.ancestors),
             hash: *self.hash.read().unwrap(),
             parent_hash: self.parent_hash,
             parent_slot: self.parent_slot,
-            hard_forks: &self.hard_forks,
+            hard_forks: self.hard_forks.read().unwrap().clone(),
             transaction_count: self.transaction_count.load(Relaxed),
             tick_height: self.tick_height.load(Relaxed),
             signature_count: self.signature_count.load(Relaxed),
@@ -1692,8 +1692,8 @@ impl Bank {
             rent_collector: self.rent_collector.clone(),
             epoch_schedule: self.epoch_schedule.clone(),
             inflation: *self.inflation.read().unwrap(),
-            stakes: &self.stakes_cache,
-            epoch_stakes: &self.epoch_stakes,
+            stakes: StakesEnum::from(self.stakes_cache.stakes().clone()),
+            epoch_stakes: self.epoch_stakes.clone(),
             is_delta: self.is_delta.load(Relaxed),
             accounts_data_len: self.load_accounts_data_size(),
         }

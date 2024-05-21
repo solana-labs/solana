@@ -2,7 +2,10 @@
 use std::ffi::{CStr, CString};
 use {
     crate::{
-        bank::{builtins::BuiltinPrototype, Bank, BankFieldsToDeserialize, BankRc},
+        bank::{
+            builtins::BuiltinPrototype, Bank, BankFieldsToDeserialize, BankFieldsToSerialize,
+            BankRc,
+        },
         epoch_stakes::EpochStakes,
         runtime_config::RuntimeConfig,
         serde_snapshot::storage::SerializableAccountStorageEntry,
@@ -51,7 +54,7 @@ use {
         result::Result,
         sync::{
             atomic::{AtomicBool, AtomicUsize, Ordering},
-            Arc, RwLock,
+            Arc,
         },
         thread::Builder,
     },
@@ -208,13 +211,13 @@ impl From<DeserializableVersionedBank> for BankFieldsToDeserialize {
 // Serializable version of Bank, not Deserializable to avoid cloning by using refs.
 // Sync fields with DeserializableVersionedBank!
 #[derive(Serialize)]
-struct SerializableVersionedBank<'a> {
-    blockhash_queue: &'a RwLock<BlockhashQueue>,
+struct SerializableVersionedBank {
+    blockhash_queue: BlockhashQueue,
     ancestors: AncestorsForSerialization,
     hash: Hash,
     parent_hash: Hash,
     parent_slot: Slot,
-    hard_forks: &'a RwLock<HardForks>,
+    hard_forks: HardForks,
     transaction_count: u64,
     tick_height: u64,
     signature_count: u64,
@@ -240,12 +243,12 @@ struct SerializableVersionedBank<'a> {
     #[serde(serialize_with = "serde_stakes_enum_compat::serialize")]
     stakes: StakesEnum,
     unused_accounts: UnusedAccounts,
-    epoch_stakes: &'a HashMap<Epoch, EpochStakes>,
+    epoch_stakes: HashMap<Epoch, EpochStakes>,
     is_delta: bool,
 }
 
-impl<'a> From<crate::bank::BankFieldsToSerialize<'a>> for SerializableVersionedBank<'a> {
-    fn from(rhs: crate::bank::BankFieldsToSerialize<'a>) -> Self {
+impl From<BankFieldsToSerialize> for SerializableVersionedBank {
+    fn from(rhs: BankFieldsToSerialize) -> Self {
         Self {
             blockhash_queue: rhs.blockhash_queue,
             ancestors: rhs.ancestors,
@@ -275,7 +278,7 @@ impl<'a> From<crate::bank::BankFieldsToSerialize<'a>> for SerializableVersionedB
             rent_collector: rhs.rent_collector,
             epoch_schedule: rhs.epoch_schedule,
             inflation: rhs.inflation,
-            stakes: StakesEnum::from(rhs.stakes.stakes().clone()),
+            stakes: rhs.stakes,
             unused_accounts: UnusedAccounts::default(),
             epoch_stakes: rhs.epoch_stakes,
             is_delta: rhs.is_delta,
@@ -284,7 +287,7 @@ impl<'a> From<crate::bank::BankFieldsToSerialize<'a>> for SerializableVersionedB
 }
 
 #[cfg(all(RUSTC_WITH_SPECIALIZATION, feature = "frozen-abi"))]
-impl<'a> solana_frozen_abi::abi_example::IgnoreAsHelper for SerializableVersionedBank<'a> {}
+impl<'a> solana_frozen_abi::abi_example::IgnoreAsHelper for SerializableVersionedBank {}
 
 /// Helper type to wrap BufReader streams when deserializing and reconstructing from either just a
 /// full snapshot, or both a full and incremental snapshot
@@ -581,19 +584,17 @@ where
 {
     let (bank_fields, mut accounts_db_fields) = deserialize_bank_fields(stream_reader).unwrap();
     accounts_db_fields.3.accounts_hash = (*accounts_hash).into();
-    let mut rhs = bank_fields;
-    let blockhash_queue = RwLock::new(std::mem::take(&mut rhs.blockhash_queue));
-    let hard_forks = RwLock::new(std::mem::take(&mut rhs.hard_forks));
+    let rhs = bank_fields;
     let lamports_per_signature = rhs.fee_rate_governor.lamports_per_signature;
     let epoch_accounts_hash = rhs.epoch_accounts_hash.as_ref();
 
     let bank = SerializableVersionedBank {
-        blockhash_queue: &blockhash_queue,
+        blockhash_queue: rhs.blockhash_queue,
         ancestors: rhs.ancestors,
         hash: rhs.hash,
         parent_hash: rhs.parent_hash,
         parent_slot: rhs.parent_slot,
-        hard_forks: &hard_forks,
+        hard_forks: rhs.hard_forks,
         transaction_count: rhs.transaction_count,
         tick_height: rhs.tick_height,
         signature_count: rhs.signature_count,
@@ -618,7 +619,7 @@ where
         inflation: rhs.inflation,
         stakes: StakesEnum::from(rhs.stakes),
         unused_accounts: UnusedAccounts::default(),
-        epoch_stakes: &rhs.epoch_stakes,
+        epoch_stakes: rhs.epoch_stakes,
         is_delta: rhs.is_delta,
     };
 
