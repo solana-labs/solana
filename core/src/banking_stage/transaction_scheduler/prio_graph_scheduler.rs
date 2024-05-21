@@ -10,7 +10,9 @@ use {
         consumer::TARGET_NUM_TRANSACTIONS_PER_BATCH,
         read_write_account_set::ReadWriteAccountSet,
         scheduler_messages::{ConsumeWork, FinishedConsumeWork, TransactionBatchId, TransactionId},
-        transaction_scheduler::transaction_priority_id::TransactionPriorityId,
+        transaction_scheduler::{
+            transaction_priority_id::TransactionPriorityId, transaction_state::TransactionState,
+        },
     },
     crossbeam_channel::{Receiver, Sender, TryRecvError},
     itertools::izip,
@@ -172,26 +174,12 @@ impl PrioGraphScheduler {
                     panic!("transaction state must exist")
                 };
 
-                let transaction = &transaction_state.transaction_ttl().transaction;
-                if !pre_lock_filter(transaction) {
-                    container.remove_by_id(&id.id);
-                    continue;
-                }
-
-                // Check if this transaction conflicts with any blocked transactions
-                if !blocking_locks.check_locks(transaction.message()) {
-                    blocking_locks.take_locks(transaction.message());
-                    unschedulable_ids.push(id);
-                    saturating_add_assign!(num_unschedulable, 1);
-                    continue;
-                }
-
-                // Schedule the transaction if it can be.
-                let transaction_locks = transaction.get_account_locks_unchecked();
-                let Some(thread_id) = self.account_locks.try_lock_accounts(
-                    transaction_locks.writable.into_iter(),
-                    transaction_locks.readonly.into_iter(),
-                    schedulable_threads,
+                let maybe_schedule_info = try_schedule_transaction(
+                    transaction_state,
+                    &pre_lock_filter,
+                    &mut blocking_locks,
+                    &mut self.account_locks,
+                    num_threads,
                     |thread_set| {
                         Self::select_thread(
                             thread_set,
@@ -201,45 +189,52 @@ impl PrioGraphScheduler {
                             self.in_flight_tracker.num_in_flight_per_thread(),
                         )
                     },
-                ) else {
-                    blocking_locks.take_locks(transaction.message());
-                    unschedulable_ids.push(id);
-                    saturating_add_assign!(num_unschedulable, 1);
-                    continue;
-                };
+                );
 
-                saturating_add_assign!(num_scheduled, 1);
-
-                let sanitized_transaction_ttl = transaction_state.transition_to_pending();
-                let cost = transaction_state.cost();
-
-                let SanitizedTransactionTTL {
-                    transaction,
-                    max_age_slot,
-                } = sanitized_transaction_ttl;
-
-                batches.transactions[thread_id].push(transaction);
-                batches.ids[thread_id].push(id.id);
-                batches.max_age_slots[thread_id].push(max_age_slot);
-                saturating_add_assign!(batches.total_cus[thread_id], cost);
-
-                // If target batch size is reached, send only this batch.
-                if batches.ids[thread_id].len() >= TARGET_NUM_TRANSACTIONS_PER_BATCH {
-                    saturating_add_assign!(num_sent, self.send_batch(&mut batches, thread_id)?);
-                }
-                // if the thread is at max_cu_per_thread, remove it from the schedulable threads
-                // if there are no more schedulable threads, stop scheduling.
-                if self.in_flight_tracker.cus_in_flight_per_thread()[thread_id]
-                    + batches.total_cus[thread_id]
-                    >= max_cu_per_thread
-                {
-                    schedulable_threads.remove(thread_id);
-                    if schedulable_threads.is_empty() {
-                        break;
+                match maybe_schedule_info {
+                    Err(TransactionSchedulingError::Filtered) => {
+                        container.remove_by_id(&id.id);
                     }
-                }
-                if num_scheduled >= MAX_TRANSACTIONS_PER_SCHEDULING_PASS {
-                    break;
+                    Err(TransactionSchedulingError::UnschedulableConflicts) => {
+                        unschedulable_ids.push(id);
+                        saturating_add_assign!(num_unschedulable, 1);
+                    }
+                    Ok(TransactionSchedulingInfo {
+                        thread_id,
+                        transaction,
+                        max_age_slot,
+                        cost,
+                    }) => {
+                        saturating_add_assign!(num_scheduled, 1);
+                        batches.transactions[thread_id].push(transaction);
+                        batches.ids[thread_id].push(id.id);
+                        batches.max_age_slots[thread_id].push(max_age_slot);
+                        saturating_add_assign!(batches.total_cus[thread_id], cost);
+
+                        // If target batch size is reached, send only this batch.
+                        if batches.ids[thread_id].len() >= TARGET_NUM_TRANSACTIONS_PER_BATCH {
+                            saturating_add_assign!(
+                                num_sent,
+                                self.send_batch(&mut batches, thread_id)?
+                            );
+                        }
+
+                        // if the thread is at max_cu_per_thread, remove it from the schedulable threads
+                        // if there are no more schedulable threads, stop scheduling.
+                        if self.in_flight_tracker.cus_in_flight_per_thread()[thread_id]
+                            + batches.total_cus[thread_id]
+                            >= max_cu_per_thread
+                        {
+                            schedulable_threads.remove(thread_id);
+                            if schedulable_threads.is_empty() {
+                                break;
+                            }
+                        }
+
+                        if num_scheduled >= MAX_TRANSACTIONS_PER_SCHEDULING_PASS {
+                            break;
+                        }
+                    }
                 }
             }
 
@@ -515,6 +510,66 @@ impl Batches {
             core::mem::replace(&mut self.total_cus[thread_id], 0),
         )
     }
+}
+
+/// A transaction has been scheduled to a thread.
+struct TransactionSchedulingInfo {
+    thread_id: ThreadId,
+    transaction: SanitizedTransaction,
+    max_age_slot: Slot,
+    cost: u64,
+}
+
+/// Error type for reasons a transaction could not be scheduled.
+enum TransactionSchedulingError {
+    /// Transaction was filtered out before locking.
+    Filtered,
+    /// Transaction cannot be scheduled due to conflicts, or
+    /// higher priority conflicting transactions are unschedulable.
+    UnschedulableConflicts,
+}
+
+fn try_schedule_transaction(
+    transaction_state: &mut TransactionState,
+    pre_lock_filter: impl Fn(&SanitizedTransaction) -> bool,
+    blocking_locks: &mut ReadWriteAccountSet,
+    account_locks: &mut ThreadAwareAccountLocks,
+    num_threads: usize,
+    thread_selector: impl Fn(ThreadSet) -> ThreadId,
+) -> Result<TransactionSchedulingInfo, TransactionSchedulingError> {
+    let transaction = &transaction_state.transaction_ttl().transaction;
+    if !pre_lock_filter(transaction) {
+        return Err(TransactionSchedulingError::Filtered);
+    }
+
+    // Check if this transaction conflicts with any blocked transactions
+    let message = transaction.message();
+    if !blocking_locks.check_locks(message) {
+        blocking_locks.take_locks(message);
+        return Err(TransactionSchedulingError::UnschedulableConflicts);
+    }
+
+    // Schedule the transaction if it can be.
+    let transaction_locks = transaction.get_account_locks_unchecked();
+    let Some(thread_id) = account_locks.try_lock_accounts(
+        transaction_locks.writable.into_iter(),
+        transaction_locks.readonly.into_iter(),
+        ThreadSet::any(num_threads),
+        thread_selector,
+    ) else {
+        blocking_locks.take_locks(message);
+        return Err(TransactionSchedulingError::UnschedulableConflicts);
+    };
+
+    let sanitized_transaction_ttl = transaction_state.transition_to_pending();
+    let cost = transaction_state.cost();
+
+    Ok(TransactionSchedulingInfo {
+        thread_id,
+        transaction: sanitized_transaction_ttl.transaction,
+        max_age_slot: sanitized_transaction_ttl.max_age_slot,
+        cost,
+    })
 }
 
 #[cfg(test)]
