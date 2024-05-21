@@ -684,11 +684,6 @@ impl borsh0_10::de::BorshDeserialize for Pubkey {
         )?))
     }
 }
-impl borsh0_9::de::BorshDeserialize for Pubkey {
-    fn deserialize(buf: &mut &[u8]) -> ::core::result::Result<Self, borsh0_9::maybestd::io::Error> {
-        Ok(Self(borsh0_9::BorshDeserialize::deserialize(buf)?))
-    }
-}
 
 macro_rules! impl_borsh_schema {
     ($borsh:ident) => {
@@ -722,7 +717,6 @@ macro_rules! impl_borsh_schema {
     };
 }
 impl_borsh_schema!(borsh0_10);
-impl_borsh_schema!(borsh0_9);
 
 macro_rules! impl_borsh_serialize {
     ($borsh:ident) => {
@@ -738,7 +732,6 @@ macro_rules! impl_borsh_serialize {
     };
 }
 impl_borsh_serialize!(borsh0_10);
-impl_borsh_serialize!(borsh0_9);
 
 #[cfg(test)]
 mod tests {
