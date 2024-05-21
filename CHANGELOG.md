@@ -21,6 +21,7 @@ Release channels have their own copy of this changelog:
   * CLI: Can specify `--with-compute-unit-price`, `--max-sign-attempts`, and `--use-rpc` during program deployment
   * RPC's `simulateTransaction` now returns an extra `replacementBlockhash` field in the response
     when the `replaceRecentBlockhash` config param is `true` (#380)
+  * SDK: `cargo test-sbf` accepts `--tools-version`, just like `build-sbf` (#1359)
 
 ## [1.18.0]
 * Changes
