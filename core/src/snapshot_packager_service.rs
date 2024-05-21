@@ -3,7 +3,7 @@ use {
     crossbeam_channel::{Receiver, Sender},
     snapshot_gossip_manager::SnapshotGossipManager,
     solana_gossip::cluster_info::ClusterInfo,
-    solana_measure::measure_us,
+    solana_measure::{measure::Measure, measure_us},
     solana_perf::thread::renice_this_thread,
     solana_runtime::{
         snapshot_archive_info::SnapshotArchiveInfoGetter,
@@ -67,41 +67,44 @@ impl SnapshotPackagerService {
                     info!("handling snapshot package: {snapshot_package:?}");
                     let enqueued_time = snapshot_package.enqueued.elapsed();
 
-                    let (purge_bank_snapshots_time_us, handling_time_us) = measure_us!({
-                        // Archiving the snapshot package is not allowed to fail.
-                        // AccountsBackgroundService calls `clean_accounts()` with a value for
-                        // last_full_snapshot_slot that requires this archive call to succeed.
-                        let result = snapshot_utils::archive_snapshot_package(
-                            &snapshot_package,
-                            &snapshot_config.full_snapshot_archives_dir,
-                            &snapshot_config.incremental_snapshot_archives_dir,
-                            snapshot_config.maximum_full_snapshot_archives_to_retain,
-                            snapshot_config.maximum_incremental_snapshot_archives_to_retain,
+                    let measure_handling = Measure::start("");
+
+                    // Archiving the snapshot package is not allowed to fail.
+                    // AccountsBackgroundService calls `clean_accounts()` with a value for
+                    // last_full_snapshot_slot that requires this archive call to succeed.
+                    let result = snapshot_utils::archive_snapshot_package(
+                        &snapshot_package,
+                    );
+                    if let Err(err) = result {
+                        error!("Stopping SnapshotPackagerService! Fatal error while archiving snapshot package: {err}");
+                        exit.store(true, Ordering::Relaxed);
+                        break;
+                    }
+
+                    if let Some(snapshot_gossip_manager) = snapshot_gossip_manager.as_mut() {
+                        snapshot_gossip_manager.push_snapshot_hash(
+                            snapshot_package.snapshot_kind,
+                            (snapshot_package.slot(), *snapshot_package.hash()),
                         );
-                        if let Err(err) = result {
-                            error!("Stopping SnapshotPackagerService! Fatal error while archiving snapshot package: {err}");
-                            exit.store(true, Ordering::Relaxed);
-                            break;
-                        }
+                    }
 
-                        if let Some(snapshot_gossip_manager) = snapshot_gossip_manager.as_mut() {
-                            snapshot_gossip_manager.push_snapshot_hash(
-                                snapshot_package.snapshot_kind,
-                                (snapshot_package.slot(), *snapshot_package.hash()),
-                            );
-                        }
+                    let (_, purge_archives_time_us) = measure_us!(snapshot_utils::purge_old_snapshot_archives(
+                        &snapshot_config.full_snapshot_archives_dir,
+                        &snapshot_config.incremental_snapshot_archives_dir,
+                        snapshot_config.maximum_full_snapshot_archives_to_retain,
+                        snapshot_config.maximum_incremental_snapshot_archives_to_retain,
+                    ));
 
-                        // Now that this snapshot package has been archived, it is safe to remove
-                        // all bank snapshots older than this slot.  We want to keep the bank
-                        // snapshot *at this slot* so that it can be used during restarts, when
-                        // booting from local state.
-                        measure_us!(snapshot_utils::purge_bank_snapshots_older_than_slot(
-                            &snapshot_config.bank_snapshots_dir,
-                            snapshot_package.slot(),
-                        ))
-                        .1
-                    });
+                    // Now that this snapshot package has been archived, it is safe to remove
+                    // all bank snapshots older than this slot.  We want to keep the bank
+                    // snapshot *at this slot* so that it can be used during restarts, when
+                    // booting from local state.
+                    let (_, purge_bank_snapshots_time_us) = measure_us!(snapshot_utils::purge_bank_snapshots_older_than_slot(
+                        &snapshot_config.bank_snapshots_dir,
+                        snapshot_package.slot(),
+                    ));
 
+                    let handling_time_us = measure_handling.end_as_us();
                     datapoint_info!(
                         "snapshot_packager_service",
                         (
@@ -119,6 +122,11 @@ impl SnapshotPackagerService {
                         (
                             "purge_old_snapshots_time_us",
                             purge_bank_snapshots_time_us,
+                            i64
+                        ),
+                        (
+                            "purge_old_archives_time_us",
+                            purge_archives_time_us,
                             i64
                         ),
                     );

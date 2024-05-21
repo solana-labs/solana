@@ -730,13 +730,7 @@ pub fn remove_tmp_snapshot_archives(snapshot_archives_dir: impl AsRef<Path>) {
 }
 
 /// Make a snapshot archive out of the snapshot package
-pub fn archive_snapshot_package(
-    snapshot_package: &SnapshotPackage,
-    full_snapshot_archives_dir: impl AsRef<Path>,
-    incremental_snapshot_archives_dir: impl AsRef<Path>,
-    maximum_full_snapshot_archives_to_retain: NonZeroUsize,
-    maximum_incremental_snapshot_archives_to_retain: NonZeroUsize,
-) -> Result<()> {
+pub fn archive_snapshot_package(snapshot_package: &SnapshotPackage) -> Result<()> {
     use ArchiveSnapshotPackageError as E;
     const SNAPSHOTS_DIR: &str = "snapshots";
     const ACCOUNTS_DIR: &str = "accounts";
@@ -883,13 +877,6 @@ pub fn archive_snapshot_package(
         .map_err(|err| E::QueryArchiveMetadata(err, archive_path.clone()))?;
     fs::rename(&archive_path, snapshot_package.path())
         .map_err(|err| E::MoveArchive(err, archive_path, snapshot_package.path().clone()))?;
-
-    purge_old_snapshot_archives(
-        full_snapshot_archives_dir,
-        incremental_snapshot_archives_dir,
-        maximum_full_snapshot_archives_to_retain,
-        maximum_incremental_snapshot_archives_to_retain,
-    );
 
     timer.stop();
     info!(
