@@ -1154,7 +1154,6 @@ impl RpcSubscriptions {
                 num_signatures_found.load(Ordering::Relaxed),
                 num_signatures_notified.load(Ordering::Relaxed),
             );
-            inc_new_counter_info!("rpc-subscription-notify-bank-or-gossip", total_notified);
             datapoint_info!(
                 "rpc_subscriptions",
                 ("source", source, String),
@@ -1199,22 +1198,6 @@ impl RpcSubscriptions {
                     i64
                 ),
                 ("notifications_time", total_time.as_us() as i64, i64),
-            );
-            inc_new_counter_info!(
-                "rpc-subscription-counter-num_accounts_notified",
-                num_accounts_notified.load(Ordering::Relaxed)
-            );
-            inc_new_counter_info!(
-                "rpc-subscription-counter-num_logs_notified",
-                num_logs_notified.load(Ordering::Relaxed)
-            );
-            inc_new_counter_info!(
-                "rpc-subscription-counter-num_programs_notified",
-                num_programs_notified.load(Ordering::Relaxed)
-            );
-            inc_new_counter_info!(
-                "rpc-subscription-counter-num_signatures_notified",
-                num_signatures_notified.load(Ordering::Relaxed)
             );
         }
     }
