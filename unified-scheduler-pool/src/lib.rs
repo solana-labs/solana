@@ -17,7 +17,7 @@
 use qualifier_attr::qualifiers;
 use {
     assert_matches::assert_matches,
-    crossbeam_channel::{self, never, select, Receiver, RecvError, SendError, Sender},
+    crossbeam_channel::{self, never, select_biased, Receiver, RecvError, SendError, Sender},
     dashmap::DashMap,
     derivative::Derivative,
     log::*,
@@ -622,10 +622,6 @@ impl<S: SpawnableScheduler<TH>, TH: TaskHandler> ThreadManager<S, TH> {
         // isn't implemented. The former is due to complex implementation and the later is due to
         // delayed (NOT real-time) processing, which is against the unified scheduler design goal.
         //
-        // Finally, note that this optimization should be combined with biased select (i.e.
-        // `select_biased!`), which isn't for now... However, consistent performance improvement is
-        // observed just with this priority queuing alone.
-        //
         // Alternatively, more faithful prioritization can be realized by checking blocking
         // statuses of all addresses immediately before sending to the handlers. This would prevent
         // false negatives of the heuristics approach (i.e. the last task of a run doesn't need to
@@ -751,9 +747,6 @@ impl<S: SpawnableScheduler<TH>, TH: TaskHandler> ThreadManager<S, TH> {
                         let dummy_unblocked_task_receiver =
                             dummy_receiver(state_machine.has_unblocked_task());
 
-                        // (Assume this is biased; i.e. select_biased! in this crossbeam pr:
-                        // https://github.com/rust-lang/futures-rs/pull/1976)
-                        //
                         // There's something special called dummy_unblocked_task_receiver here.
                         // This odd pattern was needed to react to newly unblocked tasks from
                         // _not-crossbeam-channel_ event sources, precisely at the specified
@@ -764,7 +757,7 @@ impl<S: SpawnableScheduler<TH>, TH: TaskHandler> ThreadManager<S, TH> {
                         // consistent. Note that unified scheduler will go
                         // into busy looping to seek lowest latency eventually. However, not now,
                         // to measure _actual_ cpu usage easily with the select approach.
-                        select! {
+                        select_biased! {
                             recv(finished_blocked_task_receiver) -> executed_task => {
                                 let executed_task = executed_task.unwrap();
 
@@ -828,7 +821,7 @@ impl<S: SpawnableScheduler<TH>, TH: TaskHandler> ThreadManager<S, TH> {
             let finished_idle_task_sender = finished_idle_task_sender.clone();
 
             move || loop {
-                let (task, sender) = select! {
+                let (task, sender) = select_biased! {
                     recv(runnable_task_receiver.for_select()) -> message => {
                         if let Some(task) = runnable_task_receiver.after_select(message.unwrap()) {
                             (task, &finished_blocked_task_sender)
