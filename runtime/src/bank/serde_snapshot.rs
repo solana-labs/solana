@@ -5,6 +5,9 @@ mod tests {
             bank::{
                 epoch_accounts_hash_utils, test_utils as bank_test_utils, Bank, EpochRewardStatus,
             },
+            epoch_stakes::{
+                EpochAuthorizedVoters, EpochStakes, NodeIdToVoteAccounts, VersionedEpochStakes,
+            },
             genesis_utils::activate_all_features,
             runtime_config::RuntimeConfig,
             serde_snapshot::{
@@ -16,6 +19,7 @@ mod tests {
                 self, create_tmp_accounts_dir_for_tests, get_storages_to_serialize, ArchiveFormat,
                 StorageAndNextAccountsFileId, BANK_SNAPSHOT_PRE_FILENAME_EXTENSION,
             },
+            stakes::Stakes,
             status_cache::StatusCache,
         },
         solana_accounts_db::{
@@ -35,8 +39,10 @@ mod tests {
             hash::Hash,
             pubkey::Pubkey,
             signature::{Keypair, Signer},
+            stake::state::Stake,
         },
         std::{
+            collections::HashMap,
             io::{Cursor, Read, Write},
             ops::RangeFull,
             path::Path,
@@ -369,6 +375,18 @@ mod tests {
         )
         .unwrap();
 
+        let mut new_epoch_stakes: HashMap<u64, VersionedEpochStakes> = HashMap::new();
+        new_epoch_stakes.insert(
+            42,
+            VersionedEpochStakes::Current {
+                stakes: Stakes::<Stake>::default(),
+                total_stake: 42,
+                node_id_to_vote_accounts: Arc::<NodeIdToVoteAccounts>::default(),
+                epoch_authorized_voters: Arc::<EpochAuthorizedVoters>::default(),
+            },
+        );
+        bincode::serialize_into(&mut writer, &new_epoch_stakes).unwrap();
+
         // Deserialize
         let rdr = Cursor::new(&buf[..]);
         let mut reader = std::io::BufReader::new(&buf[rdr.position() as usize..]);
@@ -401,6 +419,13 @@ mod tests {
             Arc::default(),
         )
         .unwrap();
+
+        assert_eq!(
+            dbank.epoch_stakes(42),
+            Some(&EpochStakes::from(
+                new_epoch_stakes.get(&42).unwrap().clone()
+            ))
+        );
 
         assert_eq!(
             bank.fee_rate_governor.lamports_per_signature,

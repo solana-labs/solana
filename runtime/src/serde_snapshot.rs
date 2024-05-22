@@ -6,7 +6,7 @@ use {
             builtins::BuiltinPrototype, Bank, BankFieldsToDeserialize, BankFieldsToSerialize,
             BankRc,
         },
-        epoch_stakes::EpochStakes,
+        epoch_stakes::{EpochStakes, VersionedEpochStakes},
         runtime_config::RuntimeConfig,
         serde_snapshot::storage::SerializableAccountStorageEntry,
         snapshot_utils::{
@@ -411,6 +411,16 @@ where
 
     let epoch_accounts_hash = ignore_eof_error(deserialize_from(&mut stream))?;
     bank_fields.epoch_accounts_hash = epoch_accounts_hash;
+
+    // If we deserialize the new epoch stakes, add all of the entries into the
+    // other deserialized map which could still have old epoch stakes entries
+    let new_epoch_stakes: HashMap<u64, VersionedEpochStakes> =
+        ignore_eof_error(deserialize_from(&mut stream))?;
+    bank_fields.epoch_stakes.extend(
+        new_epoch_stakes
+            .into_iter()
+            .map(|(epoch, versioned_epoch_stakes)| (epoch, versioned_epoch_stakes.into())),
+    );
 
     Ok((bank_fields, accounts_db_fields))
 }

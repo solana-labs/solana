@@ -16,6 +16,7 @@ use {
         stake::state::{Delegation, StakeActivationStatus},
         vote::state::VoteStateVersions,
     },
+    solana_stake_program::stake_state::Stake,
     solana_vote::vote_account::{VoteAccount, VoteAccounts},
     std::{
         collections::HashMap,
@@ -200,17 +201,19 @@ pub struct Stakes<T: Clone> {
 }
 
 // For backward compatibility, we can only serialize and deserialize
-// Stakes<Delegation>. However Bank caches Stakes<StakeAccount>. This type
-// mismatch incurs a conversion cost at epoch boundary when updating
-// EpochStakes.
-// Below type allows EpochStakes to include either a Stakes<StakeAccount> or
-// Stakes<Delegation> and so bypass the conversion cost between the two at the
-// epoch boundary.
+// Stakes<Delegation> in the old `epoch_stakes` bank snapshot field. However,
+// Stakes<StakeAccount> entries are added to the bank's epoch stakes hashmap
+// when crossing epoch boundaries and Stakes<Stake> entries are added when
+// starting up from bank snapshots that have the new epoch stakes field. By
+// using this enum, the cost of converting all entries to Stakes<Delegation> is
+// put off until serializing new snapshots. This helps avoid bogging down epoch
+// boundaries and startup with the conversion overhead.
 #[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum StakesEnum {
     Accounts(Stakes<StakeAccount>),
     Delegations(Stakes<Delegation>),
+    Stakes(Stakes<Stake>),
 }
 
 impl<T: Clone> Stakes<T> {
@@ -483,6 +486,7 @@ impl StakesEnum {
         match self {
             StakesEnum::Accounts(stakes) => stakes.vote_accounts(),
             StakesEnum::Delegations(stakes) => stakes.vote_accounts(),
+            StakesEnum::Stakes(stakes) => stakes.vote_accounts(),
         }
     }
 
@@ -490,6 +494,7 @@ impl StakesEnum {
         match self {
             StakesEnum::Accounts(stakes) => stakes.staked_nodes(),
             StakesEnum::Delegations(stakes) => stakes.staked_nodes(),
+            StakesEnum::Stakes(stakes) => stakes.staked_nodes(),
         }
     }
 }
@@ -507,6 +512,33 @@ impl From<Stakes<StakeAccount>> for Stakes<Delegation> {
             unused: stakes.unused,
             epoch: stakes.epoch,
             stake_history: stakes.stake_history,
+        }
+    }
+}
+
+impl From<Stakes<Stake>> for Stakes<Delegation> {
+    fn from(stakes: Stakes<Stake>) -> Self {
+        let stake_delegations = stakes
+            .stake_delegations
+            .into_iter()
+            .map(|(pubkey, stake)| (pubkey, stake.delegation))
+            .collect();
+        Self {
+            vote_accounts: stakes.vote_accounts,
+            stake_delegations,
+            unused: stakes.unused,
+            epoch: stakes.epoch,
+            stake_history: stakes.stake_history,
+        }
+    }
+}
+
+impl From<StakesEnum> for Stakes<Delegation> {
+    fn from(stakes: StakesEnum) -> Self {
+        match stakes {
+            StakesEnum::Accounts(stakes) => stakes.into(),
+            StakesEnum::Delegations(stakes) => stakes,
+            StakesEnum::Stakes(stakes) => stakes.into(),
         }
     }
 }
@@ -533,15 +565,13 @@ impl PartialEq<StakesEnum> for StakesEnum {
     fn eq(&self, other: &StakesEnum) -> bool {
         match (self, other) {
             (Self::Accounts(stakes), Self::Accounts(other)) => stakes == other,
-            (Self::Accounts(stakes), Self::Delegations(other)) => {
-                let stakes = Stakes::<Delegation>::from(stakes.clone());
-                &stakes == other
-            }
-            (Self::Delegations(stakes), Self::Accounts(other)) => {
-                let other = Stakes::<Delegation>::from(other.clone());
-                stakes == &other
-            }
             (Self::Delegations(stakes), Self::Delegations(other)) => stakes == other,
+            (Self::Stakes(stakes), Self::Stakes(other)) => stakes == other,
+            (stakes, other) => {
+                let stakes = Stakes::<Delegation>::from(stakes.clone());
+                let other = Stakes::<Delegation>::from(other.clone());
+                stakes == other
+            }
         }
     }
 }
@@ -559,11 +589,11 @@ pub(crate) mod serde_stakes_enum_compat {
         S: Serializer,
     {
         match stakes {
-            StakesEnum::Accounts(stakes) => {
+            StakesEnum::Delegations(stakes) => stakes.serialize(serializer),
+            stakes => {
                 let stakes = Stakes::<Delegation>::from(stakes.clone());
                 stakes.serialize(serializer)
             }
-            StakesEnum::Delegations(stakes) => stakes.serialize(serializer),
         }
     }
 
@@ -1101,7 +1131,7 @@ pub(crate) mod tests {
         assert!(stakes.vote_accounts.as_ref().len() >= 5);
         assert!(stakes.stake_delegations.len() >= 50);
         let other = match &*other.stakes {
-            StakesEnum::Accounts(_) => panic!("wrong type!"),
+            StakesEnum::Accounts(_) | StakesEnum::Stakes(_) => panic!("wrong type!"),
             StakesEnum::Delegations(delegations) => delegations,
         };
         assert_eq!(other, &stakes)
