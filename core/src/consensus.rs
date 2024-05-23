@@ -1174,18 +1174,16 @@ impl Tower {
             fork_stake,
             total_stake
         );
-        if threshold_vote.confirmation_count() as usize > threshold_depth {
-            for old_vote in &vote_state_before_applying_vote.votes {
-                if old_vote.slot() == threshold_vote.slot()
-                    && old_vote.confirmation_count() == threshold_vote.confirmation_count()
-                {
-                    // If you bounce back to voting on the main fork after not
-                    // voting for a while, your latest vote N on the main fork
-                    // might pop off a lot of the stake of votes in the tower.
-                    // This stake would have rolled up to earlier votes in the
-                    // tower, so skip the stake check.
-                    return ThresholdDecision::PassedThreshold;
-                }
+        for old_vote in &vote_state_before_applying_vote.votes {
+            if old_vote.slot() == threshold_vote.slot()
+                && old_vote.confirmation_count() == threshold_vote.confirmation_count()
+            {
+                // If you bounce back to voting on the main fork after not
+                // voting for a while, your latest vote N on the main fork
+                // might pop off a lot of the stake of votes in the tower.
+                // This stake would have rolled up to earlier votes in the
+                // tower, so skip the stake check.
+                return ThresholdDecision::PassedThreshold;
             }
         }
         if lockout > threshold_size {
