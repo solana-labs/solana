@@ -162,7 +162,7 @@ bitflags = { version = "2.5.0" }
 blake3 = "1.5.1"
 block-buffer = "0.10.4"
 borsh = { version = "1.5.0", features = ["derive", "unstable__schema"] }
-bs58 = "0.4.0"
+bs58 = "0.5.1"
 bv = "0.11.1"
 byte-unit = "4.0.19"
 bytecount = "0.6.7"
