@@ -6,12 +6,14 @@ use {
 
 pub mod errors;
 pub mod pod;
+pub mod zero_ciphertext;
 
 #[derive(Clone, Copy, Debug, FromPrimitive, ToPrimitive, PartialEq, Eq)]
 #[repr(u8)]
 pub enum ProofType {
     /// Empty proof type used to distinguish if a proof context account is initialized
     Uninitialized,
+    ZeroCiphertext,
 }
 
 pub trait ZkProofData<T: Pod> {
