@@ -189,10 +189,12 @@ pub struct InvokeContext<'a> {
     pub program_cache_for_tx_batch: &'a ProgramCacheForTxBatch,
     /// Runtime configurations used to provision the invocation environment.
     pub environment_config: EnvironmentConfig<'a>,
-    log_collector: Option<Rc<RefCell<LogCollector>>>,
+    /// The compute budget for the current invocation.
     compute_budget: ComputeBudget,
-    current_compute_budget: ComputeBudget,
+    /// Instruction compute meter, for tracking compute units consumed against
+    /// the designated compute budget during program execution.
     compute_meter: RefCell<u64>,
+    log_collector: Option<Rc<RefCell<LogCollector>>>,
     pub programs_modified_by_tx: &'a mut ProgramCacheForTxBatch,
     pub timings: ExecuteDetailsTimings,
     pub syscall_context: Vec<Option<SyscallContext>>,
@@ -214,7 +216,6 @@ impl<'a> InvokeContext<'a> {
             program_cache_for_tx_batch,
             environment_config,
             log_collector,
-            current_compute_budget: compute_budget,
             compute_budget,
             compute_meter: RefCell::new(compute_budget.compute_unit_limit),
             programs_modified_by_tx,
@@ -256,10 +257,8 @@ impl<'a> InvokeContext<'a> {
         if self
             .transaction_context
             .get_instruction_context_stack_height()
-            == 0
+            != 0
         {
-            self.current_compute_budget = self.compute_budget;
-        } else {
             let contains = (0..self
                 .transaction_context
                 .get_instruction_context_stack_height())
@@ -592,7 +591,7 @@ impl<'a> InvokeContext<'a> {
 
     /// Get this invocation's compute budget
     pub fn get_compute_budget(&self) -> &ComputeBudget {
-        &self.current_compute_budget
+        &self.compute_budget
     }
 
     /// Get the current feature set.
