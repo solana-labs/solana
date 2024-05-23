@@ -344,8 +344,8 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
     ) -> HashMap<Pubkey, u64> {
         let mut result: HashMap<Pubkey, u64> = HashMap::new();
         check_results.iter_mut().zip(txs).for_each(|etx| {
-            if let ((Ok(()), _nonce, lamports_per_signature), tx) = etx {
-                if lamports_per_signature.is_some() {
+            if let (Ok(checked_details), tx) = etx {
+                if checked_details.lamports_per_signature.is_some() {
                     tx.message()
                         .account_keys()
                         .iter()
@@ -367,7 +367,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                     // If the transaction's nonce account was not valid, and blockhash is not found,
                     // the transaction will fail to process. Let's not load any programs from the
                     // transaction, and update the status of the transaction.
-                    *etx.0 = (Err(TransactionError::BlockhashNotFound), None, None);
+                    *etx.0 = Err(TransactionError::BlockhashNotFound);
                 }
             }
         });
@@ -830,6 +830,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
 mod tests {
     use {
         super::*,
+        crate::account_loader::CheckedTransactionDetails,
         solana_program_runtime::loaded_programs::{BlockRelation, ProgramCacheEntryType},
         solana_sdk::{
             account::{create_account_shared_data_for_test, WritableAccount},
@@ -1254,10 +1255,19 @@ mod tests {
             sanitized_transaction_1,
         ];
         let mut lock_results = vec![
-            (Ok(()), None, Some(25)),
-            (Ok(()), None, Some(25)),
-            (Ok(()), None, None),
-            (Err(TransactionError::ProgramAccountNotFound), None, None),
+            Ok(CheckedTransactionDetails {
+                nonce: None,
+                lamports_per_signature: Some(25),
+            }),
+            Ok(CheckedTransactionDetails {
+                nonce: None,
+                lamports_per_signature: Some(25),
+            }),
+            Ok(CheckedTransactionDetails {
+                nonce: None,
+                lamports_per_signature: None,
+            }),
+            Err(TransactionError::ProgramAccountNotFound),
         ];
         let owners = vec![owner1, owner2];
 
@@ -1268,10 +1278,7 @@ mod tests {
             &owners,
         );
 
-        assert_eq!(
-            lock_results[2],
-            (Err(TransactionError::BlockhashNotFound), None, None)
-        );
+        assert_eq!(lock_results[2], Err(TransactionError::BlockhashNotFound));
         assert_eq!(result.len(), 2);
         assert_eq!(result[&key1], 2);
         assert_eq!(result[&key2], 1);
@@ -1350,7 +1357,16 @@ mod tests {
             TransactionBatchProcessor::<TestForkGraph>::filter_executable_program_accounts(
                 &bank,
                 &[sanitized_tx1, sanitized_tx2],
-                &mut [(Ok(()), None, Some(0)), (Ok(()), None, Some(0))],
+                &mut [
+                    Ok(CheckedTransactionDetails {
+                        nonce: None,
+                        lamports_per_signature: Some(0),
+                    }),
+                    Ok(CheckedTransactionDetails {
+                        nonce: None,
+                        lamports_per_signature: Some(0),
+                    }),
+                ],
                 owners,
             );
 
@@ -1440,7 +1456,16 @@ mod tests {
         let sanitized_tx2 = SanitizedTransaction::from_transaction_for_tests(tx2);
 
         let owners = &[program1_pubkey, program2_pubkey];
-        let mut lock_results = vec![(Ok(()), None, Some(0)), (Ok(()), None, None)];
+        let mut lock_results = vec![
+            Ok(CheckedTransactionDetails {
+                nonce: None,
+                lamports_per_signature: Some(0),
+            }),
+            Ok(CheckedTransactionDetails {
+                nonce: None,
+                lamports_per_signature: None,
+            }),
+        ];
         let programs =
             TransactionBatchProcessor::<TestForkGraph>::filter_executable_program_accounts(
                 &bank,
@@ -1457,7 +1482,7 @@ mod tests {
                 .expect("failed to find the program account"),
             &1
         );
-        assert_eq!(lock_results[1].0, Err(TransactionError::BlockhashNotFound));
+        assert_eq!(lock_results[1], Err(TransactionError::BlockhashNotFound));
     }
 
     #[test]

@@ -809,9 +809,7 @@ impl ThreadLocalUnprocessedPackets {
         results
             .iter()
             .enumerate()
-            .filter_map(
-                |(tx_index, (result, _, _))| if result.is_ok() { Some(tx_index) } else { None },
-            )
+            .filter_map(|(tx_index, result)| result.as_ref().ok().map(|_| tx_index))
             .collect_vec()
     }
 

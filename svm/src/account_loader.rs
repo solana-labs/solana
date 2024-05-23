@@ -27,7 +27,7 @@ use {
         rent_debits::RentDebits,
         saturating_add_assign,
         sysvar::{self, instructions::construct_instructions_data},
-        transaction::{self, Result, SanitizedTransaction, TransactionError},
+        transaction::{Result, SanitizedTransaction, TransactionError},
         transaction_context::{IndexOfAccount, TransactionAccount},
     },
     solana_system_program::{get_system_account_kind, SystemAccountKind},
@@ -37,8 +37,14 @@ use {
 // for the load instructions
 pub(crate) type TransactionRent = u64;
 pub(crate) type TransactionProgramIndices = Vec<Vec<IndexOfAccount>>;
-pub type TransactionCheckResult = (transaction::Result<()>, Option<NoncePartial>, Option<u64>);
+pub type TransactionCheckResult = Result<CheckedTransactionDetails>;
 pub type TransactionLoadResult = Result<LoadedTransaction>;
+
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub struct CheckedTransactionDetails {
+    pub nonce: Option<NoncePartial>,
+    pub lamports_per_signature: Option<u64>,
+}
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct LoadedTransaction {
@@ -127,7 +133,13 @@ pub(crate) fn load_accounts<CB: TransactionProcessingCallback>(
     txs.iter()
         .zip(check_results)
         .map(|etx| match etx {
-            (tx, (Ok(()), nonce, lamports_per_signature)) => {
+            (
+                tx,
+                Ok(CheckedTransactionDetails {
+                    nonce,
+                    lamports_per_signature,
+                }),
+            ) => {
                 let message = tx.message();
                 let fee = if let Some(lamports_per_signature) = lamports_per_signature {
                     fee_structure.calculate_fee(
@@ -155,7 +167,7 @@ pub(crate) fn load_accounts<CB: TransactionProcessingCallback>(
                     loaded_programs,
                 )
             }
-            (_, (Err(e), _nonce, _lamports_per_signature)) => Err(e.clone()),
+            (_, Err(e)) => Err(e.clone()),
         })
         .collect()
 }
@@ -543,7 +555,10 @@ mod tests {
         load_accounts(
             &callbacks,
             &[sanitized_tx],
-            &[(Ok(()), None, Some(lamports_per_signature))],
+            &[Ok(CheckedTransactionDetails {
+                nonce: None,
+                lamports_per_signature: Some(lamports_per_signature),
+            })],
             error_counters,
             fee_structure,
             None,
@@ -1028,7 +1043,10 @@ mod tests {
         load_accounts(
             &callbacks,
             &[tx],
-            &[(Ok(()), None, Some(10))],
+            &[Ok(CheckedTransactionDetails {
+                nonce: None,
+                lamports_per_signature: Some(10),
+            })],
             &mut error_counters,
             &FeeStructure::default(),
             account_overrides,
@@ -2029,7 +2047,10 @@ mod tests {
         let loaded_txs = load_accounts(
             &bank,
             &[sanitized_tx.clone()],
-            &[(Ok(()), None, Some(0))],
+            &[Ok(CheckedTransactionDetails {
+                nonce: None,
+                lamports_per_signature: Some(0),
+            })],
             &mut error_counters,
             &FeeStructure::default(),
             None,
@@ -2106,8 +2127,10 @@ mod tests {
             vec![Signature::new_unique()],
             false,
         );
-        let check_result =
-            (Ok(()), Some(NoncePartial::default()), Some(20u64)) as TransactionCheckResult;
+        let check_result = Ok(CheckedTransactionDetails {
+            nonce: Some(NoncePartial::default()),
+            lamports_per_signature: Some(20),
+        });
 
         let results = load_accounts(
             &mock_bank,
@@ -2175,7 +2198,10 @@ mod tests {
             false,
         );
 
-        let check_result = (Ok(()), Some(NoncePartial::default()), None) as TransactionCheckResult;
+        let check_result = Ok(CheckedTransactionDetails {
+            nonce: Some(NoncePartial::default()),
+            lamports_per_signature: None,
+        });
         let fee_structure = FeeStructure::default();
 
         let result = load_accounts(
@@ -2190,8 +2216,10 @@ mod tests {
 
         assert_eq!(result, vec![Err(TransactionError::BlockhashNotFound)]);
 
-        let check_result =
-            (Ok(()), Some(NoncePartial::default()), Some(20u64)) as TransactionCheckResult;
+        let check_result = Ok(CheckedTransactionDetails {
+            nonce: Some(NoncePartial::default()),
+            lamports_per_signature: Some(20),
+        });
 
         let result = load_accounts(
             &mock_bank,
@@ -2205,11 +2233,7 @@ mod tests {
 
         assert_eq!(result, vec![Err(TransactionError::AccountNotFound)]);
 
-        let check_result = (
-            Err(TransactionError::InvalidWritableAccount),
-            Some(NoncePartial::default()),
-            Some(20u64),
-        ) as TransactionCheckResult;
+        let check_result = Err(TransactionError::InvalidWritableAccount);
 
         let result = load_accounts(
             &mock_bank,

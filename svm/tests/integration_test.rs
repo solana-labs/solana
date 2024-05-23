@@ -31,7 +31,7 @@ use {
         transaction::{SanitizedTransaction, TransactionError},
     },
     solana_svm::{
-        account_loader::TransactionCheckResult,
+        account_loader::{CheckedTransactionDetails, TransactionCheckResult},
         runtime_config::RuntimeConfig,
         transaction_error_metrics::TransactionErrorMetrics,
         transaction_processing_callback::TransactionProcessingCallback,
@@ -271,7 +271,10 @@ fn prepare_transactions(
         transaction_builder.build(Hash::default(), (fee_payer, Signature::new_unique()), false);
 
     all_transactions.push(sanitized_transaction);
-    transaction_checks.push((Ok(()), None, Some(20)));
+    transaction_checks.push(Ok(CheckedTransactionDetails {
+        nonce: None,
+        lamports_per_signature: Some(20),
+    }));
 
     // The transaction fee payer must have enough funds
     let mut account_data = AccountSharedData::default();
@@ -314,7 +317,10 @@ fn prepare_transactions(
     let sanitized_transaction =
         transaction_builder.build(Hash::default(), (fee_payer, Signature::new_unique()), true);
     all_transactions.push(sanitized_transaction);
-    transaction_checks.push((Ok(()), None, Some(20)));
+    transaction_checks.push(Ok(CheckedTransactionDetails {
+        nonce: None,
+        lamports_per_signature: Some(20),
+    }));
 
     // Setting up the accounts for the transfer
 
@@ -353,7 +359,10 @@ fn prepare_transactions(
         transaction_builder.build(Hash::default(), (fee_payer, Signature::new_unique()), false);
 
     all_transactions.push(sanitized_transaction);
-    transaction_checks.push((Ok(()), None, Some(20)));
+    transaction_checks.push(Ok(CheckedTransactionDetails {
+        nonce: None,
+        lamports_per_signature: Some(20),
+    }));
 
     let mut account_data = AccountSharedData::default();
     account_data.set_lamports(80000);
@@ -394,7 +403,10 @@ fn prepare_transactions(
     let sanitized_transaction =
         transaction_builder.build(Hash::default(), (fee_payer, Signature::new_unique()), true);
     all_transactions.push(sanitized_transaction.clone());
-    transaction_checks.push((Ok(()), None, Some(20)));
+    transaction_checks.push(Ok(CheckedTransactionDetails {
+        nonce: None,
+        lamports_per_signature: Some(20),
+    }));
 
     // fee payer
     let mut account_data = AccountSharedData::default();
@@ -422,7 +434,7 @@ fn prepare_transactions(
 
     // A transaction whose verification has already failed
     all_transactions.push(sanitized_transaction);
-    transaction_checks.push((Err(TransactionError::BlockhashNotFound), None, Some(20)));
+    transaction_checks.push(Err(TransactionError::BlockhashNotFound));
 
     (all_transactions, transaction_checks)
 }
