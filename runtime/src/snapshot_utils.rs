@@ -539,7 +539,7 @@ pub enum GetSnapshotAccountsHardLinkDirError {
 /// from <account_path>/run taken at snapshot <slot> time.  They are referenced by the symlinks from the
 /// bank snapshot dir snapshot/<slot>/accounts_hardlinks/.  We observed that sometimes the bank snapshot dir
 /// could be deleted but the account snapshot directories were left behind, possibly by some manual operations
-/// or some legacy code not using the symlinks to clean up the acccount snapshot hardlink directories.
+/// or some legacy code not using the symlinks to clean up the account snapshot hardlink directories.
 /// This function cleans up any account snapshot directories that are no longer referenced by the bank
 /// snapshot dirs, to ensure proper snapshot operations.
 pub fn clean_orphaned_account_snapshot_dirs(
