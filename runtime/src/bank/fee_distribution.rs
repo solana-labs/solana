@@ -85,24 +85,18 @@ impl Bank {
         transaction: &SanitizedTransaction,
         fee_budget_limits: &FeeBudgetLimits,
     ) -> u64 {
+        let fee_details = self.fee_structure().calculate_fee_details(
+            transaction.message(),
+            fee_budget_limits,
+            self.feature_set
+                .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
+            self.feature_set
+                .is_active(&remove_rounding_in_fee_calculation::id()),
+        );
         let (reward, _burn) = if self.feature_set.is_active(&reward_full_priority_fee::id()) {
-            let fee_details = self.fee_structure().calculate_fee_details(
-                transaction.message(),
-                fee_budget_limits,
-                self.feature_set
-                    .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
-            );
             self.calculate_reward_and_burn_fee_details(&CollectorFeeDetails::from(fee_details))
         } else {
-            let fee = self.fee_structure().calculate_fee(
-                transaction.message(),
-                5_000, // this just needs to be non-zero
-                fee_budget_limits,
-                self.feature_set
-                    .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
-                self.feature_set
-                    .is_active(&remove_rounding_in_fee_calculation::id()),
-            );
+            let fee = fee_details.total_fee();
             self.calculate_reward_and_burn_fees(fee)
         };
         reward

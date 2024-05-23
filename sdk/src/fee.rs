@@ -31,16 +31,17 @@ pub struct FeeStructure {
     pub compute_fee_bins: Vec<FeeBin>,
 }
 
-#[derive(Debug, Default, Clone, Eq, PartialEq)]
+#[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
 pub struct FeeDetails {
     transaction_fee: u64,
     prioritization_fee: u64,
+    remove_rounding_in_fee_calculation: bool,
 }
 
 impl FeeDetails {
-    pub fn total_fee(&self, remove_rounding_in_fee_calculation: bool) -> u64 {
+    pub fn total_fee(&self) -> u64 {
         let total_fee = self.transaction_fee.saturating_add(self.prioritization_fee);
-        if remove_rounding_in_fee_calculation {
+        if self.remove_rounding_in_fee_calculation {
             total_fee
         } else {
             // backward compatible behavior
@@ -133,8 +134,9 @@ impl FeeStructure {
                 message,
                 budget_limits,
                 include_loaded_account_data_size_in_fee,
+                remove_rounding_in_fee_calculation,
             )
-            .total_fee(remove_rounding_in_fee_calculation)
+            .total_fee()
         }
     }
 
@@ -145,6 +147,7 @@ impl FeeStructure {
         message: &SanitizedMessage,
         budget_limits: &FeeBudgetLimits,
         include_loaded_account_data_size_in_fee: bool,
+        remove_rounding_in_fee_calculation: bool,
     ) -> FeeDetails {
         let signature_fee = message
             .num_signatures()
@@ -182,6 +185,7 @@ impl FeeStructure {
                 .saturating_add(write_lock_fee)
                 .saturating_add(compute_fee),
             prioritization_fee: budget_limits.prioritization_fee,
+            remove_rounding_in_fee_calculation,
         }
     }
 }
@@ -240,13 +244,22 @@ mod tests {
         // round large `f64` can lost precision, see feature gate:
         // "Removing unwanted rounding in fee calculation #34982"
 
-        let large_fee_details = FeeDetails {
-            transaction_fee: u64::MAX - 11,
-            prioritization_fee: 1,
-        };
+        let transaction_fee = u64::MAX - 11;
+        let prioritization_fee = 1;
         let expected_large_fee = u64::MAX - 10;
 
-        assert_eq!(large_fee_details.total_fee(true), expected_large_fee);
-        assert_ne!(large_fee_details.total_fee(false), expected_large_fee);
+        let details_with_rounding = FeeDetails {
+            transaction_fee,
+            prioritization_fee,
+            remove_rounding_in_fee_calculation: false,
+        };
+        let details_without_rounding = FeeDetails {
+            transaction_fee,
+            prioritization_fee,
+            remove_rounding_in_fee_calculation: true,
+        };
+
+        assert_eq!(details_without_rounding.total_fee(), expected_large_fee);
+        assert_ne!(details_with_rounding.total_fee(), expected_large_fee);
     }
 }

@@ -3950,16 +3950,15 @@ impl Bank {
                             .into(),
                         self.feature_set
                             .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
+                        self.feature_set
+                            .is_active(&remove_rounding_in_fee_calculation::id()),
                     );
 
                     self.check_execution_status_and_charge_fee(
                         message,
                         execution_status,
                         is_nonce,
-                        fee_details.total_fee(
-                            self.feature_set
-                                .is_active(&remove_rounding_in_fee_calculation::id()),
-                        ),
+                        fee_details.total_fee(),
                     )?;
 
                     accumulated_fee_details.accumulate(&fee_details);
