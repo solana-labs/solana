@@ -4,25 +4,24 @@
 //! certifies that a given ciphertext encrypts the message 0 in the field (`Scalar::zero()`). To
 //! generate the proof, a prover must provide the decryption key for the ciphertext.
 
-use {
-    crate::{
-        elgamal_program::{
-            errors::{ProofGenerationError, ProofVerificationError},
-            proof_data::{ProofType, ZkProofData},
-        },
-        encryption::pod::elgamal::{PodElGamalCiphertext, PodElGamalPubkey},
-        sigma_proofs::pod::PodZeroCiphertextProof,
-    },
-    bytemuck::{bytes_of, Pod, Zeroable},
-};
 #[cfg(not(target_os = "solana"))]
 use {
     crate::{
+        elgamal_program::errors::{ProofGenerationError, ProofVerificationError},
         encryption::elgamal::{ElGamalCiphertext, ElGamalKeypair},
         sigma_proofs::zero_ciphertext::ZeroCiphertextProof,
     },
+    bytemuck::bytes_of,
     merlin::Transcript,
     std::convert::TryInto,
+};
+use {
+    crate::{
+        elgamal_program::proof_data::{ProofType, ZkProofData},
+        encryption::pod::elgamal::{PodElGamalCiphertext, PodElGamalPubkey},
+        sigma_proofs::pod::PodZeroCiphertextProof,
+    },
+    bytemuck::{Pod, Zeroable},
 };
 
 /// The instruction data that is needed for the `ProofInstruction::ZeroCiphertext` instruction.
