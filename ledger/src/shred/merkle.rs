@@ -142,110 +142,7 @@ impl Shred {
 }
 
 impl ShredData {
-    // proof_size is the number of merkle proof entries.
-    fn proof_size(&self) -> Result<u8, Error> {
-        match self.common_header.shred_variant {
-            ShredVariant::MerkleData { proof_size, .. } => Ok(proof_size),
-            _ => Err(Error::InvalidShredVariant),
-        }
-    }
-
-    // Maximum size of ledger data that can be embedded in a data-shred.
-    // Also equal to:
-    //   ShredCode::capacity(proof_size, chained, resigned).unwrap()
-    //       - ShredData::SIZE_OF_HEADERS
-    //       + SIZE_OF_SIGNATURE
-    pub(super) fn capacity(proof_size: u8, chained: bool, resigned: bool) -> Result<usize, Error> {
-        debug_assert!(chained || !resigned);
-        Self::SIZE_OF_PAYLOAD
-            .checked_sub(
-                Self::SIZE_OF_HEADERS
-                    + if chained { SIZE_OF_MERKLE_ROOT } else { 0 }
-                    + usize::from(proof_size) * SIZE_OF_MERKLE_PROOF_ENTRY
-                    + if resigned { SIZE_OF_SIGNATURE } else { 0 },
-            )
-            .ok_or(Error::InvalidProofSize(proof_size))
-    }
-
-    // Where the merkle proof starts in the shred binary.
-    fn proof_offset(&self) -> Result<usize, Error> {
-        let ShredVariant::MerkleData {
-            proof_size,
-            chained,
-            resigned,
-        } = self.common_header.shred_variant
-        else {
-            return Err(Error::InvalidShredVariant);
-        };
-        Self::get_proof_offset(proof_size, chained, resigned)
-    }
-
-    fn get_proof_offset(proof_size: u8, chained: bool, resigned: bool) -> Result<usize, Error> {
-        Ok(Self::SIZE_OF_HEADERS
-            + Self::capacity(proof_size, chained, resigned)?
-            + if chained { SIZE_OF_MERKLE_ROOT } else { 0 })
-    }
-
-    fn chained_merkle_root_offset(&self) -> Result<usize, Error> {
-        let ShredVariant::MerkleData {
-            proof_size,
-            chained,
-            resigned,
-        } = self.common_header.shred_variant
-        else {
-            return Err(Error::InvalidShredVariant);
-        };
-        Self::get_chained_merkle_root_offset(proof_size, chained, resigned)
-    }
-
-    pub(super) fn get_chained_merkle_root_offset(
-        proof_size: u8,
-        chained: bool,
-        resigned: bool,
-    ) -> Result<usize, Error> {
-        if !chained {
-            return Err(Error::InvalidShredVariant);
-        }
-        debug_assert!(chained);
-        Ok(Self::SIZE_OF_HEADERS + Self::capacity(proof_size, chained, resigned)?)
-    }
-
-    pub(super) fn chained_merkle_root(&self) -> Result<Hash, Error> {
-        let offset = self.chained_merkle_root_offset()?;
-        self.payload
-            .get(offset..offset + SIZE_OF_MERKLE_ROOT)
-            .map(Hash::new)
-            .ok_or(Error::InvalidPayloadSize(self.payload.len()))
-    }
-
-    fn set_chained_merkle_root(&mut self, chained_merkle_root: &Hash) -> Result<(), Error> {
-        let offset = self.chained_merkle_root_offset()?;
-        let Some(buffer) = self.payload.get_mut(offset..offset + SIZE_OF_MERKLE_ROOT) else {
-            return Err(Error::InvalidPayloadSize(self.payload.len()));
-        };
-        buffer.copy_from_slice(chained_merkle_root.as_ref());
-        Ok(())
-    }
-
-    pub(super) fn merkle_root(&self) -> Result<Hash, Error> {
-        let proof_size = self.proof_size()?;
-        let index = self.erasure_shard_index()?;
-        let proof_offset = self.proof_offset()?;
-        let proof = get_merkle_proof(&self.payload, proof_offset, proof_size)?;
-        let node = get_merkle_node(&self.payload, SIZE_OF_SIGNATURE..proof_offset)?;
-        get_merkle_root(index, node, proof)
-    }
-
-    fn merkle_proof(&self) -> Result<impl Iterator<Item = &MerkleProofEntry>, Error> {
-        let proof_size = self.proof_size()?;
-        let proof_offset = self.proof_offset()?;
-        get_merkle_proof(&self.payload, proof_offset, proof_size)
-    }
-
-    fn merkle_node(&self) -> Result<Hash, Error> {
-        let proof_offset = self.proof_offset()?;
-        get_merkle_node(&self.payload, SIZE_OF_SIGNATURE..proof_offset)
-    }
+    impl_merkle_shred!(MerkleData);
 
     fn from_recovered_shard(
         signature: &Signature,
@@ -290,23 +187,6 @@ impl ShredData {
         Ok(shred)
     }
 
-    fn set_merkle_proof(&mut self, proof: &[&MerkleProofEntry]) -> Result<(), Error> {
-        let proof_size = self.proof_size()?;
-        if proof.len() != usize::from(proof_size) {
-            return Err(Error::InvalidMerkleProof);
-        }
-        let proof_offset = self.proof_offset()?;
-        let mut cursor = Cursor::new(
-            self.payload
-                .get_mut(proof_offset..)
-                .ok_or(Error::InvalidProofSize(proof_size))?,
-        );
-        for entry in proof {
-            bincode::serialize_into(&mut cursor, entry)?;
-        }
-        Ok(())
-    }
-
     pub(super) fn get_merkle_root(
         shred: &[u8],
         proof_size: u8,
@@ -336,153 +216,10 @@ impl ShredData {
         let node = get_merkle_node(shred, SIZE_OF_SIGNATURE..proof_offset).ok()?;
         get_merkle_root(index, node, proof).ok()
     }
-
-    pub(super) fn retransmitter_signature(&self) -> Result<Signature, Error> {
-        let offset = self.retransmitter_signature_offset()?;
-        self.payload
-            .get(offset..offset + SIZE_OF_SIGNATURE)
-            .map(|bytes| <[u8; SIZE_OF_SIGNATURE]>::try_from(bytes).unwrap())
-            .map(Signature::from)
-            .ok_or(Error::InvalidPayloadSize(self.payload.len()))
-    }
-
-    fn set_retransmitter_signature(&mut self, signature: &Signature) -> Result<(), Error> {
-        let offset = self.retransmitter_signature_offset()?;
-        let Some(buffer) = self.payload.get_mut(offset..offset + SIZE_OF_SIGNATURE) else {
-            return Err(Error::InvalidPayloadSize(self.payload.len()));
-        };
-        buffer.copy_from_slice(signature.as_ref());
-        Ok(())
-    }
-
-    fn retransmitter_signature_offset(&self) -> Result<usize, Error> {
-        let ShredVariant::MerkleData {
-            proof_size,
-            chained,
-            resigned,
-        } = self.common_header.shred_variant
-        else {
-            return Err(Error::InvalidShredVariant);
-        };
-        Self::get_retransmitter_signature_offset(proof_size, chained, resigned)
-    }
-
-    pub(super) fn get_retransmitter_signature_offset(
-        proof_size: u8,
-        chained: bool,
-        resigned: bool,
-    ) -> Result<usize, Error> {
-        if !resigned {
-            return Err(Error::InvalidShredVariant);
-        }
-        let proof_offset = Self::get_proof_offset(proof_size, chained, resigned)?;
-        Ok(proof_offset + usize::from(proof_size) * SIZE_OF_MERKLE_PROOF_ENTRY)
-    }
 }
 
 impl ShredCode {
-    // proof_size is the number of merkle proof entries.
-    fn proof_size(&self) -> Result<u8, Error> {
-        match self.common_header.shred_variant {
-            ShredVariant::MerkleCode { proof_size, .. } => Ok(proof_size),
-            _ => Err(Error::InvalidShredVariant),
-        }
-    }
-
-    // Size of buffer embedding erasure codes.
-    fn capacity(proof_size: u8, chained: bool, resigned: bool) -> Result<usize, Error> {
-        debug_assert!(chained || !resigned);
-        // Merkle proof is generated and signed after coding shreds are
-        // generated. Coding shred headers cannot be erasure coded either.
-        Self::SIZE_OF_PAYLOAD
-            .checked_sub(
-                Self::SIZE_OF_HEADERS
-                    + if chained { SIZE_OF_MERKLE_ROOT } else { 0 }
-                    + usize::from(proof_size) * SIZE_OF_MERKLE_PROOF_ENTRY
-                    + if resigned { SIZE_OF_SIGNATURE } else { 0 },
-            )
-            .ok_or(Error::InvalidProofSize(proof_size))
-    }
-
-    // Where the merkle proof starts in the shred binary.
-    fn proof_offset(&self) -> Result<usize, Error> {
-        let ShredVariant::MerkleCode {
-            proof_size,
-            chained,
-            resigned,
-        } = self.common_header.shred_variant
-        else {
-            return Err(Error::InvalidShredVariant);
-        };
-        Self::get_proof_offset(proof_size, chained, resigned)
-    }
-
-    fn get_proof_offset(proof_size: u8, chained: bool, resigned: bool) -> Result<usize, Error> {
-        Ok(Self::SIZE_OF_HEADERS
-            + Self::capacity(proof_size, chained, resigned)?
-            + if chained { SIZE_OF_MERKLE_ROOT } else { 0 })
-    }
-
-    fn chained_merkle_root_offset(&self) -> Result<usize, Error> {
-        let ShredVariant::MerkleCode {
-            proof_size,
-            chained,
-            resigned,
-        } = self.common_header.shred_variant
-        else {
-            return Err(Error::InvalidShredVariant);
-        };
-        Self::get_chained_merkle_root_offset(proof_size, chained, resigned)
-    }
-
-    pub(super) fn get_chained_merkle_root_offset(
-        proof_size: u8,
-        chained: bool,
-        resigned: bool,
-    ) -> Result<usize, Error> {
-        if !chained {
-            return Err(Error::InvalidShredVariant);
-        }
-        debug_assert!(chained);
-        Ok(Self::SIZE_OF_HEADERS + Self::capacity(proof_size, chained, resigned)?)
-    }
-
-    pub(super) fn chained_merkle_root(&self) -> Result<Hash, Error> {
-        let offset = self.chained_merkle_root_offset()?;
-        self.payload
-            .get(offset..offset + SIZE_OF_MERKLE_ROOT)
-            .map(Hash::new)
-            .ok_or(Error::InvalidPayloadSize(self.payload.len()))
-    }
-
-    fn set_chained_merkle_root(&mut self, chained_merkle_root: &Hash) -> Result<(), Error> {
-        let offset = self.chained_merkle_root_offset()?;
-        let Some(buffer) = self.payload.get_mut(offset..offset + SIZE_OF_MERKLE_ROOT) else {
-            return Err(Error::InvalidPayloadSize(self.payload.len()));
-        };
-        buffer.copy_from_slice(chained_merkle_root.as_ref());
-        Ok(())
-    }
-
-    pub(super) fn merkle_root(&self) -> Result<Hash, Error> {
-        let proof_size = self.proof_size()?;
-        let index = self.erasure_shard_index()?;
-        let proof_offset = self.proof_offset()?;
-        let proof = get_merkle_proof(&self.payload, proof_offset, proof_size)?;
-        let node = get_merkle_node(&self.payload, SIZE_OF_SIGNATURE..proof_offset)?;
-        get_merkle_root(index, node, proof)
-    }
-
-    fn merkle_proof(&self) -> Result<impl Iterator<Item = &MerkleProofEntry>, Error> {
-        let proof_size = self.proof_size()?;
-        let proof_offset = self.proof_offset()?;
-        get_merkle_proof(&self.payload, proof_offset, proof_size)
-    }
-
-    fn merkle_node(&self) -> Result<Hash, Error> {
-        let proof_offset = self.proof_offset()?;
-        get_merkle_node(&self.payload, SIZE_OF_SIGNATURE..proof_offset)
-    }
+    impl_merkle_shred!(MerkleCode);
 
     fn from_recovered_shard(
         common_header: ShredCommonHeader,
@@ -526,23 +263,6 @@ impl ShredCode {
         Ok(shred)
     }
 
-    fn set_merkle_proof(&mut self, proof: &[&MerkleProofEntry]) -> Result<(), Error> {
-        let proof_size = self.proof_size()?;
-        if proof.len() != usize::from(proof_size) {
-            return Err(Error::InvalidMerkleProof);
-        }
-        let proof_offset = self.proof_offset()?;
-        let mut cursor = Cursor::new(
-            self.payload
-                .get_mut(proof_offset..)
-                .ok_or(Error::InvalidProofSize(proof_size))?,
-        );
-        for entry in proof {
-            bincode::serialize_into(&mut cursor, entry)?;
-        }
-        Ok(())
-    }
-
     pub(super) fn get_merkle_root(
         shred: &[u8],
         proof_size: u8,
@@ -574,49 +294,184 @@ impl ShredCode {
         let node = get_merkle_node(shred, SIZE_OF_SIGNATURE..proof_offset).ok()?;
         get_merkle_root(index, node, proof).ok()
     }
-
-    pub(super) fn retransmitter_signature(&self) -> Result<Signature, Error> {
-        let offset = self.retransmitter_signature_offset()?;
-        self.payload
-            .get(offset..offset + SIZE_OF_SIGNATURE)
-            .map(|bytes| <[u8; SIZE_OF_SIGNATURE]>::try_from(bytes).unwrap())
-            .map(Signature::from)
-            .ok_or(Error::InvalidPayloadSize(self.payload.len()))
-    }
-
-    fn set_retransmitter_signature(&mut self, signature: &Signature) -> Result<(), Error> {
-        let offset = self.retransmitter_signature_offset()?;
-        let Some(buffer) = self.payload.get_mut(offset..offset + SIZE_OF_SIGNATURE) else {
-            return Err(Error::InvalidPayloadSize(self.payload.len()));
-        };
-        buffer.copy_from_slice(signature.as_ref());
-        Ok(())
-    }
-
-    fn retransmitter_signature_offset(&self) -> Result<usize, Error> {
-        let ShredVariant::MerkleCode {
-            proof_size,
-            chained,
-            resigned,
-        } = self.common_header.shred_variant
-        else {
-            return Err(Error::InvalidShredVariant);
-        };
-        Self::get_retransmitter_signature_offset(proof_size, chained, resigned)
-    }
-
-    pub(super) fn get_retransmitter_signature_offset(
-        proof_size: u8,
-        chained: bool,
-        resigned: bool,
-    ) -> Result<usize, Error> {
-        if !resigned {
-            return Err(Error::InvalidShredVariant);
-        }
-        let proof_offset = Self::get_proof_offset(proof_size, chained, resigned)?;
-        Ok(proof_offset + usize::from(proof_size) * SIZE_OF_MERKLE_PROOF_ENTRY)
-    }
 }
+
+macro_rules! impl_merkle_shred {
+    ($variant:ident) => {
+        // proof_size is the number of merkle proof entries.
+        fn proof_size(&self) -> Result<u8, Error> {
+            match self.common_header.shred_variant {
+                ShredVariant::$variant { proof_size, .. } => Ok(proof_size),
+                _ => Err(Error::InvalidShredVariant),
+            }
+        }
+
+        // For ShredCode, size of buffer embedding erasure codes.
+        // For ShredData, maximum size of ledger data that can be embedded in a
+        // data-shred, which is also equal to:
+        //   ShredCode::capacity(proof_size, chained, resigned).unwrap()
+        //       - ShredData::SIZE_OF_HEADERS
+        //       + SIZE_OF_SIGNATURE
+        pub(super) fn capacity(
+            proof_size: u8,
+            chained: bool,
+            resigned: bool,
+        ) -> Result<usize, Error> {
+            debug_assert!(chained || !resigned);
+            // Merkle proof is generated and signed after coding shreds are
+            // generated. Coding shred headers cannot be erasure coded either.
+            Self::SIZE_OF_PAYLOAD
+                .checked_sub(
+                    Self::SIZE_OF_HEADERS
+                        + if chained { SIZE_OF_MERKLE_ROOT } else { 0 }
+                        + usize::from(proof_size) * SIZE_OF_MERKLE_PROOF_ENTRY
+                        + if resigned { SIZE_OF_SIGNATURE } else { 0 },
+                )
+                .ok_or(Error::InvalidProofSize(proof_size))
+        }
+
+        // Where the merkle proof starts in the shred binary.
+        fn proof_offset(&self) -> Result<usize, Error> {
+            let ShredVariant::$variant {
+                proof_size,
+                chained,
+                resigned,
+            } = self.common_header.shred_variant
+            else {
+                return Err(Error::InvalidShredVariant);
+            };
+            Self::get_proof_offset(proof_size, chained, resigned)
+        }
+
+        fn get_proof_offset(proof_size: u8, chained: bool, resigned: bool) -> Result<usize, Error> {
+            Ok(Self::SIZE_OF_HEADERS
+                + Self::capacity(proof_size, chained, resigned)?
+                + if chained { SIZE_OF_MERKLE_ROOT } else { 0 })
+        }
+
+        fn chained_merkle_root_offset(&self) -> Result<usize, Error> {
+            let ShredVariant::$variant {
+                proof_size,
+                chained,
+                resigned,
+            } = self.common_header.shred_variant
+            else {
+                return Err(Error::InvalidShredVariant);
+            };
+            Self::get_chained_merkle_root_offset(proof_size, chained, resigned)
+        }
+
+        pub(super) fn get_chained_merkle_root_offset(
+            proof_size: u8,
+            chained: bool,
+            resigned: bool,
+        ) -> Result<usize, Error> {
+            if !chained {
+                return Err(Error::InvalidShredVariant);
+            }
+            debug_assert!(chained);
+            Ok(Self::SIZE_OF_HEADERS + Self::capacity(proof_size, chained, resigned)?)
+        }
+
+        pub(super) fn chained_merkle_root(&self) -> Result<Hash, Error> {
+            let offset = self.chained_merkle_root_offset()?;
+            self.payload
+                .get(offset..offset + SIZE_OF_MERKLE_ROOT)
+                .map(Hash::new)
+                .ok_or(Error::InvalidPayloadSize(self.payload.len()))
+        }
+
+        fn set_chained_merkle_root(&mut self, chained_merkle_root: &Hash) -> Result<(), Error> {
+            let offset = self.chained_merkle_root_offset()?;
+            let Some(buffer) = self.payload.get_mut(offset..offset + SIZE_OF_MERKLE_ROOT) else {
+                return Err(Error::InvalidPayloadSize(self.payload.len()));
+            };
+            buffer.copy_from_slice(chained_merkle_root.as_ref());
+            Ok(())
+        }
+
+        pub(super) fn merkle_root(&self) -> Result<Hash, Error> {
+            let proof_size = self.proof_size()?;
+            let index = self.erasure_shard_index()?;
+            let proof_offset = self.proof_offset()?;
+            let proof = get_merkle_proof(&self.payload, proof_offset, proof_size)?;
+            let node = get_merkle_node(&self.payload, SIZE_OF_SIGNATURE..proof_offset)?;
+            get_merkle_root(index, node, proof)
+        }
+
+        fn merkle_proof(&self) -> Result<impl Iterator<Item = &MerkleProofEntry>, Error> {
+            let proof_size = self.proof_size()?;
+            let proof_offset = self.proof_offset()?;
+            get_merkle_proof(&self.payload, proof_offset, proof_size)
+        }
+
+        fn merkle_node(&self) -> Result<Hash, Error> {
+            let proof_offset = self.proof_offset()?;
+            get_merkle_node(&self.payload, SIZE_OF_SIGNATURE..proof_offset)
+        }
+
+        fn set_merkle_proof(&mut self, proof: &[&MerkleProofEntry]) -> Result<(), Error> {
+            let proof_size = self.proof_size()?;
+            if proof.len() != usize::from(proof_size) {
+                return Err(Error::InvalidMerkleProof);
+            }
+            let proof_offset = self.proof_offset()?;
+            let mut cursor = Cursor::new(
+                self.payload
+                    .get_mut(proof_offset..)
+                    .ok_or(Error::InvalidProofSize(proof_size))?,
+            );
+            for entry in proof {
+                bincode::serialize_into(&mut cursor, entry)?;
+            }
+            Ok(())
+        }
+
+        pub(super) fn retransmitter_signature(&self) -> Result<Signature, Error> {
+            let offset = self.retransmitter_signature_offset()?;
+            self.payload
+                .get(offset..offset + SIZE_OF_SIGNATURE)
+                .map(|bytes| <[u8; SIZE_OF_SIGNATURE]>::try_from(bytes).unwrap())
+                .map(Signature::from)
+                .ok_or(Error::InvalidPayloadSize(self.payload.len()))
+        }
+
+        fn set_retransmitter_signature(&mut self, signature: &Signature) -> Result<(), Error> {
+            let offset = self.retransmitter_signature_offset()?;
+            let Some(buffer) = self.payload.get_mut(offset..offset + SIZE_OF_SIGNATURE) else {
+                return Err(Error::InvalidPayloadSize(self.payload.len()));
+            };
+            buffer.copy_from_slice(signature.as_ref());
+            Ok(())
+        }
+
+        fn retransmitter_signature_offset(&self) -> Result<usize, Error> {
+            let ShredVariant::$variant {
+                proof_size,
+                chained,
+                resigned,
+            } = self.common_header.shred_variant
+            else {
+                return Err(Error::InvalidShredVariant);
+            };
+            Self::get_retransmitter_signature_offset(proof_size, chained, resigned)
+        }
+
+        pub(super) fn get_retransmitter_signature_offset(
+            proof_size: u8,
+            chained: bool,
+            resigned: bool,
+        ) -> Result<usize, Error> {
+            if !resigned {
+                return Err(Error::InvalidShredVariant);
+            }
+            let proof_offset = Self::get_proof_offset(proof_size, chained, resigned)?;
+            Ok(proof_offset + usize::from(proof_size) * SIZE_OF_MERKLE_PROOF_ENTRY)
+        }
+    };
+}
+
+use impl_merkle_shred;
 
 impl<'a> ShredTrait<'a> for ShredData {
     type SignedData = Hash;
