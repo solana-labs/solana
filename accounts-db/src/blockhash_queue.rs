@@ -10,17 +10,23 @@ use {
 
 #[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-struct HashAge {
+pub struct HashInfo {
     fee_calculator: FeeCalculator,
     hash_index: u64,
     timestamp: u64,
+}
+
+impl HashInfo {
+    pub fn lamports_per_signature(&self) -> u64 {
+        self.fee_calculator.lamports_per_signature
+    }
 }
 
 /// Low memory overhead, so can be cloned for every checkpoint
 #[cfg_attr(
     feature = "frozen-abi",
     derive(AbiExample),
-    frozen_abi(digest = "8upYCMG37Awf4FGQ5kKtZARHP1QfD2GMpQCPnwCCsxhu")
+    frozen_abi(digest = "HzbCqb1YtCodkx6Fu57SpzkgaLp9WSrtw8texsjBhEDH")
 )]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BlockhashQueue {
@@ -30,7 +36,7 @@ pub struct BlockhashQueue {
     /// last hash to be registered
     last_hash: Option<Hash>,
 
-    ages: HashMap<Hash, HashAge>,
+    hashes: HashMap<Hash, HashInfo>,
 
     /// hashes older than `max_age` will be dropped from the queue
     max_age: usize,
@@ -45,7 +51,7 @@ impl Default for BlockhashQueue {
 impl BlockhashQueue {
     pub fn new(max_age: usize) -> Self {
         Self {
-            ages: HashMap::new(),
+            hashes: HashMap::new(),
             last_hash_index: 0,
             last_hash: None,
             max_age,
@@ -57,7 +63,7 @@ impl BlockhashQueue {
     }
 
     pub fn get_lamports_per_signature(&self, hash: &Hash) -> Option<u64> {
-        self.ages
+        self.hashes
             .get(hash)
             .map(|hash_age| hash_age.fee_calculator.lamports_per_signature)
     }
@@ -65,27 +71,32 @@ impl BlockhashQueue {
     /// Check if the age of the hash is within the queue's max age
     #[deprecated(since = "2.0.0", note = "Please use `is_hash_valid_for_age` instead")]
     pub fn is_hash_valid(&self, hash: &Hash) -> bool {
-        self.ages.contains_key(hash)
+        self.hashes.contains_key(hash)
     }
 
     /// Check if the age of the hash is within the specified age
     pub fn is_hash_valid_for_age(&self, hash: &Hash, max_age: usize) -> bool {
-        self.ages
-            .get(hash)
-            .map(|age| Self::is_hash_index_valid(self.last_hash_index, max_age, age.hash_index))
-            .unwrap_or(false)
+        self.get_hash_info_if_valid(hash, max_age).is_some()
+    }
+
+    /// Get hash info for the specified hash if it is in the queue and its age
+    /// of the hash is within the specified age
+    pub fn get_hash_info_if_valid(&self, hash: &Hash, max_age: usize) -> Option<&HashInfo> {
+        self.hashes.get(hash).filter(|info| {
+            Self::is_hash_index_valid(self.last_hash_index, max_age, info.hash_index)
+        })
     }
 
     pub fn get_hash_age(&self, hash: &Hash) -> Option<u64> {
-        self.ages
+        self.hashes
             .get(hash)
-            .map(|age| self.last_hash_index - age.hash_index)
+            .map(|info| self.last_hash_index - info.hash_index)
     }
 
     pub fn genesis_hash(&mut self, hash: &Hash, lamports_per_signature: u64) {
-        self.ages.insert(
+        self.hashes.insert(
             *hash,
-            HashAge {
+            HashInfo {
                 fee_calculator: FeeCalculator::new(lamports_per_signature),
                 hash_index: 0,
                 timestamp: timestamp(),
@@ -101,15 +112,15 @@ impl BlockhashQueue {
 
     pub fn register_hash(&mut self, hash: &Hash, lamports_per_signature: u64) {
         self.last_hash_index += 1;
-        if self.ages.len() >= self.max_age {
-            self.ages.retain(|_, age| {
-                Self::is_hash_index_valid(self.last_hash_index, self.max_age, age.hash_index)
+        if self.hashes.len() >= self.max_age {
+            self.hashes.retain(|_, info| {
+                Self::is_hash_index_valid(self.last_hash_index, self.max_age, info.hash_index)
             });
         }
 
-        self.ages.insert(
+        self.hashes.insert(
             *hash,
-            HashAge {
+            HashInfo {
                 fee_calculator: FeeCalculator::new(lamports_per_signature),
                 hash_index: self.last_hash_index,
                 timestamp: timestamp(),
@@ -125,7 +136,7 @@ impl BlockhashQueue {
     )]
     #[allow(deprecated)]
     pub fn get_recent_blockhashes(&self) -> impl Iterator<Item = recent_blockhashes::IterItem> {
-        (self.ages).iter().map(|(k, v)| {
+        (self.hashes).iter().map(|(k, v)| {
             recent_blockhashes::IterItem(v.hash_index, k, v.fee_calculator.lamports_per_signature)
         })
     }
@@ -212,22 +223,22 @@ mod tests {
     fn test_len() {
         const MAX_AGE: usize = 10;
         let mut hash_queue = BlockhashQueue::new(MAX_AGE);
-        assert_eq!(hash_queue.ages.len(), 0);
+        assert_eq!(hash_queue.hashes.len(), 0);
 
         for _ in 0..MAX_AGE {
             hash_queue.register_hash(&Hash::new_unique(), 0);
         }
-        assert_eq!(hash_queue.ages.len(), MAX_AGE);
+        assert_eq!(hash_queue.hashes.len(), MAX_AGE);
 
         // Show that the queue actually holds one more entry than the max age.
         // This is because the most recent hash is considered to have an age of 0,
         // which is likely the result of an unintentional off-by-one error in the past.
         hash_queue.register_hash(&Hash::new_unique(), 0);
-        assert_eq!(hash_queue.ages.len(), MAX_AGE + 1);
+        assert_eq!(hash_queue.hashes.len(), MAX_AGE + 1);
 
         // Ensure that no additional entries beyond `MAX_AGE + 1` are added
         hash_queue.register_hash(&Hash::new_unique(), 0);
-        assert_eq!(hash_queue.ages.len(), MAX_AGE + 1);
+        assert_eq!(hash_queue.hashes.len(), MAX_AGE + 1);
     }
 
     #[test]
@@ -282,5 +293,41 @@ mod tests {
         // When max age is 0, only the most recent blockhash is still considered valid
         assert!(hash_queue.is_hash_valid_for_age(&hash_list[MAX_AGE], 0));
         assert!(!hash_queue.is_hash_valid_for_age(&hash_list[MAX_AGE - 1], 0));
+    }
+
+    #[test]
+    fn test_get_hash_info_if_valid() {
+        const MAX_AGE: usize = 10;
+        let mut hash_list: Vec<Hash> = Vec::new();
+        hash_list.resize_with(MAX_AGE + 1, Hash::new_unique);
+
+        let mut hash_queue = BlockhashQueue::new(MAX_AGE);
+        for hash in &hash_list {
+            assert!(hash_queue.get_hash_info_if_valid(hash, MAX_AGE).is_none());
+        }
+
+        for hash in &hash_list {
+            hash_queue.register_hash(hash, 0);
+        }
+
+        // Note that the "age" of a hash in the queue is 0-indexed. So when checking
+        // the age of a hash is within max age, the hash from 11 slots ago is considered
+        // to be within the max age of 10.
+        for hash in &hash_list {
+            assert_eq!(
+                hash_queue.get_hash_info_if_valid(hash, MAX_AGE),
+                Some(hash_queue.hashes.get(hash).unwrap())
+            );
+        }
+
+        // When max age is 0, only the most recent blockhash is still considered valid
+        let most_recent_hash = &hash_list[MAX_AGE];
+        assert_eq!(
+            hash_queue.get_hash_info_if_valid(most_recent_hash, 0),
+            Some(hash_queue.hashes.get(most_recent_hash).unwrap())
+        );
+        assert!(hash_queue
+            .get_hash_info_if_valid(&hash_list[MAX_AGE - 1], 0)
+            .is_none());
     }
 }

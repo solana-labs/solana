@@ -3492,11 +3492,10 @@ impl Bank {
         error_counters: &mut TransactionErrorMetrics,
     ) -> TransactionCheckResult {
         let recent_blockhash = tx.message().recent_blockhash();
-        if hash_queue.is_hash_valid_for_age(recent_blockhash, max_age) {
+        if let Some(hash_info) = hash_queue.get_hash_info_if_valid(recent_blockhash, max_age) {
             Ok(CheckedTransactionDetails {
                 nonce: None,
-                lamports_per_signature: hash_queue
-                    .get_lamports_per_signature(tx.message().recent_blockhash()),
+                lamports_per_signature: Some(hash_info.lamports_per_signature()),
             })
         } else if let Some((address, account)) =
             self.check_transaction_for_nonce(tx, next_durable_nonce)
