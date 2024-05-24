@@ -258,11 +258,7 @@ fn run_bank_forks_snapshot_n<F>(
         AccountsPackageKind::Snapshot(SnapshotKind::FullSnapshot),
         &last_bank,
         &last_bank_snapshot_info,
-        &snapshot_config.full_snapshot_archives_dir,
-        &snapshot_config.incremental_snapshot_archives_dir,
         last_bank.get_snapshot_storages(None),
-        snapshot_config.archive_format,
-        snapshot_version,
         None,
     );
     last_bank.force_flush_accounts_cache();
@@ -274,7 +270,8 @@ fn run_bank_forks_snapshot_n<F>(
         &accounts_hash,
         None,
     );
-    let snapshot_package = SnapshotPackage::new(accounts_package, accounts_hash.into());
+    let snapshot_package =
+        SnapshotPackage::new(accounts_package, accounts_hash.into(), snapshot_config);
     snapshot_utils::archive_snapshot_package(&snapshot_package).unwrap();
 
     // Restore bank from snapshot
@@ -351,7 +348,6 @@ fn test_concurrent_snapshot_packaging(
     let snapshot_config = &snapshot_test_config.snapshot_config;
     let bank_snapshots_dir = &snapshot_config.bank_snapshots_dir;
     let full_snapshot_archives_dir = &snapshot_config.full_snapshot_archives_dir;
-    let incremental_snapshot_archives_dir = &snapshot_config.incremental_snapshot_archives_dir;
     let mint_keypair = &snapshot_test_config.genesis_config_info.mint_keypair;
     let genesis_config = &snapshot_test_config.genesis_config_info.genesis_config;
 
@@ -429,11 +425,7 @@ fn test_concurrent_snapshot_packaging(
             AccountsPackageKind::Snapshot(SnapshotKind::FullSnapshot),
             &bank,
             &bank_snapshot_info,
-            full_snapshot_archives_dir,
-            incremental_snapshot_archives_dir,
             snapshot_storages,
-            snapshot_config.archive_format,
-            snapshot_config.snapshot_version,
             None,
         );
         accounts_package_sender.send(accounts_package).unwrap();
@@ -539,7 +531,7 @@ fn test_concurrent_snapshot_packaging(
     let _package_receiver = std::thread::Builder::new()
         .name("package-receiver".to_string())
         .spawn({
-            let full_snapshot_archives_dir = full_snapshot_archives_dir.clone();
+            let snapshot_config = snapshot_config.clone();
             move || {
                 let accounts_package = real_accounts_package_receiver.try_recv().unwrap();
                 let accounts_hash = AccountsHash(Hash::default());
@@ -549,12 +541,13 @@ fn test_concurrent_snapshot_packaging(
                     &accounts_hash,
                     None,
                 );
-                let snapshot_package = SnapshotPackage::new(accounts_package, accounts_hash.into());
+                let snapshot_package =
+                    SnapshotPackage::new(accounts_package, accounts_hash.into(), &snapshot_config);
                 snapshot_package_sender.send(snapshot_package).unwrap();
 
                 // Wait until the package has been archived by SnapshotPackagerService
                 while snapshot_utils::get_highest_full_snapshot_archive_slot(
-                    &full_snapshot_archives_dir,
+                    &snapshot_config.full_snapshot_archives_dir,
                 )
                 .is_none()
                 {

@@ -12,6 +12,7 @@ use {
         snapshot_archive_info::{
             FullSnapshotArchiveInfo, IncrementalSnapshotArchiveInfo, SnapshotArchiveInfoGetter,
         },
+        snapshot_config::SnapshotConfig,
         snapshot_hash::SnapshotHash,
         snapshot_package::{AccountsPackage, AccountsPackageKind, SnapshotKind, SnapshotPackage},
         snapshot_utils::{
@@ -1123,11 +1124,7 @@ fn package_and_archive_full_snapshot(
         AccountsPackageKind::Snapshot(SnapshotKind::FullSnapshot),
         bank,
         bank_snapshot_info,
-        full_snapshot_archives_dir.as_ref(),
-        incremental_snapshot_archives_dir.as_ref(),
         snapshot_storages,
-        archive_format,
-        snapshot_version,
         None,
     );
 
@@ -1141,7 +1138,15 @@ fn package_and_archive_full_snapshot(
         None,
     );
 
-    let snapshot_package = SnapshotPackage::new(accounts_package, accounts_hash.into());
+    let snapshot_config = SnapshotConfig {
+        full_snapshot_archives_dir: full_snapshot_archives_dir.as_ref().to_path_buf(),
+        incremental_snapshot_archives_dir: incremental_snapshot_archives_dir.as_ref().to_path_buf(),
+        archive_format,
+        snapshot_version,
+        ..Default::default()
+    };
+    let snapshot_package =
+        SnapshotPackage::new(accounts_package, accounts_hash.into(), &snapshot_config);
     archive_snapshot_package(&snapshot_package)?;
 
     Ok(FullSnapshotArchiveInfo::new(
@@ -1168,11 +1173,7 @@ fn package_and_archive_incremental_snapshot(
         )),
         bank,
         bank_snapshot_info,
-        full_snapshot_archives_dir.as_ref(),
-        incremental_snapshot_archives_dir.as_ref(),
         snapshot_storages,
-        archive_format,
-        snapshot_version,
         None,
     );
 
@@ -1202,7 +1203,18 @@ fn package_and_archive_incremental_snapshot(
         bank_incremental_snapshot_persistence.as_ref(),
     );
 
-    let snapshot_package = SnapshotPackage::new(accounts_package, incremental_accounts_hash.into());
+    let snapshot_config = SnapshotConfig {
+        full_snapshot_archives_dir: full_snapshot_archives_dir.as_ref().to_path_buf(),
+        incremental_snapshot_archives_dir: incremental_snapshot_archives_dir.as_ref().to_path_buf(),
+        archive_format,
+        snapshot_version,
+        ..Default::default()
+    };
+    let snapshot_package = SnapshotPackage::new(
+        accounts_package,
+        incremental_accounts_hash.into(),
+        &snapshot_config,
+    );
     archive_snapshot_package(&snapshot_package)?;
 
     Ok(IncrementalSnapshotArchiveInfo::new(

@@ -394,11 +394,7 @@ impl SnapshotRequestHandler {
                         accounts_package_kind,
                         &snapshot_root_bank,
                         &bank_snapshot_info,
-                        &self.snapshot_config.full_snapshot_archives_dir,
-                        &self.snapshot_config.incremental_snapshot_archives_dir,
                         snapshot_storages,
-                        self.snapshot_config.archive_format,
-                        self.snapshot_config.snapshot_version,
                         accounts_hash_for_testing,
                     )
                 }

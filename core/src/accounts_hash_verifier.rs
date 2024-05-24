@@ -542,7 +542,8 @@ impl AccountsHashVerifier {
             return;
         };
 
-        let snapshot_package = SnapshotPackage::new(accounts_package, accounts_hash);
+        let snapshot_package =
+            SnapshotPackage::new(accounts_package, accounts_hash, snapshot_config);
         let send_result = snapshot_package_sender.send(snapshot_package);
         if let Err(err) = send_result {
             // Sending the snapshot package should never fail *unless* we're shutting down.

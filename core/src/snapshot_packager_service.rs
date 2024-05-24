@@ -206,7 +206,7 @@ mod tests {
             snapshot_archive_info::SnapshotArchiveInfo,
             snapshot_hash::SnapshotHash,
             snapshot_package::{SnapshotKind, SnapshotPackage},
-            snapshot_utils::{ArchiveFormat, SnapshotVersion},
+            snapshot_utils::ArchiveFormat,
         },
         solana_sdk::{clock::Slot, hash::Hash},
         std::{path::PathBuf, time::Instant},
@@ -230,7 +230,6 @@ mod tests {
                 block_height: slot,
                 bank_snapshot_dir: PathBuf::default(),
                 snapshot_storages: Vec::default(),
-                snapshot_version: SnapshotVersion::default(),
                 snapshot_kind,
                 enqueued: Instant::now(),
             }
