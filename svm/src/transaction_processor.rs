@@ -67,7 +67,7 @@ pub struct LoadAndExecuteSanitizedTransactionsOutput {
 }
 
 /// Configuration of the recording capabilities for transaction execution
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 pub struct ExecutionRecordingConfig {
     pub enable_cpi_recording: bool,
     pub enable_log_recording: bool,
@@ -82,6 +82,21 @@ impl ExecutionRecordingConfig {
             enable_cpi_recording: option,
         }
     }
+}
+
+/// Configurations for processing transactions.
+#[derive(Default)]
+pub struct TransactionProcessingConfig<'a> {
+    /// Encapsulates overridden accounts, typically used for transaction
+    /// simulation.
+    pub account_overrides: Option<&'a AccountOverrides>,
+    /// The maximum number of bytes that log messages can consume.
+    pub log_messages_bytes_limit: Option<usize>,
+    /// Whether to limit the number of programs loaded for the transaction
+    /// batch.
+    pub limit_to_load_programs: bool,
+    /// Recording capabilities for transaction execution.
+    pub recording_config: ExecutionRecordingConfig,
 }
 
 #[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
@@ -180,18 +195,14 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
     }
 
     /// Main entrypoint to the SVM.
-    #[allow(clippy::too_many_arguments)]
     pub fn load_and_execute_sanitized_transactions<CB: TransactionProcessingCallback>(
         &self,
         callbacks: &CB,
         sanitized_txs: &[SanitizedTransaction],
         check_results: &mut [TransactionCheckResult],
         error_counters: &mut TransactionErrorMetrics,
-        recording_config: ExecutionRecordingConfig,
         timings: &mut ExecuteTimings,
-        account_overrides: Option<&AccountOverrides>,
-        log_messages_bytes_limit: Option<usize>,
-        limit_to_load_programs: bool,
+        config: &TransactionProcessingConfig,
     ) -> LoadAndExecuteSanitizedTransactionsOutput {
         let mut program_cache_time = Measure::start("program_cache");
         let mut program_accounts_map = Self::filter_executable_program_accounts(
@@ -207,7 +218,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         let program_cache_for_tx_batch = Rc::new(RefCell::new(self.replenish_program_cache(
             callbacks,
             &program_accounts_map,
-            limit_to_load_programs,
+            config.limit_to_load_programs,
         )));
 
         if program_cache_for_tx_batch.borrow().hit_max_limit {
@@ -229,7 +240,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
             check_results,
             error_counters,
             &self.fee_structure,
-            account_overrides,
+            config.account_overrides,
             &program_cache_for_tx_batch.borrow(),
         );
         load_time.stop();
@@ -269,11 +280,10 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                         tx,
                         loaded_transaction,
                         compute_budget,
-                        recording_config,
                         timings,
                         error_counters,
-                        log_messages_bytes_limit,
                         &program_cache_for_tx_batch.borrow(),
+                        config,
                     );
 
                     if let TransactionExecutionResult::Executed {
@@ -546,18 +556,16 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
 
     /// Execute a transaction using the provided loaded accounts and update
     /// the executors cache if the transaction was successful.
-    #[allow(clippy::too_many_arguments)]
     fn execute_loaded_transaction<CB: TransactionProcessingCallback>(
         &self,
         callback: &CB,
         tx: &SanitizedTransaction,
         loaded_transaction: &mut LoadedTransaction,
         compute_budget: ComputeBudget,
-        recording_config: ExecutionRecordingConfig,
         timings: &mut ExecuteTimings,
         error_counters: &mut TransactionErrorMetrics,
-        log_messages_bytes_limit: Option<usize>,
         program_cache_for_tx_batch: &ProgramCacheForTxBatch,
+        config: &TransactionProcessingConfig,
     ) -> TransactionExecutionResult {
         let transaction_accounts = std::mem::take(&mut loaded_transaction.accounts);
 
@@ -591,8 +599,8 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
             tx.message(),
         );
 
-        let log_collector = if recording_config.enable_log_recording {
-            match log_messages_bytes_limit {
+        let log_collector = if config.recording_config.enable_log_recording {
+            match config.log_messages_bytes_limit {
                 None => Some(LogCollector::new_ref()),
                 Some(log_messages_bytes_limit) => Some(LogCollector::new_ref_with_limit(Some(
                     log_messages_bytes_limit,
@@ -682,7 +690,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                     .ok()
             });
 
-        let inner_instructions = if recording_config.enable_cpi_recording {
+        let inner_instructions = if config.recording_config.enable_cpi_recording {
             Some(Self::inner_instructions_list_from_instruction_trace(
                 &transaction_context,
             ))
@@ -713,12 +721,13 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         );
         saturating_add_assign!(timings.details.changed_account_count, touched_account_count);
 
-        let return_data =
-            if recording_config.enable_return_data_recording && !return_data.data.is_empty() {
-                Some(return_data)
-            } else {
-                None
-            };
+        let return_data = if config.recording_config.enable_return_data_recording
+            && !return_data.data.is_empty()
+        {
+            Some(return_data)
+        } else {
+            None
+        };
 
         TransactionExecutionResult::Executed {
             details: TransactionExecutionDetails {
@@ -992,22 +1001,18 @@ mod tests {
             rent_debits: RentDebits::default(),
         };
 
-        let mut record_config = ExecutionRecordingConfig {
-            enable_cpi_recording: false,
-            enable_log_recording: true,
-            enable_return_data_recording: false,
-        };
+        let mut processing_config = TransactionProcessingConfig::default();
+        processing_config.recording_config.enable_log_recording = true;
 
         let result = batch_processor.execute_loaded_transaction(
             &mock_bank,
             &sanitized_transaction,
             &mut loaded_transaction,
             ComputeBudget::default(),
-            record_config,
             &mut ExecuteTimings::default(),
             &mut TransactionErrorMetrics::default(),
-            None,
             &program_cache_for_tx_batch,
+            &processing_config,
         );
 
         let TransactionExecutionResult::Executed {
@@ -1019,16 +1024,17 @@ mod tests {
         };
         assert!(log_messages.is_some());
 
+        processing_config.log_messages_bytes_limit = Some(2);
+
         let result = batch_processor.execute_loaded_transaction(
             &mock_bank,
             &sanitized_transaction,
             &mut loaded_transaction,
             ComputeBudget::default(),
-            record_config,
             &mut ExecuteTimings::default(),
             &mut TransactionErrorMetrics::default(),
-            Some(2),
             &program_cache_for_tx_batch,
+            &processing_config,
         );
 
         let TransactionExecutionResult::Executed {
@@ -1046,19 +1052,19 @@ mod tests {
         assert!(log_messages.is_some());
         assert!(inner_instructions.is_none());
 
-        record_config.enable_log_recording = false;
-        record_config.enable_cpi_recording = true;
+        processing_config.recording_config.enable_log_recording = false;
+        processing_config.recording_config.enable_cpi_recording = true;
+        processing_config.log_messages_bytes_limit = None;
 
         let result = batch_processor.execute_loaded_transaction(
             &mock_bank,
             &sanitized_transaction,
             &mut loaded_transaction,
             ComputeBudget::default(),
-            record_config,
             &mut ExecuteTimings::default(),
             &mut TransactionErrorMetrics::default(),
-            None,
             &program_cache_for_tx_batch,
+            &processing_config,
         );
 
         let TransactionExecutionResult::Executed {
@@ -1119,7 +1125,10 @@ mod tests {
             rent_debits: RentDebits::default(),
         };
 
-        let record_config = ExecutionRecordingConfig::new_single_setting(false);
+        let processing_config = TransactionProcessingConfig {
+            recording_config: ExecutionRecordingConfig::new_single_setting(false),
+            ..Default::default()
+        };
         let mut error_metrics = TransactionErrorMetrics::new();
 
         let _ = batch_processor.execute_loaded_transaction(
@@ -1127,11 +1136,10 @@ mod tests {
             &sanitized_transaction,
             &mut loaded_transaction,
             ComputeBudget::default(),
-            record_config,
             &mut ExecuteTimings::default(),
             &mut error_metrics,
-            None,
             &program_cache_for_tx_batch,
+            &processing_config,
         );
 
         assert_eq!(error_metrics.instruction_error, 1);

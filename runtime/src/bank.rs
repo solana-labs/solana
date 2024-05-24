@@ -174,6 +174,7 @@ use {
         transaction_processing_callback::TransactionProcessingCallback,
         transaction_processor::{
             ExecutionRecordingConfig, TransactionBatchProcessor, TransactionLogMessages,
+            TransactionProcessingConfig,
         },
         transaction_results::{
             TransactionExecutionDetails, TransactionExecutionResult, TransactionResults,
@@ -3672,6 +3673,13 @@ impl Bank {
         debug!("check: {}us", check_time.as_us());
         timings.saturating_add_in_place(ExecuteTimingType::CheckUs, check_time.as_us());
 
+        let processing_config = TransactionProcessingConfig {
+            account_overrides,
+            limit_to_load_programs,
+            log_messages_bytes_limit,
+            recording_config,
+        };
+
         let sanitized_output = self
             .transaction_processor
             .load_and_execute_sanitized_transactions(
@@ -3679,11 +3687,8 @@ impl Bank {
                 sanitized_txs,
                 &mut check_results,
                 &mut error_counters,
-                recording_config,
                 timings,
-                account_overrides,
-                log_messages_bytes_limit,
-                limit_to_load_programs,
+                &processing_config,
             );
 
         let mut signature_count = 0;
