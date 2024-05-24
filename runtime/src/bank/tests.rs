@@ -4883,10 +4883,16 @@ fn test_banks_leak() {
 
 fn get_nonce_blockhash(bank: &Bank, nonce_pubkey: &Pubkey) -> Option<Hash> {
     let account = bank.get_account(nonce_pubkey)?;
-    let nonce_versions = StateMut::<nonce::state::Versions>::state(&account);
-    match nonce_versions.ok()?.state() {
-        nonce::State::Initialized(ref data) => Some(data.blockhash()),
-        _ => None,
+    let nonce_data = get_nonce_data_from_account(&account)?;
+    Some(nonce_data.blockhash())
+}
+
+fn get_nonce_data_from_account(account: &AccountSharedData) -> Option<nonce::state::Data> {
+    let nonce_versions = StateMut::<nonce::state::Versions>::state(account).ok()?;
+    if let nonce::State::Initialized(nonce_data) = nonce_versions.state() {
+        Some(nonce_data.clone())
+    } else {
+        None
     }
 }
 
@@ -4980,7 +4986,7 @@ impl Bank {
 }
 
 #[test]
-fn test_check_transaction_for_nonce_ok() {
+fn test_check_and_load_message_nonce_account_ok() {
     let (bank, _mint_keypair, custodian_keypair, nonce_keypair, _) = setup_nonce_with_bank(
         10_000_000,
         |_| {},
@@ -4994,27 +5000,24 @@ fn test_check_transaction_for_nonce_ok() {
     let nonce_pubkey = nonce_keypair.pubkey();
 
     let nonce_hash = get_nonce_blockhash(&bank, &nonce_pubkey).unwrap();
-    let tx = Transaction::new_signed_with_payer(
+    let message = new_sanitized_message(Message::new_with_blockhash(
         &[
             system_instruction::advance_nonce_account(&nonce_pubkey, &nonce_pubkey),
             system_instruction::transfer(&custodian_pubkey, &nonce_pubkey, 100_000),
         ],
         Some(&custodian_pubkey),
-        &[&custodian_keypair, &nonce_keypair],
-        nonce_hash,
-    );
+        &nonce_hash,
+    ));
     let nonce_account = bank.get_account(&nonce_pubkey).unwrap();
+    let nonce_data = get_nonce_data_from_account(&nonce_account).unwrap();
     assert_eq!(
-        bank.check_transaction_for_nonce(
-            &SanitizedTransaction::from_transaction_for_tests(tx),
-            &bank.next_durable_nonce(),
-        ),
-        Some((nonce_pubkey, nonce_account))
+        bank.check_and_load_message_nonce_account(&message, &bank.next_durable_nonce()),
+        Some((NoncePartial::new(nonce_pubkey, nonce_account), nonce_data))
     );
 }
 
 #[test]
-fn test_check_transaction_for_nonce_not_nonce_fail() {
+fn test_check_and_load_message_nonce_account_not_nonce_fail() {
     let (bank, _mint_keypair, custodian_keypair, nonce_keypair, _) = setup_nonce_with_bank(
         10_000_000,
         |_| {},
@@ -5028,25 +5031,21 @@ fn test_check_transaction_for_nonce_not_nonce_fail() {
     let nonce_pubkey = nonce_keypair.pubkey();
 
     let nonce_hash = get_nonce_blockhash(&bank, &nonce_pubkey).unwrap();
-    let tx = Transaction::new_signed_with_payer(
+    let message = new_sanitized_message(Message::new_with_blockhash(
         &[
             system_instruction::transfer(&custodian_pubkey, &nonce_pubkey, 100_000),
             system_instruction::advance_nonce_account(&nonce_pubkey, &nonce_pubkey),
         ],
         Some(&custodian_pubkey),
-        &[&custodian_keypair, &nonce_keypair],
-        nonce_hash,
-    );
+        &nonce_hash,
+    ));
     assert!(bank
-        .check_transaction_for_nonce(
-            &SanitizedTransaction::from_transaction_for_tests(tx,),
-            &bank.next_durable_nonce(),
-        )
+        .check_and_load_message_nonce_account(&message, &bank.next_durable_nonce())
         .is_none());
 }
 
 #[test]
-fn test_check_transaction_for_nonce_missing_ix_pubkey_fail() {
+fn test_check_and_load_message_nonce_account_missing_ix_pubkey_fail() {
     let (bank, _mint_keypair, custodian_keypair, nonce_keypair, _) = setup_nonce_with_bank(
         10_000_000,
         |_| {},
@@ -5060,26 +5059,25 @@ fn test_check_transaction_for_nonce_missing_ix_pubkey_fail() {
     let nonce_pubkey = nonce_keypair.pubkey();
 
     let nonce_hash = get_nonce_blockhash(&bank, &nonce_pubkey).unwrap();
-    let mut tx = Transaction::new_signed_with_payer(
+    let mut message = Message::new_with_blockhash(
         &[
             system_instruction::advance_nonce_account(&nonce_pubkey, &nonce_pubkey),
             system_instruction::transfer(&custodian_pubkey, &nonce_pubkey, 100_000),
         ],
         Some(&custodian_pubkey),
-        &[&custodian_keypair, &nonce_keypair],
-        nonce_hash,
+        &nonce_hash,
     );
-    tx.message.instructions[0].accounts.clear();
+    message.instructions[0].accounts.clear();
     assert!(bank
-        .check_transaction_for_nonce(
-            &SanitizedTransaction::from_transaction_for_tests(tx),
+        .check_and_load_message_nonce_account(
+            &new_sanitized_message(message),
             &bank.next_durable_nonce(),
         )
         .is_none());
 }
 
 #[test]
-fn test_check_transaction_for_nonce_nonce_acc_does_not_exist_fail() {
+fn test_check_and_load_message_nonce_account_nonce_acc_does_not_exist_fail() {
     let (bank, _mint_keypair, custodian_keypair, nonce_keypair, _) = setup_nonce_with_bank(
         10_000_000,
         |_| {},
@@ -5095,25 +5093,21 @@ fn test_check_transaction_for_nonce_nonce_acc_does_not_exist_fail() {
     let missing_pubkey = missing_keypair.pubkey();
 
     let nonce_hash = get_nonce_blockhash(&bank, &nonce_pubkey).unwrap();
-    let tx = Transaction::new_signed_with_payer(
+    let message = new_sanitized_message(Message::new_with_blockhash(
         &[
             system_instruction::advance_nonce_account(&missing_pubkey, &nonce_pubkey),
             system_instruction::transfer(&custodian_pubkey, &nonce_pubkey, 100_000),
         ],
         Some(&custodian_pubkey),
-        &[&custodian_keypair, &nonce_keypair],
-        nonce_hash,
-    );
+        &nonce_hash,
+    ));
     assert!(bank
-        .check_transaction_for_nonce(
-            &SanitizedTransaction::from_transaction_for_tests(tx),
-            &bank.next_durable_nonce(),
-        )
+        .check_and_load_message_nonce_account(&message, &bank.next_durable_nonce())
         .is_none());
 }
 
 #[test]
-fn test_check_transaction_for_nonce_bad_tx_hash_fail() {
+fn test_check_and_load_message_nonce_account_bad_tx_hash_fail() {
     let (bank, _mint_keypair, custodian_keypair, nonce_keypair, _) = setup_nonce_with_bank(
         10_000_000,
         |_| {},
@@ -5126,20 +5120,16 @@ fn test_check_transaction_for_nonce_bad_tx_hash_fail() {
     let custodian_pubkey = custodian_keypair.pubkey();
     let nonce_pubkey = nonce_keypair.pubkey();
 
-    let tx = Transaction::new_signed_with_payer(
+    let message = new_sanitized_message(Message::new_with_blockhash(
         &[
             system_instruction::advance_nonce_account(&nonce_pubkey, &nonce_pubkey),
             system_instruction::transfer(&custodian_pubkey, &nonce_pubkey, 100_000),
         ],
         Some(&custodian_pubkey),
-        &[&custodian_keypair, &nonce_keypair],
-        Hash::default(),
-    );
+        &Hash::default(),
+    ));
     assert!(bank
-        .check_transaction_for_nonce(
-            &SanitizedTransaction::from_transaction_for_tests(tx),
-            &bank.next_durable_nonce(),
-        )
+        .check_and_load_message_nonce_account(&message, &bank.next_durable_nonce())
         .is_none());
 }
 
@@ -5837,8 +5827,8 @@ fn test_check_ro_durable_nonce_fails() {
         Err(TransactionError::BlockhashNotFound)
     );
     assert_eq!(
-        bank.check_transaction_for_nonce(
-            &SanitizedTransaction::from_transaction_for_tests(tx),
+        bank.check_and_load_message_nonce_account(
+            &new_sanitized_message(tx.message().clone()),
             &bank.next_durable_nonce(),
         ),
         None
