@@ -8702,9 +8702,8 @@ impl AccountsDb {
             .collect::<Vec<_>>();
         m.stop();
         let mut m2 = Measure::start("filter");
-
         let chunk_size = 5_000;
-        let wide = self.thread_pool_clean.install(|| {
+        let (result, slots): (Vec<_>, Vec<_>) = self.thread_pool_clean.install(|| {
             slots_and_storages
                 .par_chunks_mut(chunk_size)
                 .map(|slots_and_storages| {
@@ -8717,28 +8716,16 @@ impl AccountsDb {
                         })
                         .collect::<Vec<(Arc<AccountStorageEntry>, Slot)>>()
                 })
-                .collect::<Vec<_>>()
+                .flatten()
+                .unzip()
         });
+
         m2.stop();
-        let mut m3 = Measure::start("flatten");
-        // some slots we found above may not have been a root or met the slot # constraint.
-        // So the resulting 'slots' vector we return will be a subset of the raw keys we got initially.
-        let mut slots = Vec::with_capacity(slots_and_storages.len());
-        let result = wide
-            .into_iter()
-            .flatten()
-            .map(|(storage, slot)| {
-                slots.push(slot);
-                storage
-            })
-            .collect::<Vec<_>>();
-        m3.stop();
 
         debug!(
-            "hash_total: get slots: {}, filter: {}, flatten: {}",
+            "hash_total: get slots: {}, filter: {}",
             m.as_us(),
             m2.as_us(),
-            m3.as_us()
         );
         (result, slots)
     }
