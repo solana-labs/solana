@@ -2516,16 +2516,16 @@ mod tests {
                 Err(TransactionError::BlockhashNotFound),
                 Ok(CheckedTransactionDetails {
                     nonce: None,
-                    lamports_per_signature: None
+                    lamports_per_signature: 0
                 }),
                 Err(TransactionError::BlockhashNotFound),
                 Ok(CheckedTransactionDetails {
                     nonce: None,
-                    lamports_per_signature: None
+                    lamports_per_signature: 0
                 }),
                 Ok(CheckedTransactionDetails {
                     nonce: None,
-                    lamports_per_signature: None
+                    lamports_per_signature: 0
                 }),
             ]),
             [2, 4, 5]
@@ -2535,21 +2535,21 @@ mod tests {
             Consumer::filter_valid_transaction_indexes(&[
                 Ok(CheckedTransactionDetails {
                     nonce: None,
-                    lamports_per_signature: None
+                    lamports_per_signature: 0,
                 }),
                 Err(TransactionError::BlockhashNotFound),
                 Err(TransactionError::BlockhashNotFound),
                 Ok(CheckedTransactionDetails {
                     nonce: None,
-                    lamports_per_signature: None
+                    lamports_per_signature: 0,
                 }),
                 Ok(CheckedTransactionDetails {
                     nonce: None,
-                    lamports_per_signature: None
+                    lamports_per_signature: 0,
                 }),
                 Ok(CheckedTransactionDetails {
                     nonce: None,
-                    lamports_per_signature: None
+                    lamports_per_signature: 0,
                 }),
             ]),
             [0, 3, 4, 5]

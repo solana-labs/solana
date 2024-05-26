@@ -43,7 +43,7 @@ pub type TransactionLoadResult = Result<LoadedTransaction>;
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct CheckedTransactionDetails {
     pub nonce: Option<NoncePartial>,
-    pub lamports_per_signature: Option<u64>,
+    pub lamports_per_signature: u64,
 }
 
 #[derive(PartialEq, Eq, Debug, Clone)]
@@ -141,20 +141,16 @@ pub(crate) fn load_accounts<CB: TransactionProcessingCallback>(
                 }),
             ) => {
                 let message = tx.message();
-                let fee = if let Some(lamports_per_signature) = lamports_per_signature {
-                    fee_structure.calculate_fee(
-                        message,
-                        *lamports_per_signature,
-                        &process_compute_budget_instructions(message.program_instructions_iter())
-                            .unwrap_or_default()
-                            .into(),
-                        feature_set
-                            .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
-                        feature_set.is_active(&remove_rounding_in_fee_calculation::id()),
-                    )
-                } else {
-                    return Err(TransactionError::BlockhashNotFound);
-                };
+                let fee = fee_structure.calculate_fee(
+                    message,
+                    *lamports_per_signature,
+                    &process_compute_budget_instructions(message.program_instructions_iter())
+                        .unwrap_or_default()
+                        .into(),
+                    feature_set
+                        .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
+                    feature_set.is_active(&remove_rounding_in_fee_calculation::id()),
+                );
 
                 // load transactions
                 load_transaction_accounts(
@@ -557,7 +553,7 @@ mod tests {
             &[sanitized_tx],
             &[Ok(CheckedTransactionDetails {
                 nonce: None,
-                lamports_per_signature: Some(lamports_per_signature),
+                lamports_per_signature,
             })],
             error_counters,
             fee_structure,
@@ -1045,7 +1041,7 @@ mod tests {
             &[tx],
             &[Ok(CheckedTransactionDetails {
                 nonce: None,
-                lamports_per_signature: Some(10),
+                lamports_per_signature: 10,
             })],
             &mut error_counters,
             &FeeStructure::default(),
@@ -2049,7 +2045,7 @@ mod tests {
             &[sanitized_tx.clone()],
             &[Ok(CheckedTransactionDetails {
                 nonce: None,
-                lamports_per_signature: Some(0),
+                lamports_per_signature: 0,
             })],
             &mut error_counters,
             &FeeStructure::default(),
@@ -2129,7 +2125,7 @@ mod tests {
         );
         let check_result = Ok(CheckedTransactionDetails {
             nonce: Some(NoncePartial::default()),
-            lamports_per_signature: Some(20),
+            lamports_per_signature: 20,
         });
 
         let results = load_accounts(
@@ -2198,27 +2194,10 @@ mod tests {
             false,
         );
 
-        let check_result = Ok(CheckedTransactionDetails {
-            nonce: Some(NoncePartial::default()),
-            lamports_per_signature: None,
-        });
         let fee_structure = FeeStructure::default();
-
-        let result = load_accounts(
-            &mock_bank,
-            &[sanitized_transaction.clone()],
-            &[check_result],
-            &mut TransactionErrorMetrics::default(),
-            &fee_structure,
-            None,
-            &ProgramCacheForTxBatch::default(),
-        );
-
-        assert_eq!(result, vec![Err(TransactionError::BlockhashNotFound)]);
-
         let check_result = Ok(CheckedTransactionDetails {
             nonce: Some(NoncePartial::default()),
-            lamports_per_signature: Some(20),
+            lamports_per_signature: 20,
         });
 
         let result = load_accounts(

@@ -275,7 +275,7 @@ fn prepare_transactions(
     all_transactions.push(sanitized_transaction);
     transaction_checks.push(Ok(CheckedTransactionDetails {
         nonce: None,
-        lamports_per_signature: Some(20),
+        lamports_per_signature: 20,
     }));
 
     // The transaction fee payer must have enough funds
@@ -321,7 +321,7 @@ fn prepare_transactions(
     all_transactions.push(sanitized_transaction);
     transaction_checks.push(Ok(CheckedTransactionDetails {
         nonce: None,
-        lamports_per_signature: Some(20),
+        lamports_per_signature: 20,
     }));
 
     // Setting up the accounts for the transfer
@@ -363,7 +363,7 @@ fn prepare_transactions(
     all_transactions.push(sanitized_transaction);
     transaction_checks.push(Ok(CheckedTransactionDetails {
         nonce: None,
-        lamports_per_signature: Some(20),
+        lamports_per_signature: 20,
     }));
 
     let mut account_data = AccountSharedData::default();
@@ -407,7 +407,7 @@ fn prepare_transactions(
     all_transactions.push(sanitized_transaction.clone());
     transaction_checks.push(Ok(CheckedTransactionDetails {
         nonce: None,
-        lamports_per_signature: Some(20),
+        lamports_per_signature: 20,
     }));
 
     // fee payer

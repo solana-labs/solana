@@ -3494,14 +3494,14 @@ impl Bank {
         if let Some(hash_info) = hash_queue.get_hash_info_if_valid(recent_blockhash, max_age) {
             Ok(CheckedTransactionDetails {
                 nonce: None,
-                lamports_per_signature: Some(hash_info.lamports_per_signature()),
+                lamports_per_signature: hash_info.lamports_per_signature(),
             })
         } else if let Some((nonce, nonce_data)) =
             self.check_and_load_message_nonce_account(tx.message(), next_durable_nonce)
         {
             Ok(CheckedTransactionDetails {
                 nonce: Some(nonce),
-                lamports_per_signature: Some(nonce_data.get_lamports_per_signature()),
+                lamports_per_signature: nonce_data.get_lamports_per_signature(),
             })
         } else {
             error_counters.blockhash_not_found += 1;
