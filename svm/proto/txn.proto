@@ -1,0 +1,115 @@
+syntax = "proto3";
+package org.solana.sealevel.v1;
+
+import "context.proto";
+
+// Message header contains the counts of required readonly and signatures
+message MessageHeader {
+  uint32 num_required_signatures = 1;
+  uint32 num_readonly_signed_accounts = 2;
+  uint32 num_readonly_unsigned_accounts = 3;
+}
+
+
+// The instruction a transaction executes
+message CompiledInstruction {
+  // Index into the message pubkey array
+  uint32 program_id_index = 1;
+  // Indexes into the message pubkey array
+  repeated uint32 accounts = 2;
+  bytes data = 3;
+}
+
+// List of address table lookups used to load additional accounts for a transaction
+message MessageAddressTableLookup {
+  bytes account_key = 1;
+  repeated uint32 writable_indexes = 2;
+  repeated uint32 readonly_indexes = 3;
+}
+
+// Addresses loaded with on-chain lookup tables
+message LoadedAddresses {
+  repeated bytes writable = 1;
+  repeated bytes readonly = 2;
+}
+
+// Message contains the transaction data
+message TransactionMessage {
+  // Whether this is a legacy message or not
+  bool is_legacy = 1;
+
+  MessageHeader header = 2;
+  // Vector of pubkeys
+  repeated bytes account_keys = 3;
+  // Data associated with the accounts referred above. Not all accounts need to be here.
+  repeated AcctState account_shared_data = 4;
+  // The block hash contains 32-bytes
+  bytes recent_blockhash = 5;
+  // The instructions this transaction executes
+  repeated CompiledInstruction instructions = 6;
+
+  // Not available in legacy message
+  repeated MessageAddressTableLookup address_table_lookups = 7;
+  // Not available in legacy messages
+  LoadedAddresses loaded_addresses = 8;
+}
+
+// A valid verified transaction
+message SanitizedTransaction {
+  // The transaction information
+  TransactionMessage message = 1;
+  // The message hash
+  bytes message_hash = 2;
+  // Is this a voting transaction?
+  bool is_simple_vote_tx = 3;
+  // The signatures needed in the transaction
+  repeated bytes signatures = 4;
+}
+
+// This Transaction context be used to fuzz either `load_execute_and_commit_transactions`,
+// `load_and_execute_transactions` in `bank.rs` or `load_and_execute_sanitized_transactions`
+// in `svm/transaction_processor.rs`
+message TxnContext {
+  // The transaction data
+  SanitizedTransaction tx = 1;
+  // The maximum age allowed for this transaction
+  uint64 max_age = 2;
+  // The limit of bytes allowed for this transaction to load
+  uint64 log_messages_byte_limit = 3;
+
+  EpochContext epoch_ctx = 4;
+  SlotContext slot_ctx = 5;
+}
+
+// The resulting state of an account after a transaction
+message ResultingState {
+  AcctState state = 1;
+  uint64 transaction_rent = 2;
+  RentDebits rent_debit = 3;
+}
+
+// The rent state for an account after a transaction
+message RentDebits {
+  uint64 rent_collected = 1;
+  uint64 post_balance = 2;
+}
+
+// The execution results for a transaction
+message TxnResult {
+  // Whether this transaction was executed
+  bool executed = 1;
+  // The state of each account after the transaction
+  repeated ResultingState states = 2;
+  uint64 rent = 3;
+
+  // If an executed transaction has no error
+  bool is_ok = 4;
+  // The transaction status (error code)
+  uint32 status = 5;
+  // The return data from this transaction, if any
+  bytes return_data = 6;
+  // Number of executed compute units
+  uint64 executed_units = 7;
+  // The change in accounts data len for this transaction
+  uint64 accounts_data_len_delta = 8;
+}

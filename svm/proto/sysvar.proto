@@ -1,0 +1,32 @@
+syntax = "proto3";
+package org.solana.sealevel.v1;
+
+// The clock account data
+message Clock {
+  uint64 slot = 1;
+  uint64 epoch_start_timestamp = 2;
+  uint64 epoch = 3;
+  uint64 leader_schedule_epoch = 4;
+  uint64 unix_timestamp = 5;
+}
+
+// The data for the Rent account
+message Rent {
+  uint64 lamports_per_byte_year = 1;
+  double exemption_threshold = 2;
+  uint64 burn_percent = 3;
+}
+
+// The recent slot hash vector contents
+message SlotHash {
+  uint64 slot = 1;
+  bytes hash = 2;
+}
+
+// The sysvar cache for a transaction execution
+message SysvarCache {
+  Clock clock = 1;
+  Rent rent = 2;
+  // Slot hashes sysvar: SysvarS1otHashes111111111111111111111111111
+  repeated SlotHash slot_hash = 3;
+}

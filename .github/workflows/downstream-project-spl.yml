@@ -150,6 +150,7 @@ jobs:
 
       - shell: bash
         run: |
+          source .github/scripts/downstream-project-spl-install-deps.sh
           source .github/scripts/downstream-project-spl-common.sh
 
           programStr="${{ tojson(matrix.programs) }}"

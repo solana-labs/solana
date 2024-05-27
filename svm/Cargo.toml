@@ -31,7 +31,10 @@ name = "solana_svm"
 
 [dev-dependencies]
 bincode = { workspace = true }
+lazy_static = { workspace = true }
 libsecp256k1 = { workspace = true }
+prost = { workspace = true }
+prost-types = { workspace = true }
 rand = { workspace = true }
 solana-bpf-loader-program = { workspace = true }
 solana-logger = { workspace = true }
@@ -41,6 +44,7 @@ solana-sdk = { workspace = true, features = ["dev-context-only-utils"] }
 targets = ["x86_64-unknown-linux-gnu"]
 
 [build-dependencies]
+prost-build = { workspace = true }
 rustc_version = { workspace = true }
 
 [features]

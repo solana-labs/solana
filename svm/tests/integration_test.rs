@@ -272,7 +272,7 @@ fn prepare_transactions(
     let sanitized_transaction =
         transaction_builder.build(Hash::default(), (fee_payer, Signature::new_unique()), false);
 
-    all_transactions.push(sanitized_transaction);
+    all_transactions.push(sanitized_transaction.unwrap());
     transaction_checks.push(Ok(CheckedTransactionDetails {
         nonce: None,
         lamports_per_signature: 20,
@@ -318,7 +318,7 @@ fn prepare_transactions(
 
     let sanitized_transaction =
         transaction_builder.build(Hash::default(), (fee_payer, Signature::new_unique()), true);
-    all_transactions.push(sanitized_transaction);
+    all_transactions.push(sanitized_transaction.unwrap());
     transaction_checks.push(Ok(CheckedTransactionDetails {
         nonce: None,
         lamports_per_signature: 20,
@@ -360,7 +360,7 @@ fn prepare_transactions(
     let sanitized_transaction =
         transaction_builder.build(Hash::default(), (fee_payer, Signature::new_unique()), false);
 
-    all_transactions.push(sanitized_transaction);
+    all_transactions.push(sanitized_transaction.unwrap());
     transaction_checks.push(Ok(CheckedTransactionDetails {
         nonce: None,
         lamports_per_signature: 20,
@@ -404,7 +404,7 @@ fn prepare_transactions(
 
     let sanitized_transaction =
         transaction_builder.build(Hash::default(), (fee_payer, Signature::new_unique()), true);
-    all_transactions.push(sanitized_transaction.clone());
+    all_transactions.push(sanitized_transaction.clone().unwrap());
     transaction_checks.push(Ok(CheckedTransactionDetails {
         nonce: None,
         lamports_per_signature: 20,
@@ -435,7 +435,7 @@ fn prepare_transactions(
         .insert(recipient, account_data);
 
     // A transaction whose verification has already failed
-    all_transactions.push(sanitized_transaction);
+    all_transactions.push(sanitized_transaction.unwrap());
     transaction_checks.push(Err(TransactionError::BlockhashNotFound));
 
     (all_transactions, transaction_checks)

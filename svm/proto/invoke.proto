@@ -1,0 +1,65 @@
+syntax = "proto3";
+package org.solana.sealevel.v1;
+
+import "context.proto";
+import "txn.proto";
+
+message InstrAcct {
+  // Selects an account in an external list
+  uint32 index = 1;
+  bool is_writable = 2;
+  bool is_signer = 3;
+}
+
+// The execution context of a program invocation (aka instruction).
+// Contains all required information to independently replay an instruction.
+// Also includes partial transaction context.
+message InstrContext {
+  // The address of the program invoked.  (32 bytes)
+  bytes program_id = 1;
+
+  // Account state accessed by the instruction.  This may include
+  // indirect accesses like sysvars.
+  repeated AcctState accounts = 3;
+
+  // Account access list for this instruction (refers to above accounts list)
+  repeated InstrAcct instr_accounts = 4;
+
+  // The input data passed to program execution.
+  bytes data = 5;
+
+  uint64 cu_avail = 6;
+
+  TxnContext txn_context = 7;
+  SlotContext slot_context = 8;
+  EpochContext epoch_context = 9;
+}
+
+// The results of executing an InstrContext.
+message InstrEffects {
+  // result is zero if the instruction executed succesfully.
+  // Otherwise, a non-zero error code.  Error codes are not relevant to
+  // consensus.
+  int32 result = 1;
+
+  // Some error cases additionally have a custom error code.  Unlike
+  // the expected_result, this is stable across clients.
+  uint32 custom_err = 2;
+
+  // Copies of accounts that were changed.  May be in an arbitrary
+  // order.  The pubkey of each account is unique in this list.  Each
+  // account address modified here must also be in the
+  // InstrContext.
+  repeated AcctState modified_accounts = 3;
+
+  uint64 cu_avail = 4;
+
+  // Instruction return data.
+  bytes return_data = 5;
+}
+
+// An instruction processing test fixture.
+message InstrFixture {
+  InstrContext input = 1;
+  InstrEffects output = 2;
+}

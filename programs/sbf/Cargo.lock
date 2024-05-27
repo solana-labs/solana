@@ -6257,6 +6257,7 @@ dependencies = [
  "itertools",
  "log",
  "percentage",
+ "prost-build",
  "rustc_version",
  "serde",
  "serde_derive",

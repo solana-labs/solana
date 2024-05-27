@@ -1,0 +1,68 @@
+syntax = "proto3";
+package org.solana.sealevel.v1;
+
+import "sysvar.proto";
+
+// A set of feature flags.
+message FeatureSet {
+  // Every item in this list marks an enabled feature.  The value of
+  // each item is the first 8 bytes of the feature ID as a little-
+  // endian integer.
+  repeated fixed64 features = 1;
+}
+
+// A seed address.  This is not a PDA.
+message SeedAddress {
+  // The seed address base.  (32 bytes)
+  bytes base = 1;
+
+  // The seed path  (<= 32 bytes)
+  bytes seed = 2;
+
+  // The seed address owner.  (32 bytes)
+  bytes owner = 3;
+}
+
+// The complete state of an account excluding its public key.
+message AcctState {
+  // The account address.  (32 bytes)
+  bytes address = 1;
+
+  uint64 lamports = 2;
+
+  // Account data is limited to 10 MiB on Solana mainnet as of 2024-Feb.
+  bytes data = 3;
+
+  bool executable = 4;
+
+  // The rent epoch is deprecated on Solana mainnet as of 2024-Feb.
+  // If ommitted, implies a value of UINT64_MAX.
+  uint64 rent_epoch = 5;
+
+  // Address of the program that owns this account.  (32 bytes)
+  bytes owner = 6;
+
+  // The account address, but derived as a seed address.  Overrides
+  // `address` if present.
+  // TODO: This is a solfuzz specific extension and is not compliant
+  // with the org.solana.sealevel.v1 API.
+  SeedAddress seed_addr = 7;
+}
+
+// EpochContext includes context scoped to an epoch.
+// On "real" ledgers, it is created during the epoch boundary.
+message EpochContext {
+  FeatureSet features = 1;
+}
+
+
+// SlotContext includes context scoped to a block.
+// On "real" ledgers, it is created during the slot boundary.
+message SlotContext {
+  repeated bytes recent_block_hashes = 1;
+  // public key for the leader
+  bytes leader = 2;
+  // Slot number
+  fixed64 slot = 3;
+  SysvarCache sysvar_cache = 4;
+}

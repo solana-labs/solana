@@ -7264,9 +7264,13 @@ version = "2.0.0"
 dependencies = [
  "bincode",
  "itertools",
+ "lazy_static",
  "libsecp256k1",
  "log",
  "percentage",
+ "prost",
+ "prost-build",
+ "prost-types",
  "rand 0.8.5",
  "rustc_version 0.4.0",
  "serde",
