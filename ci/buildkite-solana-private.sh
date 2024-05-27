@@ -289,10 +289,6 @@ if [[ $BUILDKITE_BRANCH =~ ^pull ]]; then
   annotate --style info --context pr-backlink \
     "Github Pull Request: https://github.com/anza-xyz/agave/$BUILDKITE_BRANCH"
 
-  if [[ $GITHUB_USER = "dependabot[bot]" ]]; then
-    command_step dependabot "ci/dependabot-pr.sh" 5
-    wait_step
-  fi
   pull_or_push_steps
   exit 0
 fi
