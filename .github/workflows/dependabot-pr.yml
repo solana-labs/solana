@@ -33,7 +33,8 @@ jobs:
           echo "crate_name: $crate_name, old_version: $old_version, new_version: $new_version"
 
           ./scripts/cargo-for-all-lock-files.sh -- update -p $crate_name:$old_version --precise $new_version || \
-          ./scripts/cargo-for-all-lock-files.sh -- update -p $crate_name --precise $new_version
+          ./scripts/cargo-for-all-lock-files.sh -- update -p $crate_name --precise $new_version || \
+          ./scripts/cargo-for-all-lock-files.sh -- tree
 
       - name: push
         run: |
