@@ -211,7 +211,17 @@ pub fn build_args<'a>(version: &'_ str) -> App<'a, '_> {
                 .long("identity")
                 .value_name("PATH")
                 .takes_value(true)
-                .help("File containing a client identity (keypair)"),
+                .hidden(hidden_unless_forced())
+                .help("Deprecated. Use --authority instead"),
+
+        )
+        .arg(
+            Arg::with_name("authority")
+                .short("a")
+                .long("authority")
+                .value_name("PATH")
+                .takes_value(true)
+                .help("File containing a client authority (keypair) to fund participating accounts"),
         )
         .arg(
             Arg::with_name("num-nodes")
@@ -469,14 +479,21 @@ pub fn parse_args(matches: &ArgMatches) -> Result<Config, &'static str> {
     );
     args.websocket_url = websocket_url;
 
+    if matches.is_present("identity") {
+        eprintln!("Warning: --identity is deprecated. Please use --authority");
+    }
+
     let (_, id_path) = ConfigInput::compute_keypair_path_setting(
-        matches.value_of("identity").unwrap_or(""),
+        matches
+            .value_of("authority")
+            .or(matches.value_of("identity"))
+            .unwrap_or(""),
         &config.keypair_path,
     );
     if let Ok(id) = read_keypair_file(id_path) {
         args.id = id;
-    } else if matches.is_present("identity") {
-        return Err("could not parse identity path");
+    } else if matches.is_present("identity") || matches.is_present("authority") {
+        return Err("could not parse authority path");
     }
 
     if matches.is_present("rpc_client") {
@@ -652,7 +669,27 @@ mod tests {
         let (keypair, keypair_file_name) = write_tmp_keypair(&out_dir);
 
         // parse provided rpc address, check that default ws address is correct
-        // always specify identity in these tests because otherwise a random one will be used
+        // always specify authority in these tests because otherwise a random one will be used
+        let matches = build_args("1.0.0").get_matches_from(vec![
+            "solana-bench-tps",
+            "--authority",
+            &keypair_file_name,
+            "-u",
+            "http://123.4.5.6:8899",
+        ]);
+        let actual = parse_args(&matches).unwrap();
+        assert_eq!(
+            actual,
+            Config {
+                json_rpc_url: "http://123.4.5.6:8899".to_string(),
+                websocket_url: "ws://123.4.5.6:8900/".to_string(),
+                id: keypair,
+                ..Config::default()
+            }
+        );
+
+        // check if --identity is working
+        let keypair = read_keypair_file(&keypair_file_name).unwrap();
         let matches = build_args("1.0.0").get_matches_from(vec![
             "solana-bench-tps",
             "--identity",
@@ -675,7 +712,7 @@ mod tests {
         let keypair = read_keypair_file(&keypair_file_name).unwrap();
         let matches = build_args("1.0.0").get_matches_from(vec![
             "solana-bench-tps",
-            "--identity",
+            "--authority",
             &keypair_file_name,
             "-u",
             "http://123.4.5.6:8899",
@@ -707,7 +744,7 @@ mod tests {
         let keypair = read_keypair_file(&keypair_file_name).unwrap();
         let matches = build_args("1.0.0").get_matches_from(vec![
             "solana-bench-tps",
-            "--identity",
+            "--authority",
             &keypair_file_name,
             "-u",
             "http://123.4.5.6:8899",
@@ -733,7 +770,7 @@ mod tests {
         let (client_id, client_id_file_name) = write_tmp_keypair(&out_dir);
         let matches = build_args("1.0.0").get_matches_from(vec![
             "solana-bench-tps",
-            "--identity",
+            "--authority",
             &keypair_file_name,
             "-u",
             "http://192.0.0.1:8899",
