@@ -262,20 +262,6 @@ impl AccountsCache {
         self.cache.iter().any(|e| e.key() <= &max_slot_inclusive)
     }
 
-    // Removes slots less than or equal to `max_root`. Only safe to pass in a rooted slot,
-    // otherwise the slot removed could still be undergoing replay!
-    pub fn remove_slots_le(&self, max_root: Slot) -> Vec<(Slot, SlotCache)> {
-        let mut removed_slots = vec![];
-        self.cache.retain(|slot, slot_cache| {
-            let should_remove = *slot <= max_root;
-            if should_remove {
-                removed_slots.push((*slot, slot_cache.clone()))
-            }
-            !should_remove
-        });
-        removed_slots
-    }
-
     pub fn cached_frozen_slots(&self) -> Vec<Slot> {
         let mut slots: Vec<_> = self
             .cache
@@ -313,6 +299,22 @@ impl AccountsCache {
 #[cfg(test)]
 pub mod tests {
     use super::*;
+
+    impl AccountsCache {
+        // Removes slots less than or equal to `max_root`. Only safe to pass in a rooted slot,
+        // otherwise the slot removed could still be undergoing replay!
+        pub fn remove_slots_le(&self, max_root: Slot) -> Vec<(Slot, SlotCache)> {
+            let mut removed_slots = vec![];
+            self.cache.retain(|slot, slot_cache| {
+                let should_remove = *slot <= max_root;
+                if should_remove {
+                    removed_slots.push((*slot, slot_cache.clone()))
+                }
+                !should_remove
+            });
+            removed_slots
+        }
+    }
 
     #[test]
     fn test_remove_slots_le() {
