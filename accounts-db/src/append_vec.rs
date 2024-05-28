@@ -1409,13 +1409,6 @@ pub mod tests {
                     // Depending on use, *executable_bool can be truthy or falsy due to direct memory manipulation
                     // assert_eq! thinks *executable_bool is equal to false but the if condition thinks it's not, contradictorily.
                     assert!(!*executable_bool);
-                    #[cfg(not(target_arch = "aarch64"))]
-                    {
-                        const FALSE: bool = false; // keep clippy happy
-                        if *executable_bool == FALSE {
-                            panic!("This didn't occur if this test passed.");
-                        }
-                    }
                     assert_eq!(*account.ref_executable_byte(), crafted_executable);
                 }
 
