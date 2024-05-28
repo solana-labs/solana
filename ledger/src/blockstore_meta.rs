@@ -423,6 +423,11 @@ impl ErasureMeta {
             StillNeed(num_needed)
         }
     }
+
+    #[cfg(test)]
+    pub(crate) fn clear_first_received_coding_shred_index(&mut self) {
+        self.first_received_coding_index = 0;
+    }
 }
 
 impl MerkleRootMeta {
