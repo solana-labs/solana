@@ -9619,6 +9619,7 @@ impl<'a> VerifyAccountsHashAndLamportsConfig<'a> {
 }
 
 /// A set of utility functions used for testing and benchmarking
+#[cfg(feature = "dev-context-only-utils")]
 pub mod test_utils {
     use {
         super::*,
