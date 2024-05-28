@@ -288,11 +288,11 @@ impl AccountsCache {
     }
 
     pub fn fetch_max_flush_root(&self) -> Slot {
-        self.max_flushed_root.load(Ordering::Relaxed)
+        self.max_flushed_root.load(Ordering::Acquire)
     }
 
     pub fn set_max_flush_root(&self, root: Slot) {
-        self.max_flushed_root.fetch_max(root, Ordering::Relaxed);
+        self.max_flushed_root.fetch_max(root, Ordering::Release);
     }
 }
 
