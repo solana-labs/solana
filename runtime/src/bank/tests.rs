@@ -330,6 +330,7 @@ fn test_bank_block_height() {
 
 #[test]
 fn test_bank_update_epoch_stakes() {
+    #[allow(non_local_definitions)]
     impl Bank {
         fn epoch_stake_keys(&self) -> Vec<Epoch> {
             let mut keys: Vec<Epoch> = self.epoch_stakes.keys().copied().collect();

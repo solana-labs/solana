@@ -217,6 +217,7 @@ pub fn hashv(
             light_poseidon::{Poseidon, PoseidonBytesHasher, PoseidonError},
         };
 
+        #[allow(non_local_definitions)]
         impl From<PoseidonError> for PoseidonSyscallError {
             fn from(error: PoseidonError) -> Self {
                 match error {

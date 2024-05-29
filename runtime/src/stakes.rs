@@ -1036,6 +1036,7 @@ pub(crate) mod tests {
     #[test]
     fn test_vote_balance_and_staked_normal() {
         let stakes_cache = StakesCache::default();
+        #[allow(non_local_definitions)]
         impl Stakes<StakeAccount> {
             fn vote_balance_and_warmed_staked(&self) -> u64 {
                 let vote_balance: u64 = self
