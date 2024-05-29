@@ -311,9 +311,6 @@ pub struct BankRc {
     /// Previous checkpoint of this bank
     pub(crate) parent: RwLock<Option<Arc<Bank>>>,
 
-    /// Current slot
-    pub(crate) _slot: Slot,
-
     pub(crate) bank_id_generator: Arc<AtomicU64>,
 }
 
@@ -328,18 +325,16 @@ impl AbiExample for BankRc {
             parent: RwLock::new(None),
             // AbiExample for Accounts is specially implemented to contain a storage example
             accounts: AbiExample::example(),
-            _slot: AbiExample::example(),
             bank_id_generator: Arc::new(AtomicU64::new(0)),
         }
     }
 }
 
 impl BankRc {
-    pub(crate) fn new(accounts: Accounts, slot: Slot) -> Self {
+    pub(crate) fn new(accounts: Accounts) -> Self {
         Self {
             accounts: Arc::new(accounts),
             parent: RwLock::new(None),
-            _slot: slot,
             bank_id_generator: Arc::new(AtomicU64::new(0)),
         }
     }
@@ -939,7 +934,7 @@ impl Bank {
         let mut bank = Self {
             skipped_rewrites: Mutex::default(),
             incremental_snapshot_persistence: None,
-            rc: BankRc::new(accounts, Slot::default()),
+            rc: BankRc::new(accounts),
             status_cache: Arc::<RwLock<BankStatusCache>>::default(),
             blockhash_queue: RwLock::<BlockhashQueue>::default(),
             ancestors: Ancestors::default(),
@@ -1140,7 +1135,6 @@ impl Bank {
             BankRc {
                 accounts: Arc::new(Accounts::new(accounts_db)),
                 parent: RwLock::new(Some(Arc::clone(&parent))),
-                _slot: slot,
                 bank_id_generator: Arc::clone(&parent.rc.bank_id_generator),
             }
         });
