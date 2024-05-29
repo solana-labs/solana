@@ -1,7 +1,8 @@
 use {
+    ahash::AHashMap,
     solana_sdk::pubkey::Pubkey,
     std::{
-        collections::{hash_map::Entry, HashMap},
+        collections::hash_map::Entry,
         fmt::{Debug, Display},
         ops::{BitAnd, BitAndAssign, Sub},
     },
@@ -48,7 +49,7 @@ pub(crate) struct ThreadAwareAccountLocks {
     num_threads: usize, // 0..MAX_THREADS
     /// Locks for each account. An account should only have an entry if there
     /// is at least one lock.
-    locks: HashMap<Pubkey, AccountLocks>,
+    locks: AHashMap<Pubkey, AccountLocks>,
 }
 
 impl ThreadAwareAccountLocks {
@@ -62,7 +63,7 @@ impl ThreadAwareAccountLocks {
 
         Self {
             num_threads,
-            locks: HashMap::new(),
+            locks: AHashMap::new(),
         }
     }
 

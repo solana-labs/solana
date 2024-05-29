@@ -14,6 +14,7 @@ edition = { workspace = true }
 codecov = { repository = "solana-labs/solana", branch = "master", service = "github" }
 
 [dependencies]
+ahash = { workspace = true }
 base64 = { workspace = true }
 bincode = { workspace = true }
 bs58 = { workspace = true }
@@ -95,7 +96,9 @@ solana-program-runtime = { workspace = true }
 solana-runtime = { workspace = true, features = ["dev-context-only-utils"] }
 solana-sdk = { workspace = true, features = ["dev-context-only-utils"] }
 solana-stake-program = { workspace = true }
-solana-unified-scheduler-pool = { workspace = true, features = ["dev-context-only-utils"] }
+solana-unified-scheduler-pool = { workspace = true, features = [
+    "dev-context-only-utils",
+] }
 static_assertions = { workspace = true }
 systemstat = { workspace = true }
 test-case = { workspace = true }
