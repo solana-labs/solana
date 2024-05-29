@@ -273,7 +273,6 @@ fn test_bank_unix_timestamp_from_genesis() {
 }
 
 #[test]
-#[allow(clippy::float_cmp)]
 fn test_bank_new() {
     let dummy_leader_pubkey = solana_sdk::pubkey::new_rand();
     let dummy_leader_stake_lamports = bootstrap_validator_stake_lamports();

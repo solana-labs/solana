@@ -1304,7 +1304,6 @@ pub(crate) mod tests {
         assert_eq!(node_crds.num_purged(), 0);
     }
     #[test]
-    #[allow(clippy::float_cmp)]
     fn test_crds_filter_mask() {
         let filter = CrdsFilter::new_rand(1, 128);
         assert_eq!(filter.mask, !0x0);
