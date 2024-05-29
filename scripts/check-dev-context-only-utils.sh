@@ -148,7 +148,12 @@ fi
 # 2. Check implicit usage of `dev-context-only-utils`-gated code in dev (=
 # test/benches) code by building in isolation from other crates, which might
 # happen to enable `dev-context-only-utils`
-export RUSTFLAGS="-Z threads=8 $RUSTFLAGS"
+
+# dcou tends to newly trigger `unused_imports` and `dead_code` lints.
+# We could selectively deny (= `-D`) them here, however, deny all warnings for
+# consistency with other CI steps and for the possibility of new similar lints.
+export RUSTFLAGS="-D warnings -Z threads=8 $RUSTFLAGS"
+
 if [[ $mode = "check-bins" || $mode = "full" ]]; then
   _ cargo "+${rust_nightly}" hack check --bins
 fi
