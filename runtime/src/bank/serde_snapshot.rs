@@ -11,7 +11,7 @@ mod tests {
             genesis_utils::activate_all_features,
             runtime_config::RuntimeConfig,
             serde_snapshot::{
-                reserialize_bank_with_new_accounts_hash, BankIncrementalSnapshotPersistence,
+                self, reserialize_bank_with_new_accounts_hash, BankIncrementalSnapshotPersistence,
                 SerdeAccountsHash, SerdeIncrementalAccountsHash, SnapshotStreams,
             },
             snapshot_bank_utils,
@@ -26,7 +26,7 @@ mod tests {
             account_storage::{AccountStorageMap, AccountStorageReference},
             accounts_db::{
                 get_temp_accounts_paths, AccountShrinkThreshold, AccountStorageEntry, AccountsDb,
-                AtomicAccountsFileId,
+                AtomicAccountsFileId, ACCOUNTS_DB_CONFIG_FOR_TESTING,
             },
             accounts_file::{AccountsFile, AccountsFileError, StorageAccess},
             accounts_hash::{AccountsDeltaHash, AccountsHash},
@@ -43,7 +43,7 @@ mod tests {
         },
         std::{
             collections::HashMap,
-            io::{Cursor, Read, Write},
+            io::{BufReader, BufWriter, Cursor, Read, Write},
             ops::RangeFull,
             path::Path,
             sync::{Arc, RwLock},
@@ -162,7 +162,7 @@ mod tests {
                 );
         }
 
-        crate::serde_snapshot::bank_to_stream(
+        serde_snapshot::bank_to_stream(
             &mut std::io::BufWriter::new(&mut writer),
             &bank2,
             &get_storages_to_serialize(&snapshot_storages),
@@ -334,6 +334,154 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// Test roundtrip serialize/deserialize of a bank
+    #[test_case(StorageAccess::Mmap, false, false)]
+    #[test_case(StorageAccess::Mmap, false, true)]
+    #[test_case(StorageAccess::Mmap, true, false)]
+    #[test_case(StorageAccess::Mmap, true, true)]
+    fn test_serialize_bank_snapshot(
+        storage_access: StorageAccess,
+        has_incremental_snapshot_persistence: bool,
+        has_epoch_accounts_hash: bool,
+    ) {
+        let (mut genesis_config, _) = create_genesis_config(500);
+        genesis_config.epoch_schedule = EpochSchedule::custom(400, 400, false);
+        let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
+        let deposit_amount = bank0.get_minimum_balance_for_rent_exemption(0);
+        let eah_start_slot = epoch_accounts_hash_utils::calculation_start(&bank0);
+        let bank1 = Bank::new_from_parent(bank0.clone(), &Pubkey::default(), 1);
+
+        // Create an account on a non-root fork
+        let key1 = Pubkey::new_unique();
+        bank_test_utils::deposit(&bank1, &key1, deposit_amount).unwrap();
+
+        // If setting an initial EAH, then the bank being snapshotted must be in the EAH calculation
+        // window.  Otherwise serializing below will *not* include the EAH in the bank snapshot,
+        // and the later-deserialized bank's EAH will not match the expected EAH.
+        let bank2_slot = if has_epoch_accounts_hash {
+            eah_start_slot
+        } else {
+            0
+        } + 2;
+        let bank2 = Bank::new_from_parent(bank0, &Pubkey::default(), bank2_slot);
+
+        // Test new account
+        let key2 = Pubkey::new_unique();
+        bank_test_utils::deposit(&bank2, &key2, deposit_amount).unwrap();
+        assert_eq!(bank2.get_balance(&key2), deposit_amount);
+
+        let key3 = Pubkey::new_unique();
+        bank_test_utils::deposit(&bank2, &key3, 0).unwrap();
+
+        bank2.squash();
+        bank2.force_flush_accounts_cache();
+        let expected_accounts_hash = AccountsHash(Hash::new_unique());
+        bank2
+            .accounts()
+            .accounts_db
+            .set_accounts_hash(bank2.slot(), (expected_accounts_hash, 30));
+
+        let expected_incremental_snapshot_persistence =
+            has_incremental_snapshot_persistence.then(|| BankIncrementalSnapshotPersistence {
+                full_slot: bank2.slot() - 1,
+                full_hash: SerdeAccountsHash(Hash::new_unique()),
+                full_capitalization: 31,
+                incremental_hash: SerdeIncrementalAccountsHash(Hash::new_unique()),
+                incremental_capitalization: 32,
+            });
+
+        let expected_epoch_accounts_hash = has_epoch_accounts_hash.then(|| {
+            let epoch_accounts_hash = EpochAccountsHash::new(Hash::new_unique());
+            bank2
+                .rc
+                .accounts
+                .accounts_db
+                .epoch_accounts_hash_manager
+                .set_valid(epoch_accounts_hash, eah_start_slot);
+            epoch_accounts_hash
+        });
+
+        let mut buf = Vec::new();
+        let cursor = Cursor::new(&mut buf);
+        let mut writer = BufWriter::new(cursor);
+        serde_snapshot::serialize_bank_snapshot(
+            &mut writer,
+            bank2.get_fields_to_serialize(),
+            &bank2.rc.accounts.accounts_db,
+            &get_storages_to_serialize(&bank2.get_snapshot_storages(None)),
+            expected_incremental_snapshot_persistence.as_ref(),
+            expected_epoch_accounts_hash,
+        )
+        .unwrap();
+        drop(writer);
+
+        // Now deserialize the serialized bank and ensure it matches the original bank
+
+        // Create a new set of directories for this bank's accounts
+        let (_accounts_dir, dbank_paths) = get_temp_accounts_paths(4).unwrap();
+        // Create a directory to simulate AppendVecs unpackaged from a snapshot tar
+        let copied_accounts = TempDir::new().unwrap();
+        let storage_and_next_append_vec_id = copy_append_vecs(
+            &bank2.rc.accounts.accounts_db,
+            copied_accounts.path(),
+            storage_access,
+        )
+        .unwrap();
+
+        let cursor = Cursor::new(buf.as_slice());
+        let mut reader = BufReader::new(cursor);
+        let mut snapshot_streams = SnapshotStreams {
+            full_snapshot_stream: &mut reader,
+            incremental_snapshot_stream: None,
+        };
+        let dbank = serde_snapshot::bank_from_streams(
+            &mut snapshot_streams,
+            &dbank_paths,
+            storage_and_next_append_vec_id,
+            &genesis_config,
+            &RuntimeConfig::default(),
+            None,
+            None,
+            AccountSecondaryIndexes::default(),
+            None,
+            AccountShrinkThreshold::default(),
+            false,
+            Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
+            None,
+            Arc::default(),
+        )
+        .unwrap();
+        assert_eq!(dbank.get_balance(&key1), 0);
+        assert_eq!(dbank.get_balance(&key2), deposit_amount);
+        assert_eq!(dbank.get_balance(&key3), 0);
+        if let Some(incremental_snapshot_persistence) =
+            expected_incremental_snapshot_persistence.as_ref()
+        {
+            assert_eq!(dbank.get_accounts_hash(), None);
+            assert_eq!(
+                dbank.get_incremental_accounts_hash(),
+                Some(
+                    incremental_snapshot_persistence
+                        .incremental_hash
+                        .clone()
+                        .into()
+                ),
+            );
+        } else {
+            assert_eq!(dbank.get_accounts_hash(), Some(expected_accounts_hash));
+            assert_eq!(dbank.get_incremental_accounts_hash(), None);
+        }
+        assert_eq!(
+            dbank.incremental_snapshot_persistence,
+            expected_incremental_snapshot_persistence,
+        );
+        assert_eq!(
+            dbank.get_epoch_accounts_hash_to_serialize(),
+            expected_epoch_accounts_hash,
+        );
+        assert_eq!(dbank, bank2);
     }
 
     fn add_root_and_flush_write_cache(bank: &Bank) {

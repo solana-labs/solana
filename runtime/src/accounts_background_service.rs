@@ -383,23 +383,15 @@ impl SnapshotRequestHandler {
         let accounts_package = match request_kind {
             SnapshotRequestKind::Snapshot => match &accounts_package_kind {
                 AccountsPackageKind::Snapshot(_) => {
-                    let bank_snapshot_info = snapshot_bank_utils::add_bank_snapshot(
-                        &self.snapshot_config.bank_snapshots_dir,
-                        &snapshot_root_bank,
-                        &snapshot_storages,
-                        self.snapshot_config.snapshot_version,
-                        status_cache_slot_deltas,
-                    )?;
                     AccountsPackage::new_for_snapshot(
                         accounts_package_kind,
                         &snapshot_root_bank,
-                        &bank_snapshot_info,
                         snapshot_storages,
+                        status_cache_slot_deltas,
                         accounts_hash_for_testing,
                     )
                 }
                 AccountsPackageKind::AccountsHashVerifier => {
-                    // skip the bank snapshot, just make an accounts package to send to AHV
                     AccountsPackage::new_for_accounts_hash_verifier(
                         accounts_package_kind,
                         &snapshot_root_bank,
@@ -410,7 +402,6 @@ impl SnapshotRequestHandler {
                 AccountsPackageKind::EpochAccountsHash => panic!("Illegal account package type: EpochAccountsHash packages must be from an EpochAccountsHash request!"),
             },
             SnapshotRequestKind::EpochAccountsHash => {
-                // skip the bank snapshot, just make an accounts package to send to AHV
                 AccountsPackage::new_for_epoch_accounts_hash(
                     accounts_package_kind,
                     &snapshot_root_bank,
@@ -430,7 +421,7 @@ impl SnapshotRequestHandler {
         }
         snapshot_time.stop();
         info!(
-            "Took bank snapshot. accounts package kind: {:?}, slot: {}, bank hash: {}",
+            "Handled snapshot request. accounts package kind: {:?}, slot: {}, bank hash: {}",
             accounts_package_kind,
             snapshot_root_bank.slot(),
             snapshot_root_bank.hash(),

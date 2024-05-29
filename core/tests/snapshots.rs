@@ -6,7 +6,7 @@ use {
     itertools::Itertools,
     log::{info, trace},
     solana_accounts_db::{
-        accounts_db::{self, CalcAccountsHashDataSource, ACCOUNTS_DB_CONFIG_FOR_TESTING},
+        accounts_db::{self, ACCOUNTS_DB_CONFIG_FOR_TESTING},
         accounts_index::AccountSecondaryIndexes,
         epoch_accounts_hash::EpochAccountsHash,
     },
@@ -27,7 +27,6 @@ use {
         snapshot_archive_info::FullSnapshotArchiveInfo,
         snapshot_bank_utils::{self, DISABLED_SNAPSHOT_ARCHIVE_INTERVAL},
         snapshot_config::SnapshotConfig,
-        snapshot_package::{AccountsPackage, AccountsPackageKind, SnapshotKind, SnapshotPackage},
         snapshot_utils::{
             self,
             SnapshotVersion::{self, V1_2_0},
@@ -48,7 +47,6 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     std::{
-        io::{Error, ErrorKind},
         path::PathBuf,
         sync::{
             atomic::{AtomicBool, Ordering},
@@ -227,8 +225,11 @@ fn run_bank_forks_snapshot_n<F>(
         // and to allow snapshotting of bank and the purging logic on status_cache to
         // kick in
         if slot % set_root_interval == 0 || slot == last_slot {
-            // set_root should send a snapshot request
+            if !bank.is_complete() {
+                bank.fill_bank_with_ticks_for_tests();
+            }
             bank_forks.read().unwrap().prune_program_cache(bank.slot());
+            // set_root should send a snapshot request
             bank_forks
                 .write()
                 .unwrap()
@@ -244,30 +245,17 @@ fn run_bank_forks_snapshot_n<F>(
     }
 
     // Generate a snapshot package for last bank
-    let last_bank = bank_forks.read().unwrap().get(last_slot).unwrap();
     let snapshot_config = &snapshot_test_config.snapshot_config;
-    let bank_snapshots_dir = &snapshot_config.bank_snapshots_dir;
-    let last_bank_snapshot_info = snapshot_utils::get_highest_bank_snapshot_pre(bank_snapshots_dir)
-        .expect("no bank snapshots found in path");
-    let accounts_package = AccountsPackage::new_for_snapshot(
-        AccountsPackageKind::Snapshot(SnapshotKind::FullSnapshot),
+    let last_bank = bank_forks.read().unwrap().get(last_slot).unwrap();
+    snapshot_bank_utils::bank_to_full_snapshot_archive(
+        &snapshot_config.bank_snapshots_dir,
         &last_bank,
-        &last_bank_snapshot_info,
-        last_bank.get_snapshot_storages(None),
-        None,
-    );
-    last_bank.force_flush_accounts_cache();
-    let accounts_hash =
-        last_bank.update_accounts_hash(CalcAccountsHashDataSource::Storages, false, false);
-    solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
-        accounts_package.bank_snapshot_dir(),
-        accounts_package.slot,
-        &accounts_hash,
-        None,
-    );
-    let snapshot_package =
-        SnapshotPackage::new(accounts_package, accounts_hash.into(), snapshot_config);
-    snapshot_utils::archive_snapshot_package(&snapshot_package).unwrap();
+        Some(snapshot_version),
+        &snapshot_config.full_snapshot_archives_dir,
+        &snapshot_config.incremental_snapshot_archives_dir,
+        snapshot_config.archive_format,
+    )
+    .unwrap();
 
     // Restore bank from snapshot
     let (_tmp_dir, temporary_accounts_dir) = create_tmp_accounts_dir_for_tests();
@@ -300,8 +288,6 @@ fn test_bank_forks_snapshot(snapshot_version: SnapshotVersion, cluster_type: Clu
             let key2 = Keypair::new().pubkey();
             let tx = system_transaction::transfer(mint_keypair, &key2, 0, bank.last_blockhash());
             assert_eq!(bank.process_transaction(&tx), Ok(()));
-
-            bank.freeze();
         },
         1,
     );
@@ -564,30 +550,18 @@ fn make_full_snapshot_archive(
     bank: &Bank,
     snapshot_config: &SnapshotConfig,
 ) -> snapshot_utils::Result<()> {
-    let slot = bank.slot();
-    info!("Making full snapshot archive from bank at slot: {}", slot);
-    bank.force_flush_accounts_cache();
-    bank.update_accounts_hash(CalcAccountsHashDataSource::Storages, false, false);
-    let bank_snapshot_info =
-        snapshot_utils::get_bank_snapshots_pre(&snapshot_config.bank_snapshots_dir)
-            .into_iter()
-            .find(|elem| elem.slot == slot)
-            .ok_or_else(|| {
-                Error::new(
-                    ErrorKind::Other,
-                    "did not find bank snapshot with this path",
-                )
-            })?;
-    snapshot_bank_utils::package_and_archive_full_snapshot(
+    info!(
+        "Making full snapshot archive from bank at slot: {}",
+        bank.slot(),
+    );
+    snapshot_bank_utils::bank_to_full_snapshot_archive(
+        &snapshot_config.bank_snapshots_dir,
         bank,
-        &bank_snapshot_info,
+        Some(snapshot_config.snapshot_version),
         &snapshot_config.full_snapshot_archives_dir,
         &snapshot_config.incremental_snapshot_archives_dir,
-        bank.get_snapshot_storages(None),
         snapshot_config.archive_format,
-        snapshot_config.snapshot_version,
     )?;
-
     Ok(())
 }
 
@@ -596,35 +570,20 @@ fn make_incremental_snapshot_archive(
     incremental_snapshot_base_slot: Slot,
     snapshot_config: &SnapshotConfig,
 ) -> snapshot_utils::Result<()> {
-    let slot = bank.slot();
     info!(
         "Making incremental snapshot archive from bank at slot: {}, and base slot: {}",
-        slot, incremental_snapshot_base_slot,
+        bank.slot(),
+        incremental_snapshot_base_slot,
     );
-    bank.force_flush_accounts_cache();
-    bank.update_incremental_accounts_hash(incremental_snapshot_base_slot);
-    let bank_snapshot_info =
-        snapshot_utils::get_bank_snapshots_pre(&snapshot_config.bank_snapshots_dir)
-            .into_iter()
-            .find(|elem| elem.slot == slot)
-            .ok_or_else(|| {
-                Error::new(
-                    ErrorKind::Other,
-                    "did not find bank snapshot with this path",
-                )
-            })?;
-    let storages = bank.get_snapshot_storages(Some(incremental_snapshot_base_slot));
-    snapshot_bank_utils::package_and_archive_incremental_snapshot(
+    snapshot_bank_utils::bank_to_incremental_snapshot_archive(
+        &snapshot_config.bank_snapshots_dir,
         bank,
         incremental_snapshot_base_slot,
-        &bank_snapshot_info,
+        Some(snapshot_config.snapshot_version),
         &snapshot_config.full_snapshot_archives_dir,
         &snapshot_config.incremental_snapshot_archives_dir,
-        storages,
         snapshot_config.archive_format,
-        snapshot_config.snapshot_version,
     )?;
-
     Ok(())
 }
 

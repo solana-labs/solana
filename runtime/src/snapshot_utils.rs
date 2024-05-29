@@ -1,12 +1,15 @@
 use {
     crate::{
-        serde_snapshot::SnapshotStreams,
+        bank::{BankFieldsToSerialize, BankSlotDelta},
+        serde_snapshot::{self, BankIncrementalSnapshotPersistence, SnapshotStreams},
         snapshot_archive_info::{
-            FullSnapshotArchiveInfo, IncrementalSnapshotArchiveInfo, SnapshotArchiveInfoGetter,
+            FullSnapshotArchiveInfo, IncrementalSnapshotArchiveInfo, SnapshotArchiveInfo,
+            SnapshotArchiveInfoGetter,
         },
+        snapshot_bank_utils,
         snapshot_config::SnapshotConfig,
         snapshot_hash::SnapshotHash,
-        snapshot_package::SnapshotPackage,
+        snapshot_package::{SnapshotKind, SnapshotPackage},
         snapshot_utils::snapshot_storage_rebuilder::{
             RebuiltSnapshotStorage, SnapshotStorageRebuilder,
         },
@@ -19,8 +22,9 @@ use {
     regex::Regex,
     solana_accounts_db::{
         account_storage::AccountStorageMap,
-        accounts_db::{AccountStorageEntry, AtomicAccountsFileId},
+        accounts_db::{AccountStorageEntry, AccountsDb, AtomicAccountsFileId},
         accounts_file::{AccountsFile, AccountsFileError, InternalsForArchive, StorageAccess},
+        epoch_accounts_hash::EpochAccountsHash,
         hardened_unpack::{self, ParallelSelector, UnpackError},
         shared_buffer_reader::{SharedBuffer, SharedBufferReader},
         utils::{move_and_async_delete_path, ACCOUNTS_RUN_DIR, ACCOUNTS_SNAPSHOT_DIR},
@@ -232,6 +236,7 @@ impl BankSnapshotInfo {
         bank_snapshot_path
     }
 }
+
 /// Bank snapshots traditionally had their accounts hash calculated prior to serialization.  Since
 /// the hash calculation takes a long time, an optimization has been put in to offload the accounts
 /// hash calculation.  The bank serialization format has not changed, so we need another way to
@@ -729,19 +734,236 @@ pub fn remove_tmp_snapshot_archives(snapshot_archives_dir: impl AsRef<Path>) {
     }
 }
 
-/// Make a snapshot archive out of the snapshot package
-pub fn archive_snapshot_package(snapshot_package: &SnapshotPackage) -> Result<()> {
+/// Serializes and archives a snapshot package
+pub fn serialize_and_archive_snapshot_package(
+    snapshot_package: SnapshotPackage,
+    snapshot_config: &SnapshotConfig,
+) -> Result<SnapshotArchiveInfo> {
+    let SnapshotPackage {
+        snapshot_kind,
+        slot: snapshot_slot,
+        block_height,
+        hash: snapshot_hash,
+        mut snapshot_storages,
+        status_cache_slot_deltas,
+        bank_fields_to_serialize,
+        epoch_accounts_hash,
+        bank_incremental_snapshot_persistence,
+        accounts,
+        enqueued: _,
+    } = snapshot_package;
+
+    let bank_snapshot_info = serialize_snapshot(
+        &snapshot_config.bank_snapshots_dir,
+        snapshot_config.snapshot_version,
+        &accounts.accounts_db,
+        snapshot_storages.as_slice(),
+        status_cache_slot_deltas.as_slice(),
+        bank_fields_to_serialize,
+        epoch_accounts_hash,
+        bank_incremental_snapshot_persistence.as_ref(),
+    )?;
+
+    // now write the full snapshot slot file after serializing so this bank snapshot is loadable
+    let full_snapshot_archive_slot = match snapshot_kind {
+        SnapshotKind::FullSnapshot => snapshot_slot,
+        SnapshotKind::IncrementalSnapshot(base_slot) => base_slot,
+    };
+    write_full_snapshot_slot_file(&bank_snapshot_info.snapshot_dir, full_snapshot_archive_slot)
+        .map_err(|err| {
+            IoError::other(format!(
+                "failed to serialize snapshot slot {snapshot_slot}, block height {block_height}, kind {snapshot_kind:?}: {err}",
+            ))
+        })?;
+
+    let snapshot_archive_path = match snapshot_package.snapshot_kind {
+        SnapshotKind::FullSnapshot => build_full_snapshot_archive_path(
+            &snapshot_config.full_snapshot_archives_dir,
+            snapshot_package.slot,
+            &snapshot_package.hash,
+            snapshot_config.archive_format,
+        ),
+        SnapshotKind::IncrementalSnapshot(incremental_snapshot_base_slot) => {
+            // After the snapshot has been serialized, it is now safe (and required) to prune all
+            // the storages that are *not* to be archived for this incremental snapshot.
+            snapshot_storages.retain(|storage| storage.slot() > incremental_snapshot_base_slot);
+            build_incremental_snapshot_archive_path(
+                &snapshot_config.incremental_snapshot_archives_dir,
+                incremental_snapshot_base_slot,
+                snapshot_package.slot,
+                &snapshot_package.hash,
+                snapshot_config.archive_format,
+            )
+        }
+    };
+
+    let snapshot_archive_info = archive_snapshot(
+        snapshot_kind,
+        snapshot_slot,
+        snapshot_hash,
+        snapshot_storages.as_slice(),
+        &bank_snapshot_info.snapshot_dir,
+        snapshot_archive_path,
+        snapshot_config.archive_format,
+    )?;
+
+    Ok(snapshot_archive_info)
+}
+
+/// Serializes a snapshot into `bank_snapshots_dir`
+fn serialize_snapshot(
+    bank_snapshots_dir: impl AsRef<Path>,
+    snapshot_version: SnapshotVersion,
+    accounts_db: &AccountsDb,
+    snapshot_storages: &[Arc<AccountStorageEntry>],
+    slot_deltas: &[BankSlotDelta],
+    bank_fields: BankFieldsToSerialize,
+    epoch_accounts_hash: Option<EpochAccountsHash>,
+    bank_incremental_snapshot_persistence: Option<&BankIncrementalSnapshotPersistence>,
+) -> Result<BankSnapshotInfo> {
+    let slot = bank_fields.slot;
+
+    // this lambda function is to facilitate converting between
+    // the AddBankSnapshotError and SnapshotError types
+    let do_serialize_snapshot = || {
+        let mut measure_everything = Measure::start("");
+        let bank_snapshot_dir = get_bank_snapshot_dir(&bank_snapshots_dir, slot);
+        if bank_snapshot_dir.exists() {
+            return Err(AddBankSnapshotError::SnapshotDirAlreadyExists(
+                bank_snapshot_dir,
+            ));
+        }
+        fs::create_dir_all(&bank_snapshot_dir).map_err(|err| {
+            AddBankSnapshotError::CreateSnapshotDir(err, bank_snapshot_dir.clone())
+        })?;
+
+        // the bank snapshot is stored as bank_snapshots_dir/slot/slot
+        let bank_snapshot_path = bank_snapshot_dir.join(get_snapshot_file_name(slot));
+        info!(
+            "Creating bank snapshot for slot {slot} at '{}'",
+            bank_snapshot_path.display(),
+        );
+
+        let (_, measure_flush) = measure!({
+            for storage in snapshot_storages {
+                storage.flush().map_err(|err| {
+                    AddBankSnapshotError::FlushStorage(err, storage.path().to_path_buf())
+                })?;
+            }
+        });
+
+        // We are constructing the snapshot directory to contain the full snapshot state information to allow
+        // constructing a bank from this directory.  It acts like an archive to include the full state.
+        // The set of the account storages files is the necessary part of this snapshot state.  Hard-link them
+        // from the operational accounts/ directory to here.
+        let (_, measure_hard_linking) =
+            measure!(
+                hard_link_storages_to_snapshot(&bank_snapshot_dir, slot, snapshot_storages)
+                    .map_err(AddBankSnapshotError::HardLinkStorages)?
+            );
+
+        let bank_snapshot_serializer = move |stream: &mut BufWriter<fs::File>| -> Result<()> {
+            serde_snapshot::serialize_bank_snapshot(
+                stream,
+                bank_fields,
+                accounts_db,
+                &get_storages_to_serialize(snapshot_storages),
+                bank_incremental_snapshot_persistence,
+                epoch_accounts_hash,
+            )?;
+            Ok(())
+        };
+        let (bank_snapshot_consumed_size, bank_serialize) = measure!(
+            serialize_snapshot_data_file(&bank_snapshot_path, bank_snapshot_serializer)
+                .map_err(|err| AddBankSnapshotError::SerializeBank(Box::new(err)))?,
+            "bank serialize"
+        );
+
+        let status_cache_path = bank_snapshot_dir.join(SNAPSHOT_STATUS_CACHE_FILENAME);
+        let (status_cache_consumed_size, status_cache_serialize) = measure!(
+            snapshot_bank_utils::serialize_status_cache(slot_deltas, &status_cache_path)
+                .map_err(|err| AddBankSnapshotError::SerializeStatusCache(Box::new(err)))?
+        );
+
+        let version_path = bank_snapshot_dir.join(SNAPSHOT_VERSION_FILENAME);
+        let (_, measure_write_version_file) = measure!(fs::write(
+            &version_path,
+            snapshot_version.as_str().as_bytes(),
+        )
+        .map_err(|err| AddBankSnapshotError::WriteSnapshotVersionFile(err, version_path))?);
+
+        // Mark this directory complete so it can be used.  Check this flag first before selecting for deserialization.
+        let state_complete_path = bank_snapshot_dir.join(SNAPSHOT_STATE_COMPLETE_FILENAME);
+        let (_, measure_write_state_complete_file) =
+            measure!(fs::File::create(&state_complete_path).map_err(|err| {
+                AddBankSnapshotError::CreateStateCompleteFile(err, state_complete_path)
+            })?);
+
+        measure_everything.stop();
+
+        // Monitor sizes because they're capped to MAX_SNAPSHOT_DATA_FILE_SIZE
+        datapoint_info!(
+            "snapshot_bank",
+            ("slot", slot, i64),
+            ("bank_size", bank_snapshot_consumed_size, i64),
+            ("status_cache_size", status_cache_consumed_size, i64),
+            ("flush_storages_us", measure_flush.as_us(), i64),
+            ("hard_link_storages_us", measure_hard_linking.as_us(), i64),
+            ("bank_serialize_us", bank_serialize.as_us(), i64),
+            (
+                "status_cache_serialize_us",
+                status_cache_serialize.as_us(),
+                i64
+            ),
+            (
+                "write_version_file_us",
+                measure_write_version_file.as_us(),
+                i64
+            ),
+            (
+                "write_state_complete_file_us",
+                measure_write_state_complete_file.as_us(),
+                i64
+            ),
+            ("total_us", measure_everything.as_us(), i64),
+        );
+
+        info!(
+            "{} for slot {} at {}",
+            bank_serialize,
+            slot,
+            bank_snapshot_path.display(),
+        );
+
+        Ok(BankSnapshotInfo {
+            slot,
+            snapshot_kind: BankSnapshotKind::Pre,
+            snapshot_dir: bank_snapshot_dir,
+            snapshot_version,
+        })
+    };
+
+    do_serialize_snapshot().map_err(|err| SnapshotError::AddBankSnapshot(err, slot))
+}
+
+/// Archives a snapshot into `archive_path`
+fn archive_snapshot(
+    snapshot_kind: SnapshotKind,
+    snapshot_slot: Slot,
+    snapshot_hash: SnapshotHash,
+    snapshot_storages: &[Arc<AccountStorageEntry>],
+    bank_snapshot_dir: impl AsRef<Path>,
+    archive_path: impl AsRef<Path>,
+    archive_format: ArchiveFormat,
+) -> Result<SnapshotArchiveInfo> {
     use ArchiveSnapshotPackageError as E;
     const SNAPSHOTS_DIR: &str = "snapshots";
     const ACCOUNTS_DIR: &str = "accounts";
-    info!(
-        "Generating snapshot archive for slot {}",
-        snapshot_package.slot()
-    );
+    info!("Generating snapshot archive for slot {snapshot_slot}, kind: {snapshot_kind:?}");
 
     let mut timer = Measure::start("snapshot_package-package_snapshots");
-    let tar_dir = snapshot_package
-        .path()
+    let tar_dir = archive_path
+        .as_ref()
         .parent()
         .expect("Tar output path is invalid");
 
@@ -750,26 +972,21 @@ pub fn archive_snapshot_package(snapshot_package: &SnapshotPackage) -> Result<()
     // Create the staging directories
     let staging_dir_prefix = TMP_SNAPSHOT_ARCHIVE_PREFIX;
     let staging_dir = tempfile::Builder::new()
-        .prefix(&format!(
-            "{}{}-",
-            staging_dir_prefix,
-            snapshot_package.slot()
-        ))
+        .prefix(&format!("{}{}-", staging_dir_prefix, snapshot_slot))
         .tempdir_in(tar_dir)
         .map_err(|err| E::CreateStagingDir(err, tar_dir.to_path_buf()))?;
     let staging_snapshots_dir = staging_dir.path().join(SNAPSHOTS_DIR);
 
-    let slot_str = snapshot_package.slot().to_string();
+    let slot_str = snapshot_slot.to_string();
     let staging_snapshot_dir = staging_snapshots_dir.join(&slot_str);
     // Creates staging snapshots/<slot>/
     fs::create_dir_all(&staging_snapshot_dir)
         .map_err(|err| E::CreateSnapshotStagingDir(err, staging_snapshot_dir.clone()))?;
 
-    let src_snapshot_dir = &snapshot_package.bank_snapshot_dir;
     // To be a source for symlinking and archiving, the path need to be an absolute path
-    let src_snapshot_dir = src_snapshot_dir
-        .canonicalize()
-        .map_err(|err| E::CanonicalizeSnapshotSourceDir(err, src_snapshot_dir.clone()))?;
+    let src_snapshot_dir = bank_snapshot_dir.as_ref().canonicalize().map_err(|err| {
+        E::CanonicalizeSnapshotSourceDir(err, bank_snapshot_dir.as_ref().to_path_buf())
+    })?;
     let staging_snapshot_file = staging_snapshot_dir.join(&slot_str);
     let src_snapshot_file = src_snapshot_dir.join(slot_str);
     symlink::symlink_file(&src_snapshot_file, &staging_snapshot_file)
@@ -789,17 +1006,17 @@ pub fn archive_snapshot_package(snapshot_package: &SnapshotPackage) -> Result<()
         E::SymlinkVersionFile(err, src_version_file, staging_version_file.clone())
     })?;
 
-    // Tar the staging directory into the archive at `archive_path`
-    let archive_path = tar_dir.join(format!(
+    // Tar the staging directory into the archive at `staging_archive_path`
+    let staging_archive_path = tar_dir.join(format!(
         "{}{}.{}",
         staging_dir_prefix,
-        snapshot_package.slot(),
-        snapshot_package.archive_format().extension(),
+        snapshot_slot,
+        archive_format.extension(),
     ));
 
     {
-        let mut archive_file = fs::File::create(&archive_path)
-            .map_err(|err| E::CreateArchiveFile(err, archive_path.clone()))?;
+        let mut archive_file = fs::File::create(&staging_archive_path)
+            .map_err(|err| E::CreateArchiveFile(err, staging_archive_path.clone()))?;
 
         let do_archive_files = |encoder: &mut dyn Write| -> std::result::Result<(), E> {
             let mut archive = tar::Builder::new(encoder);
@@ -812,7 +1029,7 @@ pub fn archive_snapshot_package(snapshot_package: &SnapshotPackage) -> Result<()
                 .append_dir_all(SNAPSHOTS_DIR, &staging_snapshots_dir)
                 .map_err(E::ArchiveSnapshotsDir)?;
 
-            for storage in &snapshot_package.snapshot_storages {
+            for storage in snapshot_storages {
                 let path_in_archive = Path::new(ACCOUNTS_DIR).join(AccountsFile::file_name(
                     storage.slot(),
                     storage.append_vec_id(),
@@ -838,7 +1055,7 @@ pub fn archive_snapshot_package(snapshot_package: &SnapshotPackage) -> Result<()
             Ok(())
         };
 
-        match snapshot_package.archive_format() {
+        match archive_format {
             ArchiveFormat::TarBzip2 => {
                 let mut encoder =
                     bzip2::write::BzEncoder::new(archive_file, bzip2::Compression::best());
@@ -873,31 +1090,28 @@ pub fn archive_snapshot_package(snapshot_package: &SnapshotPackage) -> Result<()
     }
 
     // Atomically move the archive into position for other validators to find
-    let metadata = fs::metadata(&archive_path)
-        .map_err(|err| E::QueryArchiveMetadata(err, archive_path.clone()))?;
-    fs::rename(&archive_path, snapshot_package.path())
-        .map_err(|err| E::MoveArchive(err, archive_path, snapshot_package.path().clone()))?;
+    let metadata = fs::metadata(&staging_archive_path)
+        .map_err(|err| E::QueryArchiveMetadata(err, staging_archive_path.clone()))?;
+    let archive_path = archive_path.as_ref().to_path_buf();
+    fs::rename(&staging_archive_path, &archive_path)
+        .map_err(|err| E::MoveArchive(err, staging_archive_path, archive_path.clone()))?;
 
     timer.stop();
     info!(
         "Successfully created {}. slot: {}, elapsed ms: {}, size: {}",
-        snapshot_package.path().display(),
-        snapshot_package.slot(),
+        archive_path.display(),
+        snapshot_slot,
         timer.as_ms(),
         metadata.len()
     );
 
     datapoint_info!(
         "archive-snapshot-package",
-        ("slot", snapshot_package.slot(), i64),
-        (
-            "archive_format",
-            snapshot_package.archive_format().to_string(),
-            String
-        ),
+        ("slot", snapshot_slot, i64),
+        ("archive_format", archive_format.to_string(), String),
         ("duration_ms", timer.as_ms(), i64),
         (
-            if snapshot_package.snapshot_kind.is_full_snapshot() {
+            if snapshot_kind.is_full_snapshot() {
                 "full-snapshot-archive-size"
             } else {
                 "incremental-snapshot-archive-size"
@@ -906,7 +1120,12 @@ pub fn archive_snapshot_package(snapshot_package: &SnapshotPackage) -> Result<()
             i64
         ),
     );
-    Ok(())
+    Ok(SnapshotArchiveInfo {
+        path: archive_path,
+        slot: snapshot_slot,
+        hash: snapshot_hash,
+        archive_format,
+    })
 }
 
 /// Get the bank snapshots in a directory

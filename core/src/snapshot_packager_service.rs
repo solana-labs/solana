@@ -6,7 +6,6 @@ use {
     solana_measure::{measure::Measure, measure_us},
     solana_perf::thread::renice_this_thread,
     solana_runtime::{
-        snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_config::SnapshotConfig,
         snapshot_hash::StartingSnapshotHashes,
         snapshot_package::{self, SnapshotPackage},
@@ -68,24 +67,26 @@ impl SnapshotPackagerService {
                     let enqueued_time = snapshot_package.enqueued.elapsed();
 
                     let measure_handling = Measure::start("");
+                    let snapshot_kind = snapshot_package.snapshot_kind;
+                    let snapshot_slot = snapshot_package.slot;
+                    let snapshot_hash = snapshot_package.hash;
 
                     // Archiving the snapshot package is not allowed to fail.
                     // AccountsBackgroundService calls `clean_accounts()` with a value for
                     // last_full_snapshot_slot that requires this archive call to succeed.
-                    let result = snapshot_utils::archive_snapshot_package(
-                        &snapshot_package,
-                    );
-                    if let Err(err) = result {
+                    let (archive_result, archive_time_us) = measure_us!(snapshot_utils::serialize_and_archive_snapshot_package(
+                        snapshot_package,
+                        &snapshot_config,
+                    ));
+                    if let Err(err) = archive_result {
                         error!("Stopping SnapshotPackagerService! Fatal error while archiving snapshot package: {err}");
                         exit.store(true, Ordering::Relaxed);
                         break;
                     }
 
+
                     if let Some(snapshot_gossip_manager) = snapshot_gossip_manager.as_mut() {
-                        snapshot_gossip_manager.push_snapshot_hash(
-                            snapshot_package.snapshot_kind,
-                            (snapshot_package.slot(), *snapshot_package.hash()),
-                        );
+                        snapshot_gossip_manager.push_snapshot_hash(snapshot_kind, (snapshot_slot, snapshot_hash));
                     }
 
                     let (_, purge_archives_time_us) = measure_us!(snapshot_utils::purge_old_snapshot_archives(
@@ -101,7 +102,7 @@ impl SnapshotPackagerService {
                     // booting from local state.
                     let (_, purge_bank_snapshots_time_us) = measure_us!(snapshot_utils::purge_bank_snapshots_older_than_slot(
                         &snapshot_config.bank_snapshots_dir,
-                        snapshot_package.slot(),
+                        snapshot_slot,
                     ));
 
                     let handling_time_us = measure_handling.end_as_us();
@@ -119,6 +120,7 @@ impl SnapshotPackagerService {
                         ),
                         ("enqueued_time_us", enqueued_time.as_micros(), i64),
                         ("handling_time_us", handling_time_us, i64),
+                        ("archive_time_us", archive_time_us, i64),
                         (
                             "purge_old_snapshots_time_us",
                             purge_bank_snapshots_time_us,
@@ -176,12 +178,12 @@ impl SnapshotPackagerService {
         // SAFETY: We know `snapshot_packages` is not empty, so its len is >= 1,
         // therefore there is always an element to pop.
         let snapshot_package = snapshot_packages.pop().unwrap();
-        let handled_snapshot_package_slot = snapshot_package.slot();
+        let handled_snapshot_package_slot = snapshot_package.slot;
         // re-enqueue any remaining snapshot packages for slots GREATER-THAN the snapshot package
         // that will be handled
         let num_re_enqueued_snapshot_packages = snapshot_packages
             .into_iter()
-            .filter(|snapshot_package| snapshot_package.slot() > handled_snapshot_package_slot)
+            .filter(|snapshot_package| snapshot_package.slot > handled_snapshot_package_slot)
             .map(|snapshot_package| {
                 snapshot_package_sender
                     .try_send(snapshot_package)
@@ -202,14 +204,8 @@ mod tests {
     use {
         super::*,
         rand::seq::SliceRandom,
-        solana_runtime::{
-            snapshot_archive_info::SnapshotArchiveInfo,
-            snapshot_hash::SnapshotHash,
-            snapshot_package::{SnapshotKind, SnapshotPackage},
-            snapshot_utils::ArchiveFormat,
-        },
-        solana_sdk::{clock::Slot, hash::Hash},
-        std::{path::PathBuf, time::Instant},
+        solana_runtime::snapshot_package::{SnapshotKind, SnapshotPackage},
+        solana_sdk::clock::Slot,
     };
 
     /// Ensure that unhandled snapshot packages are properly re-enqueued or dropped
@@ -221,17 +217,10 @@ mod tests {
     fn test_get_next_snapshot_package() {
         fn new(snapshot_kind: SnapshotKind, slot: Slot) -> SnapshotPackage {
             SnapshotPackage {
-                snapshot_archive_info: SnapshotArchiveInfo {
-                    path: PathBuf::default(),
-                    slot,
-                    hash: SnapshotHash(Hash::default()),
-                    archive_format: ArchiveFormat::Tar,
-                },
-                block_height: slot,
-                bank_snapshot_dir: PathBuf::default(),
-                snapshot_storages: Vec::default(),
                 snapshot_kind,
-                enqueued: Instant::now(),
+                slot,
+                block_height: slot,
+                ..SnapshotPackage::default_for_tests()
             }
         }
         fn new_full(slot: Slot) -> SnapshotPackage {
@@ -273,7 +262,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(snapshot_package.snapshot_kind, SnapshotKind::FullSnapshot,);
-        assert_eq!(snapshot_package.slot(), 400);
+        assert_eq!(snapshot_package.slot, 400);
         assert_eq!(num_re_enqueued_snapshot_packages, 2);
 
         // The Incremental Snapshot from slot 420 is handled 2nd
@@ -291,7 +280,7 @@ mod tests {
             snapshot_package.snapshot_kind,
             SnapshotKind::IncrementalSnapshot(400),
         );
-        assert_eq!(snapshot_package.slot(), 420);
+        assert_eq!(snapshot_package.slot, 420);
         assert_eq!(num_re_enqueued_snapshot_packages, 0);
 
         // And now the snapshot package channel is empty!

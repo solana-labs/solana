@@ -1,15 +1,12 @@
 use {
-    super::{
-        AccountsPackage, AccountsPackageKind, SnapshotArchiveInfoGetter, SnapshotKind,
-        SnapshotPackage,
-    },
+    super::{AccountsPackage, AccountsPackageKind, SnapshotKind, SnapshotPackage},
     std::cmp::Ordering::{self, Equal, Greater, Less},
 };
 
 /// Compare snapshot packages by priority; first by type, then by slot
 #[must_use]
 pub fn cmp_snapshot_packages_by_priority(a: &SnapshotPackage, b: &SnapshotPackage) -> Ordering {
-    cmp_snapshot_kinds_by_priority(&a.snapshot_kind, &b.snapshot_kind).then(a.slot().cmp(&b.slot()))
+    cmp_snapshot_kinds_by_priority(&a.snapshot_kind, &b.snapshot_kind).then(a.slot.cmp(&b.slot))
 }
 
 /// Compare accounts packages by priority; first by type, then by slot
@@ -71,31 +68,16 @@ pub fn cmp_snapshot_kinds_by_priority(a: &SnapshotKind, b: &SnapshotKind) -> Ord
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::*,
-        crate::{
-            snapshot_archive_info::SnapshotArchiveInfo, snapshot_hash::SnapshotHash,
-            snapshot_utils::ArchiveFormat,
-        },
-        solana_sdk::{clock::Slot, hash::Hash},
-        std::{path::PathBuf, time::Instant},
-    };
+    use {super::*, solana_sdk::clock::Slot};
 
     #[test]
     fn test_cmp_snapshot_packages_by_priority() {
         fn new(snapshot_kind: SnapshotKind, slot: Slot) -> SnapshotPackage {
             SnapshotPackage {
-                snapshot_archive_info: SnapshotArchiveInfo {
-                    path: PathBuf::default(),
-                    slot,
-                    hash: SnapshotHash(Hash::default()),
-                    archive_format: ArchiveFormat::Tar,
-                },
-                block_height: slot,
-                bank_snapshot_dir: PathBuf::default(),
-                snapshot_storages: Vec::default(),
                 snapshot_kind,
-                enqueued: Instant::now(),
+                slot,
+                block_height: slot,
+                ..SnapshotPackage::default_for_tests()
             }
         }
 
