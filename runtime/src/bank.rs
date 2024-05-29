@@ -3929,7 +3929,6 @@ impl Bank {
         txs: &[SanitizedTransaction],
         execution_results: &[TransactionExecutionResult],
     ) -> Vec<Result<()>> {
-        let hash_queue = self.blockhash_queue.read().unwrap();
         let mut fees = 0;
 
         let results = txs
@@ -3937,21 +3936,16 @@ impl Bank {
             .zip(execution_results)
             .map(|(tx, execution_result)| {
                 let message = tx.message();
-                let (execution_status, is_nonce, lamports_per_signature) =
-                    Self::get_details_from_execution_result(
-                        &hash_queue,
-                        execution_result,
-                        message.recent_blockhash(),
-                    )?;
-                let fee = self.get_fee_for_message_with_lamports_per_signature(
-                    message,
-                    lamports_per_signature,
-                );
+                let details = match &execution_result {
+                    TransactionExecutionResult::Executed { details, .. } => details,
+                    TransactionExecutionResult::NotExecuted(err) => return Err(err.clone()),
+                };
 
+                let fee = details.fee_details.total_fee();
                 self.check_execution_status_and_charge_fee(
                     message,
-                    execution_status,
-                    is_nonce,
+                    &details.status,
+                    details.is_nonce,
                     fee,
                 )?;
 
@@ -3970,7 +3964,6 @@ impl Bank {
         txs: &[SanitizedTransaction],
         execution_results: &[TransactionExecutionResult],
     ) -> Vec<Result<()>> {
-        let hash_queue = self.blockhash_queue.read().unwrap();
         let mut accumulated_fee_details = FeeDetails::default();
 
         let results = txs
@@ -3978,34 +3971,20 @@ impl Bank {
             .zip(execution_results)
             .map(|(tx, execution_result)| {
                 let message = tx.message();
-                let (execution_status, is_nonce, lamports_per_signature) =
-                    Self::get_details_from_execution_result(
-                        &hash_queue,
-                        execution_result,
-                        message.recent_blockhash(),
-                    )?;
+                let details = match &execution_result {
+                    TransactionExecutionResult::Executed { details, .. } => details,
+                    TransactionExecutionResult::NotExecuted(err) => return Err(err.clone()),
+                };
 
-                if !FeeStructure::to_clear_transaction_fee(lamports_per_signature) {
-                    let fee_details = self.fee_structure().calculate_fee_details(
-                        message,
-                        &process_compute_budget_instructions(message.program_instructions_iter())
-                            .unwrap_or_default()
-                            .into(),
-                        self.feature_set
-                            .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
-                        self.feature_set
-                            .is_active(&remove_rounding_in_fee_calculation::id()),
-                    );
+                self.check_execution_status_and_charge_fee(
+                    message,
+                    &details.status,
+                    details.is_nonce,
+                    details.fee_details.total_fee(),
+                )?;
 
-                    self.check_execution_status_and_charge_fee(
-                        message,
-                        execution_status,
-                        is_nonce,
-                        fee_details.total_fee(),
-                    )?;
+                accumulated_fee_details.accumulate(&details.fee_details);
 
-                    accumulated_fee_details.accumulate(&fee_details);
-                }
                 Ok(())
             })
             .collect();
@@ -4015,33 +3994,6 @@ impl Bank {
             .unwrap()
             .accumulate(&accumulated_fee_details);
         results
-    }
-
-    fn get_details_from_execution_result<'a>(
-        hash_queue_readonly: &RwLockReadGuard<'a, BlockhashQueue>,
-        execution_result: &'a TransactionExecutionResult,
-        transaction_blockhash: &Hash,
-    ) -> Result<(&'a transaction::Result<()>, bool, u64)> {
-        let (execution_status, durable_nonce_fee) = match &execution_result {
-            TransactionExecutionResult::Executed { details, .. } => {
-                Ok((&details.status, details.durable_nonce_fee.as_ref()))
-            }
-            TransactionExecutionResult::NotExecuted(err) => Err(err.clone()),
-        }?;
-
-        let (lamports_per_signature, is_nonce) = durable_nonce_fee
-            .map(|durable_nonce_fee| durable_nonce_fee.lamports_per_signature())
-            .map(|maybe_lamports_per_signature| (maybe_lamports_per_signature, true))
-            .unwrap_or_else(|| {
-                (
-                    hash_queue_readonly.get_lamports_per_signature(transaction_blockhash),
-                    false,
-                )
-            });
-
-        let lamports_per_signature =
-            lamports_per_signature.ok_or(TransactionError::BlockhashNotFound)?;
-        Ok((execution_status, is_nonce, lamports_per_signature))
     }
 
     fn check_execution_status_and_charge_fee(

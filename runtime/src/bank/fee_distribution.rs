@@ -87,6 +87,7 @@ impl Bank {
     ) -> u64 {
         let fee_details = self.fee_structure().calculate_fee_details(
             transaction.message(),
+            self.get_lamports_per_signature(),
             fee_budget_limits,
             self.feature_set
                 .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),

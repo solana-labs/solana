@@ -17,7 +17,7 @@ use {
             self, include_loaded_accounts_data_size_in_fee_calculation,
             remove_rounding_in_fee_calculation,
         },
-        fee::FeeStructure,
+        fee::{FeeDetails, FeeStructure},
         message::SanitizedMessage,
         native_loader,
         nonce::State as NonceState,
@@ -51,6 +51,7 @@ pub struct LoadedTransaction {
     pub accounts: Vec<TransactionAccount>,
     pub program_indices: TransactionProgramIndices,
     pub nonce: Option<NonceFull>,
+    pub fee_details: FeeDetails,
     pub rent: TransactionRent,
     pub rent_debits: RentDebits,
 }
@@ -141,7 +142,7 @@ pub(crate) fn load_accounts<CB: TransactionProcessingCallback>(
                 }),
             ) => {
                 let message = tx.message();
-                let fee = fee_structure.calculate_fee(
+                let fee_details = fee_structure.calculate_fee_details(
                     message,
                     *lamports_per_signature,
                     &process_compute_budget_instructions(message.program_instructions_iter())
@@ -157,7 +158,7 @@ pub(crate) fn load_accounts<CB: TransactionProcessingCallback>(
                     callbacks,
                     message,
                     nonce.as_ref(),
-                    fee,
+                    fee_details,
                     error_counters,
                     account_overrides,
                     loaded_programs,
@@ -172,7 +173,7 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
     callbacks: &CB,
     message: &SanitizedMessage,
     nonce: Option<&NoncePartial>,
-    fee: u64,
+    fee_details: FeeDetails,
     error_counters: &mut TransactionErrorMetrics,
     account_overrides: Option<&AccountOverrides>,
     loaded_programs: &ProgramCacheForTxBatch,
@@ -283,7 +284,7 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
                         i as IndexOfAccount,
                         error_counters,
                         rent_collector,
-                        fee,
+                        fee_details.total_fee(),
                     )?;
 
                     validated_fee_payer = true;
@@ -386,6 +387,7 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
         accounts,
         program_indices,
         nonce,
+        fee_details,
         rent: tx_rent,
         rent_debits,
     })
@@ -1448,7 +1450,7 @@ mod tests {
             &mock_bank,
             sanitized_transaction.message(),
             None,
-            32,
+            FeeDetails::default(),
             &mut error_counter,
             None,
             &loaded_programs,
@@ -1488,11 +1490,12 @@ mod tests {
             vec![Signature::new_unique()],
             false,
         );
+        let fee_details = FeeDetails::new_for_tests(32, 0, false);
         let result = load_transaction_accounts(
             &mock_bank,
             sanitized_transaction.message(),
             None,
-            32,
+            fee_details,
             &mut error_counter,
             None,
             &loaded_programs,
@@ -1518,6 +1521,7 @@ mod tests {
                 ],
                 program_indices: vec![vec![]],
                 nonce: None,
+                fee_details,
                 rent: 0,
                 rent_debits: RentDebits::default()
             }
@@ -1559,7 +1563,7 @@ mod tests {
             &mock_bank,
             sanitized_transaction.message(),
             None,
-            32,
+            FeeDetails::default(),
             &mut error_counter,
             None,
             &loaded_programs,
@@ -1602,7 +1606,7 @@ mod tests {
             &mock_bank,
             sanitized_transaction.message(),
             None,
-            32,
+            FeeDetails::default(),
             &mut error_counter,
             None,
             &loaded_programs,
@@ -1645,7 +1649,7 @@ mod tests {
             &mock_bank,
             sanitized_transaction.message(),
             None,
-            32,
+            FeeDetails::default(),
             &mut error_counter,
             None,
             &loaded_programs,
@@ -1691,11 +1695,12 @@ mod tests {
             vec![Signature::new_unique()],
             false,
         );
+        let fee_details = FeeDetails::new_for_tests(32, 0, false);
         let result = load_transaction_accounts(
             &mock_bank,
             sanitized_transaction.message(),
             None,
-            32,
+            fee_details,
             &mut error_counter,
             None,
             &loaded_programs,
@@ -1720,6 +1725,7 @@ mod tests {
                     ),
                 ],
                 nonce: None,
+                fee_details,
                 program_indices: vec![vec![1]],
                 rent: 0,
                 rent_debits: RentDebits::default()
@@ -1764,16 +1770,11 @@ mod tests {
             &mock_bank,
             sanitized_transaction.message(),
             None,
-            32,
+            FeeDetails::default(),
             &mut error_counter,
             None,
             &loaded_programs,
         );
-        mock_bank
-            .accounts_map
-            .get_mut(&key2.pubkey())
-            .unwrap()
-            .set_lamports(200 - 32);
 
         assert_eq!(result.err(), Some(TransactionError::ProgramAccountNotFound));
     }
@@ -1821,16 +1822,11 @@ mod tests {
             &mock_bank,
             sanitized_transaction.message(),
             None,
-            32,
+            FeeDetails::default(),
             &mut error_counter,
             None,
             &loaded_programs,
         );
-        mock_bank
-            .accounts_map
-            .get_mut(&key2.pubkey())
-            .unwrap()
-            .set_lamports(200 - 32);
 
         assert_eq!(
             result.err(),
@@ -1879,11 +1875,12 @@ mod tests {
             vec![Signature::new_unique()],
             false,
         );
+        let fee_details = FeeDetails::new_for_tests(32, 0, false);
         let result = load_transaction_accounts(
             &mock_bank,
             sanitized_transaction.message(),
             None,
-            32,
+            fee_details,
             &mut error_counter,
             None,
             &loaded_programs,
@@ -1913,6 +1910,7 @@ mod tests {
                 ],
                 program_indices: vec![vec![2, 1]],
                 nonce: None,
+                fee_details,
                 rent: 0,
                 rent_debits: RentDebits::default()
             }
@@ -1968,11 +1966,12 @@ mod tests {
             vec![Signature::new_unique()],
             false,
         );
+        let fee_details = FeeDetails::new_for_tests(32, 0, false);
         let result = load_transaction_accounts(
             &mock_bank,
             sanitized_transaction.message(),
             None,
-            32,
+            fee_details,
             &mut error_counter,
             None,
             &loaded_programs,
@@ -2005,6 +2004,7 @@ mod tests {
                 ],
                 program_indices: vec![vec![3, 1], vec![3, 1]],
                 nonce: None,
+                fee_details,
                 rent: 0,
                 rent_debits: RentDebits::default()
             }
@@ -2167,6 +2167,7 @@ mod tests {
                     AccountSharedData::default(),
                     Some(mock_bank.accounts_map[&key2.pubkey()].clone())
                 )),
+                fee_details: FeeDetails::default(),
                 rent: 0,
                 rent_debits: RentDebits::default()
             }

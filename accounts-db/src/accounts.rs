@@ -838,6 +838,7 @@ mod tests {
         solana_sdk::{
             account::{AccountSharedData, WritableAccount},
             address_lookup_table::state::LookupTableMeta,
+            fee::FeeDetails,
             hash::Hash,
             instruction::{CompiledInstruction, InstructionError},
             message::{Message, MessageHeader},
@@ -848,8 +849,7 @@ mod tests {
             transaction::{Transaction, MAX_TX_ACCOUNT_LOCKS},
         },
         solana_svm::{
-            account_loader::LoadedTransaction,
-            transaction_results::{DurableNonceFee, TransactionExecutionDetails},
+            account_loader::LoadedTransaction, transaction_results::TransactionExecutionDetails,
         },
         std::{
             borrow::Cow,
@@ -880,7 +880,8 @@ mod tests {
                 status,
                 log_messages: None,
                 inner_instructions: None,
-                durable_nonce_fee: nonce.map(DurableNonceFee::from),
+                fee_details: FeeDetails::default(),
+                is_nonce: nonce.is_some(),
                 return_data: None,
                 executed_units: 0,
                 accounts_data_len_delta: 0,
@@ -1578,6 +1579,7 @@ mod tests {
             accounts: transaction_accounts0,
             program_indices: vec![],
             nonce: None,
+            fee_details: FeeDetails::default(),
             rent: 0,
             rent_debits: RentDebits::default(),
         });
@@ -1586,6 +1588,7 @@ mod tests {
             accounts: transaction_accounts1,
             program_indices: vec![],
             nonce: None,
+            fee_details: FeeDetails::default(),
             rent: 0,
             rent_debits: RentDebits::default(),
         });
@@ -1962,6 +1965,7 @@ mod tests {
             accounts: transaction_accounts,
             program_indices: vec![],
             nonce: nonce.clone(),
+            fee_details: FeeDetails::default(),
             rent: 0,
             rent_debits: RentDebits::default(),
         });
@@ -2066,6 +2070,7 @@ mod tests {
             accounts: transaction_accounts,
             program_indices: vec![],
             nonce: nonce.clone(),
+            fee_details: FeeDetails::default(),
             rent: 0,
             rent_debits: RentDebits::default(),
         });

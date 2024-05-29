@@ -6,7 +6,7 @@ use {
         blockstore::Blockstore,
         blockstore_processor::{TransactionStatusBatch, TransactionStatusMessage},
     },
-    solana_svm::transaction_results::{DurableNonceFee, TransactionExecutionDetails},
+    solana_svm::transaction_results::TransactionExecutionDetails,
     solana_transaction_status::{
         extract_and_fmt_memos, map_inner_instructions, Reward, TransactionStatusMeta,
     },
@@ -99,27 +99,14 @@ impl TransactionStatusService {
                             status,
                             log_messages,
                             inner_instructions,
-                            durable_nonce_fee,
                             return_data,
                             executed_units,
+                            fee_details,
                             ..
                         } = details;
-                        let lamports_per_signature = match durable_nonce_fee {
-                            Some(DurableNonceFee::Valid(lamports_per_signature)) => {
-                                Some(lamports_per_signature)
-                            }
-                            Some(DurableNonceFee::Invalid) => None,
-                            None => bank.get_lamports_per_signature_for_blockhash(
-                                transaction.message().recent_blockhash(),
-                            ),
-                        }
-                        .expect("lamports_per_signature must be available");
-                        let fee = bank.get_fee_for_message_with_lamports_per_signature(
-                            transaction.message(),
-                            lamports_per_signature,
-                        );
                         let tx_account_locks = transaction.get_account_locks_unchecked();
 
+                        let fee = fee_details.total_fee();
                         let inner_instructions = inner_instructions.map(|inner_instructions| {
                             map_inner_instructions(inner_instructions).collect()
                         });
@@ -217,6 +204,7 @@ pub(crate) mod tests {
         solana_sdk::{
             account_utils::StateMut,
             clock::Slot,
+            fee::FeeDetails,
             hash::Hash,
             nonce::{self, state::DurableNonce},
             nonce_account,
@@ -230,7 +218,6 @@ pub(crate) mod tests {
                 VersionedTransaction,
             },
         },
-        solana_svm::nonce_info::{NonceFull, NoncePartial},
         solana_transaction_status::{
             token_balances::TransactionTokenBalancesSet, TransactionStatusMeta,
             TransactionTokenBalance,
@@ -333,23 +320,15 @@ pub(crate) mod tests {
             )))
             .unwrap();
 
-        let rollback_partial = NoncePartial::new(pubkey, nonce_account.clone());
-
         let mut rent_debits = RentDebits::default();
         rent_debits.insert(&pubkey, 123, 456);
 
-        let fee_payer_address = &pubkey;
-        let fee_payer_account = nonce_account;
         let transaction_result = Some(TransactionExecutionDetails {
             status: Ok(()),
             log_messages: None,
             inner_instructions: None,
-            durable_nonce_fee: Some(DurableNonceFee::from(&NonceFull::from_partial(
-                &rollback_partial,
-                fee_payer_address,
-                fee_payer_account,
-                &rent_debits,
-            ))),
+            fee_details: FeeDetails::default(),
+            is_nonce: true,
             return_data: None,
             executed_units: 0,
             accounts_data_len_delta: 0,

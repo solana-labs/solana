@@ -50,7 +50,7 @@ use {
     },
     solana_svm::transaction_processor::ExecutionRecordingConfig,
     solana_svm::transaction_results::{
-        DurableNonceFee, InnerInstruction, TransactionExecutionDetails, TransactionExecutionResult,
+        InnerInstruction, TransactionExecutionDetails, TransactionExecutionResult,
         TransactionResults,
     },
     solana_transaction_status::{
@@ -185,30 +185,11 @@ fn execute_transactions(
                         status,
                         log_messages,
                         inner_instructions,
-                        durable_nonce_fee,
+                        fee_details,
                         return_data,
                         executed_units,
                         ..
                     } = details;
-
-                    let lamports_per_signature = match durable_nonce_fee {
-                        Some(DurableNonceFee::Valid(lamports_per_signature)) => {
-                            Some(lamports_per_signature)
-                        }
-                        Some(DurableNonceFee::Invalid) => None,
-                        None => bank.get_lamports_per_signature_for_blockhash(
-                            &tx.message().recent_blockhash,
-                        ),
-                    }
-                    .expect("lamports_per_signature must be available");
-                    let fee = bank.get_fee_for_message_with_lamports_per_signature(
-                        &SanitizedMessage::try_from_legacy_message(
-                            tx.message().clone(),
-                            &ReservedAccountKeys::empty_key_set(),
-                        )
-                        .unwrap(),
-                        lamports_per_signature,
-                    );
 
                     let inner_instructions = inner_instructions.map(|inner_instructions| {
                         map_inner_instructions(inner_instructions).collect()
@@ -216,7 +197,7 @@ fn execute_transactions(
 
                     let tx_status_meta = TransactionStatusMeta {
                         status,
-                        fee,
+                        fee: fee_details.total_fee(),
                         pre_balances,
                         post_balances,
                         pre_token_balances: Some(pre_token_balances),

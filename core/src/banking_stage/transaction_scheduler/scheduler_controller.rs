@@ -653,9 +653,9 @@ mod tests {
         solana_poh::poh_recorder::{PohRecorder, Record, WorkingBankEntry},
         solana_runtime::bank::Bank,
         solana_sdk::{
-            compute_budget::ComputeBudgetInstruction, hash::Hash, message::Message,
-            poh_config::PohConfig, pubkey::Pubkey, signature::Keypair, signer::Signer,
-            system_instruction, system_transaction, transaction::Transaction,
+            compute_budget::ComputeBudgetInstruction, fee_calculator::FeeRateGovernor, hash::Hash,
+            message::Message, poh_config::PohConfig, pubkey::Pubkey, signature::Keypair,
+            signer::Signer, system_instruction, system_transaction, transaction::Transaction,
         },
         std::sync::{atomic::AtomicBool, Arc, RwLock},
         tempfile::TempDir,
@@ -682,10 +682,11 @@ mod tests {
 
     fn create_test_frame(num_threads: usize) -> (TestFrame, SchedulerController) {
         let GenesisConfigInfo {
-            genesis_config,
+            mut genesis_config,
             mint_keypair,
             ..
         } = create_slow_genesis_config(u64::MAX);
+        genesis_config.fee_rate_governor = FeeRateGovernor::new(5000, 0);
         let (bank, bank_forks) = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
 
         let ledger_path = get_tmp_ledger_path_auto_delete!();
