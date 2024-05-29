@@ -73,7 +73,6 @@ fn invoker_dupes_process_instruction(
 }
 
 // Process instruction to be invoked by another program
-#[allow(clippy::unnecessary_wraps)]
 fn invoked_process_instruction(
     _program_id: &Pubkey,
     _accounts: &[AccountInfo],
@@ -248,7 +247,6 @@ fn invoker_stack_height(
 }
 
 // Process instruction to be invoked by another program
-#[allow(clippy::unnecessary_wraps)]
 fn invoked_stack_height(
     _program_id: &Pubkey,
     _accounts: &[AccountInfo],

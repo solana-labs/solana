@@ -11,7 +11,6 @@ use solana_program::{
 };
 
 solana_program::entrypoint_deprecated!(process_instruction);
-#[allow(clippy::unnecessary_wraps)]
 fn process_instruction(
     _program_id: &Pubkey,
     accounts: &[AccountInfo],

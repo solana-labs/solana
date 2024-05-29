@@ -39,7 +39,6 @@ fn custom_panic(info: &core::panic::PanicInfo<'_>) {
 }
 
 solana_program::entrypoint_deprecated!(process_instruction);
-#[allow(clippy::unnecessary_wraps)]
 fn process_instruction(
     program_id: &Pubkey,
     accounts: &[AccountInfo],

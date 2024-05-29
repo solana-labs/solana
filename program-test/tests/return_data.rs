@@ -43,7 +43,6 @@ fn get_return_data_process_instruction(
 }
 
 // Process instruction to echo input back to another program
-#[allow(clippy::unnecessary_wraps)]
 fn set_return_data_process_instruction(
     _program_id: &Pubkey,
     _accounts: &[AccountInfo],
@@ -92,7 +91,6 @@ async fn return_data() {
 }
 
 // Process instruction to echo input back to another program
-#[allow(clippy::unnecessary_wraps)]
 fn error_set_return_data_process_instruction(
     _program_id: &Pubkey,
     _accounts: &[AccountInfo],

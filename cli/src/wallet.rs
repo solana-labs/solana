@@ -812,7 +812,6 @@ pub fn process_confirm(
     }
 }
 
-#[allow(clippy::unnecessary_wraps)]
 pub fn process_decode_transaction(
     config: &CliConfig,
     transaction: &VersionedTransaction,

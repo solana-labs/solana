@@ -160,7 +160,6 @@ impl AbiDigester {
         self.update(&[&label]);
     }
 
-    #[allow(clippy::unnecessary_wraps)]
     fn digest_primitive<T: Serialize>(mut self) -> Result<AbiDigester, DigestError> {
         self.update_with_type::<T>("primitive");
         Ok(self)
@@ -189,7 +188,6 @@ impl AbiDigester {
         self.create_child()?.digest_data(v).map(|_| ())
     }
 
-    #[allow(clippy::unnecessary_wraps)]
     fn check_for_enum(
         &mut self,
         label: &'static str,
