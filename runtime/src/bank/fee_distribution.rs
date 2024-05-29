@@ -162,7 +162,9 @@ impl Bank {
         fees: u64,
         options: DepositFeeOptions,
     ) -> Result<u64, DepositFeeError> {
-        let mut account = self.get_account_with_fixed_root(pubkey).unwrap_or_default();
+        let mut account = self
+            .get_account_with_fixed_root_no_cache(pubkey)
+            .unwrap_or_default();
 
         if options.check_account_owner && !system_program::check_id(account.owner()) {
             return Err(DepositFeeError::InvalidAccountOwner);
