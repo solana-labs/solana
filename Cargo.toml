@@ -397,7 +397,7 @@ solana-zk-keygen = { path = "zk-keygen", version = "=2.0.0" }
 solana-zk-sdk = { path = "zk-sdk", version = "=2.0.0" }
 solana-zk-token-proof-program = { path = "programs/zk-token-proof", version = "=2.0.0" }
 solana-zk-token-sdk = { path = "zk-token-sdk", version = "=2.0.0" }
-solana_rbpf = "=0.8.0"
+solana_rbpf = "=0.8.1"
 spl-associated-token-account = "=3.0.2"
 spl-instruction-padding = "0.1"
 spl-memo = "=4.0.1"

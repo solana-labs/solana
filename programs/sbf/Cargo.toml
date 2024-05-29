@@ -50,7 +50,7 @@ solana-svm = { path = "../../svm", version = "=2.0.0" }
 solana-transaction-status = { path = "../../transaction-status", version = "=2.0.0" }
 agave-validator = { path = "../../validator", version = "=2.0.0" }
 solana-zk-token-sdk = { path = "../../zk-token-sdk", version = "=2.0.0" }
-solana_rbpf = "=0.8.0"
+solana_rbpf = "=0.8.1"
 static_assertions = "1.1.0"
 thiserror = "1.0"
 
