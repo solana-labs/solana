@@ -312,7 +312,7 @@ pub struct BankRc {
     pub(crate) parent: RwLock<Option<Arc<Bank>>>,
 
     /// Current slot
-    pub(crate) slot: Slot,
+    pub(crate) _slot: Slot,
 
     pub(crate) bank_id_generator: Arc<AtomicU64>,
 }
@@ -328,7 +328,7 @@ impl AbiExample for BankRc {
             parent: RwLock::new(None),
             // AbiExample for Accounts is specially implemented to contain a storage example
             accounts: AbiExample::example(),
-            slot: AbiExample::example(),
+            _slot: AbiExample::example(),
             bank_id_generator: Arc::new(AtomicU64::new(0)),
         }
     }
@@ -339,7 +339,7 @@ impl BankRc {
         Self {
             accounts: Arc::new(accounts),
             parent: RwLock::new(None),
-            slot,
+            _slot: slot,
             bank_id_generator: Arc::new(AtomicU64::new(0)),
         }
     }
@@ -1140,7 +1140,7 @@ impl Bank {
             BankRc {
                 accounts: Arc::new(Accounts::new(accounts_db)),
                 parent: RwLock::new(Some(Arc::clone(&parent))),
-                slot,
+                _slot: slot,
                 bank_id_generator: Arc::clone(&parent.rc.bank_id_generator),
             }
         });

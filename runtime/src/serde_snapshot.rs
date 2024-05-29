@@ -714,23 +714,26 @@ pub fn reserialize_bank_with_new_accounts_hash(
     found
 }
 
+#[cfg(feature = "dev-context-only-utils")]
 struct SerializableBankAndStorage<'a> {
     bank: &'a Bank,
     snapshot_storages: &'a [Vec<Arc<AccountStorageEntry>>],
 }
 
+#[cfg(feature = "dev-context-only-utils")]
 impl<'a> Serialize for SerializableBankAndStorage<'a> {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: serde::ser::Serializer,
     {
+        let slot = self.bank.slot();
         let fields = self.bank.get_fields_to_serialize();
         let lamports_per_signature = fields.fee_rate_governor.lamports_per_signature;
         let bank_fields_to_serialize = (
             SerializableVersionedBank::from(fields),
             SerializableAccountsDb::<'_> {
                 accounts_db: &self.bank.rc.accounts.accounts_db,
-                slot: self.bank.rc.slot,
+                slot,
                 account_storage_entries: self.snapshot_storages,
             },
             // Additional fields, we manually store the lamps per signature here so that
@@ -774,12 +777,13 @@ impl<'a> Serialize for SerializableBankAndStorageNoExtra<'a> {
     where
         S: serde::ser::Serializer,
     {
+        let slot = self.bank.slot();
         let fields = self.bank.get_fields_to_serialize();
         (
             SerializableVersionedBank::from(fields),
             SerializableAccountsDb::<'_> {
                 accounts_db: &self.bank.rc.accounts.accounts_db,
-                slot: self.bank.rc.slot,
+                slot,
                 account_storage_entries: self.snapshot_storages,
             },
         )
