@@ -5,7 +5,6 @@
 ///
 /// You can find out more about this error model and how to work with it in the
 /// [API Design Guide](<https://cloud.google.com/apis/design/errors>).
-#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Status {
     /// The status code, which should be an enum value of

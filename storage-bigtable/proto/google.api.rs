@@ -1,7 +1,6 @@
 /// Defines the HTTP configuration for an API service. It contains a list of
 /// \[HttpRule][google.api.HttpRule\], each specifying the mapping of an RPC method
 /// to one or more HTTP REST API methods.
-#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Http {
     /// A list of HTTP configuration rules that apply to individual API methods.
@@ -290,7 +289,6 @@ pub struct Http {
 /// If an API needs to use a JSON array for request or response body, it can map
 /// the request or response body to a repeated field. However, some gRPC
 /// Transcoding implementations may not support this feature.
-#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct HttpRule {
     /// Selects a method to which this rule applies.
@@ -331,7 +329,6 @@ pub mod http_rule {
     /// Determines the URL pattern is matched by this rules. This pattern can be
     /// used with any of the {get|put|post|delete|patch} methods. A custom method
     /// can be defined using the 'custom' field.
-    #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Oneof)]
     pub enum Pattern {
         /// Maps to HTTP GET. Used for listing and getting information about
@@ -359,7 +356,6 @@ pub mod http_rule {
     }
 }
 /// A custom pattern is used for defining custom HTTP verb.
-#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct CustomHttpPattern {
     /// The name of this custom HTTP verb.
@@ -445,7 +441,6 @@ impl LaunchStage {
     }
 }
 /// Required information for every language.
-#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct CommonLanguageSettings {
     /// Link to automatically generated reference documentation.  Example:
@@ -458,7 +453,6 @@ pub struct CommonLanguageSettings {
     pub destinations: ::prost::alloc::vec::Vec<i32>,
 }
 /// Details about how and where to publish client libraries.
-#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ClientLibrarySettings {
     /// Version of the API to apply these settings to. This is the full protobuf
@@ -501,7 +495,6 @@ pub struct ClientLibrarySettings {
 /// This message configures the settings for publishing [Google Cloud Client
 /// libraries](<https://cloud.google.com/apis/docs/cloud-client-libraries>)
 /// generated from the service config.
-#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Publishing {
     /// A list of API method settings, e.g. the behavior for methods that use the
@@ -546,7 +539,6 @@ pub struct Publishing {
     pub proto_reference_documentation_uri: ::prost::alloc::string::String,
 }
 /// Settings for Java client libraries.
-#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct JavaSettings {
     /// The package name to use in Java. Clobbers the java_package option
@@ -586,7 +578,6 @@ pub struct JavaSettings {
     pub common: ::core::option::Option<CommonLanguageSettings>,
 }
 /// Settings for C++ client libraries.
-#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct CppSettings {
     /// Some settings.
@@ -594,7 +585,6 @@ pub struct CppSettings {
     pub common: ::core::option::Option<CommonLanguageSettings>,
 }
 /// Settings for Php client libraries.
-#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct PhpSettings {
     /// Some settings.
@@ -602,7 +592,6 @@ pub struct PhpSettings {
     pub common: ::core::option::Option<CommonLanguageSettings>,
 }
 /// Settings for Python client libraries.
-#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct PythonSettings {
     /// Some settings.
@@ -610,7 +599,6 @@ pub struct PythonSettings {
     pub common: ::core::option::Option<CommonLanguageSettings>,
 }
 /// Settings for Node client libraries.
-#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct NodeSettings {
     /// Some settings.
@@ -618,7 +606,6 @@ pub struct NodeSettings {
     pub common: ::core::option::Option<CommonLanguageSettings>,
 }
 /// Settings for Dotnet client libraries.
-#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct DotnetSettings {
     /// Some settings.
@@ -664,7 +651,6 @@ pub struct DotnetSettings {
     pub handwritten_signatures: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
 /// Settings for Ruby client libraries.
-#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct RubySettings {
     /// Some settings.
@@ -672,7 +658,6 @@ pub struct RubySettings {
     pub common: ::core::option::Option<CommonLanguageSettings>,
 }
 /// Settings for Go client libraries.
-#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GoSettings {
     /// Some settings.
@@ -680,7 +665,6 @@ pub struct GoSettings {
     pub common: ::core::option::Option<CommonLanguageSettings>,
 }
 /// Describes the generator configuration for a method.
-#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct MethodSettings {
     /// The fully qualified name of the method, for which the options below apply.
@@ -727,7 +711,6 @@ pub mod method_settings {
     /// All default values below are from those used in the client library
     /// generators (e.g.
     /// \[Java\](<https://github.com/googleapis/gapic-generator-java/blob/04c2faa191a9b5a10b92392fe8482279c4404803/src/main/java/com/google/api/generator/gapic/composer/common/RetrySettingsComposer.java>)).
-    #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct LongRunning {
         /// Initial delay after which the first poll request will be made.
@@ -979,7 +962,6 @@ impl FieldBehavior {
 ///        pattern: "folders/{folder}/logs/{log}"
 ///        pattern: "organizations/{organization}/logs/{log}"
 ///        pattern: "billingAccounts/{billing_account}/logs/{log}"
-#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResourceDescriptor {
     /// The resource type. It must be in the format of
@@ -1155,7 +1137,6 @@ pub mod resource_descriptor {
 }
 /// Defines a proto annotation that describes a string field that refers to
 /// an API resource.
-#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResourceReference {
     /// The resource type that the annotated field references.
@@ -1553,7 +1534,6 @@ pub struct ResourceReference {
 ///
 ///      x-goog-request-params:
 ///      table_location=instances/instance_bar&routing_id=prof_qux
-#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct RoutingRule {
     /// A collection of Routing Parameter specifications.
@@ -1566,7 +1546,6 @@ pub struct RoutingRule {
     pub routing_parameters: ::prost::alloc::vec::Vec<RoutingParameter>,
 }
 /// A projection from an input message to the GRPC or REST header.
-#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct RoutingParameter {
     /// A request field to extract the header key-value pair from.
