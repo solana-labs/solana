@@ -240,7 +240,6 @@ fn full_battery_tests(
 }
 
 #[test]
-#[allow(clippy::redundant_closure)]
 fn test_create_account_with_seed() {
     const ONE_SIG_FEE: f64 = 0.000005;
     solana_logger::setup();

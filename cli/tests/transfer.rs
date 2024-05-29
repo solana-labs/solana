@@ -1,5 +1,4 @@
 #![allow(clippy::arithmetic_side_effects)]
-#![allow(clippy::redundant_closure)]
 use {
     solana_cli::{
         check_balance,

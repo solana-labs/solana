@@ -30,7 +30,6 @@ impl Source {
                 Ok(blockhash)
             }
             Self::NonceAccount(ref pubkey) => {
-                #[allow(clippy::redundant_closure)]
                 let data = nonblocking::get_account_with_commitment(rpc_client, pubkey, commitment)
                     .await
                     .and_then(|ref a| nonblocking::data_from_account(a))?;
@@ -48,7 +47,6 @@ impl Source {
         Ok(match self {
             Self::Cluster => rpc_client.is_blockhash_valid(blockhash, commitment).await?,
             Self::NonceAccount(ref pubkey) => {
-                #[allow(clippy::redundant_closure)]
                 let _ = nonblocking::get_account_with_commitment(rpc_client, pubkey, commitment)
                     .await
                     .and_then(|ref a| nonblocking::data_from_account(a))?;
