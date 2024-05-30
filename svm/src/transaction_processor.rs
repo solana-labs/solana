@@ -1001,6 +1001,7 @@ mod tests {
             fee_details: FeeDetails::default(),
             rent: 0,
             rent_debits: RentDebits::default(),
+            loaded_accounts_data_size: 32,
         };
 
         let mut processing_config = TransactionProcessingConfig::default();
@@ -1126,6 +1127,7 @@ mod tests {
             fee_details: FeeDetails::default(),
             rent: 0,
             rent_debits: RentDebits::default(),
+            loaded_accounts_data_size: 0,
         };
 
         let processing_config = TransactionProcessingConfig {

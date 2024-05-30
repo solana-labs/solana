@@ -16,8 +16,15 @@ use {
 
 pub struct TransactionResults {
     pub fee_collection_results: Vec<transaction::Result<()>>,
+    pub loaded_accounts_stats: Vec<transaction::Result<TransactionLoadedAccountsStats>>,
     pub execution_results: Vec<TransactionExecutionResult>,
     pub rent_debits: Vec<RentDebits>,
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct TransactionLoadedAccountsStats {
+    pub loaded_accounts_data_size: usize,
+    pub loaded_accounts_count: usize,
 }
 
 /// Type safe representation of a transaction execution attempt which

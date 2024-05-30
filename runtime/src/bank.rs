@@ -177,7 +177,8 @@ use {
             TransactionProcessingConfig,
         },
         transaction_results::{
-            TransactionExecutionDetails, TransactionExecutionResult, TransactionResults,
+            TransactionExecutionDetails, TransactionExecutionResult,
+            TransactionLoadedAccountsStats, TransactionResults,
         },
     },
     solana_system_program::{get_system_account_kind, SystemAccountKind},
@@ -4139,11 +4140,34 @@ impl Bank {
             update_transaction_statuses_time.as_us(),
         );
 
+        let loaded_accounts_stats = Self::collect_loaded_accounts_stats(loaded_txs);
+        assert_eq!(
+            loaded_accounts_stats.len(),
+            execution_results.len(),
+            "loaded_account_stats and execution_results are not the same size"
+        );
+
         TransactionResults {
             fee_collection_results,
+            loaded_accounts_stats,
             execution_results,
             rent_debits,
         }
+    }
+
+    fn collect_loaded_accounts_stats(
+        loaded_txs: &[TransactionLoadResult],
+    ) -> Vec<Result<TransactionLoadedAccountsStats>> {
+        loaded_txs
+            .iter()
+            .map(|load_result| match load_result {
+                Ok(loaded_tx) => Ok(TransactionLoadedAccountsStats {
+                    loaded_accounts_data_size: loaded_tx.loaded_accounts_data_size,
+                    loaded_accounts_count: loaded_tx.accounts.len(),
+                }),
+                Err(err) => Err(err.clone()),
+            })
+            .collect()
     }
 
     fn collect_rent(

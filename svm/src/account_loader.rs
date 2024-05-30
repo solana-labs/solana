@@ -54,6 +54,7 @@ pub struct LoadedTransaction {
     pub fee_details: FeeDetails,
     pub rent: TransactionRent,
     pub rent_debits: RentDebits,
+    pub loaded_accounts_data_size: usize,
 }
 
 impl LoadedTransaction {
@@ -390,6 +391,7 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
         fee_details,
         rent: tx_rent,
         rent_debits,
+        loaded_accounts_data_size: accumulated_accounts_data_size,
     })
 }
 
@@ -1523,7 +1525,8 @@ mod tests {
                 nonce: None,
                 fee_details,
                 rent: 0,
-                rent_debits: RentDebits::default()
+                rent_debits: RentDebits::default(),
+                loaded_accounts_data_size: 0,
             }
         );
     }
@@ -1728,7 +1731,8 @@ mod tests {
                 fee_details,
                 program_indices: vec![vec![1]],
                 rent: 0,
-                rent_debits: RentDebits::default()
+                rent_debits: RentDebits::default(),
+                loaded_accounts_data_size: 0,
             }
         );
     }
@@ -1912,7 +1916,8 @@ mod tests {
                 nonce: None,
                 fee_details,
                 rent: 0,
-                rent_debits: RentDebits::default()
+                rent_debits: RentDebits::default(),
+                loaded_accounts_data_size: 0,
             }
         );
     }
@@ -2006,7 +2011,8 @@ mod tests {
                 nonce: None,
                 fee_details,
                 rent: 0,
-                rent_debits: RentDebits::default()
+                rent_debits: RentDebits::default(),
+                loaded_accounts_data_size: 0,
             }
         );
     }
@@ -2169,7 +2175,8 @@ mod tests {
                 )),
                 fee_details: FeeDetails::default(),
                 rent: 0,
-                rent_debits: RentDebits::default()
+                rent_debits: RentDebits::default(),
+                loaded_accounts_data_size: 0,
             }
         );
     }

@@ -1582,6 +1582,7 @@ mod tests {
             fee_details: FeeDetails::default(),
             rent: 0,
             rent_debits: RentDebits::default(),
+            loaded_accounts_data_size: 0,
         });
 
         let loaded1 = Ok(LoadedTransaction {
@@ -1591,6 +1592,7 @@ mod tests {
             fee_details: FeeDetails::default(),
             rent: 0,
             rent_debits: RentDebits::default(),
+            loaded_accounts_data_size: 0,
         });
 
         let mut loaded = vec![loaded0, loaded1];
@@ -1968,6 +1970,7 @@ mod tests {
             fee_details: FeeDetails::default(),
             rent: 0,
             rent_debits: RentDebits::default(),
+            loaded_accounts_data_size: 0,
         });
 
         let mut loaded = vec![loaded];
@@ -2073,6 +2076,7 @@ mod tests {
             fee_details: FeeDetails::default(),
             rent: 0,
             rent_debits: RentDebits::default(),
+            loaded_accounts_data_size: 0,
         });
 
         let mut loaded = vec![loaded];
