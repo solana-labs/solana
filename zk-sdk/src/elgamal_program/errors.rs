@@ -45,6 +45,7 @@ pub enum SigmaProofType {
     Equality,
     PubkeyValidity,
     PercentageWithCap,
+    ValidityProof,
 }
 
 impl From<ZeroCiphertextProofVerificationError> for ProofVerificationError {
@@ -68,5 +69,11 @@ impl From<PubkeyValidityProofVerificationError> for ProofVerificationError {
 impl From<PercentageWithCapProofVerificationError> for ProofVerificationError {
     fn from(err: PercentageWithCapProofVerificationError) -> Self {
         Self::SigmaProof(SigmaProofType::PercentageWithCap, err.0)
+    }
+}
+
+impl From<ValidityProofVerificationError> for ProofVerificationError {
+    fn from(err: ValidityProofVerificationError) -> Self {
+        Self::SigmaProof(SigmaProofType::ValidityProof, err.0)
     }
 }
