@@ -406,7 +406,7 @@ mod tests {
         let mut buf = Vec::new();
         let cursor = Cursor::new(&mut buf);
         let mut writer = BufWriter::new(cursor);
-        serde_snapshot::serialize_bank_snapshot(
+        serde_snapshot::serialize_bank_snapshot_into(
             &mut writer,
             bank2.get_fields_to_serialize(),
             &bank2.rc.accounts.accounts_db,
@@ -718,22 +718,22 @@ mod tests {
 
     #[cfg(RUSTC_WITH_SPECIALIZATION)]
     mod test_bank_serialize {
-        use {super::*, crate::serde_snapshot::serialize_test_bank_and_storage};
+        use {super::*, solana_sdk::clock::Slot};
 
         // This some what long test harness is required to freeze the ABI of
         // Bank's serialization due to versioned nature
         #[cfg_attr(
             feature = "frozen-abi",
             derive(AbiExample),
-            frozen_abi(digest = "7K1xfUkoCwhxssszgoSpbeMCcX3KEyjycGyLXrpFaJNe")
+            frozen_abi(digest = "6riNuebfnAUpS2e3GYb5G8udH5PoEtep48ULchLjRDCB")
         )]
         #[derive(Serialize)]
-        pub struct BankAbiTestWrapperNewer {
+        pub struct BankAbiTestWrapper {
             #[serde(serialize_with = "wrapper")]
             bank: Bank,
         }
 
-        pub fn wrapper<S>(bank: &Bank, s: S) -> std::result::Result<S::Ok, S::Error>
+        pub fn wrapper<S>(bank: &Bank, serializer: S) -> Result<S::Ok, S::Error>
         where
             S: serde::Serializer,
         {
@@ -745,14 +745,26 @@ mod tests {
                 bank.slot(),
                 (AccountsHash(Hash::new_unique()), u64::default()),
             );
-            let snapshot_storages = bank.rc.accounts.accounts_db.get_snapshot_storages(..=0).0;
-            // ensure there is a single snapshot storage example for ABI digesting
-            assert_eq!(snapshot_storages.len(), 1);
 
-            serialize_test_bank_and_storage::<S>(
-                bank,
+            let snapshot_storages = bank.get_snapshot_storages(None);
+            // ensure there is at least one snapshot storage example for ABI digesting
+            assert!(!snapshot_storages.is_empty());
+
+            let incremental_snapshot_persistence = BankIncrementalSnapshotPersistence {
+                full_slot: Slot::default(),
+                full_hash: SerdeAccountsHash(Hash::new_unique()),
+                full_capitalization: u64::default(),
+                incremental_hash: SerdeIncrementalAccountsHash(Hash::new_unique()),
+                incremental_capitalization: u64::default(),
+            };
+
+            serde_snapshot::serialize_bank_snapshot_with(
+                serializer,
+                bank.get_fields_to_serialize(),
+                &bank.rc.accounts.accounts_db,
                 &get_storages_to_serialize(&snapshot_storages),
-                s,
+                Some(&incremental_snapshot_persistence),
+                Some(EpochAccountsHash::new(Hash::new_unique())),
             )
         }
     }

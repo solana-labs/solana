@@ -580,8 +580,8 @@ where
     )
 }
 
-/// Serializes bank snapshot into `stream`
-pub fn serialize_bank_snapshot<W>(
+/// Serializes bank snapshot into `stream` with bincode
+pub fn serialize_bank_snapshot_into<W>(
     stream: &mut BufWriter<W>,
     bank_fields: BankFieldsToSerialize,
     accounts_db: &AccountsDb,
@@ -592,6 +592,32 @@ pub fn serialize_bank_snapshot<W>(
 where
     W: Write,
 {
+    let mut serializer = bincode::Serializer::new(
+        stream,
+        bincode::DefaultOptions::new().with_fixint_encoding(),
+    );
+    serialize_bank_snapshot_with(
+        &mut serializer,
+        bank_fields,
+        accounts_db,
+        account_storage_entries,
+        incremental_snapshot_persistence,
+        epoch_accounts_hash,
+    )
+}
+
+/// Serializes bank snapshot with `serializer`
+pub fn serialize_bank_snapshot_with<S>(
+    serializer: S,
+    bank_fields: BankFieldsToSerialize,
+    accounts_db: &AccountsDb,
+    account_storage_entries: &[Vec<Arc<AccountStorageEntry>>],
+    incremental_snapshot_persistence: Option<&BankIncrementalSnapshotPersistence>,
+    epoch_accounts_hash: Option<EpochAccountsHash>,
+) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
     let slot = bank_fields.slot;
     let lamports_per_signature = bank_fields.fee_rate_governor.lamports_per_signature;
     let serializable_bank = SerializableVersionedBank::from(bank_fields);
@@ -600,16 +626,15 @@ where
         slot,
         account_storage_entries,
     };
-    bincode::serialize_into(
-        stream,
-        &(
-            serializable_bank,
-            serializable_accounts_db,
-            lamports_per_signature,
-            incremental_snapshot_persistence,
-            epoch_accounts_hash,
-        ),
+
+    (
+        serializable_bank,
+        serializable_accounts_db,
+        lamports_per_signature,
+        incremental_snapshot_persistence,
+        epoch_accounts_hash,
     )
+        .serialize(serializer)
 }
 
 /// deserialize the bank from 'stream_reader'
@@ -747,22 +772,6 @@ impl<'a> Serialize for SerializableBankAndStorage<'a> {
         );
         bank_fields_to_serialize.serialize(serializer)
     }
-}
-
-#[cfg(test)]
-pub fn serialize_test_bank_and_storage<S>(
-    bank: &Bank,
-    storage: &[Vec<Arc<AccountStorageEntry>>],
-    s: S,
-) -> std::result::Result<S::Ok, S::Error>
-where
-    S: serde::Serializer,
-{
-    SerializableBankAndStorage {
-        bank,
-        snapshot_storages: storage,
-    }
-    .serialize(s)
 }
 
 #[cfg(test)]

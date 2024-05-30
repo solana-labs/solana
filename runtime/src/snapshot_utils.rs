@@ -863,7 +863,7 @@ fn serialize_snapshot(
             );
 
         let bank_snapshot_serializer = move |stream: &mut BufWriter<fs::File>| -> Result<()> {
-            serde_snapshot::serialize_bank_snapshot(
+            serde_snapshot::serialize_bank_snapshot_into(
                 stream,
                 bank_fields,
                 accounts_db,
