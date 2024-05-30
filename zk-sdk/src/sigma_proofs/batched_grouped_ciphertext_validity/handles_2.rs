@@ -29,10 +29,10 @@ use {
 ///
 /// A batched grouped ciphertext validity proof certifies the validity of two instances of a
 /// standard ciphertext validity proof. An instance of a standard validity proof consists of one
-/// ciphertext and two decryption handles: `(commitment, destination_handle, auditor_handle)`. An
+/// ciphertext and two decryption handles: `(commitment, first_handle, second_handle)`. An
 /// instance of a batched ciphertext validity proof is a pair `(commitment_0,
-/// destination_handle_0, auditor_handle_0)` and `(commitment_1, destination_handle_1,
-/// auditor_handle_1)`. The proof certifies the analogous decryptable properties for each one of
+/// first_handle_0, second_handle_0)` and `(commitment_1, first_handle_1,
+/// second_handle_1)`. The proof certifies the analogous decryptable properties for each one of
 /// these pairs of commitment and decryption handles.
 #[allow(non_snake_case)]
 #[derive(Clone)]
@@ -48,8 +48,8 @@ impl BatchedGroupedCiphertext2HandlesValidityProof {
     ///
     /// This function is randomized. It uses `OsRng` internally to generate random scalars.
     pub fn new<T: Into<Scalar>>(
-        destination_pubkey: &ElGamalPubkey,
-        auditor_pubkey: &ElGamalPubkey,
+        first_pubkey: &ElGamalPubkey,
+        second_pubkey: &ElGamalPubkey,
         amount_lo: T,
         amount_hi: T,
         opening_lo: &PedersenOpening,
@@ -64,8 +64,8 @@ impl BatchedGroupedCiphertext2HandlesValidityProof {
         let batched_opening = opening_lo + &(opening_hi * &t);
 
         BatchedGroupedCiphertext2HandlesValidityProof(GroupedCiphertext2HandlesValidityProof::new(
-            destination_pubkey,
-            auditor_pubkey,
+            first_pubkey,
+            second_pubkey,
             batched_message,
             &batched_opening,
             transcript,
@@ -80,14 +80,14 @@ impl BatchedGroupedCiphertext2HandlesValidityProof {
     #[allow(clippy::too_many_arguments)]
     pub fn verify(
         self,
-        destination_pubkey: &ElGamalPubkey,
-        auditor_pubkey: &ElGamalPubkey,
+        first_pubkey: &ElGamalPubkey,
+        second_pubkey: &ElGamalPubkey,
         commitment_lo: &PedersenCommitment,
         commitment_hi: &PedersenCommitment,
-        destination_handle_lo: &DecryptHandle,
-        destination_handle_hi: &DecryptHandle,
-        auditor_handle_lo: &DecryptHandle,
-        auditor_handle_hi: &DecryptHandle,
+        first_handle_lo: &DecryptHandle,
+        first_handle_hi: &DecryptHandle,
+        second_handle_lo: &DecryptHandle,
+        second_handle_hi: &DecryptHandle,
         transcript: &mut Transcript,
     ) -> Result<(), ValidityProofVerificationError> {
         transcript.batched_grouped_ciphertext_validity_proof_domain_separator(2);
@@ -95,17 +95,17 @@ impl BatchedGroupedCiphertext2HandlesValidityProof {
         let t = transcript.challenge_scalar(b"t");
 
         let batched_commitment = commitment_lo + commitment_hi * t;
-        let destination_batched_handle = destination_handle_lo + destination_handle_hi * t;
-        let auditor_batched_handle = auditor_handle_lo + auditor_handle_hi * t;
+        let first_batched_handle = first_handle_lo + first_handle_hi * t;
+        let second_batched_handle = second_handle_lo + second_handle_hi * t;
 
         let BatchedGroupedCiphertext2HandlesValidityProof(validity_proof) = self;
 
         validity_proof.verify(
             &batched_commitment,
-            destination_pubkey,
-            auditor_pubkey,
-            &destination_batched_handle,
-            &auditor_batched_handle,
+            first_pubkey,
+            second_pubkey,
+            &first_batched_handle,
+            &second_batched_handle,
             transcript,
         )
     }
@@ -128,11 +128,11 @@ mod test {
 
     #[test]
     fn test_batched_grouped_ciphertext_validity_proof() {
-        let destination_keypair = ElGamalKeypair::new_rand();
-        let destination_pubkey = destination_keypair.pubkey();
+        let first_keypair = ElGamalKeypair::new_rand();
+        let first_pubkey = first_keypair.pubkey();
 
-        let auditor_keypair = ElGamalKeypair::new_rand();
-        let auditor_pubkey = auditor_keypair.pubkey();
+        let second_keypair = ElGamalKeypair::new_rand();
+        let second_pubkey = second_keypair.pubkey();
 
         let amount_lo: u64 = 55;
         let amount_hi: u64 = 77;
@@ -140,18 +140,18 @@ mod test {
         let (commitment_lo, open_lo) = Pedersen::new(amount_lo);
         let (commitment_hi, open_hi) = Pedersen::new(amount_hi);
 
-        let destination_handle_lo = destination_pubkey.decrypt_handle(&open_lo);
-        let destination_handle_hi = destination_pubkey.decrypt_handle(&open_hi);
+        let first_handle_lo = first_pubkey.decrypt_handle(&open_lo);
+        let first_handle_hi = first_pubkey.decrypt_handle(&open_hi);
 
-        let auditor_handle_lo = auditor_pubkey.decrypt_handle(&open_lo);
-        let auditor_handle_hi = auditor_pubkey.decrypt_handle(&open_hi);
+        let second_handle_lo = second_pubkey.decrypt_handle(&open_lo);
+        let second_handle_hi = second_pubkey.decrypt_handle(&open_hi);
 
         let mut prover_transcript = Transcript::new(b"Test");
         let mut verifier_transcript = Transcript::new(b"Test");
 
         let proof = BatchedGroupedCiphertext2HandlesValidityProof::new(
-            destination_pubkey,
-            auditor_pubkey,
+            first_pubkey,
+            second_pubkey,
             amount_lo,
             amount_hi,
             &open_lo,
@@ -161,14 +161,14 @@ mod test {
 
         assert!(proof
             .verify(
-                destination_pubkey,
-                auditor_pubkey,
+                first_pubkey,
+                second_pubkey,
                 &commitment_lo,
                 &commitment_hi,
-                &destination_handle_lo,
-                &destination_handle_hi,
-                &auditor_handle_lo,
-                &auditor_handle_hi,
+                &first_handle_lo,
+                &first_handle_hi,
+                &second_handle_lo,
+                &second_handle_hi,
                 &mut verifier_transcript,
             )
             .is_ok());

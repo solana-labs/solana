@@ -45,9 +45,9 @@ pub struct GroupedCiphertext2HandlesValidityProofData {
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct GroupedCiphertext2HandlesValidityProofContext {
-    pub destination_pubkey: PodElGamalPubkey, // 32 bytes
+    pub first_pubkey: PodElGamalPubkey, // 32 bytes
 
-    pub auditor_pubkey: PodElGamalPubkey, // 32 bytes
+    pub second_pubkey: PodElGamalPubkey, // 32 bytes
 
     pub grouped_ciphertext: PodGroupedElGamalCiphertext2Handles, // 96 bytes
 }
@@ -55,27 +55,27 @@ pub struct GroupedCiphertext2HandlesValidityProofContext {
 #[cfg(not(target_os = "solana"))]
 impl GroupedCiphertext2HandlesValidityProofData {
     pub fn new(
-        destination_pubkey: &ElGamalPubkey,
-        auditor_pubkey: &ElGamalPubkey,
+        first_pubkey: &ElGamalPubkey,
+        second_pubkey: &ElGamalPubkey,
         grouped_ciphertext: &GroupedElGamalCiphertext<2>,
         amount: u64,
         opening: &PedersenOpening,
     ) -> Result<Self, ProofGenerationError> {
-        let pod_destination_pubkey = PodElGamalPubkey(destination_pubkey.into());
-        let pod_auditor_pubkey = PodElGamalPubkey(auditor_pubkey.into());
+        let pod_first_pubkey = PodElGamalPubkey(first_pubkey.into());
+        let pod_second_pubkey = PodElGamalPubkey(second_pubkey.into());
         let pod_grouped_ciphertext = (*grouped_ciphertext).into();
 
         let context = GroupedCiphertext2HandlesValidityProofContext {
-            destination_pubkey: pod_destination_pubkey,
-            auditor_pubkey: pod_auditor_pubkey,
+            first_pubkey: pod_first_pubkey,
+            second_pubkey: pod_second_pubkey,
             grouped_ciphertext: pod_grouped_ciphertext,
         };
 
         let mut transcript = context.new_transcript();
 
         let proof = GroupedCiphertext2HandlesValidityProof::new(
-            destination_pubkey,
-            auditor_pubkey,
+            first_pubkey,
+            second_pubkey,
             amount,
             opening,
             &mut transcript,
@@ -99,23 +99,23 @@ impl ZkProofData<GroupedCiphertext2HandlesValidityProofContext>
     fn verify_proof(&self) -> Result<(), ProofVerificationError> {
         let mut transcript = self.context.new_transcript();
 
-        let destination_pubkey = self.context.destination_pubkey.try_into()?;
-        let auditor_pubkey = self.context.auditor_pubkey.try_into()?;
+        let first_pubkey = self.context.first_pubkey.try_into()?;
+        let second_pubkey = self.context.second_pubkey.try_into()?;
         let grouped_ciphertext: GroupedElGamalCiphertext<2> =
             self.context.grouped_ciphertext.try_into()?;
 
-        let destination_handle = grouped_ciphertext.handles.first().unwrap();
-        let auditor_handle = grouped_ciphertext.handles.get(1).unwrap();
+        let first_handle = grouped_ciphertext.handles.first().unwrap();
+        let second_handle = grouped_ciphertext.handles.get(1).unwrap();
 
         let proof: GroupedCiphertext2HandlesValidityProof = self.proof.try_into()?;
 
         proof
             .verify(
                 &grouped_ciphertext.commitment,
-                &destination_pubkey,
-                &auditor_pubkey,
-                destination_handle,
-                auditor_handle,
+                &first_pubkey,
+                &second_pubkey,
+                first_handle,
+                second_handle,
                 &mut transcript,
             )
             .map_err(|e| e.into())
@@ -127,8 +127,8 @@ impl GroupedCiphertext2HandlesValidityProofContext {
     fn new_transcript(&self) -> Transcript {
         let mut transcript = Transcript::new(b"grouped-ciphertext-validity-2-handles-instruction");
 
-        transcript.append_message(b"destination-pubkey", bytes_of(&self.destination_pubkey));
-        transcript.append_message(b"auditor-pubkey", bytes_of(&self.auditor_pubkey));
+        transcript.append_message(b"first-pubkey", bytes_of(&self.first_pubkey));
+        transcript.append_message(b"second-pubkey", bytes_of(&self.second_pubkey));
         transcript.append_message(b"grouped-ciphertext", bytes_of(&self.grouped_ciphertext));
 
         transcript
@@ -144,20 +144,20 @@ mod test {
 
     #[test]
     fn test_ciphertext_validity_proof_instruction_correctness() {
-        let destination_keypair = ElGamalKeypair::new_rand();
-        let destination_pubkey = destination_keypair.pubkey();
+        let first_keypair = ElGamalKeypair::new_rand();
+        let first_pubkey = first_keypair.pubkey();
 
-        let auditor_keypair = ElGamalKeypair::new_rand();
-        let auditor_pubkey = auditor_keypair.pubkey();
+        let second_keypair = ElGamalKeypair::new_rand();
+        let second_pubkey = second_keypair.pubkey();
 
         let amount: u64 = 55;
         let opening = PedersenOpening::new_rand();
         let grouped_ciphertext =
-            GroupedElGamal::encrypt_with([destination_pubkey, auditor_pubkey], amount, &opening);
+            GroupedElGamal::encrypt_with([first_pubkey, second_pubkey], amount, &opening);
 
         let proof_data = GroupedCiphertext2HandlesValidityProofData::new(
-            destination_pubkey,
-            auditor_pubkey,
+            first_pubkey,
+            second_pubkey,
             &grouped_ciphertext,
             amount,
             &opening,

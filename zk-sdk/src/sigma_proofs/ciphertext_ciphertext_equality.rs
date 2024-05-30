@@ -59,42 +59,42 @@ impl CiphertextCiphertextEqualityProof {
     ///
     /// This function is randomized. It uses `OsRng` internally to generate random scalars.
     ///
-    /// * `source_keypair` - The ElGamal keypair associated with the first ciphertext to be proved
-    /// * `destination_pubkey` - The ElGamal pubkey associated with the second ElGamal ciphertext
-    /// * `source_ciphertext` - The first ElGamal ciphertext for which the prover knows a
+    /// * `first_keypair` - The ElGamal keypair associated with the first ciphertext to be proved
+    /// * `second_pubkey` - The ElGamal pubkey associated with the second ElGamal ciphertext
+    /// * `first_ciphertext` - The first ElGamal ciphertext for which the prover knows a
     /// decryption key for
-    /// * `destination_opening` - The opening (randomness) associated with the second ElGamal ciphertext
+    /// * `second_opening` - The opening (randomness) associated with the second ElGamal ciphertext
     /// * `amount` - The message associated with the ElGamal ciphertext and Pedersen commitment
     /// * `transcript` - The transcript that does the bookkeeping for the Fiat-Shamir heuristic
     pub fn new(
-        source_keypair: &ElGamalKeypair,
-        destination_pubkey: &ElGamalPubkey,
-        source_ciphertext: &ElGamalCiphertext,
-        destination_opening: &PedersenOpening,
+        first_keypair: &ElGamalKeypair,
+        second_pubkey: &ElGamalPubkey,
+        first_ciphertext: &ElGamalCiphertext,
+        second_opening: &PedersenOpening,
         amount: u64,
         transcript: &mut Transcript,
     ) -> Self {
         transcript.ciphertext_ciphertext_equality_proof_domain_separator();
 
         // extract the relevant scalar and Ristretto points from the inputs
-        let P_source = source_keypair.pubkey().get_point();
-        let D_source = source_ciphertext.handle.get_point();
-        let P_destination = destination_pubkey.get_point();
+        let P_first = first_keypair.pubkey().get_point();
+        let D_first = first_ciphertext.handle.get_point();
+        let P_second = second_pubkey.get_point();
 
-        let s = source_keypair.secret().get_scalar();
+        let s = first_keypair.secret().get_scalar();
         let x = Scalar::from(amount);
-        let r = destination_opening.get_scalar();
+        let r = second_opening.get_scalar();
 
         // generate random masking factors that also serves as nonces
         let mut y_s = Scalar::random(&mut OsRng);
         let mut y_x = Scalar::random(&mut OsRng);
         let mut y_r = Scalar::random(&mut OsRng);
 
-        let Y_0 = (&y_s * P_source).compress();
+        let Y_0 = (&y_s * P_first).compress();
         let Y_1 =
-            RistrettoPoint::multiscalar_mul(vec![&y_x, &y_s], vec![&(*G), D_source]).compress();
+            RistrettoPoint::multiscalar_mul(vec![&y_x, &y_s], vec![&(*G), D_first]).compress();
         let Y_2 = RistrettoPoint::multiscalar_mul(vec![&y_x, &y_r], vec![&(*G), &(*H)]).compress();
-        let Y_3 = (&y_r * P_destination).compress();
+        let Y_3 = (&y_r * P_second).compress();
 
         // record masking factors in the transcript
         transcript.append_point(b"Y_0", &Y_0);
@@ -128,29 +128,29 @@ impl CiphertextCiphertextEqualityProof {
 
     /// Verifies a ciphertext-ciphertext equality proof.
     ///
-    /// * `source_pubkey` - The ElGamal pubkey associated with the first ciphertext to be proved
-    /// * `destination_pubkey` - The ElGamal pubkey associated with the second ciphertext to be proved
-    /// * `source_ciphertext` - The first ElGamal ciphertext to be proved
-    /// * `destination_ciphertext` - The second ElGamal ciphertext to be proved
+    /// * `first_pubkey` - The ElGamal pubkey associated with the first ciphertext to be proved
+    /// * `second_pubkey` - The ElGamal pubkey associated with the second ciphertext to be proved
+    /// * `first_ciphertext` - The first ElGamal ciphertext to be proved
+    /// * `second_ciphertext` - The second ElGamal ciphertext to be proved
     /// * `transcript` - The transcript that does the bookkeeping for the Fiat-Shamir heuristic
     pub fn verify(
         self,
-        source_pubkey: &ElGamalPubkey,
-        destination_pubkey: &ElGamalPubkey,
-        source_ciphertext: &ElGamalCiphertext,
-        destination_ciphertext: &ElGamalCiphertext,
+        first_pubkey: &ElGamalPubkey,
+        second_pubkey: &ElGamalPubkey,
+        first_ciphertext: &ElGamalCiphertext,
+        second_ciphertext: &ElGamalCiphertext,
         transcript: &mut Transcript,
     ) -> Result<(), EqualityProofVerificationError> {
         transcript.ciphertext_ciphertext_equality_proof_domain_separator();
 
         // extract the relevant scalar and Ristretto points from the inputs
-        let P_source = source_pubkey.get_point();
-        let C_source = source_ciphertext.commitment.get_point();
-        let D_source = source_ciphertext.handle.get_point();
+        let P_first = first_pubkey.get_point();
+        let C_first = first_ciphertext.commitment.get_point();
+        let D_first = first_ciphertext.handle.get_point();
 
-        let P_destination = destination_pubkey.get_point();
-        let C_destination = destination_ciphertext.commitment.get_point();
-        let D_destination = destination_ciphertext.handle.get_point();
+        let P_second = second_pubkey.get_point();
+        let C_second = second_ciphertext.commitment.get_point();
+        let D_second = second_ciphertext.handle.get_point();
 
         // include Y_0, Y_1, Y_2 to transcript and extract challenges
         transcript.validate_and_append_point(b"Y_0", &self.Y_0)?;
@@ -203,20 +203,20 @@ impl CiphertextCiphertextEqualityProof {
                 &www_negated,
             ],
             vec![
-                P_source,      // P_source
-                &(*H),         // H
-                &Y_0,          // Y_0
-                &(*G),         // G
-                D_source,      // D_source
-                C_source,      // C_source
-                &Y_1,          // Y_1
-                &(*G),         // G
-                &(*H),         // H
-                C_destination, // C_destination
-                &Y_2,          // Y_2
-                P_destination, // P_destination
-                D_destination, // D_destination
-                &Y_3,          // Y_3
+                P_first,  // P_first
+                &(*H),    // H
+                &Y_0,     // Y_0
+                &(*G),    // G
+                D_first,  // D_first
+                C_first,  // C_first
+                &Y_1,     // Y_1
+                &(*G),    // G
+                &(*H),    // H
+                C_second, // C_second
+                &Y_2,     // Y_2
+                P_second, // P_second
+                D_second, // D_second
+                &Y_3,     // Y_3
             ],
         );
 
@@ -272,68 +272,68 @@ mod test {
     #[test]
     fn test_ciphertext_ciphertext_equality_proof_correctness() {
         // success case
-        let source_keypair = ElGamalKeypair::new_rand();
-        let destination_keypair = ElGamalKeypair::new_rand();
+        let first_keypair = ElGamalKeypair::new_rand();
+        let second_keypair = ElGamalKeypair::new_rand();
         let message: u64 = 55;
 
-        let source_ciphertext = source_keypair.pubkey().encrypt(message);
+        let first_ciphertext = first_keypair.pubkey().encrypt(message);
 
-        let destination_opening = PedersenOpening::new_rand();
-        let destination_ciphertext = destination_keypair
+        let second_opening = PedersenOpening::new_rand();
+        let second_ciphertext = second_keypair
             .pubkey()
-            .encrypt_with(message, &destination_opening);
+            .encrypt_with(message, &second_opening);
 
         let mut prover_transcript = Transcript::new(b"Test");
         let mut verifier_transcript = Transcript::new(b"Test");
 
         let proof = CiphertextCiphertextEqualityProof::new(
-            &source_keypair,
-            destination_keypair.pubkey(),
-            &source_ciphertext,
-            &destination_opening,
+            &first_keypair,
+            second_keypair.pubkey(),
+            &first_ciphertext,
+            &second_opening,
             message,
             &mut prover_transcript,
         );
 
         assert!(proof
             .verify(
-                source_keypair.pubkey(),
-                destination_keypair.pubkey(),
-                &source_ciphertext,
-                &destination_ciphertext,
+                first_keypair.pubkey(),
+                second_keypair.pubkey(),
+                &first_ciphertext,
+                &second_ciphertext,
                 &mut verifier_transcript
             )
             .is_ok());
 
         // fail case: encrypted and committed messages are different
-        let source_message: u64 = 55;
-        let destination_message: u64 = 77;
+        let first_message: u64 = 55;
+        let second_message: u64 = 77;
 
-        let source_ciphertext = source_keypair.pubkey().encrypt(source_message);
+        let first_ciphertext = first_keypair.pubkey().encrypt(first_message);
 
-        let destination_opening = PedersenOpening::new_rand();
-        let destination_ciphertext = destination_keypair
+        let second_opening = PedersenOpening::new_rand();
+        let second_ciphertext = second_keypair
             .pubkey()
-            .encrypt_with(destination_message, &destination_opening);
+            .encrypt_with(second_message, &second_opening);
 
         let mut prover_transcript = Transcript::new(b"Test");
         let mut verifier_transcript = Transcript::new(b"Test");
 
         let proof = CiphertextCiphertextEqualityProof::new(
-            &source_keypair,
-            destination_keypair.pubkey(),
-            &source_ciphertext,
-            &destination_opening,
+            &first_keypair,
+            second_keypair.pubkey(),
+            &first_ciphertext,
+            &second_opening,
             message,
             &mut prover_transcript,
         );
 
         assert!(proof
             .verify(
-                source_keypair.pubkey(),
-                destination_keypair.pubkey(),
-                &source_ciphertext,
-                &destination_ciphertext,
+                first_keypair.pubkey(),
+                second_keypair.pubkey(),
+                &first_ciphertext,
+                &second_ciphertext,
                 &mut verifier_transcript
             )
             .is_err());

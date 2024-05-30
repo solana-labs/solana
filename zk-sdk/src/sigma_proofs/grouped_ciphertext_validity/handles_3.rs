@@ -7,10 +7,6 @@
 //!
 //! The protocol guarantees computational soundness (by the hardness of discrete log) and perfect
 //! zero-knowledge in the random oracle model.
-//!
-//! In accordance with its application to the SPL Token program, the first decryption handle
-//! associated with the proof is referred to as the "source" handle, the second as the
-//! "destination" handle, and the third as the "auditor" handle.
 
 #[cfg(not(target_os = "solana"))]
 use {
@@ -70,16 +66,16 @@ impl GroupedCiphertext3HandlesValidityProof {
     /// Note that the proof constructor does not take the actual Pedersen commitment or decryption
     /// handles as input; it only takes the associated Pedersen opening instead.
     ///
-    /// * `source_pubkey` - The source ElGamal public key
-    /// * `destination_pubkey` - The destination ElGamal public key
-    /// * `auditor_pubkey` - The auditor ElGamal public key
+    /// * `first_pubkey` - The first ElGamal public key
+    /// * `second_pubkey` - The second ElGamal public key
+    /// * `third_pubkey` - The third ElGamal public key
     /// * `amount` - The committed message in the commitment
     /// * `opening` - The opening associated with the Pedersen commitment
     /// * `transcript` - The transcript that does the bookkeeping for the Fiat-Shamir heuristic
     pub fn new<T: Into<Scalar>>(
-        source_pubkey: &ElGamalPubkey,
-        destination_pubkey: &ElGamalPubkey,
-        auditor_pubkey: &ElGamalPubkey,
+        first_pubkey: &ElGamalPubkey,
+        second_pubkey: &ElGamalPubkey,
+        third_pubkey: &ElGamalPubkey,
         amount: T,
         opening: &PedersenOpening,
         transcript: &mut Transcript,
@@ -87,9 +83,9 @@ impl GroupedCiphertext3HandlesValidityProof {
         transcript.grouped_ciphertext_validity_proof_domain_separator(3);
 
         // extract the relevant scalar and Ristretto points from the inputs
-        let P_source = source_pubkey.get_point();
-        let P_destination = destination_pubkey.get_point();
-        let P_auditor = auditor_pubkey.get_point();
+        let P_first = first_pubkey.get_point();
+        let P_second = second_pubkey.get_point();
+        let P_third = third_pubkey.get_point();
 
         let x = amount.into();
         let r = opening.get_scalar();
@@ -99,9 +95,9 @@ impl GroupedCiphertext3HandlesValidityProof {
         let mut y_x = Scalar::random(&mut OsRng);
 
         let Y_0 = RistrettoPoint::multiscalar_mul(vec![&y_r, &y_x], vec![&(*H), &(*G)]).compress();
-        let Y_1 = (&y_r * P_source).compress();
-        let Y_2 = (&y_r * P_destination).compress();
-        let Y_3 = (&y_r * P_auditor).compress();
+        let Y_1 = (&y_r * P_first).compress();
+        let Y_2 = (&y_r * P_second).compress();
+        let Y_3 = (&y_r * P_third).compress();
 
         // record masking factors in transcript and get challenges
         transcript.append_point(b"Y_0", &Y_0);
@@ -132,22 +128,22 @@ impl GroupedCiphertext3HandlesValidityProof {
     /// Verifies a grouped ciphertext with 3 handles validity proof.
     ///
     /// * `commitment` - The Pedersen commitment
-    /// * `source_pubkey` - The source ElGamal public key
-    /// * `destination_pubkey` - The destination ElGamal public key
-    /// * `auditor_pubkey` - The auditor ElGamal public key
-    /// * `source_handle` - The source decryption handle
-    /// * `destination_handle` - The destination decryption handle
-    /// * `auditor_handle` - The auditor decryption handle
+    /// * `first_pubkey` - The first ElGamal public key
+    /// * `second_pubkey` - The second ElGamal public key
+    /// * `third_pubkey` - The third ElGamal public key
+    /// * `first_handle` - The first decryption handle
+    /// * `second_handle` - The second decryption handle
+    /// * `third_handle` - The third decryption handle
     /// * `transcript` - The transcript that does the bookkeeping for the Fiat-Shamir heuristic
     pub fn verify(
         self,
         commitment: &PedersenCommitment,
-        source_pubkey: &ElGamalPubkey,
-        destination_pubkey: &ElGamalPubkey,
-        auditor_pubkey: &ElGamalPubkey,
-        source_handle: &DecryptHandle,
-        destination_handle: &DecryptHandle,
-        auditor_handle: &DecryptHandle,
+        first_pubkey: &ElGamalPubkey,
+        second_pubkey: &ElGamalPubkey,
+        third_pubkey: &ElGamalPubkey,
+        first_handle: &DecryptHandle,
+        second_handle: &DecryptHandle,
+        third_handle: &DecryptHandle,
         transcript: &mut Transcript,
     ) -> Result<(), ValidityProofVerificationError> {
         transcript.grouped_ciphertext_validity_proof_domain_separator(3);
@@ -156,8 +152,8 @@ impl GroupedCiphertext3HandlesValidityProof {
         transcript.validate_and_append_point(b"Y_0", &self.Y_0)?;
         transcript.validate_and_append_point(b"Y_1", &self.Y_1)?;
         transcript.validate_and_append_point(b"Y_2", &self.Y_2)?;
-        // the point `Y_3` is defined with respect to the auditor public key and can be zero if the
-        // auditor public key is zero
+        // the point `Y_3` is defined with respect to the third public key and can be zero if the
+        // third public key is zero
         transcript.append_point(b"Y_3", &self.Y_3);
 
         let c = transcript.challenge_scalar(b"c");
@@ -187,14 +183,14 @@ impl GroupedCiphertext3HandlesValidityProof {
             .decompress()
             .ok_or(SigmaProofVerificationError::Deserialization)?;
 
-        let P_source = source_pubkey.get_point();
-        let P_destination = destination_pubkey.get_point();
-        let P_auditor = auditor_pubkey.get_point();
+        let P_first = first_pubkey.get_point();
+        let P_second = second_pubkey.get_point();
+        let P_third = third_pubkey.get_point();
 
         let C = commitment.get_point();
-        let D_source = source_handle.get_point();
-        let D_destination = destination_handle.get_point();
-        let D_auditor = auditor_handle.get_point();
+        let D_first = first_handle.get_point();
+        let D_second = second_handle.get_point();
+        let D_third = third_handle.get_point();
 
         let check = RistrettoPoint::vartime_multiscalar_mul(
             vec![
@@ -213,19 +209,19 @@ impl GroupedCiphertext3HandlesValidityProof {
                 &www_negated,         // -www
             ],
             vec![
-                &(*H),         // H
-                &(*G),         // G
-                C,             // C
-                &Y_0,          // Y_0
-                P_source,      // P_destination
-                D_source,      // D_destination
-                &Y_1,          // Y_1
-                P_destination, // P_destination
-                D_destination, // D_destination
-                &Y_2,          // Y_1
-                P_auditor,     // P_auditor
-                D_auditor,     // D_auditor
-                &Y_3,          // Y_2
+                &(*H),    // H
+                &(*G),    // G
+                C,        // C
+                &Y_0,     // Y_0
+                P_first,  // P_first
+                D_first,  // D_first
+                &Y_1,     // Y_1
+                P_second, // P_second
+                D_second, // D_second
+                &Y_2,     // Y_1
+                P_third,  // P_third
+                D_third,  // D_third
+                &Y_3,     // Y_2
             ],
         );
 
@@ -277,29 +273,29 @@ mod test {
 
     #[test]
     fn test_grouped_ciphertext_3_handles_validity_proof_correctness() {
-        let source_keypair = ElGamalKeypair::new_rand();
-        let source_pubkey = source_keypair.pubkey();
+        let first_keypair = ElGamalKeypair::new_rand();
+        let first_pubkey = first_keypair.pubkey();
 
-        let destination_keypair = ElGamalKeypair::new_rand();
-        let destination_pubkey = destination_keypair.pubkey();
+        let second_keypair = ElGamalKeypair::new_rand();
+        let second_pubkey = second_keypair.pubkey();
 
-        let auditor_keypair = ElGamalKeypair::new_rand();
-        let auditor_pubkey = auditor_keypair.pubkey();
+        let third_keypair = ElGamalKeypair::new_rand();
+        let third_pubkey = third_keypair.pubkey();
 
         let amount: u64 = 55;
         let (commitment, opening) = Pedersen::new(amount);
 
-        let source_handle = source_pubkey.decrypt_handle(&opening);
-        let destination_handle = destination_pubkey.decrypt_handle(&opening);
-        let auditor_handle = auditor_pubkey.decrypt_handle(&opening);
+        let first_handle = first_pubkey.decrypt_handle(&opening);
+        let second_handle = second_pubkey.decrypt_handle(&opening);
+        let third_handle = third_pubkey.decrypt_handle(&opening);
 
         let mut prover_transcript = Transcript::new(b"Test");
         let mut verifier_transcript = Transcript::new(b"Test");
 
         let proof = GroupedCiphertext3HandlesValidityProof::new(
-            source_pubkey,
-            destination_pubkey,
-            auditor_pubkey,
+            first_pubkey,
+            second_pubkey,
+            third_pubkey,
             amount,
             &opening,
             &mut prover_transcript,
@@ -308,12 +304,12 @@ mod test {
         assert!(proof
             .verify(
                 &commitment,
-                source_pubkey,
-                destination_pubkey,
-                auditor_pubkey,
-                &source_handle,
-                &destination_handle,
-                &auditor_handle,
+                first_pubkey,
+                second_pubkey,
+                third_pubkey,
+                &first_handle,
+                &second_handle,
+                &third_handle,
                 &mut verifier_transcript,
             )
             .is_ok());
@@ -321,27 +317,27 @@ mod test {
 
     #[test]
     fn test_grouped_ciphertext_3_handles_validity_proof_edge_cases() {
-        // if source or destination public key zeroed, then the proof should always reject
-        let source_pubkey = ElGamalPubkey::try_from([0u8; 32].as_slice()).unwrap();
-        let destination_pubkey = ElGamalPubkey::try_from([0u8; 32].as_slice()).unwrap();
+        // if first or second public key zeroed, then the proof should always reject
+        let first_pubkey = ElGamalPubkey::try_from([0u8; 32].as_slice()).unwrap();
+        let second_pubkey = ElGamalPubkey::try_from([0u8; 32].as_slice()).unwrap();
 
-        let auditor_keypair = ElGamalKeypair::new_rand();
-        let auditor_pubkey = auditor_keypair.pubkey();
+        let third_keypair = ElGamalKeypair::new_rand();
+        let third_pubkey = third_keypair.pubkey();
 
         let amount: u64 = 55;
         let (commitment, opening) = Pedersen::new(amount);
 
-        let source_handle = destination_pubkey.decrypt_handle(&opening);
-        let destination_handle = destination_pubkey.decrypt_handle(&opening);
-        let auditor_handle = auditor_pubkey.decrypt_handle(&opening);
+        let first_handle = second_pubkey.decrypt_handle(&opening);
+        let second_handle = second_pubkey.decrypt_handle(&opening);
+        let third_handle = third_pubkey.decrypt_handle(&opening);
 
         let mut prover_transcript = Transcript::new(b"Test");
         let mut verifier_transcript = Transcript::new(b"Test");
 
         let proof = GroupedCiphertext3HandlesValidityProof::new(
-            &source_pubkey,
-            &destination_pubkey,
-            auditor_pubkey,
+            &first_pubkey,
+            &second_pubkey,
+            third_pubkey,
             amount,
             &opening,
             &mut prover_transcript,
@@ -350,41 +346,41 @@ mod test {
         assert!(proof
             .verify(
                 &commitment,
-                &source_pubkey,
-                &destination_pubkey,
-                auditor_pubkey,
-                &source_handle,
-                &destination_handle,
-                &auditor_handle,
+                &first_pubkey,
+                &second_pubkey,
+                third_pubkey,
+                &first_handle,
+                &second_handle,
+                &third_handle,
                 &mut verifier_transcript,
             )
             .is_err());
 
         // all zeroed ciphertext should still be valid
-        let source_keypair = ElGamalKeypair::new_rand();
-        let source_pubkey = source_keypair.pubkey();
+        let first_keypair = ElGamalKeypair::new_rand();
+        let first_pubkey = first_keypair.pubkey();
 
-        let destination_keypair = ElGamalKeypair::new_rand();
-        let destination_pubkey = destination_keypair.pubkey();
+        let second_keypair = ElGamalKeypair::new_rand();
+        let second_pubkey = second_keypair.pubkey();
 
-        let auditor_keypair = ElGamalKeypair::new_rand();
-        let auditor_pubkey = auditor_keypair.pubkey();
+        let third_keypair = ElGamalKeypair::new_rand();
+        let third_pubkey = third_keypair.pubkey();
 
         let amount: u64 = 0;
         let commitment = PedersenCommitment::from_bytes(&[0u8; 32]).unwrap();
         let opening = PedersenOpening::from_bytes(&[0u8; 32]).unwrap();
 
-        let source_handle = source_pubkey.decrypt_handle(&opening);
-        let destination_handle = destination_pubkey.decrypt_handle(&opening);
-        let auditor_handle = auditor_pubkey.decrypt_handle(&opening);
+        let first_handle = first_pubkey.decrypt_handle(&opening);
+        let second_handle = second_pubkey.decrypt_handle(&opening);
+        let third_handle = third_pubkey.decrypt_handle(&opening);
 
         let mut prover_transcript = Transcript::new(b"Test");
         let mut verifier_transcript = Transcript::new(b"Test");
 
         let proof = GroupedCiphertext3HandlesValidityProof::new(
-            source_pubkey,
-            destination_pubkey,
-            auditor_pubkey,
+            first_pubkey,
+            second_pubkey,
+            third_pubkey,
             amount,
             &opening,
             &mut prover_transcript,
@@ -393,42 +389,42 @@ mod test {
         assert!(proof
             .verify(
                 &commitment,
-                source_pubkey,
-                destination_pubkey,
-                auditor_pubkey,
-                &source_handle,
-                &destination_handle,
-                &auditor_handle,
+                first_pubkey,
+                second_pubkey,
+                third_pubkey,
+                &first_handle,
+                &second_handle,
+                &third_handle,
                 &mut verifier_transcript,
             )
             .is_ok());
 
         // decryption handles can be zero as long as the Pedersen commitment is valid
-        let source_keypair = ElGamalKeypair::new_rand();
-        let source_pubkey = source_keypair.pubkey();
+        let first_keypair = ElGamalKeypair::new_rand();
+        let first_pubkey = first_keypair.pubkey();
 
-        let destination_keypair = ElGamalKeypair::new_rand();
-        let destination_pubkey = destination_keypair.pubkey();
+        let second_keypair = ElGamalKeypair::new_rand();
+        let second_pubkey = second_keypair.pubkey();
 
-        let auditor_keypair = ElGamalKeypair::new_rand();
-        let auditor_pubkey = auditor_keypair.pubkey();
+        let third_keypair = ElGamalKeypair::new_rand();
+        let third_pubkey = third_keypair.pubkey();
 
         let amount: u64 = 55;
         let zeroed_opening = PedersenOpening::default();
 
         let commitment = Pedersen::with(amount, &zeroed_opening);
 
-        let source_handle = source_pubkey.decrypt_handle(&zeroed_opening);
-        let destination_handle = destination_pubkey.decrypt_handle(&zeroed_opening);
-        let auditor_handle = auditor_pubkey.decrypt_handle(&zeroed_opening);
+        let first_handle = first_pubkey.decrypt_handle(&zeroed_opening);
+        let second_handle = second_pubkey.decrypt_handle(&zeroed_opening);
+        let third_handle = third_pubkey.decrypt_handle(&zeroed_opening);
 
         let mut prover_transcript = Transcript::new(b"Test");
         let mut verifier_transcript = Transcript::new(b"Test");
 
         let proof = GroupedCiphertext3HandlesValidityProof::new(
-            source_pubkey,
-            destination_pubkey,
-            auditor_pubkey,
+            first_pubkey,
+            second_pubkey,
+            third_pubkey,
             amount,
             &opening,
             &mut prover_transcript,
@@ -437,12 +433,12 @@ mod test {
         assert!(proof
             .verify(
                 &commitment,
-                source_pubkey,
-                destination_pubkey,
-                auditor_pubkey,
-                &source_handle,
-                &destination_handle,
-                &auditor_handle,
+                first_pubkey,
+                second_pubkey,
+                third_pubkey,
+                &first_handle,
+                &second_handle,
+                &third_handle,
                 &mut verifier_transcript,
             )
             .is_ok());
