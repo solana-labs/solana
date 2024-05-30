@@ -8,7 +8,7 @@ use {
         errors::AuthenticatedEncryptionError,
     },
     aes_gcm_siv::{
-        aead::{Aead, NewAead},
+        aead::{Aead, KeyInit},
         Aes128GcmSiv,
     },
     base64::{prelude::BASE64_STANDARD, Engine},
