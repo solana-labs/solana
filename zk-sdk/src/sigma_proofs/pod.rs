@@ -12,7 +12,7 @@ use crate::sigma_proofs::{
         GroupedCiphertext2HandlesValidityProof, GroupedCiphertext3HandlesValidityProof,
     },
     percentage_with_cap::PercentageWithCapProof,
-    pubkey::PubkeyValidityProof,
+    pubkey_validity::PubkeyValidityProof,
     zero_ciphertext::ZeroCiphertextProof,
 };
 use {

@@ -21,7 +21,7 @@ pub mod grouped_ciphertext_validity;
 #[cfg(not(target_os = "solana"))]
 pub mod percentage_with_cap;
 #[cfg(not(target_os = "solana"))]
-pub mod pubkey;
+pub mod pubkey_validity;
 #[cfg(not(target_os = "solana"))]
 pub mod zero_ciphertext;
 

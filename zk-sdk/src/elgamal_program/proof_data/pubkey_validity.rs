@@ -10,7 +10,7 @@ use {
     crate::{
         elgamal_program::errors::{ProofGenerationError, ProofVerificationError},
         encryption::elgamal::ElGamalKeypair,
-        sigma_proofs::pubkey::PubkeyValidityProof,
+        sigma_proofs::pubkey_validity::PubkeyValidityProof,
     },
     bytemuck::bytes_of,
     merlin::Transcript,
@@ -32,7 +32,7 @@ use {
 /// the proof.
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
-pub struct PubkeyValidityData {
+pub struct PubkeyValidityProofData {
     /// The context data for the public key validity proof
     pub context: PubkeyValidityProofContext, // 32 bytes
 
@@ -49,7 +49,7 @@ pub struct PubkeyValidityProofContext {
 }
 
 #[cfg(not(target_os = "solana"))]
-impl PubkeyValidityData {
+impl PubkeyValidityProofData {
     pub fn new(keypair: &ElGamalKeypair) -> Result<Self, ProofGenerationError> {
         let pod_pubkey = PodElGamalPubkey(keypair.pubkey().into());
 
@@ -58,11 +58,11 @@ impl PubkeyValidityData {
         let mut transcript = context.new_transcript();
         let proof = PubkeyValidityProof::new(keypair, &mut transcript).into();
 
-        Ok(PubkeyValidityData { context, proof })
+        Ok(PubkeyValidityProofData { context, proof })
     }
 }
 
-impl ZkProofData<PubkeyValidityProofContext> for PubkeyValidityData {
+impl ZkProofData<PubkeyValidityProofContext> for PubkeyValidityProofData {
     const PROOF_TYPE: ProofType = ProofType::PubkeyValidity;
 
     fn context_data(&self) -> &PubkeyValidityProofContext {
@@ -96,7 +96,7 @@ mod test {
     fn test_pubkey_validity_instruction_correctness() {
         let keypair = ElGamalKeypair::new_rand();
 
-        let pubkey_validity_data = PubkeyValidityData::new(&keypair).unwrap();
+        let pubkey_validity_data = PubkeyValidityProofData::new(&keypair).unwrap();
         assert!(pubkey_validity_data.verify_proof().is_ok());
     }
 }
