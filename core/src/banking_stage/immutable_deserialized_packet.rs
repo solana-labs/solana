@@ -104,10 +104,10 @@ impl ImmutableDeserializedPacket {
     }
 
     // This function deserializes packets into transactions, computes the blake3 hash of transaction
-    // messages, and verifies secp256k1 instructions.
+    // messages.
     pub fn build_sanitized_transaction(
         &self,
-        feature_set: &Arc<feature_set::FeatureSet>,
+        _feature_set: &Arc<feature_set::FeatureSet>,
         votes_only: bool,
         address_loader: impl AddressLoader,
     ) -> Option<SanitizedTransaction> {
@@ -121,7 +121,6 @@ impl ImmutableDeserializedPacket {
             address_loader,
         )
         .ok()?;
-        tx.verify_precompiles(feature_set).ok()?;
         Some(tx)
     }
 }
