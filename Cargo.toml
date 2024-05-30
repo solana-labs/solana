@@ -59,6 +59,7 @@ members = [
     "perf",
     "poh",
     "poh-bench",
+    "poseidon",
     "program-runtime",
     "program-test",
     "programs/address-lookup-table",
@@ -355,6 +356,7 @@ solana-nohash-hasher = "0.2.1"
 solana-notifier = { path = "notifier", version = "=2.0.0" }
 solana-perf = { path = "perf", version = "=2.0.0" }
 solana-poh = { path = "poh", version = "=2.0.0" }
+solana-poseidon = { path = "poseidon", version = "=2.0.0" }
 solana-program = { path = "sdk/program", version = "=2.0.0" }
 solana-program-runtime = { path = "program-runtime", version = "=2.0.0" }
 solana-program-test = { path = "program-test", version = "=2.0.0" }

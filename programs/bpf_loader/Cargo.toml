@@ -16,6 +16,7 @@ libsecp256k1 = { workspace = true }
 log = { workspace = true }
 scopeguard = { workspace = true }
 solana-measure = { workspace = true }
+solana-poseidon = { workspace = true }
 solana-program-runtime = { workspace = true }
 solana-sdk = { workspace = true }
 solana-zk-token-sdk = { workspace = true }

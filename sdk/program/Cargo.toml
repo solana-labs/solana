@@ -55,7 +55,6 @@ bitflags = { workspace = true }
 curve25519-dalek = { workspace = true }
 itertools = { workspace = true }
 libsecp256k1 = { workspace = true }
-light-poseidon = { workspace = true }
 num-bigint = { workspace = true }
 rand = { workspace = true }
 wasm-bindgen = { workspace = true }

@@ -1,6 +1,7 @@
 [package]
-name = "solana-sbf-rust-poseidon"
-description = "Solana SBF test program written in Rust"
+name = "solana-poseidon"
+description = "Solana Poseidon hashing"
+documentation = "https://docs.rs/solana-poseidon"
 version = { workspace = true }
 authors = { workspace = true }
 repository = { workspace = true }
@@ -9,12 +10,11 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
-array-bytes = { workspace = true }
-solana-poseidon = { workspace = true }
-solana-program = { workspace = true }
+thiserror = { workspace = true }
 
-[lib]
-crate-type = ["cdylib"]
+[target.'cfg(not(target_os = "solana"))'.dependencies]
+ark-bn254 = { workspace = true }
+light-poseidon = { workspace = true }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

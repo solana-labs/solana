@@ -33,6 +33,7 @@ solana-cli-output = { path = "../../cli-output", version = "=2.0.0" }
 solana-ledger = { path = "../../ledger", version = "=2.0.0" }
 solana-logger = { path = "../../logger", version = "=2.0.0" }
 solana-measure = { path = "../../measure", version = "=2.0.0" }
+solana-poseidon = { path = "../../poseidon/", version = "=2.0.0" }
 solana-program = { path = "../../sdk/program", version = "=2.0.0" }
 solana-program-runtime = { path = "../../program-runtime", version = "=2.0.0" }
 solana-program-test = { path = "../../program-test", version = "=2.0.0" }
