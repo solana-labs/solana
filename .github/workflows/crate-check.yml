@@ -10,6 +10,7 @@ on:
     paths:
       - "**/Cargo.toml"
       - ".github/workflows/crate-check.yml"
+      - "./ci/check-crates.sh"
 
 jobs:
   check:

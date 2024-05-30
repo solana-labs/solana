@@ -21,7 +21,7 @@ declare skip_patterns=(
 )
 
 declare -A verified_crate_owners=(
-  ["solana-grimes"]=1
+  ["anza-team"]=1
 )
 
 # get Cargo.toml from git diff
