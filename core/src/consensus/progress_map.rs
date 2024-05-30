@@ -183,7 +183,7 @@ pub struct ForkStats {
     pub has_voted: bool,
     pub is_recent: bool,
     pub is_empty: bool,
-    pub vote_threshold: ThresholdDecision,
+    pub vote_threshold: Vec<ThresholdDecision>,
     pub is_locked_out: bool,
     pub voted_stakes: VotedStakes,
     pub is_supermajority_confirmed: bool,

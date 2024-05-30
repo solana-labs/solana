@@ -3855,7 +3855,7 @@ impl ReplayStage {
             // checks
             let (
                 is_locked_out,
-                vote_threshold,
+                vote_thresholds,
                 propagated_stake,
                 is_leader_slot,
                 fork_weight,
@@ -3868,7 +3868,7 @@ impl ReplayStage {
                     .unwrap();
                 (
                     fork_stats.is_locked_out,
-                    fork_stats.vote_threshold,
+                    &fork_stats.vote_threshold,
                     propagated_stats.propagated_validators_stake,
                     propagated_stats.is_leader_slot,
                     fork_stats.fork_weight(),
@@ -3885,13 +3885,22 @@ impl ReplayStage {
             if is_locked_out {
                 failure_reasons.push(HeaviestForkFailures::LockedOut(candidate_vote_bank.slot()));
             }
-            if let ThresholdDecision::FailedThreshold(vote_depth, fork_stake) = vote_threshold {
+            let mut threshold_passed = true;
+            for threshold_failure in vote_thresholds {
+                let &ThresholdDecision::FailedThreshold(vote_depth, fork_stake) = threshold_failure
+                else {
+                    continue;
+                };
                 failure_reasons.push(HeaviestForkFailures::FailedThreshold(
                     candidate_vote_bank.slot(),
                     vote_depth,
                     fork_stake,
                     total_threshold_stake,
                 ));
+                // Ignore shallow checks for voting purposes
+                if (vote_depth as usize) >= tower.threshold_depth {
+                    threshold_passed = false;
+                }
             }
             if !propagation_confirmed {
                 failure_reasons.push(HeaviestForkFailures::NoPropagatedConfirmation(
@@ -3902,7 +3911,7 @@ impl ReplayStage {
             }
 
             if !is_locked_out
-                && vote_threshold.passed()
+                && threshold_passed
                 && propagation_confirmed
                 && switch_fork_decision.can_vote()
             {
