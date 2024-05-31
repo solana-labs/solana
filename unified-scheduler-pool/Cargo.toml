@@ -25,6 +25,7 @@ solana-vote = { workspace = true }
 
 [dev-dependencies]
 assert_matches = { workspace = true }
+lazy_static = { workspace = true }
 solana-logger = { workspace = true }
 solana-runtime = { workspace = true, features = ["dev-context-only-utils"] }
 

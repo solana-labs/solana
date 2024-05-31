@@ -338,11 +338,29 @@ fn process_batches(
             "process_batches()/schedule_batches_for_execution({} batches)",
             batches.len()
         );
-        // scheduling always succeeds here without being blocked on actual transaction executions.
-        // The transaction execution errors will be collected via the blocking fn called
-        // BankWithScheduler::wait_for_completed_scheduler(), if any.
-        schedule_batches_for_execution(bank, batches);
-        Ok(())
+        // Scheduling usually succeeds (immediately returns `Ok(())`) here without being blocked on
+        // the actual transaction executions.
+        //
+        // As an exception, this code path could propagate the transaction execution _errors of
+        // previously-scheduled transactions_ to notify the replay stage. Then, the replay stage
+        // will bail out the further processing of the malformed (possibly malicious) block
+        // immediately, not to waste any system resources. Note that this propagation is of early
+        // hints. Even if errors won't be propagated in this way, they are guaranteed to be
+        // propagated eventually via the blocking fn called
+        // BankWithScheduler::wait_for_completed_scheduler().
+        //
+        // To recite, the returned error is completely unrelated to the argument's `batches` at the
+        // hand. While being awkward, the _async_ unified scheduler is abusing this existing error
+        // propagation code path to the replay stage for compatibility and ease of integration,
+        // exploiting the fact that the replay stage doesn't care _which transaction the returned
+        // error is originating from_.
+        //
+        // In the future, more proper error propagation mechanism will be introduced once after we
+        // fully transition to the unified scheduler for the block verification. That one would be
+        // a push based one from the unified scheduler to the replay stage to eliminate the current
+        // overhead: 1 read lock per batch in
+        // `BankWithScheduler::schedule_transaction_executions()`.
+        schedule_batches_for_execution(bank, batches)
     } else {
         debug!(
             "process_batches()/rebatch_and_execute_batches({} batches)",
@@ -364,7 +382,7 @@ fn process_batches(
 fn schedule_batches_for_execution(
     bank: &BankWithScheduler,
     batches: &[TransactionBatchWithIndexes],
-) {
+) -> Result<()> {
     for TransactionBatchWithIndexes {
         batch,
         transaction_indexes,
@@ -375,8 +393,9 @@ fn schedule_batches_for_execution(
                 .sanitized_transactions()
                 .iter()
                 .zip(transaction_indexes.iter()),
-        );
+        )?;
     }
+    Ok(())
 }
 
 fn rebatch_transactions<'a>(
@@ -2138,7 +2157,8 @@ pub mod tests {
                 self, create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs,
             },
             installed_scheduler_pool::{
-                MockInstalledScheduler, MockUninstalledScheduler, SchedulingContext,
+                MockInstalledScheduler, MockUninstalledScheduler, SchedulerAborted,
+                SchedulingContext,
             },
         },
         solana_sdk::{
@@ -4740,8 +4760,7 @@ pub mod tests {
         assert_eq!(batch3.transaction_indexes, vec![43, 44]);
     }
 
-    #[test]
-    fn test_schedule_batches_for_execution() {
+    fn do_test_schedule_batches_for_execution(should_succeed: bool) {
         solana_logger::setup();
         let dummy_leader_pubkey = solana_sdk::pubkey::new_rand();
         let GenesisConfigInfo {
@@ -4762,10 +4781,23 @@ pub mod tests {
             .times(1)
             .in_sequence(&mut seq.lock().unwrap())
             .return_const(context);
-        mocked_scheduler
-            .expect_schedule_execution()
-            .times(txs.len())
-            .returning(|_| ());
+        if should_succeed {
+            mocked_scheduler
+                .expect_schedule_execution()
+                .times(txs.len())
+                .returning(|(_, _)| Ok(()));
+        } else {
+            // mocked_scheduler isn't async; so short-circuiting behavior is quite visible in that
+            // .times(1) is called instead of .times(txs.len()), not like the succeeding case
+            mocked_scheduler
+                .expect_schedule_execution()
+                .times(1)
+                .returning(|(_, _)| Err(SchedulerAborted));
+            mocked_scheduler
+                .expect_recover_error_after_abort()
+                .times(1)
+                .returning(|| TransactionError::InsufficientFundsForFee);
+        }
         mocked_scheduler
             .expect_wait_for_termination()
             .with(mockall::predicate::eq(true))
@@ -4794,7 +4826,7 @@ pub mod tests {
         let replay_tx_thread_pool = create_thread_pool(1);
         let mut batch_execution_timing = BatchExecutionTiming::default();
         let ignored_prioritization_fee_cache = PrioritizationFeeCache::new(0u64);
-        assert!(process_batches(
+        let result = process_batches(
             &bank,
             &replay_tx_thread_pool,
             &[batch_with_indexes],
@@ -4802,9 +4834,23 @@ pub mod tests {
             None,
             &mut batch_execution_timing,
             None,
-            &ignored_prioritization_fee_cache
-        )
-        .is_ok());
+            &ignored_prioritization_fee_cache,
+        );
+        if should_succeed {
+            assert_matches!(result, Ok(()));
+        } else {
+            assert_matches!(result, Err(TransactionError::InsufficientFundsForFee));
+        }
+    }
+
+    #[test]
+    fn test_schedule_batches_for_execution_success() {
+        do_test_schedule_batches_for_execution(true);
+    }
+
+    #[test]
+    fn test_schedule_batches_for_execution_failure() {
+        do_test_schedule_batches_for_execution(false);
     }
 
     #[test]

@@ -7556,6 +7556,7 @@ dependencies = [
  "crossbeam-channel",
  "dashmap",
  "derivative",
+ "lazy_static",
  "log",
  "qualifier_attr",
  "solana-ledger",

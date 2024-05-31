@@ -27,7 +27,7 @@ use {
     solana_sdk::{
         hash::Hash,
         slot_history::Slot,
-        transaction::{Result, SanitizedTransaction},
+        transaction::{Result, SanitizedTransaction, TransactionError},
     },
     std::{
         fmt::Debug,
@@ -41,6 +41,10 @@ use {mockall::automock, qualifier_attr::qualifiers};
 pub trait InstalledSchedulerPool: Send + Sync + Debug {
     fn take_scheduler(&self, context: SchedulingContext) -> InstalledSchedulerBox;
 }
+
+#[derive(Debug)]
+pub struct SchedulerAborted;
+pub type ScheduleResult = std::result::Result<(), SchedulerAborted>;
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Schedules, executes, and commits transactions under encapsulated implementation
@@ -101,17 +105,51 @@ pub trait InstalledScheduler: Send + Sync + Debug + 'static {
     fn id(&self) -> SchedulerId;
     fn context(&self) -> &SchedulingContext;
 
-    // Calling this is illegal as soon as wait_for_termination is called.
+    /// Schedule transaction for execution.
+    ///
+    /// This non-blocking function will return immediately without waiting for actual execution.
+    ///
+    /// Calling this is illegal as soon as `wait_for_termination()` is called. It would result in
+    /// fatal logic error.
+    ///
+    /// Note that the returned result indicates whether the scheduler has been aborted due to a
+    /// previously-scheduled bad transaction, which terminates further block verification. So,
+    /// almost always, the returned error isn't due to the merely scheduling of the current
+    /// transaction itself. At this point, calling this does nothing anymore while it's still safe
+    /// to do. As soon as notified, callers are expected to stop processing upcoming transactions
+    /// of the same `SchedulingContext` (i.e. same block). Internally, the aborted scheduler will
+    /// be disposed cleanly, not repooled, after `wait_for_termination()` is called like
+    /// not-aborted schedulers.
+    ///
+    /// Caller can acquire the error by calling a separate function called
+    /// `recover_error_after_abort()`, which requires `&mut self`, instead of `&self`. This
+    /// separation and the convoluted returned value semantics explained above are intentional to
+    /// optimize the fast code-path of normal transaction scheduling to be multi-threaded at the
+    /// cost of far slower error code-path while giving implementors increased flexibility by
+    /// having &mut.
     fn schedule_execution<'a>(
         &'a self,
         transaction_with_index: &'a (&'a SanitizedTransaction, usize),
-    );
+    ) -> ScheduleResult;
+
+    /// Return the error which caused the scheduler to abort.
+    ///
+    /// Note that this must not be called until it's observed that `schedule_execution()` has
+    /// returned `Err(SchedulerAborted)`. Violating this should `panic!()`.
+    ///
+    /// That said, calling this multiple times is completely acceptable after the error observation
+    /// from `schedule_execution()`. While it's not guaranteed, the same `.clone()`-ed errors of
+    /// the first bad transaction are usually returned across invocations.
+    fn recover_error_after_abort(&mut self) -> TransactionError;
 
     /// Wait for a scheduler to terminate after processing.
     ///
     /// This function blocks the current thread while waiting for the scheduler to complete all of
     /// the executions for the scheduled transactions and to return the finalized
-    /// `ResultWithTimings`. Along with the result, this function also makes the scheduler itself
+    /// `ResultWithTimings`. This function still blocks for short period of time even in the case
+    /// of aborted schedulers to gracefully shutdown the scheduler (like thread joining).
+    ///
+    /// Along with the result being returned, this function also makes the scheduler itself
     /// uninstalled from the bank by transforming the consumed self.
     ///
     /// If no transaction is scheduled, the result and timing will be `Ok(())` and
@@ -286,11 +324,15 @@ impl BankWithScheduler {
         self.inner.scheduler.read().unwrap().is_some()
     }
 
+    /// Schedule the transaction as long as the scheduler hasn't been aborted.
+    ///
+    /// If the scheduler has been aborted, this doesn't schedule the transaction, instead just
+    /// return the error of prior scheduled transaction.
     // 'a is needed; anonymous_lifetime_in_impl_trait isn't stabilized yet...
     pub fn schedule_transaction_executions<'a>(
         &self,
         transactions_with_indexes: impl ExactSizeIterator<Item = (&'a SanitizedTransaction, &'a usize)>,
-    ) {
+    ) -> Result<()> {
         trace!(
             "schedule_transaction_executions(): {} txs",
             transactions_with_indexes.len()
@@ -300,8 +342,25 @@ impl BankWithScheduler {
         let scheduler = scheduler_guard.as_ref().unwrap();
 
         for (sanitized_transaction, &index) in transactions_with_indexes {
-            scheduler.schedule_execution(&(sanitized_transaction, index));
+            if scheduler
+                .schedule_execution(&(sanitized_transaction, index))
+                .is_err()
+            {
+                drop(scheduler_guard);
+                // This write lock isn't atomic with the above the read lock. So, another thread
+                // could have called .recover_error_after_abort() while we're literally stuck at
+                // the gaps of these locks (i.e. this comment in source code wise) under extreme
+                // race conditions. Thus, .recover_error_after_abort() is made idempotetnt for that
+                // consideration in mind.
+                //
+                // Lastly, this non-atomic nature is intentional for optimizing the fast code-path
+                let mut scheduler_guard = self.inner.scheduler.write().unwrap();
+                let scheduler = scheduler_guard.as_mut().unwrap();
+                return Err(scheduler.recover_error_after_abort());
+            }
         }
+
+        Ok(())
     }
 
     // take needless &mut only to communicate its semantic mutability to humans...
@@ -550,8 +609,7 @@ mod tests {
         assert_matches!(bank.wait_for_completed_scheduler(), Some(_));
     }
 
-    #[test]
-    fn test_schedule_executions() {
+    fn do_test_schedule_execution(should_succeed: bool) {
         solana_logger::setup();
 
         let GenesisConfigInfo {
@@ -570,14 +628,40 @@ mod tests {
             bank.clone(),
             [true].into_iter(),
             Some(|mocked: &mut MockInstalledScheduler| {
-                mocked
-                    .expect_schedule_execution()
-                    .times(1)
-                    .returning(|(_, _)| ());
+                if should_succeed {
+                    mocked
+                        .expect_schedule_execution()
+                        .times(1)
+                        .returning(|(_, _)| Ok(()));
+                } else {
+                    mocked
+                        .expect_schedule_execution()
+                        .times(1)
+                        .returning(|(_, _)| Err(SchedulerAborted));
+                    mocked
+                        .expect_recover_error_after_abort()
+                        .times(1)
+                        .returning(|| TransactionError::InsufficientFundsForFee);
+                }
             }),
         );
 
         let bank = BankWithScheduler::new(bank, Some(mocked_scheduler));
-        bank.schedule_transaction_executions([(&tx0, &0)].into_iter());
+        let result = bank.schedule_transaction_executions([(&tx0, &0)].into_iter());
+        if should_succeed {
+            assert_matches!(result, Ok(()));
+        } else {
+            assert_matches!(result, Err(TransactionError::InsufficientFundsForFee));
+        }
+    }
+
+    #[test]
+    fn test_schedule_execution_success() {
+        do_test_schedule_execution(true);
+    }
+
+    #[test]
+    fn test_schedule_execution_failure() {
+        do_test_schedule_execution(false);
     }
 }
