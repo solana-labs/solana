@@ -22,8 +22,9 @@ use {
     regex::Regex,
     solana_accounts_db::{
         account_storage::AccountStorageMap,
-        accounts_db::{AccountStorageEntry, AccountsDb, AtomicAccountsFileId},
+        accounts_db::{AccountStorageEntry, AccountsDb, AtomicAccountsFileId, BankHashStats},
         accounts_file::{AccountsFile, AccountsFileError, InternalsForArchive, StorageAccess},
+        accounts_hash::{AccountsDeltaHash, AccountsHash},
         epoch_accounts_hash::EpochAccountsHash,
         hardened_unpack::{self, ParallelSelector, UnpackError},
         shared_buffer_reader::{SharedBuffer, SharedBufferReader},
@@ -747,6 +748,9 @@ pub fn serialize_and_archive_snapshot_package(
         mut snapshot_storages,
         status_cache_slot_deltas,
         bank_fields_to_serialize,
+        bank_hash_stats,
+        accounts_delta_hash,
+        accounts_hash,
         epoch_accounts_hash,
         bank_incremental_snapshot_persistence,
         accounts,
@@ -760,6 +764,9 @@ pub fn serialize_and_archive_snapshot_package(
         snapshot_storages.as_slice(),
         status_cache_slot_deltas.as_slice(),
         bank_fields_to_serialize,
+        bank_hash_stats,
+        accounts_delta_hash,
+        accounts_hash,
         epoch_accounts_hash,
         bank_incremental_snapshot_persistence.as_ref(),
     )?;
@@ -811,6 +818,7 @@ pub fn serialize_and_archive_snapshot_package(
 }
 
 /// Serializes a snapshot into `bank_snapshots_dir`
+#[allow(clippy::too_many_arguments)]
 fn serialize_snapshot(
     bank_snapshots_dir: impl AsRef<Path>,
     snapshot_version: SnapshotVersion,
@@ -818,6 +826,9 @@ fn serialize_snapshot(
     snapshot_storages: &[Arc<AccountStorageEntry>],
     slot_deltas: &[BankSlotDelta],
     bank_fields: BankFieldsToSerialize,
+    bank_hash_stats: BankHashStats,
+    accounts_delta_hash: AccountsDeltaHash,
+    accounts_hash: AccountsHash,
     epoch_accounts_hash: Option<EpochAccountsHash>,
     bank_incremental_snapshot_persistence: Option<&BankIncrementalSnapshotPersistence>,
 ) -> Result<BankSnapshotInfo> {
@@ -866,6 +877,9 @@ fn serialize_snapshot(
             serde_snapshot::serialize_bank_snapshot_into(
                 stream,
                 bank_fields,
+                bank_hash_stats,
+                accounts_delta_hash,
+                accounts_hash,
                 accounts_db,
                 &get_storages_to_serialize(snapshot_storages),
                 bank_incremental_snapshot_persistence,

@@ -131,17 +131,16 @@ mod tests {
         let key3 = Pubkey::new_unique();
         bank_test_utils::deposit(&bank2, &key3, 0).unwrap();
 
+        let accounts_db = &bank2.rc.accounts.accounts_db;
+
         bank2.squash();
         bank2.force_flush_accounts_cache();
         let expected_accounts_hash = AccountsHash(Hash::new_unique());
-        bank2
-            .accounts()
-            .accounts_db
-            .set_accounts_hash(bank2.slot(), (expected_accounts_hash, 30));
+        accounts_db.set_accounts_hash(bank2_slot, (expected_accounts_hash, 30));
 
         let expected_incremental_snapshot_persistence =
             has_incremental_snapshot_persistence.then(|| BankIncrementalSnapshotPersistence {
-                full_slot: bank2.slot() - 1,
+                full_slot: bank2_slot - 1,
                 full_hash: SerdeAccountsHash(Hash::new_unique()),
                 full_capitalization: 31,
                 incremental_hash: SerdeIncrementalAccountsHash(Hash::new_unique()),
@@ -150,10 +149,7 @@ mod tests {
 
         let expected_epoch_accounts_hash = has_epoch_accounts_hash.then(|| {
             let epoch_accounts_hash = EpochAccountsHash::new(Hash::new_unique());
-            bank2
-                .rc
-                .accounts
-                .accounts_db
+            accounts_db
                 .epoch_accounts_hash_manager
                 .set_valid(epoch_accounts_hash, eah_start_slot);
             epoch_accounts_hash
@@ -165,7 +161,10 @@ mod tests {
         serde_snapshot::serialize_bank_snapshot_into(
             &mut writer,
             bank2.get_fields_to_serialize(),
-            &bank2.rc.accounts.accounts_db,
+            accounts_db.get_bank_hash_stats(bank2_slot).unwrap(),
+            accounts_db.get_accounts_delta_hash(bank2_slot).unwrap(),
+            expected_accounts_hash,
+            accounts_db,
             &get_storages_to_serialize(&bank2.get_snapshot_storages(None)),
             expected_incremental_snapshot_persistence.as_ref(),
             expected_epoch_accounts_hash,
@@ -179,12 +178,8 @@ mod tests {
         let (_accounts_dir, dbank_paths) = get_temp_accounts_paths(4).unwrap();
         // Create a directory to simulate AppendVecs unpackaged from a snapshot tar
         let copied_accounts = TempDir::new().unwrap();
-        let storage_and_next_append_vec_id = copy_append_vecs(
-            &bank2.rc.accounts.accounts_db,
-            copied_accounts.path(),
-            storage_access,
-        )
-        .unwrap();
+        let storage_and_next_append_vec_id =
+            copy_append_vecs(accounts_db, copied_accounts.path(), storage_access).unwrap();
 
         let cursor = Cursor::new(buf.as_slice());
         let mut reader = BufReader::new(cursor);
@@ -474,7 +469,7 @@ mod tests {
 
     #[cfg(RUSTC_WITH_SPECIALIZATION)]
     mod test_bank_serialize {
-        use {super::*, solana_sdk::clock::Slot};
+        use {super::*, solana_accounts_db::accounts_db::BankHashStats, solana_sdk::clock::Slot};
 
         // This some what long test harness is required to freeze the ABI of
         // Bank's serialization due to versioned nature
@@ -493,15 +488,6 @@ mod tests {
         where
             S: serde::Serializer,
         {
-            bank.rc
-                .accounts
-                .accounts_db
-                .set_accounts_delta_hash(bank.slot(), AccountsDeltaHash(Hash::new_unique()));
-            bank.rc.accounts.accounts_db.set_accounts_hash(
-                bank.slot(),
-                (AccountsHash(Hash::new_unique()), u64::default()),
-            );
-
             let snapshot_storages = bank.get_snapshot_storages(None);
             // ensure there is at least one snapshot storage example for ABI digesting
             assert!(!snapshot_storages.is_empty());
@@ -517,6 +503,9 @@ mod tests {
             serde_snapshot::serialize_bank_snapshot_with(
                 serializer,
                 bank.get_fields_to_serialize(),
+                BankHashStats::default(),
+                AccountsDeltaHash(Hash::new_unique()),
+                AccountsHash(Hash::new_unique()),
                 &bank.rc.accounts.accounts_db,
                 &get_storages_to_serialize(&snapshot_storages),
                 Some(&incremental_snapshot_persistence),

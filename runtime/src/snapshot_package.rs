@@ -7,12 +7,13 @@ use {
     log::*,
     solana_accounts_db::{
         accounts::Accounts,
-        accounts_db::AccountStorageEntry,
-        accounts_hash::{AccountsHash, AccountsHashKind},
+        accounts_db::{AccountStorageEntry, BankHashStats},
+        accounts_hash::{AccountsDeltaHash, AccountsHash, AccountsHashKind},
         epoch_accounts_hash::EpochAccountsHash,
     },
     solana_sdk::{
-        clock::Slot, rent_collector::RentCollector, sysvar::epoch_schedule::EpochSchedule,
+        clock::Slot, hash::Hash, rent_collector::RentCollector,
+        sysvar::epoch_schedule::EpochSchedule,
     },
     std::{sync::Arc, time::Instant},
 };
@@ -49,27 +50,40 @@ impl AccountsPackage {
         status_cache_slot_deltas: Vec<BankSlotDelta>,
         accounts_hash_for_testing: Option<AccountsHash>,
     ) -> Self {
+        let slot = bank.slot();
         if let AccountsPackageKind::Snapshot(snapshot_kind) = package_kind {
             info!(
                 "Package snapshot for bank {} has {} account storage entries (snapshot kind: {:?})",
-                bank.slot(),
+                slot,
                 snapshot_storages.len(),
                 snapshot_kind,
             );
             if let SnapshotKind::IncrementalSnapshot(incremental_snapshot_base_slot) = snapshot_kind
             {
                 assert!(
-                    bank.slot() > incremental_snapshot_base_slot,
+                    slot > incremental_snapshot_base_slot,
                     "Incremental snapshot base slot must be less than the bank being snapshotted!"
                 );
             }
         }
 
-        let snapshot_info = SupplementalSnapshotInfo {
-            status_cache_slot_deltas,
-            bank_fields_to_serialize: bank.get_fields_to_serialize(),
-            epoch_accounts_hash: bank.get_epoch_accounts_hash_to_serialize(),
+        let snapshot_info = {
+            let accounts_db = &bank.rc.accounts.accounts_db;
+            // SAFETY: There *must* be an accounts delta hash for this slot.
+            // Since we only snapshot rooted slots, and we know rooted slots must be frozen,
+            // that guarantees this slot will have an accounts delta hash.
+            let accounts_delta_hash = accounts_db.get_accounts_delta_hash(slot).unwrap();
+            // SAFETY: Every slot *must* have a BankHashStats entry in AccountsDb.
+            let bank_hash_stats = accounts_db.get_bank_hash_stats(slot).unwrap();
+            SupplementalSnapshotInfo {
+                status_cache_slot_deltas,
+                bank_fields_to_serialize: bank.get_fields_to_serialize(),
+                bank_hash_stats,
+                accounts_delta_hash,
+                epoch_accounts_hash: bank.get_epoch_accounts_hash_to_serialize(),
+            }
         };
+
         Self::_new(
             package_kind,
             bank,
@@ -157,6 +171,8 @@ impl AccountsPackage {
             snapshot_info: Some(SupplementalSnapshotInfo {
                 status_cache_slot_deltas: Vec::default(),
                 bank_fields_to_serialize: BankFieldsToSerialize::default_for_tests(),
+                bank_hash_stats: BankHashStats::default(),
+                accounts_delta_hash: AccountsDeltaHash(Hash::default()),
                 epoch_accounts_hash: Option::default(),
             }),
             enqueued: Instant::now(),
@@ -178,6 +194,8 @@ impl std::fmt::Debug for AccountsPackage {
 pub struct SupplementalSnapshotInfo {
     pub status_cache_slot_deltas: Vec<BankSlotDelta>,
     pub bank_fields_to_serialize: BankFieldsToSerialize,
+    pub bank_hash_stats: BankHashStats,
+    pub accounts_delta_hash: AccountsDeltaHash,
     pub epoch_accounts_hash: Option<EpochAccountsHash>,
 }
 
@@ -200,6 +218,9 @@ pub struct SnapshotPackage {
     pub snapshot_storages: Vec<Arc<AccountStorageEntry>>,
     pub status_cache_slot_deltas: Vec<BankSlotDelta>,
     pub bank_fields_to_serialize: BankFieldsToSerialize,
+    pub bank_hash_stats: BankHashStats,
+    pub accounts_delta_hash: AccountsDeltaHash,
+    pub accounts_hash: AccountsHash,
     pub epoch_accounts_hash: Option<EpochAccountsHash>,
     pub bank_incremental_snapshot_persistence: Option<BankIncrementalSnapshotPersistence>,
     pub accounts: Arc<Accounts>,
@@ -212,7 +233,7 @@ pub struct SnapshotPackage {
 impl SnapshotPackage {
     pub fn new(
         accounts_package: AccountsPackage,
-        accounts_hash: AccountsHashKind,
+        accounts_hash_kind: AccountsHashKind,
         bank_incremental_snapshot_persistence: Option<BankIncrementalSnapshotPersistence>,
     ) -> Self {
         let AccountsPackageKind::Snapshot(kind) = accounts_package.package_kind else {
@@ -226,14 +247,33 @@ impl SnapshotPackage {
             );
         };
 
+        let accounts_hash = match accounts_hash_kind {
+            AccountsHashKind::Full(accounts_hash) => accounts_hash,
+            AccountsHashKind::Incremental(_) => {
+                // The accounts hash is only needed when serializing a full snapshot.
+                // When serializing an incremental snapshot, there will not be a full accounts hash
+                // at `slot`.  In that case, use the default, because it doesn't actually get used.
+                // The incremental snapshot will use the BankIncrementalSnapshotPersistence
+                // field, so ensure it is Some.
+                assert!(bank_incremental_snapshot_persistence.is_some());
+                AccountsHash(Hash::default())
+            }
+        };
+
         Self {
             snapshot_kind: kind,
             slot: accounts_package.slot,
             block_height: accounts_package.block_height,
-            hash: SnapshotHash::new(&accounts_hash, snapshot_info.epoch_accounts_hash.as_ref()),
+            hash: SnapshotHash::new(
+                &accounts_hash_kind,
+                snapshot_info.epoch_accounts_hash.as_ref(),
+            ),
             snapshot_storages: accounts_package.snapshot_storages,
             status_cache_slot_deltas: snapshot_info.status_cache_slot_deltas,
             bank_fields_to_serialize: snapshot_info.bank_fields_to_serialize,
+            accounts_delta_hash: snapshot_info.accounts_delta_hash,
+            bank_hash_stats: snapshot_info.bank_hash_stats,
+            accounts_hash,
             epoch_accounts_hash: snapshot_info.epoch_accounts_hash,
             bank_incremental_snapshot_persistence,
             accounts: accounts_package.accounts,
@@ -247,7 +287,7 @@ impl SnapshotPackage {
     /// Create a new SnapshotPackage where basically every field is defaulted.
     /// Only use for tests; many of the fields are invalid!
     pub fn default_for_tests() -> Self {
-        use {solana_accounts_db::accounts_db::AccountsDb, solana_sdk::hash::Hash};
+        use solana_accounts_db::accounts_db::AccountsDb;
         Self {
             snapshot_kind: SnapshotKind::FullSnapshot,
             slot: Slot::default(),
@@ -256,6 +296,9 @@ impl SnapshotPackage {
             snapshot_storages: Vec::default(),
             status_cache_slot_deltas: Vec::default(),
             bank_fields_to_serialize: BankFieldsToSerialize::default_for_tests(),
+            accounts_delta_hash: AccountsDeltaHash(Hash::default()),
+            bank_hash_stats: BankHashStats::default(),
+            accounts_hash: AccountsHash(Hash::default()),
             epoch_accounts_hash: None,
             bank_incremental_snapshot_persistence: None,
             accounts: Accounts::new(AccountsDb::default_for_tests().into()).into(),
