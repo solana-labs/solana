@@ -196,6 +196,8 @@ pub struct InvokeContext<'a> {
     compute_meter: RefCell<u64>,
     log_collector: Option<Rc<RefCell<LogCollector>>>,
     pub programs_modified_by_tx: &'a mut ProgramCacheForTxBatch,
+    /// Latest measurement not yet accumulated in [ExecuteDetailsTimings::execute_us]
+    pub execute_time: Option<Measure>,
     pub timings: ExecuteDetailsTimings,
     pub syscall_context: Vec<Option<SyscallContext>>,
     traces: Vec<Vec<[u64; 12]>>,
@@ -219,6 +221,7 @@ impl<'a> InvokeContext<'a> {
             compute_budget,
             compute_meter: RefCell::new(compute_budget.compute_unit_limit),
             programs_modified_by_tx,
+            execute_time: None,
             timings: ExecuteDetailsTimings::default(),
             syscall_context: Vec::new(),
             traces: Vec::new(),
