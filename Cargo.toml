@@ -294,7 +294,7 @@ rustc_version = "0.4"
 rustls = { version = "0.21.11", default-features = false, features = ["quic"] }
 rustversion = "1.0.14"
 scopeguard = "1.2.0"
-semver = "1.0.22"
+semver = "1.0.23"
 seqlock = "0.2.0"
 serde = "1.0.197" # must match the serde_derive version, see https://github.com/serde-rs/serde/issues/2584#issuecomment-1685252251
 serde_bytes = "0.11.14"
