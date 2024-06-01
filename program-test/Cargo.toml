@@ -22,6 +22,7 @@ solana-banks-client = { workspace = true }
 solana-banks-interface = { workspace = true }
 solana-banks-server = { workspace = true }
 solana-bpf-loader-program = { workspace = true }
+solana-compute-budget = { workspace = true }
 solana-inline-spl = { workspace = true }
 solana-logger = { workspace = true }
 solana-program-runtime = { workspace = true }

@@ -1,6 +1,6 @@
 use {
     solana_client::rpc_config::RpcSimulateTransactionConfig,
-    solana_program_runtime::compute_budget_processor::MAX_COMPUTE_UNIT_LIMIT,
+    solana_compute_budget::compute_budget_processor::MAX_COMPUTE_UNIT_LIMIT,
     solana_rpc_client::rpc_client::RpcClient,
     solana_sdk::{
         borsh1::try_from_slice_unchecked,

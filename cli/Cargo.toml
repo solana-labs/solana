@@ -34,6 +34,7 @@ solana-clap-utils = { workspace = true }
 solana-cli-config = { workspace = true }
 solana-cli-output = { workspace = true }
 solana-client = { workspace = true }
+solana-compute-budget = { workspace = true }
 solana-config-program = { workspace = true }
 solana-faucet = { workspace = true }
 solana-loader-v4-program = { workspace = true }

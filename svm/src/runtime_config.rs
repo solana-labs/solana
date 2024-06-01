@@ -1,4 +1,4 @@
-use solana_program_runtime::compute_budget::ComputeBudget;
+use solana_compute_budget::compute_budget::ComputeBudget;
 
 #[cfg(all(RUSTC_WITH_SPECIALIZATION, feature = "frozen-abi"))]
 impl ::solana_frozen_abi::abi_example::AbiExample for RuntimeConfig {

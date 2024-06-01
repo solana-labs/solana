@@ -1,6 +1,5 @@
 use {
     crate::{
-        compute_budget::ComputeBudget,
         ic_msg,
         loaded_programs::{
             ProgramCacheEntry, ProgramCacheEntryType, ProgramCacheForTxBatch,
@@ -11,6 +10,7 @@ use {
         sysvar_cache::SysvarCache,
         timings::{ExecuteDetailsTimings, ExecuteTimings},
     },
+    solana_compute_budget::compute_budget::ComputeBudget,
     solana_measure::measure::Measure,
     solana_rbpf::{
         ebpf::MM_HEAP_START,
@@ -670,13 +670,13 @@ macro_rules! with_mock_invoke_context {
         $transaction_accounts:expr $(,)?
     ) => {
         use {
+            solana_compute_budget::compute_budget::ComputeBudget,
             solana_sdk::{
                 account::ReadableAccount, feature_set::FeatureSet, hash::Hash, sysvar::rent::Rent,
                 transaction_context::TransactionContext,
             },
             std::sync::Arc,
             $crate::{
-                compute_budget::ComputeBudget,
                 invoke_context::{EnvironmentConfig, InvokeContext},
                 loaded_programs::ProgramCacheForTxBatch,
                 log_collector::LogCollector,
@@ -806,8 +806,8 @@ pub fn mock_process_instruction<F: FnMut(&mut InvokeContext), G: FnMut(&mut Invo
 mod tests {
     use {
         super::*,
-        crate::compute_budget_processor,
         serde::{Deserialize, Serialize},
+        solana_compute_budget::compute_budget_processor,
         solana_sdk::{account::WritableAccount, instruction::Instruction, rent::Rent},
     };
 

@@ -1,7 +1,7 @@
 use {
+    solana_compute_budget::compute_budget::ComputeBudget,
     solana_measure::measure::Measure,
     solana_program_runtime::{
-        compute_budget::ComputeBudget,
         ic_logger_msg,
         invoke_context::InvokeContext,
         loaded_programs::{

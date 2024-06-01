@@ -26,6 +26,7 @@ members = [
     "cli-output",
     "client",
     "client-test",
+    "compute-budget",
     "connection-cache",
     "core",
     "cost-model",
@@ -328,6 +329,7 @@ solana-cli = { path = "cli", version = "=2.0.0" }
 solana-cli-config = { path = "cli-config", version = "=2.0.0" }
 solana-cli-output = { path = "cli-output", version = "=2.0.0" }
 solana-client = { path = "client", version = "=2.0.0" }
+solana-compute-budget = { path = "compute-budget", version = "=2.0.0" }
 solana-compute-budget-program = { path = "programs/compute-budget", version = "=2.0.0" }
 solana-config-program = { path = "programs/config", version = "=2.0.0" }
 solana-connection-cache = { path = "connection-cache", version = "=2.0.0", default-features = false }

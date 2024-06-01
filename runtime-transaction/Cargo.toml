@@ -11,7 +11,7 @@ edition = { workspace = true }
 
 [dependencies]
 log = { workspace = true }
-solana-program-runtime = { workspace = true }
+solana-compute-budget = { workspace = true }
 solana-sdk = { workspace = true }
 thiserror = { workspace = true }
 

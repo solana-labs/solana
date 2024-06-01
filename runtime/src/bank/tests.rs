@@ -33,14 +33,16 @@ use {
         accounts_partition::{self, PartitionIndex, RentPayingAccountsByPartition},
         ancestors::Ancestors,
     },
+    solana_compute_budget::{
+        compute_budget::ComputeBudget,
+        compute_budget_processor::{self, MAX_COMPUTE_UNIT_LIMIT},
+        prioritization_fee::{PrioritizationFeeDetails, PrioritizationFeeType},
+    },
     solana_inline_spl::token,
     solana_logger,
     solana_program_runtime::{
-        compute_budget::ComputeBudget,
-        compute_budget_processor::{self, MAX_COMPUTE_UNIT_LIMIT},
         declare_process_instruction,
         loaded_programs::{ProgramCacheEntry, ProgramCacheEntryType, ProgramCacheForTxBatch},
-        prioritization_fee::{PrioritizationFeeDetails, PrioritizationFeeType},
         timings::ExecuteTimings,
     },
     solana_sdk::{

@@ -15,6 +15,7 @@ byteorder = { workspace = true }
 libsecp256k1 = { workspace = true }
 log = { workspace = true }
 scopeguard = { workspace = true }
+solana-compute-budget = { workspace = true }
 solana-measure = { workspace = true }
 solana-poseidon = { workspace = true }
 solana-program-runtime = { workspace = true }

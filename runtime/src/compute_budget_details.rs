@@ -1,5 +1,5 @@
 use {
-    solana_program_runtime::compute_budget_processor::process_compute_budget_instructions,
+    solana_compute_budget::compute_budget_processor::process_compute_budget_instructions,
     solana_sdk::{
         instruction::CompiledInstruction,
         pubkey::Pubkey,
@@ -89,7 +89,7 @@ mod tests {
             Some(ComputeBudgetDetails {
                 compute_unit_price: 0,
                 compute_unit_limit:
-                    solana_program_runtime::compute_budget_processor::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT
+                solana_compute_budget::compute_budget_processor::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT
                     as u64,
             })
         );
@@ -101,7 +101,7 @@ mod tests {
             Some(ComputeBudgetDetails {
                 compute_unit_price: 0,
                 compute_unit_limit:
-                    solana_program_runtime::compute_budget_processor::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT
+                solana_compute_budget::compute_budget_processor::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT
                     as u64,
             })
         );
@@ -163,7 +163,7 @@ mod tests {
             Some(ComputeBudgetDetails {
                 compute_unit_price: requested_price,
                 compute_unit_limit:
-                    solana_program_runtime::compute_budget_processor::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT
+                solana_compute_budget::compute_budget_processor::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT
                     as u64,
             })
         );
@@ -175,7 +175,7 @@ mod tests {
             Some(ComputeBudgetDetails {
                 compute_unit_price: requested_price,
                 compute_unit_limit:
-                    solana_program_runtime::compute_budget_processor::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT
+                    solana_compute_budget::compute_budget_processor::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT
                     as u64,
             })
         );

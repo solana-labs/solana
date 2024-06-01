@@ -9,15 +9,14 @@ use {
         BankingStageStats,
     },
     itertools::Itertools,
+    solana_compute_budget::compute_budget_processor::process_compute_budget_instructions,
     solana_ledger::token_balances::collect_token_balances,
     solana_measure::{measure::Measure, measure_us},
     solana_poh::poh_recorder::{
         BankStart, PohRecorderError, RecordTransactionsSummary, RecordTransactionsTimings,
         TransactionRecorder,
     },
-    solana_program_runtime::{
-        compute_budget_processor::process_compute_budget_instructions, timings::ExecuteTimings,
-    },
+    solana_program_runtime::timings::ExecuteTimings,
     solana_runtime::{
         bank::{Bank, LoadAndExecuteTransactionsOutput},
         compute_budget_details::GetComputeBudgetDetails,

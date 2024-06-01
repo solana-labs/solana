@@ -21,8 +21,9 @@ use {
         create_vm, serialization::serialize_parameters,
         syscalls::create_program_runtime_environment_v1,
     },
+    solana_compute_budget::compute_budget::ComputeBudget,
     solana_measure::measure::Measure,
-    solana_program_runtime::{compute_budget::ComputeBudget, invoke_context::InvokeContext},
+    solana_program_runtime::invoke_context::InvokeContext,
     solana_rbpf::{
         ebpf::MM_INPUT_START, elf::Executable, memory_region::MemoryRegion,
         verifier::RequisiteVerifier, vm::ContextObject,

@@ -1,5 +1,7 @@
 use {
-    crate::compute_budget_processor::{self, process_compute_budget_instructions},
+    crate::compute_budget_processor::{
+        self, process_compute_budget_instructions, DEFAULT_HEAP_COST,
+    },
     solana_sdk::{instruction::CompiledInstruction, pubkey::Pubkey, transaction::Result},
 };
 
@@ -10,10 +12,6 @@ impl ::solana_frozen_abi::abi_example::AbiExample for ComputeBudget {
         ComputeBudget::default()
     }
 }
-
-/// Roughly 0.5us/page, where page is 32K; given roughly 15CU/us, the
-/// default heap page cost = 0.5 * 15 ~= 8CU/page
-pub const DEFAULT_HEAP_COST: u64 = 8;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ComputeBudget {

@@ -20,6 +20,7 @@ solana-vote-program = { workspace = true }
 [dev-dependencies]
 assert_matches = { workspace = true }
 proptest = { workspace = true }
+solana-compute-budget = { workspace = true }
 solana-logger = { workspace = true }
 test-case = { workspace = true }
 

@@ -7,10 +7,8 @@ use {
         transaction_processing_callback::TransactionProcessingCallback,
     },
     itertools::Itertools,
-    solana_program_runtime::{
-        compute_budget_processor::process_compute_budget_instructions,
-        loaded_programs::{ProgramCacheEntry, ProgramCacheForTxBatch},
-    },
+    solana_compute_budget::compute_budget_processor::process_compute_budget_instructions,
+    solana_program_runtime::loaded_programs::{ProgramCacheEntry, ProgramCacheForTxBatch},
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
         feature_set::{
@@ -483,12 +481,12 @@ mod tests {
             transaction_processing_callback::TransactionProcessingCallback,
         },
         nonce::state::Versions as NonceVersions,
-        solana_program_runtime::{
+        solana_compute_budget::{
             compute_budget::ComputeBudget,
             compute_budget_processor,
-            loaded_programs::{ProgramCacheEntry, ProgramCacheForTxBatch},
             prioritization_fee::{PrioritizationFeeDetails, PrioritizationFeeType},
         },
+        solana_program_runtime::loaded_programs::{ProgramCacheEntry, ProgramCacheForTxBatch},
         solana_sdk::{
             account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
             bpf_loader_upgradeable,

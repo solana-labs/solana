@@ -8,12 +8,9 @@
 use {
     crate::{block_cost_limits::*, transaction_cost::*},
     log::*,
-    solana_program_runtime::{
-        compute_budget::DEFAULT_HEAP_COST,
-        compute_budget_processor::{
-            process_compute_budget_instructions, DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT,
-            MAX_COMPUTE_UNIT_LIMIT,
-        },
+    solana_compute_budget::compute_budget_processor::{
+        process_compute_budget_instructions, DEFAULT_HEAP_COST,
+        DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT, MAX_COMPUTE_UNIT_LIMIT,
     },
     solana_sdk::{
         borsh1::try_from_slice_unchecked,
@@ -571,7 +568,7 @@ mod tests {
         // default loaded_accounts_data_size_limit
         const DEFAULT_PAGE_COST: u64 = 8;
         let expected_loaded_accounts_data_size_cost =
-            solana_program_runtime::compute_budget_processor::MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES
+            solana_compute_budget::compute_budget_processor::MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES
                 as u64
                 / ACCOUNT_DATA_COST_PAGE_SIZE
                 * DEFAULT_PAGE_COST;

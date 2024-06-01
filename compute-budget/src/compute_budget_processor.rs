@@ -1,8 +1,5 @@
 use {
-    crate::{
-        compute_budget::DEFAULT_HEAP_COST,
-        prioritization_fee::{PrioritizationFeeDetails, PrioritizationFeeType},
-    },
+    crate::prioritization_fee::{PrioritizationFeeDetails, PrioritizationFeeType},
     solana_sdk::{
         borsh1::try_from_slice_unchecked,
         compute_budget::{self, ComputeBudgetInstruction},
@@ -15,6 +12,9 @@ use {
 };
 
 const MAX_HEAP_FRAME_BYTES: u32 = 256 * 1024;
+/// Roughly 0.5us/page, where page is 32K; given roughly 15CU/us, the
+/// default heap page cost = 0.5 * 15 ~= 8CU/page
+pub const DEFAULT_HEAP_COST: u64 = 8;
 pub const DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT: u32 = 200_000;
 pub const MAX_COMPUTE_UNIT_LIMIT: u32 = 1_400_000;
 
