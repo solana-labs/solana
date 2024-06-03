@@ -33,7 +33,9 @@ impl ForkGraph for MockForkGraph {
 #[derive(Default)]
 pub struct MockBankCallback {
     rent_collector: RentCollector,
-    feature_set: Arc<FeatureSet>,
+    pub feature_set: Arc<FeatureSet>,
+    pub blockhash: Hash,
+    pub lamports_per_sginature: u64,
     pub account_shared_data: RefCell<HashMap<Pubkey, AccountSharedData>>,
 }
 
@@ -56,7 +58,7 @@ impl TransactionProcessingCallback for MockBankCallback {
 
     fn get_last_blockhash_and_lamports_per_signature(&self) -> (Hash, u64) {
         // Mock a hash and a value
-        (Hash::new_unique(), 2)
+        (self.blockhash, self.lamports_per_sginature)
     }
 
     fn get_rent_collector(&self) -> &RentCollector {
