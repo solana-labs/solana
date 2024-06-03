@@ -1602,7 +1602,6 @@ fn streaming_unarchive_snapshot(
     let shared_buffer = untar_snapshot_create_shared_buffer(&snapshot_archive_path, archive_format);
 
     // All shared buffer readers need to be created before the threads are spawned
-    #[allow(clippy::needless_collect)]
     let archives: Vec<_> = (0..num_threads)
         .map(|_| {
             let reader = SharedBufferReader::new(&shared_buffer);

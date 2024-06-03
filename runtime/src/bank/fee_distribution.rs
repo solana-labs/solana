@@ -210,7 +210,6 @@ impl Bank {
     // fees
     //
     // Ref: distribute_transaction_fees
-    #[allow(clippy::needless_collect)]
     fn distribute_rent_to_validators(
         &self,
         vote_accounts: &VoteAccountsHashMap,

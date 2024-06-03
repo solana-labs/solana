@@ -504,7 +504,6 @@ fn distribute_allocations(
     Ok(())
 }
 
-#[allow(clippy::needless_collect)]
 fn read_allocations(
     input_csv: &str,
     transfer_amount: Option<u64>,

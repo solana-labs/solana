@@ -596,7 +596,6 @@ impl Accounts {
     /// This function will prevent multiple threads from modifying the same account state at the
     /// same time
     #[must_use]
-    #[allow(clippy::needless_collect)]
     pub fn lock_accounts<'a>(
         &self,
         txs: impl Iterator<Item = &'a SanitizedTransaction>,
@@ -609,7 +608,6 @@ impl Accounts {
     }
 
     #[must_use]
-    #[allow(clippy::needless_collect)]
     pub fn lock_accounts_with_results<'a>(
         &self,
         txs: impl Iterator<Item = &'a SanitizedTransaction>,
@@ -646,7 +644,6 @@ impl Accounts {
     }
 
     /// Once accounts are unlocked, new transactions that modify that state can enter the pipeline
-    #[allow(clippy::needless_collect)]
     pub fn unlock_accounts<'a>(
         &self,
         txs_and_results: impl Iterator<Item = (&'a SanitizedTransaction, &'a Result<()>)>,

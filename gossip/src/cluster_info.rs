@@ -2307,7 +2307,6 @@ impl ClusterInfo {
         }
     }
 
-    #[allow(clippy::needless_collect)]
     fn handle_batch_push_messages(
         &self,
         messages: Vec<(Pubkey, Vec<CrdsValue>)>,
@@ -3357,7 +3356,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::needless_collect)]
     fn test_handle_ping_messages() {
         let mut rng = rand::thread_rng();
         let this_node = Arc::new(Keypair::new());
@@ -4156,7 +4154,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::needless_collect)]
     fn test_split_messages_packet_size() {
         // Test that if a value is smaller than payload size but too large to be wrapped in a vec
         // that it is still dropped

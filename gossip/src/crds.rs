@@ -1383,7 +1383,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::needless_collect)]
     fn test_drop() {
         fn num_unique_pubkeys<'a, I>(values: I) -> usize
         where

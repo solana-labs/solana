@@ -4,7 +4,6 @@
 #![allow(clippy::redundant_clone)]
 #![allow(clippy::needless_borrow)]
 #![allow(clippy::cmp_owned)]
-#![allow(clippy::needless_collect)]
 #![allow(clippy::match_like_matches_macro)]
 #![allow(clippy::unnecessary_cast)]
 #![allow(clippy::uninlined_format_args)]

@@ -1632,7 +1632,6 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
     // But, does NOT update secondary index
     // This is designed to be called at startup time.
     // returns (dirty_pubkeys, insertion_time_us, GenerateIndexResult)
-    #[allow(clippy::needless_collect)]
     pub(crate) fn insert_new_if_missing_into_primary_index(
         &self,
         slot: Slot,
