@@ -147,7 +147,7 @@ mod tests_core_bpf_migration {
         let (builtin_id, config) = prototype.deconstruct();
         let feature_id = &config.feature_id;
         let source_buffer_address = &config.source_buffer_address;
-        let upgrade_authority_address = Some(Pubkey::new_unique());
+        let upgrade_authority_address = config.upgrade_authority_address;
 
         // Add the feature to the bank's inactive feature set.
         // Note this will add the feature ID if it doesn't exist.

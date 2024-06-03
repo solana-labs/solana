@@ -42,6 +42,13 @@ pub(crate) struct CoreBpfMigrationConfig {
     /// The address of the source buffer account to be used to replace the
     /// builtin.
     pub source_buffer_address: Pubkey,
+    /// The authority to be used as the BPF program's upgrade authority.
+    ///
+    /// Note: If this value is set to `None`, then the migration will ignore
+    /// the source buffer account's authority. If it's set to any `Some(..)`
+    /// value, then the migration will perform a sanity check to ensure the
+    /// source buffer account's authority matches the provided value.
+    pub upgrade_authority_address: Option<Pubkey>,
     /// The feature gate to trigger the migration to Core BPF.
     /// Note: This feature gate should never be the same as any builtin's
     /// `enable_feature_id`. It should always be a feature gate that will be
@@ -86,14 +93,33 @@ impl Bank {
     /// Create an `AccountSharedData` with data initialized to
     /// `UpgradeableLoaderState::ProgramData` populated with the current slot, as
     /// well as the source program data account's upgrade authority and ELF.
+    ///
+    /// This function accepts a provided upgrade authority address, which comes
+    /// from the migration configuration. If the provided upgrade authority
+    /// address is different from the source buffer account's upgrade authority
+    /// address, the migration will fail. If the provided upgrade authority
+    /// address is `None`, the migration will ignore the source buffer account's
+    /// upgrade authority and set the new program data account's upgrade
+    /// authority to `None`.
     fn new_target_program_data_account(
         &self,
         source: &SourceBuffer,
+        upgrade_authority_address: Option<Pubkey>,
     ) -> Result<AccountSharedData, CoreBpfMigrationError> {
         let buffer_metadata_size = UpgradeableLoaderState::size_of_buffer_metadata();
-        if let UpgradeableLoaderState::Buffer { authority_address } =
-            bincode::deserialize(&source.buffer_account.data()[..buffer_metadata_size])?
+        if let UpgradeableLoaderState::Buffer {
+            authority_address: buffer_authority,
+        } = bincode::deserialize(&source.buffer_account.data()[..buffer_metadata_size])?
         {
+            if let Some(provided_authority) = upgrade_authority_address {
+                if upgrade_authority_address != buffer_authority {
+                    return Err(CoreBpfMigrationError::UpgradeAuthorityMismatch(
+                        provided_authority,
+                        buffer_authority,
+                    ));
+                }
+            }
+
             let elf = &source.buffer_account.data()[buffer_metadata_size..];
 
             let programdata_metadata_size = UpgradeableLoaderState::size_of_programdata_metadata();
@@ -103,7 +129,7 @@ impl Bank {
 
             let programdata_metadata = UpgradeableLoaderState::ProgramData {
                 slot: self.slot,
-                upgrade_authority_address: authority_address,
+                upgrade_authority_address,
             };
 
             let mut account = AccountSharedData::new_data_with_space(
@@ -215,7 +241,8 @@ impl Bank {
 
         // Attempt serialization first before modifying the bank.
         let new_target_program_account = self.new_target_program_account(&target)?;
-        let new_target_program_data_account = self.new_target_program_data_account(&source)?;
+        let new_target_program_data_account =
+            self.new_target_program_data_account(&source, config.upgrade_authority_address)?;
 
         // Gather old and new account data sizes, for updating the bank's
         // accounts data size delta off-chain.
@@ -513,6 +540,7 @@ pub(crate) mod tests {
 
         let core_bpf_migration_config = CoreBpfMigrationConfig {
             source_buffer_address,
+            upgrade_authority_address,
             feature_id: Pubkey::new_unique(),
             migration_target: CoreBpfMigrationTargetType::Builtin,
             datapoint_name: "test_migrate_builtin",
@@ -571,6 +599,7 @@ pub(crate) mod tests {
 
         let core_bpf_migration_config = CoreBpfMigrationConfig {
             source_buffer_address,
+            upgrade_authority_address,
             feature_id: Pubkey::new_unique(),
             migration_target: CoreBpfMigrationTargetType::Stateless,
             datapoint_name: "test_migrate_stateless_builtin",
@@ -594,6 +623,124 @@ pub(crate) mod tests {
         assert_eq!(
             bank.accounts_data_size_delta_off_chain.load(Relaxed),
             expected_post_migration_accounts_data_size_delta_off_chain
+        );
+    }
+
+    #[test]
+    fn test_fail_authority_mismatch() {
+        let mut bank = create_simple_test_bank(0);
+
+        let builtin_id = Pubkey::new_unique();
+        let source_buffer_address = Pubkey::new_unique();
+
+        let upgrade_authority_address = Some(Pubkey::new_unique());
+
+        {
+            let builtin_name = String::from("test_builtin");
+            let account =
+                AccountSharedData::new_data(1, &builtin_name, &native_loader::id()).unwrap();
+            bank.store_account_and_update_capitalization(&builtin_id, &account);
+            bank.transaction_processor.add_builtin(
+                &bank,
+                builtin_id,
+                builtin_name.as_str(),
+                ProgramCacheEntry::default(),
+            );
+            account
+        };
+
+        let test_context = TestContext::new(
+            &bank,
+            &builtin_id,
+            &source_buffer_address,
+            upgrade_authority_address,
+        );
+        let TestContext {
+            builtin_id,
+            source_buffer_address,
+            ..
+        } = test_context;
+
+        let core_bpf_migration_config = CoreBpfMigrationConfig {
+            source_buffer_address,
+            upgrade_authority_address: Some(Pubkey::new_unique()), // Mismatch.
+            feature_id: Pubkey::new_unique(),
+            migration_target: CoreBpfMigrationTargetType::Builtin,
+            datapoint_name: "test_migrate_builtin",
+        };
+
+        assert_matches!(
+            bank.migrate_builtin_to_core_bpf(&builtin_id, &core_bpf_migration_config)
+                .unwrap_err(),
+            CoreBpfMigrationError::UpgradeAuthorityMismatch(_, _)
+        )
+    }
+
+    #[test]
+    fn test_none_authority_with_some_buffer_authority() {
+        let mut bank = create_simple_test_bank(0);
+
+        let builtin_id = Pubkey::new_unique();
+        let source_buffer_address = Pubkey::new_unique();
+
+        let upgrade_authority_address = Some(Pubkey::new_unique());
+
+        {
+            let builtin_name = String::from("test_builtin");
+            let account =
+                AccountSharedData::new_data(1, &builtin_name, &native_loader::id()).unwrap();
+            bank.store_account_and_update_capitalization(&builtin_id, &account);
+            bank.transaction_processor.add_builtin(
+                &bank,
+                builtin_id,
+                builtin_name.as_str(),
+                ProgramCacheEntry::default(),
+            );
+            account
+        };
+
+        // Set up the source buffer with a valid authority, but the migration
+        // config will define the upgrade authority to be `None`.
+        {
+            let elf = test_elf();
+            let buffer_metadata_size = UpgradeableLoaderState::size_of_buffer_metadata();
+            let space = buffer_metadata_size + elf.len();
+            let lamports = bank.get_minimum_balance_for_rent_exemption(space);
+            let owner = &bpf_loader_upgradeable::id();
+
+            let buffer_metadata = UpgradeableLoaderState::Buffer {
+                authority_address: upgrade_authority_address,
+            };
+
+            let mut account =
+                AccountSharedData::new_data_with_space(lamports, &buffer_metadata, space, owner)
+                    .unwrap();
+            account.data_as_mut_slice()[buffer_metadata_size..].copy_from_slice(&elf);
+
+            bank.store_account_and_update_capitalization(&source_buffer_address, &account);
+        }
+
+        let core_bpf_migration_config = CoreBpfMigrationConfig {
+            source_buffer_address,
+            upgrade_authority_address: None, // None.
+            feature_id: Pubkey::new_unique(),
+            migration_target: CoreBpfMigrationTargetType::Builtin,
+            datapoint_name: "test_migrate_builtin",
+        };
+
+        bank.migrate_builtin_to_core_bpf(&builtin_id, &core_bpf_migration_config)
+            .unwrap();
+
+        let program_data_address = get_program_data_address(&builtin_id);
+        let program_data_account = bank.get_account(&program_data_address).unwrap();
+        let program_data_account_state: UpgradeableLoaderState =
+            program_data_account.state().unwrap();
+        assert_eq!(
+            program_data_account_state,
+            UpgradeableLoaderState::ProgramData {
+                upgrade_authority_address: None,
+                slot: bank.slot(),
+            },
         );
     }
 }

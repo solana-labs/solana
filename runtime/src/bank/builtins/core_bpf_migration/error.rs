@@ -30,4 +30,7 @@ pub enum CoreBpfMigrationError {
     /// Arithmetic overflow
     #[error("Arithmetic overflow")]
     ArithmeticOverflow,
+    /// Upgrade authority mismatch
+    #[error("Upgrade authority mismatch. Expected: {0:?}, Got: {1:?}")]
+    UpgradeAuthorityMismatch(Pubkey, Option<Pubkey>),
 }
