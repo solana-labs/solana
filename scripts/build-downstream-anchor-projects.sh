@@ -48,6 +48,7 @@ anchor() {
   rm -rf spl
   git clone https://github.com/solana-labs/solana-program-library.git spl
   cd spl || exit 1
+  ./patch.crates-io.sh "$solana_dir"
   spl_dir=$PWD
   get_spl_versions "$spl_dir"
   cd ..
