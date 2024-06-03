@@ -34,6 +34,10 @@ pub use {
     ciphertext_commitment_equality::{
         CiphertextCommitmentEqualityProofContext, CiphertextCommitmentEqualityProofData,
     },
+    grouped_ciphertext_validity::{
+        GroupedCiphertext2HandlesValidityProofContext, GroupedCiphertext2HandlesValidityProofData,
+        GroupedCiphertext3HandlesValidityProofContext, GroupedCiphertext3HandlesValidityProofData,
+    },
     percentage_with_cap::{PercentageWithCapProofContext, PercentageWithCapProofData},
     pubkey_validity::{PubkeyValidityProofContext, PubkeyValidityProofData},
     zero_ciphertext::{ZeroCiphertextProofContext, ZeroCiphertextProofData},
