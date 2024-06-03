@@ -10,9 +10,7 @@ use {
     solana_compute_budget::compute_budget::ComputeBudget,
     solana_program_runtime::{
         invoke_context::{EnvironmentConfig, InvokeContext},
-        loaded_programs::{
-            ProgramCache, ProgramCacheEntry, ProgramCacheForTxBatch, ProgramRuntimeEnvironments,
-        },
+        loaded_programs::{ProgramCacheEntry, ProgramCacheForTxBatch, ProgramRuntimeEnvironments},
         log_collector::LogCollector,
         solana_rbpf::{
             program::{BuiltinProgram, FunctionRegistry},
@@ -244,26 +242,26 @@ fn run_fixture(fixture: InstrFixture, filename: OsString, execute_as_instr: bool
     let v1_environment =
         create_program_runtime_environment_v1(&feature_set, &compute_budget, false, false).unwrap();
 
-    let mut program_cache = ProgramCache::<MockForkGraph>::new(0, 20);
-    program_cache.environments = ProgramRuntimeEnvironments {
-        program_runtime_v1: Arc::new(v1_environment),
-        program_runtime_v2: Arc::new(BuiltinProgram::new_loader(
-            Config::default(),
-            FunctionRegistry::default(),
-        )),
-    };
-    program_cache.fork_graph = Some(Arc::new(RwLock::new(MockForkGraph {})));
-
-    let program_cache = Arc::new(RwLock::new(program_cache));
     mock_bank.override_feature_set(feature_set);
     let batch_processor = TransactionBatchProcessor::<MockForkGraph>::new(
         42,
         2,
         EpochSchedule::default(),
         Arc::new(RuntimeConfig::default()),
-        program_cache.clone(),
         HashSet::new(),
     );
+
+    {
+        let mut program_cache = batch_processor.program_cache.write().unwrap();
+        program_cache.environments = ProgramRuntimeEnvironments {
+            program_runtime_v1: Arc::new(v1_environment),
+            program_runtime_v2: Arc::new(BuiltinProgram::new_loader(
+                Config::default(),
+                FunctionRegistry::default(),
+            )),
+        };
+        program_cache.fork_graph = Some(Arc::new(RwLock::new(MockForkGraph {})));
+    }
 
     batch_processor.fill_missing_sysvar_cache_entries(&mock_bank);
     register_builtins(&batch_processor, &mock_bank);

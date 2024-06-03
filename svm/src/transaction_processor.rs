@@ -164,7 +164,6 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         epoch: Epoch,
         epoch_schedule: EpochSchedule,
         runtime_config: Arc<RuntimeConfig>,
-        program_cache: Arc<RwLock<ProgramCache<FG>>>,
         builtin_program_ids: HashSet<Pubkey>,
     ) -> Self {
         Self {
@@ -174,7 +173,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
             fee_structure: FeeStructure::default(),
             runtime_config,
             sysvar_cache: RwLock::<SysvarCache>::default(),
-            program_cache,
+            program_cache: Arc::new(RwLock::new(ProgramCache::new(slot, epoch))),
             builtin_program_ids: RwLock::new(builtin_program_ids),
         }
     }
@@ -1711,7 +1710,6 @@ mod tests {
             5,
             EpochSchedule::default(),
             Arc::new(RuntimeConfig::default()),
-            Arc::new(RwLock::new(ProgramCache::new(0, 0))),
             HashSet::new(),
         );
         batch_processor.program_cache.write().unwrap().fork_graph =
@@ -1733,13 +1731,10 @@ mod tests {
             let ths: Vec<_> = (0..4)
                 .map(|_| {
                     let local_bank = mock_bank.clone();
-                    let processor = TransactionBatchProcessor::new(
+                    let processor = TransactionBatchProcessor::new_from(
+                        &batch_processor,
                         batch_processor.slot,
                         batch_processor.epoch,
-                        batch_processor.epoch_schedule.clone(),
-                        batch_processor.runtime_config.clone(),
-                        batch_processor.program_cache.clone(),
-                        HashSet::new(),
                     );
                     let maps = account_maps.clone();
                     let programs = programs.clone();
