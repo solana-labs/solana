@@ -3391,15 +3391,17 @@ impl Bank {
             // for processing. During forwarding, the transaction could expire if the
             // delay is not accounted for.
             MAX_PROCESSING_AGE - MAX_TRANSACTION_FORWARDING_DELAY,
-            ExecutionRecordingConfig {
-                enable_cpi_recording,
-                enable_log_recording: true,
-                enable_return_data_recording: true,
-            },
             &mut timings,
-            Some(&account_overrides),
-            None,
-            true,
+            TransactionProcessingConfig {
+                account_overrides: Some(&account_overrides),
+                log_messages_bytes_limit: None,
+                limit_to_load_programs: true,
+                recording_config: ExecutionRecordingConfig {
+                    enable_cpi_recording,
+                    enable_log_recording: true,
+                    enable_return_data_recording: true,
+                },
+            },
         );
 
         let post_simulation_accounts = loaded_transactions
@@ -3642,16 +3644,12 @@ impl Bank {
         balances
     }
 
-    #[allow(clippy::too_many_arguments, clippy::type_complexity)]
     pub fn load_and_execute_transactions(
         &self,
         batch: &TransactionBatch,
         max_age: usize,
-        recording_config: ExecutionRecordingConfig,
         timings: &mut ExecuteTimings,
-        account_overrides: Option<&AccountOverrides>,
-        log_messages_bytes_limit: Option<usize>,
-        limit_to_load_programs: bool,
+        processing_config: TransactionProcessingConfig,
     ) -> LoadAndExecuteTransactionsOutput {
         let sanitized_txs = batch.sanitized_transactions();
         debug!("processing transactions: {}", sanitized_txs.len());
@@ -3703,13 +3701,6 @@ impl Bank {
         check_time.stop();
         debug!("check: {}us", check_time.as_us());
         timings.saturating_add_in_place(ExecuteTimingType::CheckUs, check_time.as_us());
-
-        let processing_config = TransactionProcessingConfig {
-            account_overrides,
-            limit_to_load_programs,
-            log_messages_bytes_limit,
-            recording_config,
-        };
 
         let sanitized_output = self
             .transaction_processor
@@ -4821,11 +4812,13 @@ impl Bank {
         } = self.load_and_execute_transactions(
             batch,
             max_age,
-            recording_config,
             timings,
-            None,
-            log_messages_bytes_limit,
-            false,
+            TransactionProcessingConfig {
+                account_overrides: None,
+                log_messages_bytes_limit,
+                limit_to_load_programs: false,
+                recording_config,
+            },
         );
 
         let (last_blockhash, lamports_per_signature) =
