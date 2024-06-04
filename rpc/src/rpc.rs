@@ -2383,7 +2383,10 @@ fn encode_account<T: ReadableAccount>(
     data_slice: Option<UiDataSliceConfig>,
 ) -> Result<UiAccount> {
     if (encoding == UiAccountEncoding::Binary || encoding == UiAccountEncoding::Base58)
-        && account.data().len() > MAX_BASE58_BYTES
+        && data_slice
+            .map(|s| min(s.length, account.data().len().saturating_sub(s.offset)))
+            .unwrap_or(account.data().len())
+            > MAX_BASE58_BYTES
     {
         let message = format!("Encoded binary (base 58) data should be less than {MAX_BASE58_BYTES} bytes, please use Base64 encoding.");
         Err(error::Error {
@@ -5728,6 +5731,85 @@ pub mod tests {
             result["value"]["data"], expected,
             "should use data slice if parsing fails"
         );
+    }
+
+    #[test]
+    fn test_encode_account_does_not_throw_when_slice_larger_than_account() {
+        let data = vec![42; 5];
+        let pubkey = Pubkey::new_unique();
+        let account = AccountSharedData::create(42, data, pubkey, false, 0);
+        let result = encode_account(
+            &account,
+            &pubkey,
+            UiAccountEncoding::Base58,
+            Some(UiDataSliceConfig {
+                length: account.data().len() + 1,
+                offset: 0,
+            }),
+        );
+        assert!(result.is_ok());
+    }
+    #[test]
+    #[should_panic(expected = "should be less than 128 bytes")] // If ever `MAX_BASE58_BYTES` changes, the expected error message will need to be updated.
+    fn test_encode_account_throws_when_data_too_large_to_base58_encode() {
+        let data = vec![42; MAX_BASE58_BYTES + 1];
+        let pubkey = Pubkey::new_unique();
+        let account = AccountSharedData::create(42, data, pubkey, false, 0);
+        let _ = encode_account(&account, &pubkey, UiAccountEncoding::Base58, None).unwrap();
+    }
+
+    #[test]
+    fn test_encode_account_does_not_throw_despite_data_too_large_to_base58_encode_because_dataslice_makes_it_fit(
+    ) {
+        let data = vec![42; MAX_BASE58_BYTES + 1];
+        let pubkey = Pubkey::new_unique();
+        let account = AccountSharedData::create(42, data, pubkey, false, 0);
+        let result = encode_account(
+            &account,
+            &pubkey,
+            UiAccountEncoding::Base58,
+            Some(UiDataSliceConfig {
+                length: MAX_BASE58_BYTES,
+                offset: 1,
+            }),
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_encode_account_does_not_throw_despite_dataslice_being_too_large_to_base58_encode_because_account_is_small_enough_to_fit(
+    ) {
+        let data = vec![42; MAX_BASE58_BYTES];
+        let pubkey = Pubkey::new_unique();
+        let account = AccountSharedData::create(42, data, pubkey, false, 0);
+        let result = encode_account(
+            &account,
+            &pubkey,
+            UiAccountEncoding::Base58,
+            Some(UiDataSliceConfig {
+                length: MAX_BASE58_BYTES + 1,
+                offset: 0,
+            }),
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_encode_account_does_not_throw_despite_account_and_dataslice_being_too_large_to_base58_encode_because_their_intersection_fits(
+    ) {
+        let data = vec![42; MAX_BASE58_BYTES + 1];
+        let pubkey = Pubkey::new_unique();
+        let account = AccountSharedData::create(42, data, pubkey, false, 0);
+        let result = encode_account(
+            &account,
+            &pubkey,
+            UiAccountEncoding::Base58,
+            Some(UiDataSliceConfig {
+                length: MAX_BASE58_BYTES + 1,
+                offset: 1,
+            }),
+        );
+        assert!(result.is_ok());
     }
 
     #[test]
