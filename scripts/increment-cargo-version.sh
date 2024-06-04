@@ -121,8 +121,8 @@ newVersion="$MAJOR.$MINOR.$PATCH$SPECIAL"
 
 # Update all the Cargo.toml files
 for Cargo_toml in "${Cargo_tomls[@]}"; do
-  # ignore when version inheritant from workspace (exclude programs/sbf/Cargo.toml)
-  if grep "^version = { workspace = true }" "$Cargo_toml" &>/dev/null && Cargo_toml && ! [[ $Cargo_toml =~ programs/sbf/Cargo.toml ]]; then
+  if ! grep "$currentVersion" "$Cargo_toml"; then
+    echo "$Cargo_toml (skipped)"
     continue
   fi
 
@@ -145,6 +145,16 @@ done
 
 # Update cargo lock files
 scripts/cargo-for-all-lock-files.sh tree >/dev/null
+
+# Only apply related changes
+(
+  shopt -s globstar
+  git diff --unified=0 ./**/Cargo.lock >cargo-lock-patch
+  grep -E '^(diff|index|---|\+\+\+|@@.*@@ name = .*|-version|\+version)' cargo-lock-patch >filtered-cargo-lock-patch
+  git checkout ./**/Cargo.lock
+  git apply --unidiff-zero filtered-cargo-lock-patch
+  rm cargo-lock-patch filtered-cargo-lock-patch
+)
 
 echo "$currentVersion -> $newVersion"
 
