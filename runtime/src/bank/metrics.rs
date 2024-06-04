@@ -223,6 +223,7 @@ pub(crate) fn report_loaded_programs_stats(stats: &ProgramCacheStats, slot: Slot
     let prunes_orphan = stats.prunes_orphan.load(Ordering::Relaxed);
     let prunes_environment = stats.prunes_environment.load(Ordering::Relaxed);
     let empty_entries = stats.empty_entries.load(Ordering::Relaxed);
+    let water_level = stats.water_level.load(Ordering::Relaxed);
     datapoint_info!(
         "loaded-programs-cache-stats",
         ("slot", slot, i64),
@@ -237,6 +238,7 @@ pub(crate) fn report_loaded_programs_stats(stats: &ProgramCacheStats, slot: Slot
         ("prunes_orphan", prunes_orphan, i64),
         ("prunes_environment", prunes_environment, i64),
         ("empty_entries", empty_entries, i64),
+        ("water_level", water_level, i64),
     );
     stats.log();
 }

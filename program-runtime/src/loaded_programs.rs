@@ -229,6 +229,8 @@ pub struct ProgramCacheStats {
     pub prunes_environment: AtomicU64,
     /// a program had no entries because all slot versions got pruned
     pub empty_entries: AtomicU64,
+    /// water level of loaded entries currently cached
+    pub water_level: AtomicU64,
 }
 
 impl ProgramCacheStats {
@@ -247,9 +249,10 @@ impl ProgramCacheStats {
         let prunes_orphan = self.prunes_orphan.load(Ordering::Relaxed);
         let prunes_environment = self.prunes_environment.load(Ordering::Relaxed);
         let empty_entries = self.empty_entries.load(Ordering::Relaxed);
+        let water_level = self.water_level.load(Ordering::Relaxed);
         debug!(
-            "Loaded Programs Cache Stats -- Hits: {}, Misses: {}, Evictions: {}, Reloads: {}, Insertions: {} Lost-Insertions: {}, Replacements: {}, One-Hit-Wonders: {}, Prunes-Orphan: {}, Prunes-Environment: {}, Empty: {}",
-            hits, misses, evictions, reloads, insertions, lost_insertions, replacements, one_hit_wonders, prunes_orphan, prunes_environment, empty_entries
+            "Loaded Programs Cache Stats -- Hits: {}, Misses: {}, Evictions: {}, Reloads: {}, Insertions: {}, Lost-Insertions: {}, Replacements: {}, One-Hit-Wonders: {}, Prunes-Orphan: {}, Prunes-Environment: {}, Empty: {}, Water-Level: {}",
+            hits, misses, evictions, reloads, insertions, lost_insertions, replacements, one_hit_wonders, prunes_orphan, prunes_environment, empty_entries, water_level
         );
         if log_enabled!(log::Level::Trace) && !self.evictions.is_empty() {
             let mut evictions = self.evictions.iter().collect::<Vec<_>>();
@@ -1227,6 +1230,9 @@ impl<FG: ForkGraph> ProgramCache<FG> {
     /// The eviction is performed enough number of times to reduce the cache usage to the given percentage.
     pub fn evict_using_2s_random_selection(&mut self, shrink_to: PercentageInteger, now: Slot) {
         let mut candidates = self.get_flattened_entries(true, true);
+        self.stats
+            .water_level
+            .store(candidates.len() as u64, Ordering::Relaxed);
         let num_to_unload = candidates
             .len()
             .saturating_sub(shrink_to.apply_to(MAX_LOADED_ENTRY_COUNT));
