@@ -2,8 +2,8 @@ use {
     crate::transaction_processing_callback::TransactionProcessingCallback,
     solana_program_runtime::{
         loaded_programs::{
-            ForkGraph, LoadProgramMetrics, ProgramCache, ProgramCacheEntry, ProgramCacheEntryOwner,
-            ProgramCacheEntryType, ProgramRuntimeEnvironment, DELAY_VISIBILITY_SLOT_OFFSET,
+            LoadProgramMetrics, ProgramCacheEntry, ProgramCacheEntryOwner, ProgramCacheEntryType,
+            ProgramRuntimeEnvironment, ProgramRuntimeEnvironments, DELAY_VISIBILITY_SLOT_OFFSET,
         },
         timings::ExecuteDetailsTimings,
     },
@@ -12,7 +12,7 @@ use {
         account_utils::StateMut,
         bpf_loader, bpf_loader_deprecated,
         bpf_loader_upgradeable::UpgradeableLoaderState,
-        clock::{Epoch, Slot},
+        clock::Slot,
         epoch_schedule::EpochSchedule,
         instruction::InstructionError,
         loader_v4::{self, LoaderV4State, LoaderV4Status},
@@ -121,16 +121,14 @@ pub(crate) fn load_program_accounts<CB: TransactionProcessingCallback>(
 /// If the account doesn't exist it returns `None`. If the account does exist, it must be a program
 /// account (belong to one of the program loaders). Returns `Some(InvalidAccountData)` if the program
 /// account is `Closed`, contains invalid data or any of the programdata accounts are invalid.
-pub fn load_program_with_pubkey<CB: TransactionProcessingCallback, FG: ForkGraph>(
+pub fn load_program_with_pubkey<CB: TransactionProcessingCallback>(
     callbacks: &CB,
-    program_cache: &ProgramCache<FG>,
+    environments: &ProgramRuntimeEnvironments,
     pubkey: &Pubkey,
     slot: Slot,
-    effective_epoch: Epoch,
     _epoch_schedule: &EpochSchedule,
     reload: bool,
 ) -> Option<Arc<ProgramCacheEntry>> {
-    let environments = program_cache.get_environments_for_epoch(effective_epoch);
     let mut load_program_metrics = LoadProgramMetrics {
         program_id: pubkey.to_string(),
         ..LoadProgramMetrics::default()
@@ -227,7 +225,7 @@ mod tests {
         super::*,
         crate::transaction_processor::TransactionBatchProcessor,
         solana_program_runtime::{
-            loaded_programs::{BlockRelation, ProgramRuntimeEnvironments},
+            loaded_programs::{BlockRelation, ForkGraph, ProgramRuntimeEnvironments},
             solana_rbpf::program::BuiltinProgram,
         },
         solana_sdk::{
@@ -507,14 +505,12 @@ mod tests {
         let mock_bank = MockBankCallback::default();
         let key = Pubkey::new_unique();
         let batch_processor = TransactionBatchProcessor::<TestForkGraph>::default();
-        let program_cache = batch_processor.program_cache.read().unwrap();
 
         let result = load_program_with_pubkey(
             &mock_bank,
-            &program_cache,
+            &batch_processor.get_environments_for_epoch(50),
             &key,
             500,
-            50,
             &batch_processor.epoch_schedule,
             false,
         );
@@ -533,14 +529,11 @@ mod tests {
             .borrow_mut()
             .insert(key, account_data.clone());
 
-        let program_cache = batch_processor.program_cache.read().unwrap();
-
         let result = load_program_with_pubkey(
             &mock_bank,
-            &program_cache,
+            &batch_processor.get_environments_for_epoch(20),
             &key,
             0, // Slot 0
-            20,
             &batch_processor.epoch_schedule,
             false,
         );
@@ -550,11 +543,7 @@ mod tests {
             ProgramCacheEntryOwner::LoaderV4,
             ProgramCacheEntryType::FailedVerification(
                 batch_processor
-                    .program_cache
-                    .read()
-                    .unwrap()
                     .get_environments_for_epoch(20)
-                    .clone()
                     .program_runtime_v1,
             ),
         );
@@ -573,15 +562,12 @@ mod tests {
             .borrow_mut()
             .insert(key, account_data.clone());
 
-        let program_cache = batch_processor.program_cache.read().unwrap();
-
         // This should return an error
         let result = load_program_with_pubkey(
             &mock_bank,
-            &program_cache,
+            &batch_processor.get_environments_for_epoch(20),
             &key,
             200,
-            20,
             &batch_processor.epoch_schedule,
             false,
         );
@@ -590,11 +576,7 @@ mod tests {
             ProgramCacheEntryOwner::LoaderV2,
             ProgramCacheEntryType::FailedVerification(
                 batch_processor
-                    .program_cache
-                    .read()
-                    .unwrap()
                     .get_environments_for_epoch(20)
-                    .clone()
                     .program_runtime_v1,
             ),
         );
@@ -610,10 +592,9 @@ mod tests {
 
         let result = load_program_with_pubkey(
             &mock_bank,
-            &program_cache,
+            &batch_processor.get_environments_for_epoch(20),
             &key,
             200,
-            20,
             &batch_processor.epoch_schedule,
             false,
         );
@@ -638,7 +619,6 @@ mod tests {
         let key2 = Pubkey::new_unique();
         let mock_bank = MockBankCallback::default();
         let batch_processor = TransactionBatchProcessor::<TestForkGraph>::default();
-        let program_cache = batch_processor.program_cache.read().unwrap();
 
         let mut account_data = AccountSharedData::default();
         account_data.set_owner(bpf_loader_upgradeable::id());
@@ -666,9 +646,8 @@ mod tests {
         // This should return an error
         let result = load_program_with_pubkey(
             &mock_bank,
-            &program_cache,
+            &batch_processor.get_environments_for_epoch(0),
             &key1,
-            0,
             0,
             &batch_processor.epoch_schedule,
             false,
@@ -678,11 +657,7 @@ mod tests {
             ProgramCacheEntryOwner::LoaderV3,
             ProgramCacheEntryType::FailedVerification(
                 batch_processor
-                    .program_cache
-                    .read()
-                    .unwrap()
                     .get_environments_for_epoch(0)
-                    .clone()
                     .program_runtime_v1,
             ),
         );
@@ -708,10 +683,9 @@ mod tests {
 
         let result = load_program_with_pubkey(
             &mock_bank,
-            &program_cache,
+            &batch_processor.get_environments_for_epoch(20),
             &key1,
             200,
-            20,
             &batch_processor.epoch_schedule,
             false,
         );
@@ -740,7 +714,6 @@ mod tests {
         let mut account_data = AccountSharedData::default();
         account_data.set_owner(loader_v4::id());
         let batch_processor = TransactionBatchProcessor::<TestForkGraph>::default();
-        let program_cache = batch_processor.program_cache.read().unwrap();
 
         let loader_data = LoaderV4State {
             slot: 0,
@@ -760,9 +733,8 @@ mod tests {
 
         let result = load_program_with_pubkey(
             &mock_bank,
-            &program_cache,
+            &batch_processor.get_environments_for_epoch(0),
             &key,
-            0,
             0,
             &batch_processor.epoch_schedule,
             false,
@@ -772,11 +744,7 @@ mod tests {
             ProgramCacheEntryOwner::LoaderV4,
             ProgramCacheEntryType::FailedVerification(
                 batch_processor
-                    .program_cache
-                    .read()
-                    .unwrap()
                     .get_environments_for_epoch(0)
-                    .clone()
                     .program_runtime_v1,
             ),
         );
@@ -798,10 +766,9 @@ mod tests {
 
         let result = load_program_with_pubkey(
             &mock_bank,
-            &program_cache,
+            &batch_processor.get_environments_for_epoch(20),
             &key,
             200,
-            20,
             &batch_processor.epoch_schedule,
             false,
         );
@@ -845,15 +812,12 @@ mod tests {
             .borrow_mut()
             .insert(key, account_data.clone());
 
-        let program_cache = batch_processor.program_cache.read().unwrap();
-
         for is_upcoming_env in [false, true] {
             let result = load_program_with_pubkey(
                 &mock_bank,
-                &program_cache,
+                &batch_processor.get_environments_for_epoch(is_upcoming_env as u64),
                 &key,
                 200,
-                is_upcoming_env as u64,
                 &batch_processor.epoch_schedule,
                 false,
             )

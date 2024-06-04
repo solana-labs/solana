@@ -707,7 +707,7 @@ impl ProgramCacheForTxBatch {
         Self {
             entries: HashMap::new(),
             slot,
-            environments: cache.get_environments_for_epoch(epoch).clone(),
+            environments: cache.get_environments_for_epoch(epoch),
             upcoming_environments: cache.get_upcoming_environments_for_epoch(epoch),
             latest_root_epoch: cache.latest_root_epoch,
             hit_max_limit: false,
@@ -805,13 +805,13 @@ impl<FG: ForkGraph> ProgramCache<FG> {
     }
 
     /// Returns the current environments depending on the given epoch
-    pub fn get_environments_for_epoch(&self, epoch: Epoch) -> &ProgramRuntimeEnvironments {
+    pub fn get_environments_for_epoch(&self, epoch: Epoch) -> ProgramRuntimeEnvironments {
         if epoch != self.latest_root_epoch {
             if let Some(upcoming_environments) = self.upcoming_environments.as_ref() {
-                return upcoming_environments;
+                return upcoming_environments.clone();
             }
         }
-        &self.environments
+        self.environments.clone()
     }
 
     /// Returns the upcoming environments depending on the given epoch

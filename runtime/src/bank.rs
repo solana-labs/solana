@@ -6746,13 +6746,14 @@ impl Bank {
         reload: bool,
         effective_epoch: Epoch,
     ) -> Option<Arc<ProgramCacheEntry>> {
-        let program_cache = self.transaction_processor.program_cache.read().unwrap();
+        let environments = self
+            .transaction_processor
+            .get_environments_for_epoch(effective_epoch);
         load_program_with_pubkey(
             self,
-            &program_cache,
+            &environments,
             pubkey,
             self.slot(),
-            effective_epoch,
             self.epoch_schedule(),
             reload,
         )

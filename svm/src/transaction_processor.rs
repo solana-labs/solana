@@ -22,7 +22,7 @@ use {
         invoke_context::{EnvironmentConfig, InvokeContext},
         loaded_programs::{
             ForkGraph, ProgramCache, ProgramCacheEntry, ProgramCacheForTxBatch,
-            ProgramCacheMatchCriteria,
+            ProgramCacheMatchCriteria, ProgramRuntimeEnvironments,
         },
         log_collector::LogCollector,
         sysvar_cache::SysvarCache,
@@ -189,6 +189,14 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
             program_cache: self.program_cache.clone(),
             builtin_program_ids: RwLock::new(self.builtin_program_ids.read().unwrap().clone()),
         }
+    }
+
+    /// Returns the current environments depending on the given epoch
+    pub fn get_environments_for_epoch(&self, epoch: Epoch) -> ProgramRuntimeEnvironments {
+        self.program_cache
+            .read()
+            .unwrap()
+            .get_environments_for_epoch(epoch)
     }
 
     /// Main entrypoint to the SVM.
@@ -416,10 +424,9 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                     // Load, verify and compile one program.
                     let program = load_program_with_pubkey(
                         callback,
-                        &program_cache,
+                        &self.get_environments_for_epoch(self.epoch),
                         &key,
                         self.slot,
-                        self.epoch,
                         &self.epoch_schedule,
                         false,
                     )
@@ -481,17 +488,14 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
             if let Some((key, program_to_recompile)) = program_cache.programs_to_recompile.pop() {
                 let effective_epoch = program_cache.latest_root_epoch.saturating_add(1);
                 drop(program_cache);
-                let program_cache_read = self.program_cache.read().unwrap();
                 if let Some(recompiled) = load_program_with_pubkey(
                     callbacks,
-                    &program_cache_read,
+                    &self.get_environments_for_epoch(effective_epoch),
                     &key,
                     self.slot,
-                    effective_epoch,
                     &self.epoch_schedule,
                     false,
                 ) {
-                    drop(program_cache_read);
                     recompiled
                         .tx_usage_counter
                         .fetch_add(program_to_recompile.tx_usage_counter.load(Relaxed), Relaxed);

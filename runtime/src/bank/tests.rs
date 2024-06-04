@@ -12006,16 +12006,14 @@ fn test_feature_activation_loaded_programs_cache_preparation_phase() {
         .read()
         .unwrap()
         .get_environments_for_epoch(0)
-        .program_runtime_v1
-        .clone();
+        .program_runtime_v1;
     let upcoming_env = bank
         .transaction_processor
         .program_cache
         .read()
         .unwrap()
         .get_environments_for_epoch(1)
-        .program_runtime_v1
-        .clone();
+        .program_runtime_v1;
 
     // Advance the bank to recompile the program.
     {
