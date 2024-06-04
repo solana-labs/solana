@@ -36,9 +36,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: mozilla-actions/sccache-action@v0.0.3
+      - uses: mozilla-actions/sccache-action@v0.0.4
         with:
-          version: "v0.5.4"
+          version: "v0.8.1"
 
       - shell: bash
         run: .github/scripts/cargo-clippy-before-script.sh ${{ runner.os }}
@@ -59,9 +59,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: mozilla-actions/sccache-action@v0.0.3
+      - uses: mozilla-actions/sccache-action@v0.0.4
         with:
-          version: "v0.5.4"
+          version: "v0.8.1"
 
       - shell: bash
         run: .github/scripts/cargo-clippy-before-script.sh ${{ runner.os }}
