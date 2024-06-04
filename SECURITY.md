@@ -103,37 +103,37 @@ _Note: Payments will continue to be paid out in 12-month locked SOL._
 
 
 #### Loss of Funds:
-_**As of 2/1/24:** Max: 25,000 SOL tokens. Min: 6,250 SOL tokens_
+_Max: 25,000 SOL tokens. Min: 6,250 SOL tokens_
 
 * Theft of funds without users signature from any account
 * Theft of funds without users interaction in system, stake, vote programs
 * Theft of funds that requires users signature - creating a vote program that drains the delegated stakes.
 
 #### Consensus/Safety Violations:
-_**As of 2/1/24:** Max: 12,500 SOL tokens. Min: 3,125 SOL tokens_
+_Max: 12,500 SOL tokens. Min: 3,125 SOL tokens_
 
 * Consensus safety violation
 * Tricking a validator to accept an optimistic confirmation or rooted slot without a double vote, etc.
 
 #### Liveness / Loss of Availability:
-_**As of 2/1/24:** Max: 5,000 SOL tokens. Min: 1,250 SOL tokens_
+_Max: 5,000 SOL tokens. Min: 1,250 SOL tokens_
 
 * Whereby consensus halts and requires human intervention
 * Eclipse attacks,
 * Remote attacks that partition the network,
 
 #### DoS Attacks:
-_**As of 2/1/24:** Max: 1,250 SOL tokens. Min: 315 SOL tokens_
+_Max: 1,250 SOL tokens. Min: 315 SOL tokens_
 
 * Remote resource exhaustion via Non-RPC protocols
 
 #### Supply Chain Attacks:
-_**As of 2/1/24:** Max: 1,250 SOL tokens. Min: 315 SOL tokens_
+_Max: 1,250 SOL tokens. Min: 315 SOL tokens_
 
 * Non-social attacks against source code change management, automated testing, release build, release publication and release hosting infrastructure of the monorepo.
 
 #### RPC DoS/Crashes:
-_**As of 2/1/24:** Max: 65 SOL tokens. Min: 20 SOL tokens_
+_Max: 65 SOL tokens. Min: 20 SOL tokens_
 
 * RPC attacks
 
@@ -178,3 +178,4 @@ bi = 2 ^ (R - ri) / ((2^R) - 1)
 ### Payment of Bug Bounties:
 * Bounties are currently awarded on a rolling/weekly basis and paid out within 30 days upon receipt of an invoice.
 * Bug bounties that are paid out in SOL are paid to stake accounts with a lockup expiring 12 months from the date of delivery of SOL.
+* **Note: payment notices need to be sent to ap@solana.org within 90 days of receiving payment advice instructions.** Failure to do so may result in forfeiture of the bug bounty reward.
