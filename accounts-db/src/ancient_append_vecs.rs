@@ -40,6 +40,8 @@ struct PackedAncientStorageTuning {
     ideal_storage_size: NonZeroU64,
     /// true if storages can be randomly shrunk even if they aren't eligible
     can_randomly_shrink: bool,
+    /// limit the max # of output storages to prevent packing from running too long
+    max_resulting_storages: NonZeroU64,
 }
 
 /// info about a storage eligible to be combined into an ancient append vec.
@@ -199,11 +201,11 @@ impl AncientSlotInfos {
             // combined ancient storages is less than the threshold, then
             // we've gone too far, so get rid of this entry and all after it.
             // Every storage after this one is larger.
-            // if we ever get to more than 10 required ancient storages, that is enough to stop for now.
+            // if we ever get to more than `max_resulting_storages` required ancient storages, that is enough to stop for now.
             // It will take a while to create that many. This should be a limit that only affects
             // extreme testing environments.
             if storages_remaining + ancient_storages_required < low_threshold
-                || ancient_storages_required > 10
+                || ancient_storages_required as u64 > u64::from(tuning.max_resulting_storages)
             {
                 self.all_infos.truncate(i);
                 break;
@@ -268,6 +270,7 @@ impl AccountsDb {
             percent_of_alive_shrunk_data: 55,
             ideal_storage_size: NonZeroU64::new(get_ancient_append_vec_capacity()).unwrap(),
             can_randomly_shrink,
+            max_resulting_storages: NonZeroU64::new(10).unwrap(),
         };
 
         let _guard = self.active_stats.activate(ActiveStatItem::SquashAncient);
@@ -2207,6 +2210,7 @@ pub mod tests {
                             ideal_storage_size: NonZeroU64::new(get_ancient_append_vec_capacity())
                                 .unwrap(),
                             can_randomly_shrink,
+                            ..default_tuning()
                         };
                         infos = db.collect_sort_filter_ancient_slots(vec![slot1], &tuning);
                     }
@@ -2385,6 +2389,7 @@ pub mod tests {
                                 )
                                 .unwrap(),
                                 can_randomly_shrink,
+                                ..default_tuning()
                             };
                             db.collect_sort_filter_ancient_slots(slot_vec.clone(), &tuning)
                         }
@@ -2455,6 +2460,7 @@ pub mod tests {
                     // irrelevant since we clear 'shrink_indexes'
                     percent_of_alive_shrunk_data: 0,
                     can_randomly_shrink: false,
+                    ..default_tuning()
                 };
                 match method {
                     TestSmallestCapacity::FilterAncientSlots => {
@@ -2501,6 +2507,7 @@ pub mod tests {
                     // irrelevant since we clear 'shrink_indexes'
                     percent_of_alive_shrunk_data: 0,
                     can_randomly_shrink: false,
+                    ..default_tuning()
                 };
                 match method {
                     TestSmallestCapacity::FilterBySmallestCapacity => {
@@ -2703,6 +2710,7 @@ pub mod tests {
                             ideal_storage_size: NonZeroU64::new(get_ancient_append_vec_capacity())
                                 .unwrap(),
                             can_randomly_shrink,
+                            ..default_tuning()
                         };
                         // note this can sort infos.all_infos
                         db.collect_sort_filter_ancient_slots(slot_vec.clone(), &tuning)
@@ -2742,6 +2750,7 @@ pub mod tests {
             max_ancient_slots: 0,
             ideal_storage_size: NonZeroU64::new(1).unwrap(),
             can_randomly_shrink: false,
+            max_resulting_storages: NonZeroU64::new(10).unwrap(),
         }
     }
 
@@ -2949,6 +2958,7 @@ pub mod tests {
                         ideal_storage_size: NonZeroU64::new(get_ancient_append_vec_capacity())
                             .unwrap(),
                         can_randomly_shrink: false,
+                        ..default_tuning()
                     };
                     match method {
                         TestShouldShrink::FilterAncientSlots => {
@@ -3050,6 +3060,7 @@ pub mod tests {
                     max_ancient_slots,
                     can_randomly_shrink,
                     ideal_storage_size: NonZeroU64::new(get_ancient_append_vec_capacity()).unwrap(),
+                    ..default_tuning()
                 };
                 db.combine_ancient_slots_packed_internal(
                     (0..num_slots).map(|slot| (slot as Slot) + slot1).collect(),
@@ -3130,6 +3141,7 @@ pub mod tests {
             percent_of_alive_shrunk_data: 55,
             ideal_storage_size: NonZeroU64::new(get_ancient_append_vec_capacity()).unwrap(),
             can_randomly_shrink: CAN_RANDOMLY_SHRINK_FALSE,
+            ..default_tuning()
         };
 
         let mut stats_sub = ShrinkStatsSub::default();
@@ -3319,6 +3331,7 @@ pub mod tests {
             percent_of_alive_shrunk_data: 55,
             ideal_storage_size: NonZeroU64::new(1000).unwrap(),
             can_randomly_shrink: false,
+            ..default_tuning()
         };
 
         // nothing to move, so no problem fitting it
