@@ -476,26 +476,52 @@ impl PohRecorder {
         my_pubkey: &Pubkey,
         leader_first_tick_height_including_grace_ticks: u64,
     ) -> bool {
+        // Check if PoH was reset to run immediately
+        if self.start_tick_height + self.grace_ticks
+            == leader_first_tick_height_including_grace_ticks
+        {
+            return true;
+        }
+
+        // Check if we have finished waiting for grace ticks
         let target_tick_height = leader_first_tick_height_including_grace_ticks.saturating_sub(1);
+        if self.tick_height >= target_tick_height {
+            return true;
+        }
+
+        // Check if we ticked to our leader slot and can skip grace ticks
         let ideal_target_tick_height = target_tick_height.saturating_sub(self.grace_ticks);
-        let next_tick_height = self.tick_height.saturating_add(1);
-        let next_slot = self.slot_for_tick_height(next_tick_height);
-        // We've approached target_tick_height OR poh was reset to run immediately
-        // Or, previous leader didn't transmit in any of its leader slots, so ignore grace ticks
-        self.tick_height >= target_tick_height
-            || self.start_tick_height + self.grace_ticks
-                == leader_first_tick_height_including_grace_ticks
-            || (self.tick_height >= ideal_target_tick_height
-                && (self.prev_slot_was_mine(my_pubkey, next_slot) || {
-                    // If we are not reset to a bank by the previous leader, skip grace
-                    // ticks unless there is a pending reset bank and we are configured
-                    // to apply grace ticks when we detect a pending reset bank.
-                    !self.is_same_fork_as_previous_leader(next_slot)
-                        && (!self.is_new_reset_bank_pending(next_slot) || {
-                            self.report_pending_fork_was_detected(next_slot);
-                            !self.delay_leader_block_for_pending_fork
-                        })
-                }))
+        if self.tick_height >= ideal_target_tick_height {
+            let next_tick_height = self.tick_height.saturating_add(1);
+            let next_slot = self.slot_for_tick_height(next_tick_height);
+
+            // If the previous slot was mine, skip grace ticks
+            if self.prev_slot_was_mine(my_pubkey, next_slot) {
+                return true;
+            }
+
+            // If we are not reset to a bank by the previous leader, skip grace
+            // ticks if there isn't a pending reset bank or we aren't configured
+            // to apply grace ticks when we detect a pending reset bank.
+            if !self.is_same_fork_as_previous_leader(next_slot) {
+                // If there is no pending reset bank, skip grace ticks
+                if !self.is_new_reset_bank_pending(next_slot) {
+                    return true;
+                }
+
+                // If we aren't configured to wait for pending forks, skip grace ticks
+                self.report_pending_fork_was_detected(next_slot);
+                if !self.delay_leader_block_for_pending_fork {
+                    return true;
+                }
+            }
+
+            // Wait for grace ticks
+            return false;
+        }
+
+        // Keep ticking
+        false
     }
 
     // Report metrics when poh recorder detects a pending fork that could
