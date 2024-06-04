@@ -114,15 +114,16 @@ mod serde_snapshot_tests {
         let bank_hash_stats = accounts_db.get_bank_hash_stats(slot).unwrap();
         let accounts_delta_hash = accounts_db.get_accounts_delta_hash(slot).unwrap();
         let accounts_hash = accounts_db.get_accounts_hash(slot).unwrap().0;
+        let write_version = accounts_db.write_version.load(Ordering::Acquire);
         serialize_into(
             stream,
             &SerializableAccountsDb {
-                accounts_db,
                 slot,
                 account_storage_entries,
                 bank_hash_stats,
                 accounts_delta_hash,
                 accounts_hash,
+                write_version,
             },
         )
     }

@@ -21,8 +21,8 @@ use {
     log::*,
     regex::Regex,
     solana_accounts_db::{
-        account_storage::AccountStorageMap,
-        accounts_db::{AccountStorageEntry, AccountsDb, AtomicAccountsFileId, BankHashStats},
+        account_storage::{meta::StoredMetaWriteVersion, AccountStorageMap},
+        accounts_db::{AccountStorageEntry, AtomicAccountsFileId, BankHashStats},
         accounts_file::{AccountsFile, AccountsFileError, InternalsForArchive, StorageAccess},
         accounts_hash::{AccountsDeltaHash, AccountsHash},
         epoch_accounts_hash::EpochAccountsHash,
@@ -753,14 +753,13 @@ pub fn serialize_and_archive_snapshot_package(
         accounts_hash,
         epoch_accounts_hash,
         bank_incremental_snapshot_persistence,
-        accounts,
+        write_version,
         enqueued: _,
     } = snapshot_package;
 
     let bank_snapshot_info = serialize_snapshot(
         &snapshot_config.bank_snapshots_dir,
         snapshot_config.snapshot_version,
-        &accounts.accounts_db,
         snapshot_storages.as_slice(),
         status_cache_slot_deltas.as_slice(),
         bank_fields_to_serialize,
@@ -769,6 +768,7 @@ pub fn serialize_and_archive_snapshot_package(
         accounts_hash,
         epoch_accounts_hash,
         bank_incremental_snapshot_persistence.as_ref(),
+        write_version,
     )?;
 
     // now write the full snapshot slot file after serializing so this bank snapshot is loadable
@@ -822,7 +822,6 @@ pub fn serialize_and_archive_snapshot_package(
 fn serialize_snapshot(
     bank_snapshots_dir: impl AsRef<Path>,
     snapshot_version: SnapshotVersion,
-    accounts_db: &AccountsDb,
     snapshot_storages: &[Arc<AccountStorageEntry>],
     slot_deltas: &[BankSlotDelta],
     bank_fields: BankFieldsToSerialize,
@@ -831,6 +830,7 @@ fn serialize_snapshot(
     accounts_hash: AccountsHash,
     epoch_accounts_hash: Option<EpochAccountsHash>,
     bank_incremental_snapshot_persistence: Option<&BankIncrementalSnapshotPersistence>,
+    write_version: StoredMetaWriteVersion,
 ) -> Result<BankSnapshotInfo> {
     let slot = bank_fields.slot;
 
@@ -880,10 +880,10 @@ fn serialize_snapshot(
                 bank_hash_stats,
                 accounts_delta_hash,
                 accounts_hash,
-                accounts_db,
                 &get_storages_to_serialize(snapshot_storages),
                 bank_incremental_snapshot_persistence,
                 epoch_accounts_hash,
+                write_version,
             )?;
             Ok(())
         };

@@ -41,7 +41,7 @@ mod tests {
             io::{BufReader, BufWriter, Cursor},
             ops::RangeFull,
             path::Path,
-            sync::Arc,
+            sync::{atomic::Ordering, Arc},
         },
         tempfile::TempDir,
         test_case::test_case,
@@ -164,10 +164,10 @@ mod tests {
             accounts_db.get_bank_hash_stats(bank2_slot).unwrap(),
             accounts_db.get_accounts_delta_hash(bank2_slot).unwrap(),
             expected_accounts_hash,
-            accounts_db,
             &get_storages_to_serialize(&bank2.get_snapshot_storages(None)),
             expected_incremental_snapshot_persistence.as_ref(),
             expected_epoch_accounts_hash,
+            accounts_db.write_version.load(Ordering::Acquire),
         )
         .unwrap();
         drop(writer);
@@ -469,7 +469,13 @@ mod tests {
 
     #[cfg(RUSTC_WITH_SPECIALIZATION)]
     mod test_bank_serialize {
-        use {super::*, solana_accounts_db::accounts_db::BankHashStats, solana_sdk::clock::Slot};
+        use {
+            super::*,
+            solana_accounts_db::{
+                account_storage::meta::StoredMetaWriteVersion, accounts_db::BankHashStats,
+            },
+            solana_sdk::clock::Slot,
+        };
 
         // This some what long test harness is required to freeze the ABI of
         // Bank's serialization due to versioned nature
@@ -506,10 +512,10 @@ mod tests {
                 BankHashStats::default(),
                 AccountsDeltaHash(Hash::new_unique()),
                 AccountsHash(Hash::new_unique()),
-                &bank.rc.accounts.accounts_db,
                 &get_storages_to_serialize(&snapshot_storages),
                 Some(&incremental_snapshot_persistence),
                 Some(EpochAccountsHash::new(Hash::new_unique())),
+                StoredMetaWriteVersion::default(),
             )
         }
     }

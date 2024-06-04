@@ -6,6 +6,7 @@ use {
     },
     log::*,
     solana_accounts_db::{
+        account_storage::meta::StoredMetaWriteVersion,
         accounts::Accounts,
         accounts_db::{AccountStorageEntry, BankHashStats},
         accounts_hash::{AccountsDeltaHash, AccountsHash, AccountsHashKind},
@@ -15,7 +16,10 @@ use {
         clock::Slot, hash::Hash, rent_collector::RentCollector,
         sysvar::epoch_schedule::EpochSchedule,
     },
-    std::{sync::Arc, time::Instant},
+    std::{
+        sync::{atomic::Ordering, Arc},
+        time::Instant,
+    },
 };
 
 mod compare;
@@ -69,6 +73,7 @@ impl AccountsPackage {
 
         let snapshot_info = {
             let accounts_db = &bank.rc.accounts.accounts_db;
+            let write_version = accounts_db.write_version.load(Ordering::Acquire);
             // SAFETY: There *must* be an accounts delta hash for this slot.
             // Since we only snapshot rooted slots, and we know rooted slots must be frozen,
             // that guarantees this slot will have an accounts delta hash.
@@ -81,6 +86,7 @@ impl AccountsPackage {
                 bank_hash_stats,
                 accounts_delta_hash,
                 epoch_accounts_hash: bank.get_epoch_accounts_hash_to_serialize(),
+                write_version,
             }
         };
 
@@ -174,6 +180,7 @@ impl AccountsPackage {
                 bank_hash_stats: BankHashStats::default(),
                 accounts_delta_hash: AccountsDeltaHash(Hash::default()),
                 epoch_accounts_hash: Option::default(),
+                write_version: StoredMetaWriteVersion::default(),
             }),
             enqueued: Instant::now(),
         }
@@ -197,6 +204,7 @@ pub struct SupplementalSnapshotInfo {
     pub bank_hash_stats: BankHashStats,
     pub accounts_delta_hash: AccountsDeltaHash,
     pub epoch_accounts_hash: Option<EpochAccountsHash>,
+    pub write_version: StoredMetaWriteVersion,
 }
 
 /// Accounts packages are sent to the Accounts Hash Verifier for processing.  There are multiple
@@ -222,8 +230,8 @@ pub struct SnapshotPackage {
     pub accounts_delta_hash: AccountsDeltaHash,
     pub accounts_hash: AccountsHash,
     pub epoch_accounts_hash: Option<EpochAccountsHash>,
+    pub write_version: StoredMetaWriteVersion,
     pub bank_incremental_snapshot_persistence: Option<BankIncrementalSnapshotPersistence>,
-    pub accounts: Arc<Accounts>,
 
     /// The instant this snapshot package was sent to the queue.
     /// Used to track how long snapshot packages wait before handling.
@@ -276,7 +284,7 @@ impl SnapshotPackage {
             accounts_hash,
             epoch_accounts_hash: snapshot_info.epoch_accounts_hash,
             bank_incremental_snapshot_persistence,
-            accounts: accounts_package.accounts,
+            write_version: snapshot_info.write_version,
             enqueued: Instant::now(),
         }
     }
@@ -287,7 +295,6 @@ impl SnapshotPackage {
     /// Create a new SnapshotPackage where basically every field is defaulted.
     /// Only use for tests; many of the fields are invalid!
     pub fn default_for_tests() -> Self {
-        use solana_accounts_db::accounts_db::AccountsDb;
         Self {
             snapshot_kind: SnapshotKind::FullSnapshot,
             slot: Slot::default(),
@@ -301,7 +308,7 @@ impl SnapshotPackage {
             accounts_hash: AccountsHash(Hash::default()),
             epoch_accounts_hash: None,
             bank_incremental_snapshot_persistence: None,
-            accounts: Accounts::new(AccountsDb::default_for_tests().into()).into(),
+            write_version: StoredMetaWriteVersion::default(),
             enqueued: Instant::now(),
         }
     }
