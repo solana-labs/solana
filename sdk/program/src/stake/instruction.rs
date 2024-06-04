@@ -5,6 +5,7 @@ use {
         clock::{Epoch, UnixTimestamp},
         decode_error::DecodeError,
         instruction::{AccountMeta, Instruction},
+        program_error::ProgramError,
         pubkey::Pubkey,
         stake::{
             program::id,
@@ -77,6 +78,12 @@ pub enum StakeError {
 
     #[error("stake action is not permitted while the epoch rewards period is active")]
     EpochRewardsActive,
+}
+
+impl From<StakeError> for ProgramError {
+    fn from(e: StakeError) -> Self {
+        ProgramError::Custom(e as u32)
+    }
 }
 
 impl<E> DecodeError<E> for StakeError {
