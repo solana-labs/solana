@@ -269,6 +269,15 @@ impl VoteSimulator {
             .push((lockout_interval.0, *vote_account_pubkey));
     }
 
+    pub fn clear_lockout_intervals(&mut self, slot: Slot) {
+        self.progress
+            .entry(slot)
+            .or_insert_with(|| ForkProgress::new(Hash::default(), None, None, 0, 0))
+            .fork_stats
+            .lockout_intervals
+            .clear()
+    }
+
     pub fn can_progress_on_fork(
         &mut self,
         my_pubkey: &Pubkey,
