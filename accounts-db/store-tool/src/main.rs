@@ -38,8 +38,8 @@ fn main() {
         println!(
             "{:#0offset_width$x}: {:44}, owner: {:44}, data size: {:data_size_width$}, lamports: {}",
             account.offset(),
-            bs58::encode(account.pubkey()).into_string(),
-            bs58::encode(account.owner()).into_string(),
+            account.pubkey().to_string(),
+            account.owner().to_string(),
             account.data_len(),
             account.lamports(),
         );
