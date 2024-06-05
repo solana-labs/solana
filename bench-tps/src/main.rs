@@ -3,7 +3,6 @@ use {
     log::*,
     solana_bench_tps::{
         bench::{do_bench_tps, max_lamports_for_prioritization},
-        bench_tps_client::BenchTpsClient,
         cli::{self, ExternalClientType},
         keypairs::get_keypairs,
         send_batch::{generate_durable_nonce_accounts, generate_keypairs},
@@ -19,6 +18,7 @@ use {
         system_program,
     },
     solana_streamer::streamer::StakedNodes,
+    solana_tps_client::TpsClient,
     solana_tpu_client::tpu_client::{TpuClient, TpuClientConfig},
     std::{
         collections::HashMap,
@@ -124,7 +124,7 @@ fn create_client(
     websocket_url: &str,
     connection_cache: ConnectionCache,
     commitment_config: CommitmentConfig,
-) -> Arc<dyn BenchTpsClient + Send + Sync> {
+) -> Arc<dyn TpsClient + Send + Sync> {
     match external_client_type {
         ExternalClientType::RpcClient => Arc::new(RpcClient::new_with_commitment(
             json_rpc_url.to_string(),

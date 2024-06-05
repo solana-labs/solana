@@ -102,6 +102,12 @@ pub fn get_clap_app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> A
                 .help("Use UDP when sending transactions."),
         )
         .arg(
+            Arg::with_name("use_tpu_client")
+                .long("use-tpu-client")
+                .global(true)
+                .help("Use TPU client when sending transactions."),
+        )
+        .arg(
             Arg::with_name("no_address_labels")
                 .long("no-address-labels")
                 .global(true)

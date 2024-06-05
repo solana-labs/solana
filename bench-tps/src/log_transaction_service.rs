@@ -2,10 +2,7 @@
 //! and saves log files in csv format.
 
 use {
-    crate::{
-        bench_tps_client::BenchTpsClient,
-        rpc_with_retry_utils::{get_blocks_with_retry, get_slot_with_retry},
-    },
+    crate::rpc_with_retry_utils::{get_blocks_with_retry, get_slot_with_retry},
     chrono::{DateTime, TimeZone, Utc},
     crossbeam_channel::{select, tick, unbounded, Receiver, Sender},
     log::*,
@@ -18,6 +15,7 @@ use {
         signature::Signature,
         slot_history::Slot,
     },
+    solana_tps_client::TpsClient,
     solana_transaction_status::{
         option_serializer::OptionSerializer, EncodedTransactionWithStatusMeta, RewardType,
         TransactionDetails, UiConfirmedBlock, UiTransactionEncoding, UiTransactionStatusMeta,
@@ -52,7 +50,7 @@ pub(crate) fn create_log_transactions_service_and_sender<Client>(
     transaction_data_file: Option<&str>,
 ) -> (Option<LogTransactionService>, Option<SignatureBatchSender>)
 where
-    Client: 'static + BenchTpsClient + Send + Sync + ?Sized,
+    Client: 'static + TpsClient + Send + Sync + ?Sized,
 {
     if data_file_provided(block_data_file, transaction_data_file) {
         let (sender, receiver) = unbounded();
@@ -91,7 +89,7 @@ impl LogTransactionService {
         transaction_data_file: Option<&str>,
     ) -> Self
     where
-        Client: 'static + BenchTpsClient + Send + Sync + ?Sized,
+        Client: 'static + TpsClient + Send + Sync + ?Sized,
     {
         if !data_file_provided(block_data_file, transaction_data_file) {
             panic!("Expect block-data-file or transaction-data-file is specified, must have been verified by callee.");
@@ -120,7 +118,7 @@ impl LogTransactionService {
         mut tx_log_writer: TransactionLogWriter,
         mut block_log_writer: BlockLogWriter,
     ) where
-        Client: 'static + BenchTpsClient + Send + Sync + ?Sized,
+        Client: 'static + TpsClient + Send + Sync + ?Sized,
     {
         // used to request blocks data and only confirmed makes sense in this context.
         let commitment: CommitmentConfig = CommitmentConfig {
@@ -202,7 +200,7 @@ impl LogTransactionService {
         commitment: CommitmentConfig,
     ) -> DateTime<Utc>
     where
-        Client: 'static + BenchTpsClient + Send + Sync + ?Sized,
+        Client: 'static + TpsClient + Send + Sync + ?Sized,
     {
         let rpc_block_config = RpcBlockConfig {
             encoding: Some(UiTransactionEncoding::Base64),

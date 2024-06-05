@@ -5562,6 +5562,7 @@ dependencies = [
  "solana-sdk",
  "solana-streamer",
  "solana-test-validator",
+ "solana-tps-client",
  "solana-tpu-client",
  "solana-transaction-status",
  "solana-version",
@@ -5756,6 +5757,7 @@ dependencies = [
  "solana-logger",
  "solana-program-runtime",
  "solana-pubsub-client",
+ "solana-quic-client",
  "solana-remote-wallet",
  "solana-rpc",
  "solana-rpc-client",
@@ -5764,8 +5766,10 @@ dependencies = [
  "solana-sdk",
  "solana-streamer",
  "solana-test-validator",
+ "solana-tps-client",
  "solana-tpu-client",
  "solana-transaction-status",
+ "solana-udp-client",
  "solana-version",
  "solana-vote-program",
  "solana_rbpf",
@@ -6071,6 +6075,7 @@ dependencies = [
  "solana-runtime",
  "solana-sdk",
  "solana-streamer",
+ "solana-tps-client",
  "solana-tpu-client",
  "solana-version",
 ]
@@ -7421,6 +7426,27 @@ dependencies = [
  "solana-version",
  "spl-associated-token-account",
  "spl-token",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
+name = "solana-tps-client"
+version = "2.0.0"
+dependencies = [
+ "log",
+ "serial_test",
+ "solana-client",
+ "solana-connection-cache",
+ "solana-quic-client",
+ "solana-rpc-client",
+ "solana-rpc-client-api",
+ "solana-runtime",
+ "solana-sdk",
+ "solana-streamer",
+ "solana-test-validator",
+ "solana-tpu-client",
+ "solana-transaction-status",
  "tempfile",
  "thiserror",
 ]

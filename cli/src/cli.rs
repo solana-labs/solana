@@ -12,6 +12,7 @@ use {
     solana_cli_output::{
         display::println_name_value, CliSignature, CliValidatorsSortOrder, OutputFormat,
     },
+    solana_client::connection_cache::ConnectionCache,
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
     solana_rpc_client::rpc_client::RpcClient,
     solana_rpc_client_api::{
@@ -28,13 +29,18 @@ use {
         offchain_message::OffchainMessage,
         pubkey::Pubkey,
         signature::{Signature, Signer, SignerError},
+        signer::keypair::{read_keypair_file, Keypair},
         stake::{instruction::LockupArgs, state::Lockup},
         transaction::{TransactionError, VersionedTransaction},
     },
-    solana_tpu_client::tpu_client::DEFAULT_TPU_ENABLE_UDP,
+    solana_tps_client::{utils::create_connection_cache, TpsClient},
+    solana_tpu_client::tpu_client::{
+        TpuClient, TpuClientConfig, DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_ENABLE_UDP,
+    },
     solana_vote_program::vote_state::VoteAuthorize,
     std::{
-        collections::HashMap, error, io::stdout, rc::Rc, str::FromStr, sync::Arc, time::Duration,
+        collections::HashMap, error, io::stdout, process::exit, rc::Rc, str::FromStr, sync::Arc,
+        time::Duration,
     },
     thiserror::Error,
 };
@@ -42,6 +48,7 @@ use {
 pub const DEFAULT_RPC_TIMEOUT_SECONDS: &str = "30";
 pub const DEFAULT_CONFIRM_TX_TIMEOUT_SECONDS: &str = "5";
 const CHECKED: bool = true;
+pub const DEFAULT_PING_USE_TPU_CLIENT: bool = false;
 
 #[derive(Debug, PartialEq)]
 #[allow(clippy::large_enum_variant)]
@@ -533,6 +540,7 @@ pub struct CliConfig<'a> {
     pub confirm_transaction_initial_timeout: Duration,
     pub address_labels: HashMap<String, String>,
     pub use_quic: bool,
+    pub use_tpu_client: bool,
 }
 
 impl CliConfig<'_> {
@@ -581,6 +589,7 @@ impl Default for CliConfig<'_> {
             ),
             address_labels: HashMap::new(),
             use_quic: !DEFAULT_TPU_ENABLE_UDP,
+            use_tpu_client: DEFAULT_PING_USE_TPU_CLIENT,
         }
     }
 }
@@ -887,7 +896,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             our_localhost_port,
             log,
         } => process_catchup(
-            &rpc_client,
+            &rpc_client.clone(),
             config,
             *node_pubkey,
             node_json_rpc_url.clone(),
@@ -940,16 +949,57 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             blockhash,
             print_timestamp,
             compute_unit_price,
-        } => process_ping(
-            &rpc_client,
-            config,
-            interval,
-            count,
-            timeout,
-            blockhash,
-            *print_timestamp,
-            compute_unit_price.as_ref(),
-        ),
+        } => {
+            let client_dyn: Arc<dyn TpsClient + 'static> = if config.use_tpu_client {
+                let keypair = read_keypair_file(&config.keypair_path).unwrap_or(Keypair::new());
+                let connection_cache = create_connection_cache(
+                    DEFAULT_TPU_CONNECTION_POOL_SIZE,
+                    config.use_quic,
+                    "127.0.0.1".parse().unwrap(),
+                    Some(&keypair),
+                    rpc_client.clone(),
+                );
+                match connection_cache {
+                    ConnectionCache::Udp(cache) => Arc::new(
+                        TpuClient::new_with_connection_cache(
+                            rpc_client.clone(),
+                            &config.websocket_url,
+                            TpuClientConfig::default(),
+                            cache,
+                        )
+                        .unwrap_or_else(|err| {
+                            eprintln!("Could not create TpuClient {err:?}");
+                            exit(1);
+                        }),
+                    ),
+                    ConnectionCache::Quic(cache) => Arc::new(
+                        TpuClient::new_with_connection_cache(
+                            rpc_client.clone(),
+                            &config.websocket_url,
+                            TpuClientConfig::default(),
+                            cache,
+                        )
+                        .unwrap_or_else(|err| {
+                            eprintln!("Could not create TpuClient {err:?}");
+                            exit(1);
+                        }),
+                    ),
+                }
+            } else {
+                rpc_client.clone() as Arc<dyn TpsClient + 'static>
+            };
+            process_ping(
+                &client_dyn,
+                config,
+                interval,
+                count,
+                timeout,
+                blockhash,
+                *print_timestamp,
+                compute_unit_price.as_ref(),
+                &rpc_client,
+            )
+        }
         CliCommand::Rent {
             data_length,
             use_lamports_unit,

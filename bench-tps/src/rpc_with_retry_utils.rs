@@ -1,18 +1,18 @@
 use {
-    crate::bench_tps_client::{BenchTpsClient, Result},
     log::*,
     solana_sdk::{
         clock::DEFAULT_MS_PER_SLOT, commitment_config::CommitmentConfig, slot_history::Slot,
     },
+    solana_tps_client::{TpsClient, TpsClientResult},
     std::{sync::Arc, thread::sleep, time::Duration},
 };
 
 const NUM_RETRY: u64 = 5;
 const RETRY_EVERY_MS: u64 = 4 * DEFAULT_MS_PER_SLOT;
 
-fn call_rpc_with_retry<Func, Data>(f: Func, retry_warning: &str) -> Result<Data>
+fn call_rpc_with_retry<Func, Data>(f: Func, retry_warning: &str) -> TpsClientResult<Data>
 where
-    Func: Fn() -> Result<Data>,
+    Func: Fn() -> TpsClientResult<Data>,
 {
     let mut iretry = 0;
     loop {
@@ -35,9 +35,9 @@ where
 pub(crate) fn get_slot_with_retry<Client>(
     client: &Arc<Client>,
     commitment: CommitmentConfig,
-) -> Result<Slot>
+) -> TpsClientResult<Slot>
 where
-    Client: 'static + BenchTpsClient + Send + Sync + ?Sized,
+    Client: 'static + TpsClient + Send + Sync + ?Sized,
 {
     call_rpc_with_retry(
         || client.get_slot_with_commitment(commitment),
@@ -50,9 +50,9 @@ pub(crate) fn get_blocks_with_retry<Client>(
     start_slot: Slot,
     end_slot: Option<Slot>,
     commitment: CommitmentConfig,
-) -> Result<Vec<Slot>>
+) -> TpsClientResult<Vec<Slot>>
 where
-    Client: 'static + BenchTpsClient + Send + Sync + ?Sized,
+    Client: 'static + TpsClient + Send + Sync + ?Sized,
 {
     call_rpc_with_retry(
         || client.get_blocks_with_commitment(start_slot, end_slot, commitment),

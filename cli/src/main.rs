@@ -212,6 +212,8 @@ pub fn parse_args<'a>(
         !DEFAULT_TPU_ENABLE_UDP
     };
 
+    let use_tpu_client = matches.is_present("use_tpu_client");
+
     Ok((
         CliConfig {
             command,
@@ -231,6 +233,7 @@ pub fn parse_args<'a>(
             confirm_transaction_initial_timeout,
             address_labels,
             use_quic,
+            use_tpu_client,
         },
         signers,
     ))

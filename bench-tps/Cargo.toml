@@ -39,6 +39,7 @@ solana-rpc-client-nonce-utils = { workspace = true }
 solana-runtime = { workspace = true, features = ["dev-context-only-utils"] }
 solana-sdk = { workspace = true }
 solana-streamer = { workspace = true }
+solana-tps-client = { workspace = true }
 solana-tpu-client = { workspace = true }
 solana-transaction-status = { workspace = true }
 solana-version = { workspace = true }

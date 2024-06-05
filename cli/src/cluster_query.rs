@@ -59,6 +59,7 @@ use {
         sysvar::{self, slot_history::SlotHistory, stake_history},
         transaction::Transaction,
     },
+    solana_tps_client::TpsClient,
     solana_transaction_status::{
         EncodableWithMeta, EncodedConfirmedTransactionWithStatusMeta, UiTransactionEncoding,
     },
@@ -1471,7 +1472,7 @@ pub fn process_get_transaction_count(rpc_client: &RpcClient, _config: &CliConfig
 }
 
 pub fn process_ping(
-    rpc_client: &RpcClient,
+    tps_client: &Arc<dyn TpsClient>,
     config: &CliConfig,
     interval: &Duration,
     count: &Option<u64>,
@@ -1479,6 +1480,7 @@ pub fn process_ping(
     fixed_blockhash: &Option<Hash>,
     print_timestamp: bool,
     compute_unit_price: Option<&u64>,
+    rpc_client: &RpcClient,
 ) -> ProcessResult {
     let (signal_sender, signal_receiver) = unbounded();
     ctrlc::set_handler(move || {
@@ -1492,7 +1494,7 @@ pub fn process_ping(
     let mut confirmed_count: u32 = 0;
     let mut confirmation_time: VecDeque<u64> = VecDeque::with_capacity(1024);
 
-    let mut blockhash = rpc_client.get_latest_blockhash()?;
+    let mut blockhash = tps_client.get_latest_blockhash()?;
     let mut lamports: u64 = 0;
     let mut blockhash_acquired = Instant::now();
     let mut blockhash_from_cluster = false;
@@ -1508,7 +1510,7 @@ pub fn process_ping(
         let now = Instant::now();
         if fixed_blockhash.is_none() && now.duration_since(blockhash_acquired).as_secs() > 60 {
             // Fetch a new blockhash every minute
-            let new_blockhash = rpc_client.get_new_latest_blockhash(&blockhash)?;
+            let new_blockhash = tps_client.get_new_latest_blockhash(&blockhash)?;
             blockhash = new_blockhash;
             lamports = 0;
             blockhash_acquired = Instant::now();
@@ -1546,11 +1548,11 @@ pub fn process_ping(
             format!("[{}.{:06}] ", micros / 1_000_000, micros % 1_000_000)
         };
 
-        match rpc_client.send_transaction(&tx) {
+        match tps_client.send_transaction(tx) {
             Ok(signature) => {
                 let transaction_sent = Instant::now();
                 loop {
-                    let signature_status = rpc_client.get_signature_status(&signature)?;
+                    let signature_status = tps_client.get_signature_status(&signature)?;
                     let elapsed_time = Instant::now().duration_since(transaction_sent);
                     if let Some(transaction_status) = signature_status {
                         match transaction_status {

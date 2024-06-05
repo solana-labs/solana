@@ -1,6 +1,5 @@
 use {
     crate::{
-        bench_tps_client::*,
         cli::{ComputeUnitPrice, Config, InstructionPaddingConfig},
         log_transaction_service::{
             create_log_transactions_service_and_sender, SignatureBatchSender, TransactionInfoBatch,
@@ -28,6 +27,7 @@ use {
         timing::{duration_as_ms, duration_as_s, duration_as_us, timestamp},
         transaction::Transaction,
     },
+    solana_tps_client::*,
     spl_instruction_padding::instruction::wrap_instruction,
     std::{
         collections::{HashSet, VecDeque},
@@ -154,7 +154,7 @@ struct TransactionChunkGenerator<'a, 'b, T: ?Sized> {
 
 impl<'a, 'b, T> TransactionChunkGenerator<'a, 'b, T>
 where
-    T: 'static + BenchTpsClient + Send + Sync + ?Sized,
+    T: 'static + TpsClient + Send + Sync + ?Sized,
 {
     fn new(
         client: Arc<T>,
@@ -263,7 +263,7 @@ where
 
 fn wait_for_target_slots_per_epoch<T>(target_slots_per_epoch: u64, client: &Arc<T>)
 where
-    T: 'static + BenchTpsClient + Send + Sync + ?Sized,
+    T: 'static + TpsClient + Send + Sync + ?Sized,
 {
     if target_slots_per_epoch != 0 {
         info!(
@@ -293,7 +293,7 @@ fn create_sampler_thread<T>(
     maxes: &Arc<RwLock<Vec<(String, SampleStats)>>>,
 ) -> JoinHandle<()>
 where
-    T: 'static + BenchTpsClient + Send + Sync + ?Sized,
+    T: 'static + TpsClient + Send + Sync + ?Sized,
 {
     info!("Sampling TPS every {} second...", sample_period);
     let maxes = maxes.clone();
@@ -306,7 +306,7 @@ where
         .unwrap()
 }
 
-fn generate_chunked_transfers<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
+fn generate_chunked_transfers<T: 'static + TpsClient + Send + Sync + ?Sized>(
     recent_blockhash: Arc<RwLock<Hash>>,
     shared_txs: &SharedTransactions,
     shared_tx_active_thread_count: Arc<AtomicIsize>,
@@ -369,7 +369,7 @@ fn create_sender_threads<T>(
     signatures_sender: Option<SignatureBatchSender>,
 ) -> Vec<JoinHandle<()>>
 where
-    T: 'static + BenchTpsClient + Send + Sync + ?Sized,
+    T: 'static + TpsClient + Send + Sync + ?Sized,
 {
     (0..threads)
         .map(|_| {
@@ -404,7 +404,7 @@ pub fn do_bench_tps<T>(
     nonce_keypairs: Option<Vec<Keypair>>,
 ) -> u64
 where
-    T: 'static + BenchTpsClient + Send + Sync + ?Sized,
+    T: 'static + TpsClient + Send + Sync + ?Sized,
 {
     let Config {
         id,
@@ -688,7 +688,7 @@ fn transfer_with_compute_unit_price_and_padding(
     Transaction::new(&[from_keypair], message, recent_blockhash)
 }
 
-fn get_nonce_accounts<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
+fn get_nonce_accounts<T: 'static + TpsClient + Send + Sync + ?Sized>(
     client: &Arc<T>,
     nonce_pubkeys: &[Pubkey],
 ) -> Vec<Option<Account>> {
@@ -707,7 +707,7 @@ fn get_nonce_accounts<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
     }
 }
 
-fn get_nonce_blockhashes<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
+fn get_nonce_blockhashes<T: 'static + TpsClient + Send + Sync + ?Sized>(
     client: &Arc<T>,
     nonce_pubkeys: &[Pubkey],
 ) -> Vec<Hash> {
@@ -789,7 +789,7 @@ fn nonced_transfer_with_padding(
     Transaction::new(&[from_keypair, nonce_authority], message, nonce_hash)
 }
 
-fn generate_nonced_system_txs<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
+fn generate_nonced_system_txs<T: 'static + TpsClient + Send + Sync + ?Sized>(
     client: Arc<T>,
     source: &[&Keypair],
     dest: &VecDeque<&Keypair>,
@@ -848,7 +848,7 @@ fn generate_nonced_system_txs<T: 'static + BenchTpsClient + Send + Sync + ?Sized
     transactions
 }
 
-fn generate_txs<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
+fn generate_txs<T: 'static + TpsClient + Send + Sync + ?Sized>(
     shared_txs: &SharedTransactions,
     blockhash: &Arc<RwLock<Hash>>,
     chunk_generator: &mut TransactionChunkGenerator<'_, '_, T>,
@@ -872,7 +872,7 @@ fn generate_txs<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
     }
 }
 
-fn get_new_latest_blockhash<T: BenchTpsClient + ?Sized>(
+fn get_new_latest_blockhash<T: TpsClient + ?Sized>(
     client: &Arc<T>,
     blockhash: &Hash,
 ) -> Option<Hash> {
@@ -891,7 +891,7 @@ fn get_new_latest_blockhash<T: BenchTpsClient + ?Sized>(
     None
 }
 
-fn poll_blockhash<T: BenchTpsClient + ?Sized>(
+fn poll_blockhash<T: TpsClient + ?Sized>(
     exit_signal: &AtomicBool,
     blockhash: &Arc<RwLock<Hash>>,
     client: &Arc<T>,
@@ -941,7 +941,7 @@ fn poll_blockhash<T: BenchTpsClient + ?Sized>(
     }
 }
 
-fn do_tx_transfers<T: BenchTpsClient + ?Sized>(
+fn do_tx_transfers<T: TpsClient + ?Sized>(
     exit_signal: &AtomicBool,
     shared_txs: &SharedTransactions,
     shared_tx_thread_count: &Arc<AtomicIsize>,
@@ -1110,14 +1110,14 @@ fn compute_and_report_stats(
     );
 }
 
-pub fn generate_and_fund_keypairs<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
+pub fn generate_and_fund_keypairs<T: 'static + TpsClient + Send + Sync + ?Sized>(
     client: Arc<T>,
     funding_key: &Keypair,
     keypair_count: usize,
     lamports_per_account: u64,
     skip_tx_account_data_size: bool,
     enable_padding: bool,
-) -> Result<Vec<Keypair>> {
+) -> TpsClientResult<Vec<Keypair>> {
     let rent = client.get_minimum_balance_for_rent_exemption(0)?;
     let lamports_per_account = lamports_per_account + rent;
 
@@ -1139,7 +1139,7 @@ pub fn generate_and_fund_keypairs<T: 'static + BenchTpsClient + Send + Sync + ?S
     Ok(keypairs)
 }
 
-pub fn fund_keypairs<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
+pub fn fund_keypairs<T: 'static + TpsClient + Send + Sync + ?Sized>(
     client: Arc<T>,
     funding_key: &Keypair,
     keypairs: &[Keypair],
@@ -1147,7 +1147,7 @@ pub fn fund_keypairs<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
     lamports_per_account: u64,
     skip_tx_account_data_size: bool,
     enable_padding: bool,
-) -> Result<()> {
+) -> TpsClientResult<()> {
     let rent = client.get_minimum_balance_for_rent_exemption(0)?;
     info!("Get lamports...");
 
@@ -1200,7 +1200,7 @@ pub fn fund_keypairs<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
                 )
                 .is_err()
             {
-                return Err(BenchTpsError::AirdropFailure);
+                return Err(TpsClientError::AirdropFailure);
             }
         }
         let data_size_limit = (!skip_tx_account_data_size)

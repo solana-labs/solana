@@ -45,7 +45,7 @@ use {
     itertools::Itertools,
     log::*,
     rand::{thread_rng, Rng},
-    solana_bench_tps::{bench::generate_and_fund_keypairs, bench_tps_client::BenchTpsClient},
+    solana_bench_tps::bench::generate_and_fund_keypairs,
     solana_client::{
         connection_cache::ConnectionCache, tpu_client::TpuClientWrapper,
         tpu_connection::TpuConnection,
@@ -71,6 +71,7 @@ use {
         transaction::Transaction,
     },
     solana_streamer::socket::SocketAddrSpace,
+    solana_tps_client::TpsClient,
     solana_tpu_client::tpu_client::DEFAULT_TPU_CONNECTION_POOL_SIZE,
     std::{
         net::{SocketAddr, UdpSocket},
@@ -123,7 +124,7 @@ impl TransactionGenerator {
     /// new accounts, signing accounts. It is `None` only if `valid_signatures==false`.
     /// `client` - structure responsible for providing blockhash.
     ///
-    fn generate<T: 'static + BenchTpsClient + Send + Sync>(
+    fn generate<T: 'static + TpsClient + Send + Sync>(
         &mut self,
         payer: Option<&Keypair>,
         destinations: Option<Vec<&Keypair>>,
@@ -139,7 +140,7 @@ impl TransactionGenerator {
         }
     }
 
-    fn generate_with_blockhash<T: 'static + BenchTpsClient + Send + Sync>(
+    fn generate_with_blockhash<T: 'static + TpsClient + Send + Sync>(
         &mut self,
         payer: &Keypair,
         destinations: Vec<&Keypair>,
@@ -343,7 +344,7 @@ fn create_sender_thread(
     }).unwrap()
 }
 
-fn create_generator_thread<T: 'static + BenchTpsClient + Send + Sync>(
+fn create_generator_thread<T: 'static + TpsClient + Send + Sync>(
     tx_sender: &Sender<TransactionBatchMsg>,
     send_batch_size: usize,
     transaction_generator: &TransactionGenerator,
@@ -542,7 +543,7 @@ fn apply_permutation<'a, T>(permutation: Vec<&usize>, items: &'a [T]) -> Vec<&'a
     res
 }
 
-fn create_payers<T: 'static + BenchTpsClient + Send + Sync>(
+fn create_payers<T: 'static + TpsClient + Send + Sync>(
     valid_blockhash: bool,
     size: usize,
     client: Option<&Arc<T>>,
@@ -581,7 +582,7 @@ fn get_permutation_size(num_signatures: Option<&usize>, num_instructions: Option
     }
 }
 
-fn run_dos_transactions<T: 'static + BenchTpsClient + Send + Sync>(
+fn run_dos_transactions<T: 'static + TpsClient + Send + Sync>(
     target: SocketAddr,
     iterations: usize,
     client: Option<Arc<T>>,
@@ -624,7 +625,7 @@ fn run_dos_transactions<T: 'static + BenchTpsClient + Send + Sync>(
     }
 }
 
-fn run_dos<T: 'static + BenchTpsClient + Send + Sync>(
+fn run_dos<T: 'static + TpsClient + Send + Sync>(
     nodes: &[ContactInfo],
     iterations: usize,
     client: Option<Arc<T>>,
@@ -637,7 +638,7 @@ fn run_dos<T: 'static + BenchTpsClient + Send + Sync>(
         params.tpu_use_quic,
     );
     if params.mode == Mode::Rpc {
-        // creating rpc_client because get_account, get_program_accounts are not implemented for BenchTpsClient
+        // creating rpc_client because get_account, get_program_accounts are not implemented for TpsClient
         let rpc_client =
             get_rpc_client(nodes, params.entrypoint_addr).expect("Failed to get rpc client");
         // existence of data_input is checked at cli level

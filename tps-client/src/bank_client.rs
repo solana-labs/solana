@@ -1,5 +1,5 @@
 use {
-    crate::bench_tps_client::{BenchTpsClient, BenchTpsError, Result},
+    crate::{TpsClient, TpsClientError, TpsClientResult},
     solana_rpc_client_api::config::RpcBlockConfig,
     solana_runtime::bank_client::BankClient,
     solana_sdk::{
@@ -12,47 +12,51 @@ use {
         pubkey::Pubkey,
         signature::Signature,
         slot_history::Slot,
-        transaction::Transaction,
+        transaction::{Result, Transaction},
     },
     solana_transaction_status::UiConfirmedBlock,
 };
 
-impl BenchTpsClient for BankClient {
-    fn send_transaction(&self, transaction: Transaction) -> Result<Signature> {
+impl TpsClient for BankClient {
+    fn send_transaction(&self, transaction: Transaction) -> TpsClientResult<Signature> {
         AsyncClient::async_send_transaction(self, transaction).map_err(|err| err.into())
     }
-    fn send_batch(&self, transactions: Vec<Transaction>) -> Result<()> {
+    fn send_batch(&self, transactions: Vec<Transaction>) -> TpsClientResult<()> {
         AsyncClient::async_send_batch(self, transactions).map_err(|err| err.into())
     }
-    fn get_latest_blockhash(&self) -> Result<Hash> {
+    fn get_latest_blockhash(&self) -> TpsClientResult<Hash> {
         SyncClient::get_latest_blockhash(self).map_err(|err| err.into())
     }
 
     fn get_latest_blockhash_with_commitment(
         &self,
         commitment_config: CommitmentConfig,
-    ) -> Result<(Hash, u64)> {
+    ) -> TpsClientResult<(Hash, u64)> {
         SyncClient::get_latest_blockhash_with_commitment(self, commitment_config)
             .map_err(|err| err.into())
     }
 
-    fn get_transaction_count(&self) -> Result<u64> {
+    fn get_transaction_count(&self) -> TpsClientResult<u64> {
         SyncClient::get_transaction_count(self).map_err(|err| err.into())
+    }
+
+    fn get_signature_status(&self, signature: &Signature) -> TpsClientResult<Option<Result<()>>> {
+        SyncClient::get_signature_status(self, signature).map_err(|err| err.into())
     }
 
     fn get_transaction_count_with_commitment(
         &self,
         commitment_config: CommitmentConfig,
-    ) -> Result<u64> {
+    ) -> TpsClientResult<u64> {
         SyncClient::get_transaction_count_with_commitment(self, commitment_config)
             .map_err(|err| err.into())
     }
 
-    fn get_epoch_info(&self) -> Result<EpochInfo> {
+    fn get_epoch_info(&self) -> TpsClientResult<EpochInfo> {
         SyncClient::get_epoch_info(self).map_err(|err| err.into())
     }
 
-    fn get_balance(&self, pubkey: &Pubkey) -> Result<u64> {
+    fn get_balance(&self, pubkey: &Pubkey) -> TpsClientResult<u64> {
         SyncClient::get_balance(self, pubkey).map_err(|err| err.into())
     }
 
@@ -60,16 +64,16 @@ impl BenchTpsClient for BankClient {
         &self,
         pubkey: &Pubkey,
         commitment_config: CommitmentConfig,
-    ) -> Result<u64> {
+    ) -> TpsClientResult<u64> {
         SyncClient::get_balance_with_commitment(self, pubkey, commitment_config)
             .map_err(|err| err.into())
     }
 
-    fn get_fee_for_message(&self, message: &Message) -> Result<u64> {
+    fn get_fee_for_message(&self, message: &Message) -> TpsClientResult<u64> {
         SyncClient::get_fee_for_message(self, message).map_err(|err| err.into())
     }
 
-    fn get_minimum_balance_for_rent_exemption(&self, data_len: usize) -> Result<u64> {
+    fn get_minimum_balance_for_rent_exemption(&self, data_len: usize) -> TpsClientResult<u64> {
         SyncClient::get_minimum_balance_for_rent_exemption(self, data_len).map_err(|err| err.into())
     }
 
@@ -82,17 +86,17 @@ impl BenchTpsClient for BankClient {
         _pubkey: &Pubkey,
         _lamports: u64,
         _recent_blockhash: &Hash,
-    ) -> Result<Signature> {
+    ) -> TpsClientResult<Signature> {
         // BankClient doesn't support airdrops
-        Err(BenchTpsError::AirdropFailure)
+        Err(TpsClientError::AirdropFailure)
     }
 
-    fn get_account(&self, pubkey: &Pubkey) -> Result<Account> {
+    fn get_account(&self, pubkey: &Pubkey) -> TpsClientResult<Account> {
         SyncClient::get_account(self, pubkey)
             .map_err(|err| err.into())
             .and_then(|account| {
                 account.ok_or_else(|| {
-                    BenchTpsError::Custom(format!("AccountNotFound: pubkey={pubkey}"))
+                    TpsClientError::Custom(format!("AccountNotFound: pubkey={pubkey}"))
                 })
             })
     }
@@ -101,21 +105,24 @@ impl BenchTpsClient for BankClient {
         &self,
         pubkey: &Pubkey,
         commitment_config: CommitmentConfig,
-    ) -> Result<Account> {
+    ) -> TpsClientResult<Account> {
         SyncClient::get_account_with_commitment(self, pubkey, commitment_config)
             .map_err(|err| err.into())
             .and_then(|account| {
                 account.ok_or_else(|| {
-                    BenchTpsError::Custom(format!("AccountNotFound: pubkey={pubkey}"))
+                    TpsClientError::Custom(format!("AccountNotFound: pubkey={pubkey}"))
                 })
             })
     }
 
-    fn get_multiple_accounts(&self, _pubkeys: &[Pubkey]) -> Result<Vec<Option<Account>>> {
+    fn get_multiple_accounts(&self, _pubkeys: &[Pubkey]) -> TpsClientResult<Vec<Option<Account>>> {
         unimplemented!("BankClient doesn't support get_multiple_accounts");
     }
 
-    fn get_slot_with_commitment(&self, commitment_config: CommitmentConfig) -> Result<Slot> {
+    fn get_slot_with_commitment(
+        &self,
+        commitment_config: CommitmentConfig,
+    ) -> TpsClientResult<Slot> {
         SyncClient::get_slot_with_commitment(self, commitment_config).map_err(|err| err.into())
     }
 
@@ -124,7 +131,7 @@ impl BenchTpsClient for BankClient {
         _start_slot: Slot,
         _end_slot: Option<Slot>,
         _commitment_config: CommitmentConfig,
-    ) -> Result<Vec<Slot>> {
+    ) -> TpsClientResult<Vec<Slot>> {
         unimplemented!("BankClient doesn't support get_blocks");
     }
 
@@ -132,7 +139,7 @@ impl BenchTpsClient for BankClient {
         &self,
         _slot: Slot,
         _rpc_block_config: RpcBlockConfig,
-    ) -> Result<UiConfirmedBlock> {
+    ) -> TpsClientResult<UiConfirmedBlock> {
         unimplemented!("BankClient doesn't support get_block_with_config");
     }
 }

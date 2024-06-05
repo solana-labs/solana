@@ -1,11 +1,9 @@
 use {
-    crate::{
-        bench::{fund_keypairs, generate_and_fund_keypairs},
-        bench_tps_client::BenchTpsClient,
-    },
+    crate::bench::{fund_keypairs, generate_and_fund_keypairs},
     log::*,
     solana_genesis::Base64Account,
     solana_sdk::signature::{Keypair, Signer},
+    solana_tps_client::TpsClient,
     std::{collections::HashMap, fs::File, path::Path, process::exit, sync::Arc},
 };
 
@@ -20,7 +18,7 @@ pub fn get_keypairs<T>(
     enable_padding: bool,
 ) -> Vec<Keypair>
 where
-    T: 'static + BenchTpsClient + Send + Sync + ?Sized,
+    T: 'static + TpsClient + Send + Sync + ?Sized,
 {
     if read_from_client_file {
         let path = Path::new(client_ids_and_stake_file);

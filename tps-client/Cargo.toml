@@ -1,0 +1,32 @@
+[package]
+name = "solana-tps-client"
+publish = false
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+log = { workspace = true }
+solana-client = { workspace = true }
+solana-connection-cache = { workspace = true }
+solana-quic-client = { workspace = true }
+solana-rpc-client = { workspace = true }
+solana-rpc-client-api = { workspace = true }
+solana-runtime = { workspace = true }
+solana-sdk = { workspace = true }
+solana-streamer = { workspace = true }
+solana-tpu-client = { workspace = true }
+solana-transaction-status = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+serial_test = { workspace = true }
+solana-runtime = { workspace = true, features = ["dev-context-only-utils"] }
+solana-test-validator = { workspace = true }
+tempfile = { workspace = true }
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

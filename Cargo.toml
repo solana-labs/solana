@@ -107,6 +107,7 @@ members = [
     "test-validator",
     "thin-client",
     "tokens",
+    "tps-client",
     "tpu-client",
     "transaction-dos",
     "transaction-metrics-tracker",
@@ -340,6 +341,7 @@ solana-entry = { path = "entry", version = "=2.0.0" }
 solana-faucet = { path = "faucet", version = "=2.0.0" }
 solana-frozen-abi = { path = "frozen-abi", version = "=2.0.0" }
 solana-frozen-abi-macro = { path = "frozen-abi/macro", version = "=2.0.0" }
+solana-tps-client = { path = "tps-client", version = "=2.0.0" }
 solana-genesis = { path = "genesis", version = "=2.0.0" }
 solana-genesis-utils = { path = "genesis-utils", version = "=2.0.0" }
 agave-geyser-plugin-interface = { path = "geyser-plugin-interface", version = "=2.0.0" }
