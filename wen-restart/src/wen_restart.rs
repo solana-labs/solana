@@ -81,7 +81,6 @@ pub enum WenRestartError {
     Exiting,
     FutureSnapshotExists(Slot, Slot, String),
     GenerateSnapshotWhenOneExists(Slot, String),
-    InvalidLastVoteType(VoteTransaction),
     MalformedLastVotedForkSlotsProtobuf(Option<LastVotedForkSlotsRecord>),
     MissingLastVotedForkSlots,
     MissingFullSnapshot(String),
@@ -132,9 +131,6 @@ impl std::fmt::Display for WenRestartError {
                     f,
                     "Generate snapshot when one exists for slot: {slot} in directory: {directory}",
                 )
-            }
-            WenRestartError::InvalidLastVoteType(vote) => {
-                write!(f, "Invalid last vote type: {:?}", vote)
             }
             WenRestartError::MalformedLastVotedForkSlotsProtobuf(record) => {
                 write!(f, "Malformed last voted fork slots protobuf: {:?}", record)
@@ -1029,24 +1025,20 @@ pub(crate) fn initialize(
                 }
                 None => {
                     // repair and restart option does not work without last voted slot.
-                    if let VoteTransaction::Vote(ref vote) = last_vote {
-                        if let Some(last_vote_slot) = vote.last_voted_slot() {
-                            last_vote_bankhash = vote.hash;
-                            last_voted_fork_slots =
-                                AncestorIterator::new_inclusive(last_vote_slot, &blockstore)
-                                    .take(RestartLastVotedForkSlots::MAX_SLOTS)
-                                    .collect();
-                        } else {
-                            error!("
-                                Cannot find last voted slot in the tower storage, it either means that this node has never \
-                                voted or the tower storage is corrupted. Unfortunately, since WenRestart is a consensus protocol \
-                                depending on each participant to send their last voted fork slots, your validator cannot participate.\
-                                Please check discord for the conclusion of the WenRestart protocol, then generate a snapshot and use \
-                                --wait-for-supermajority to restart the validator.");
-                            return Err(WenRestartError::MissingLastVotedForkSlots.into());
-                        }
+                    if let Some(last_vote_slot) = last_vote.last_voted_slot() {
+                        last_vote_bankhash = last_vote.hash();
+                        last_voted_fork_slots =
+                            AncestorIterator::new_inclusive(last_vote_slot, &blockstore)
+                                .take(RestartLastVotedForkSlots::MAX_SLOTS)
+                                .collect();
                     } else {
-                        return Err(WenRestartError::InvalidLastVoteType(last_vote).into());
+                        error!("
+                            Cannot find last voted slot in the tower storage, it either means that this node has never \
+                            voted or the tower storage is corrupted. Unfortunately, since WenRestart is a consensus protocol \
+                            depending on each participant to send their last voted fork slots, your validator cannot participate.\
+                            Please check discord for the conclusion of the WenRestart protocol, then generate a snapshot and use \
+                            --wait-for-supermajority to restart the validator.");
+                        return Err(WenRestartError::MissingLastVotedForkSlots.into());
                     }
                 }
             }
@@ -1647,18 +1639,13 @@ mod tests {
             prost::DecodeError::new("invalid wire type value: 7")
         );
         remove_file(&test_state.wen_restart_proto_path).unwrap();
-        let invalid_last_vote = VoteTransaction::from(TowerSync::from(vec![(0, 8), (1, 1)]));
-        assert_eq!(
-            initialize(
-                &test_state.wen_restart_proto_path,
-                invalid_last_vote.clone(),
-                test_state.blockstore.clone()
-            )
-            .unwrap_err()
-            .downcast::<WenRestartError>()
-            .unwrap(),
-            WenRestartError::InvalidLastVoteType(invalid_last_vote)
-        );
+        let last_vote = VoteTransaction::from(TowerSync::from(vec![(0, 8), (1, 1)]));
+        assert!(initialize(
+            &test_state.wen_restart_proto_path,
+            last_vote.clone(),
+            test_state.blockstore.clone()
+        )
+        .is_ok());
         let empty_last_vote = VoteTransaction::from(Vote::new(vec![], last_vote_bankhash));
         assert_eq!(
             initialize(
