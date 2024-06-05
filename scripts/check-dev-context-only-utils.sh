@@ -33,6 +33,7 @@ declare tainted_packages=(
   solana-banking-bench
   agave-ledger-tool
   solana-bench-tps
+  solana-store-tool
 )
 
 # convert to comma separeted (ref: https://stackoverflow.com/a/53839433)

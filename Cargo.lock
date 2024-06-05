@@ -7266,10 +7266,9 @@ dependencies = [
 name = "solana-store-tool"
 version = "2.0.0"
 dependencies = [
+ "bs58",
  "clap 2.33.3",
- "log",
  "solana-accounts-db",
- "solana-logger",
  "solana-sdk",
  "solana-version",
 ]

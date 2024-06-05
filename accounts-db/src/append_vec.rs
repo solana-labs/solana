@@ -426,6 +426,14 @@ impl AppendVec {
         })
     }
 
+    /// Opens the AppendVec at `path` for use by `store-tool`
+    #[cfg(feature = "dev-context-only-utils")]
+    pub fn new_for_store_tool(path: impl Into<PathBuf>) -> Result<Self> {
+        let path = path.into();
+        let file_size = std::fs::metadata(&path)?.len();
+        Self::new_from_file_unchecked(path, file_size as usize, StorageAccess::default())
+    }
+
     fn sanitize_layout_and_length(&self) -> (bool, usize) {
         // This discards allocated accounts immediately after check at each loop iteration.
         //

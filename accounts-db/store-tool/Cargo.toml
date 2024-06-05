@@ -10,12 +10,11 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
+bs58 = { workspace = true }
 clap = { workspace = true }
-log = { workspace = true }
-solana-accounts-db = { workspace = true }
-solana-logger = { workspace = true }
+solana-accounts-db = { workspace = true, features = ["dev-context-only-utils"] }
 solana-sdk = { workspace = true }
 solana-version = { workspace = true }
 
-[package.metadata.docs.rs]
-targets = ["x86_64-unknown-linux-gnu"]
+[features]
+dev-context-only-utils = []
