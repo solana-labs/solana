@@ -298,10 +298,7 @@ impl SnapshotRequestHandler {
         accounts_package_kind: AccountsPackageKind,
         exit: &AtomicBool,
     ) -> Result<u64, SnapshotError> {
-        debug!(
-            "handling snapshot request: {:?}, {:?}",
-            snapshot_request, accounts_package_kind
-        );
+        info!("handling snapshot request: {snapshot_request:?}, {accounts_package_kind:?}");
         let mut total_time = Measure::start("snapshot_request_receiver_total_time");
         let SnapshotRequest {
             snapshot_root_bank,
