@@ -1942,6 +1942,7 @@ pub(crate) struct ShrinkAncientStats {
     pub(crate) slots_considered: AtomicU64,
     pub(crate) ancient_scanned: AtomicU64,
     pub(crate) bytes_ancient_created: AtomicU64,
+    pub(crate) many_ref_slots_skipped: AtomicU64,
 }
 
 #[derive(Debug, Default)]
@@ -2229,6 +2230,11 @@ impl ShrinkAncientStats {
             (
                 "bytes_ancient_created",
                 self.bytes_ancient_created.swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "many_ref_slots_skipped",
+                self.many_ref_slots_skipped.swap(0, Ordering::Relaxed),
                 i64
             ),
         );
