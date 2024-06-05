@@ -48,6 +48,7 @@ rustc_version = { workspace = true }
 frozen-abi = [
     "dep:solana-frozen-abi",
     "dep:solana-frozen-abi-macro",
+    "solana-compute-budget/frozen-abi",
     "solana-sdk/frozen-abi",
     "solana-vote-program/frozen-abi",
 ]

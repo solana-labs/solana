@@ -5887,6 +5887,7 @@ dependencies = [
 name = "solana-compute-budget"
 version = "2.0.0"
 dependencies = [
+ "solana-frozen-abi",
  "solana-sdk",
 ]
 
