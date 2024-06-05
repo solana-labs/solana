@@ -33,7 +33,6 @@ use {
     solana_svm::{
         account_loader::{CheckedTransactionDetails, TransactionCheckResult},
         runtime_config::RuntimeConfig,
-        transaction_error_metrics::TransactionErrorMetrics,
         transaction_processing_callback::TransactionProcessingCallback,
         transaction_processor::{
             ExecutionRecordingConfig, TransactionBatchProcessor, TransactionProcessingConfig,
@@ -461,7 +460,6 @@ fn svm_integration() {
     batch_processor.fill_missing_sysvar_cache_entries(&mock_bank);
     register_builtins(&mock_bank, &batch_processor);
 
-    let mut error_counter = TransactionErrorMetrics::default();
     let processing_config = TransactionProcessingConfig {
         recording_config: ExecutionRecordingConfig {
             enable_log_recording: true,
@@ -476,7 +474,6 @@ fn svm_integration() {
         &mock_bank,
         &transactions,
         check_results.as_mut_slice(),
-        &mut error_counter,
         &mut timings,
         &processing_config,
     );

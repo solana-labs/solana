@@ -39,7 +39,6 @@ use {
         account_loader::CheckedTransactionDetails,
         program_loader,
         runtime_config::RuntimeConfig,
-        transaction_error_metrics::TransactionErrorMetrics,
         transaction_processing_callback::TransactionProcessingCallback,
         transaction_processor::{
             ExecutionRecordingConfig, TransactionBatchProcessor, TransactionProcessingConfig,
@@ -280,7 +279,6 @@ fn run_fixture(fixture: InstrFixture, filename: OsString, execute_as_instr: bool
     mock_bank.lamports_per_sginature = lamports_per_signature;
     mock_bank.blockhash = blockhash;
 
-    let mut error_counter = TransactionErrorMetrics::default();
     let recording_config = ExecutionRecordingConfig {
         enable_log_recording: true,
         enable_return_data_recording: true,
@@ -311,7 +309,6 @@ fn run_fixture(fixture: InstrFixture, filename: OsString, execute_as_instr: bool
         &mock_bank,
         &transactions,
         transaction_check.as_mut_slice(),
-        &mut error_counter,
         &mut timings,
         &processor_config,
     );

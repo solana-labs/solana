@@ -57,11 +57,16 @@ use {
 /// A list of log messages emitted during a transaction
 pub type TransactionLogMessages = Vec<String>;
 
+/// The output of the transaction batch processor's
+/// `load_and_execute_sanitized_transactions` method.
 pub struct LoadAndExecuteSanitizedTransactionsOutput {
-    pub loaded_transactions: Vec<TransactionLoadResult>,
+    /// Error metrics for transactions that were processed.
+    pub error_metrics: TransactionErrorMetrics,
     // Vector of results indicating whether a transaction was executed or could not
     // be executed. Note executed transactions can still have failed!
     pub execution_results: Vec<TransactionExecutionResult>,
+    // Vector of loaded transactions from transactions that were processed.
+    pub loaded_transactions: Vec<TransactionLoadResult>,
 }
 
 /// Configuration of the recording capabilities for transaction execution
@@ -205,10 +210,12 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         callbacks: &CB,
         sanitized_txs: &[SanitizedTransaction],
         check_results: &mut [TransactionCheckResult],
-        error_counters: &mut TransactionErrorMetrics,
         timings: &mut ExecuteTimings,
         config: &TransactionProcessingConfig,
     ) -> LoadAndExecuteSanitizedTransactionsOutput {
+        // Initialize metrics.
+        let mut error_metrics = TransactionErrorMetrics::default();
+
         let mut program_cache_time = Measure::start("program_cache");
         let mut program_accounts_map = Self::filter_executable_program_accounts(
             callbacks,
@@ -232,8 +239,9 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
             let execution_results =
                 vec![TransactionExecutionResult::NotExecuted(ERROR); sanitized_txs.len()];
             return LoadAndExecuteSanitizedTransactionsOutput {
-                loaded_transactions,
+                error_metrics,
                 execution_results,
+                loaded_transactions,
             };
         }
         program_cache_time.stop();
@@ -243,7 +251,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
             callbacks,
             sanitized_txs,
             check_results,
-            error_counters,
+            &mut error_metrics,
             &self.fee_structure,
             config.account_overrides,
             &program_cache_for_tx_batch.borrow(),
@@ -286,7 +294,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                         loaded_transaction,
                         compute_budget,
                         timings,
-                        error_counters,
+                        &mut error_metrics,
                         &program_cache_for_tx_batch.borrow(),
                         config,
                     );
@@ -344,8 +352,9 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         timings.saturating_add_in_place(ExecuteTimingType::ExecuteUs, execution_time.as_us());
 
         LoadAndExecuteSanitizedTransactionsOutput {
-            loaded_transactions,
+            error_metrics,
             execution_results,
+            loaded_transactions,
         }
     }
 
@@ -553,7 +562,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         loaded_transaction: &mut LoadedTransaction,
         compute_budget: ComputeBudget,
         timings: &mut ExecuteTimings,
-        error_counters: &mut TransactionErrorMetrics,
+        error_metrics: &mut TransactionErrorMetrics,
         program_cache_for_tx_batch: &ProgramCacheForTxBatch,
         config: &TransactionProcessingConfig,
     ) -> TransactionExecutionResult {
@@ -661,13 +670,13 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                 match err {
                     TransactionError::InvalidRentPayingAccount
                     | TransactionError::InsufficientFundsForRent { .. } => {
-                        error_counters.invalid_rent_paying_account += 1;
+                        error_metrics.invalid_rent_paying_account += 1;
                     }
                     TransactionError::InvalidAccountIndex => {
-                        error_counters.invalid_account_index += 1;
+                        error_metrics.invalid_account_index += 1;
                     }
                     _ => {
-                        error_counters.instruction_error += 1;
+                        error_metrics.instruction_error += 1;
                     }
                 }
                 err

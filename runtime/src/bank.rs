@@ -3703,10 +3703,12 @@ impl Bank {
                 self,
                 sanitized_txs,
                 &mut check_results,
-                &mut error_counters,
                 timings,
                 &processing_config,
             );
+
+        // Accumulate the errors returned by the batch processor.
+        error_counters.accumulate(&sanitized_output.error_metrics);
 
         let mut signature_count = 0;
 
