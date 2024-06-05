@@ -433,7 +433,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                     // Load, verify and compile one program.
                     let program = load_program_with_pubkey(
                         callback,
-                        &self.get_environments_for_epoch(self.epoch),
+                        &program_cache.get_environments_for_epoch(self.epoch),
                         &key,
                         self.slot,
                         &self.epoch_schedule,
