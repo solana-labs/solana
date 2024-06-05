@@ -4451,7 +4451,7 @@ fn test_deny_executable_write() {
         ];
 
         let mut instruction_data = vec![TEST_WRITE_ACCOUNT, 2];
-        instruction_data.extend_from_slice(4usize.to_le_bytes().as_ref());
+        instruction_data.extend_from_slice(3usize.to_le_bytes().as_ref());
         instruction_data.push(42);
         let instruction = Instruction::new_with_bytes(
             invoke_program_id,
