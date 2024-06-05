@@ -198,22 +198,7 @@ fn run_fixture(fixture: InstrFixture, filename: OsString, execute_as_instr: bool
         }
     }
 
-    let fee_payer = Pubkey::new_unique();
-    let Ok(transaction) =
-        transaction_builder.build(Hash::default(), (fee_payer, Signature::new_unique()), false)
-    else {
-        // If we can't build a sanitized transaction,
-        // the output must be a failed instruction as well
-        assert_ne!(output.result, 0);
-        return;
-    };
-
-    let transactions = vec![transaction];
-    let mut transaction_check = vec![Ok(CheckedTransactionDetails {
-        nonce: None,
-        lamports_per_signature: 30,
-    })];
-
+    let mut fee_payer = Pubkey::new_unique();
     let mut mock_bank = MockBankCallback::default();
     {
         let mut account_data_map = mock_bank.account_shared_data.borrow_mut();
@@ -230,8 +215,28 @@ fn run_fixture(fixture: InstrFixture, filename: OsString, execute_as_instr: bool
         }
         let mut account_data = AccountSharedData::default();
         account_data.set_lamports(800000);
+
+        while account_data_map.contains_key(&fee_payer) {
+            // The fee payer must not coincide with any of the previous accounts
+            fee_payer = Pubkey::new_unique();
+        }
         account_data_map.insert(fee_payer, account_data);
     }
+
+    let Ok(transaction) =
+        transaction_builder.build(Hash::default(), (fee_payer, Signature::new_unique()), false)
+    else {
+        // If we can't build a sanitized transaction,
+        // the output must be a failed instruction as well
+        assert_ne!(output.result, 0);
+        return;
+    };
+
+    let transactions = vec![transaction];
+    let mut transaction_check = vec![Ok(CheckedTransactionDetails {
+        nonce: None,
+        lamports_per_signature: 30,
+    })];
 
     let compute_budget = ComputeBudget {
         compute_unit_limit: input.cu_avail,
