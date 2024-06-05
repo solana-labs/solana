@@ -3,9 +3,10 @@
 //! [SHA-256]: https://en.wikipedia.org/wiki/SHA-2
 //! [`Hash`]: struct@Hash
 
+#[cfg(feature = "borsh")]
+use borsh::{BorshDeserialize, BorshSchema, BorshSerialize};
 use {
     crate::{sanitize::Sanitize, wasm_bindgen},
-    borsh::{BorshDeserialize, BorshSchema, BorshSerialize},
     bytemuck::{Pod, Zeroable},
     sha2::{Digest, Sha256},
     std::{convert::TryFrom, fmt, mem, str::FromStr},
@@ -29,12 +30,14 @@ const MAX_BASE58_LEN: usize = 44;
 /// [`Message::hash`]: crate::message::Message::hash
 #[wasm_bindgen]
 #[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+#[cfg_attr(
+    feature = "borsh",
+    derive(BorshSerialize, BorshDeserialize, BorshSchema),
+    borsh(crate = "borsh")
+)]
 #[derive(
     Serialize,
     Deserialize,
-    BorshSerialize,
-    BorshDeserialize,
-    BorshSchema,
     Clone,
     Copy,
     Default,
@@ -46,7 +49,6 @@ const MAX_BASE58_LEN: usize = 44;
     Pod,
     Zeroable,
 )]
-#[borsh(crate = "borsh")]
 #[repr(transparent)]
 pub struct Hash(pub(crate) [u8; HASH_BYTES]);
 

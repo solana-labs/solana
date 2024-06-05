@@ -475,8 +475,11 @@ pub mod alt_bn128;
 pub(crate) mod atomic_u64;
 pub mod big_mod_exp;
 pub mod blake3;
+#[cfg(feature = "borsh")]
 pub mod borsh;
+#[cfg(feature = "borsh")]
 pub mod borsh0_10;
+#[cfg(feature = "borsh")]
 pub mod borsh1;
 pub mod bpf_loader;
 pub mod bpf_loader_deprecated;

@@ -70,6 +70,7 @@ pub(crate) fn read_bool<T: AsRef<[u8]>>(cursor: &mut Cursor<T>) -> Result<bool, 
     }
 }
 
+#[cfg(feature = "borsh")]
 #[cfg(test)]
 mod test {
     use {super::*, rand::Rng, std::fmt::Debug};

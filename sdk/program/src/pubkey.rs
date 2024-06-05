@@ -4,9 +4,10 @@
 
 #[cfg(test)]
 use arbitrary::Arbitrary;
+#[cfg(feature = "borsh")]
+use borsh::{BorshDeserialize, BorshSchema, BorshSerialize};
 use {
     crate::{decode_error::DecodeError, hash::hashv, wasm_bindgen},
-    borsh::{BorshDeserialize, BorshSchema, BorshSerialize},
     bytemuck::{Pod, Zeroable},
     num_derive::{FromPrimitive, ToPrimitive},
     std::{
@@ -70,10 +71,12 @@ impl From<u64> for PubkeyError {
 #[wasm_bindgen]
 #[repr(transparent)]
 #[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+#[cfg_attr(
+    feature = "borsh",
+    derive(BorshSerialize, BorshDeserialize, BorshSchema),
+    borsh(crate = "borsh")
+)]
 #[derive(
-    BorshDeserialize,
-    BorshSchema,
-    BorshSerialize,
     Clone,
     Copy,
     Default,
@@ -87,7 +90,6 @@ impl From<u64> for PubkeyError {
     Serialize,
     Zeroable,
 )]
-#[borsh(crate = "borsh")]
 #[cfg_attr(test, derive(Arbitrary))]
 pub struct Pubkey(pub(crate) [u8; 32]);
 
@@ -675,6 +677,7 @@ impl fmt::Display for Pubkey {
     }
 }
 
+#[cfg(feature = "borsh")]
 impl borsh0_10::de::BorshDeserialize for Pubkey {
     fn deserialize_reader<R: borsh0_10::maybestd::io::Read>(
         reader: &mut R,
@@ -685,6 +688,7 @@ impl borsh0_10::de::BorshDeserialize for Pubkey {
     }
 }
 
+#[cfg(feature = "borsh")]
 macro_rules! impl_borsh_schema {
     ($borsh:ident) => {
         impl $borsh::BorshSchema for Pubkey
@@ -716,8 +720,10 @@ macro_rules! impl_borsh_schema {
         }
     };
 }
+#[cfg(feature = "borsh")]
 impl_borsh_schema!(borsh0_10);
 
+#[cfg(feature = "borsh")]
 macro_rules! impl_borsh_serialize {
     ($borsh:ident) => {
         impl $borsh::ser::BorshSerialize for Pubkey {
@@ -731,6 +737,7 @@ macro_rules! impl_borsh_serialize {
         }
     };
 }
+#[cfg(feature = "borsh")]
 impl_borsh_serialize!(borsh0_10);
 
 #[cfg(test)]
@@ -964,6 +971,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "borsh")]
     fn pubkey_from_seed_by_marker(marker: &[u8]) -> Result<Pubkey, PubkeyError> {
         let key = Pubkey::new_unique();
         let owner = Pubkey::default();
@@ -977,6 +985,7 @@ mod tests {
         Pubkey::create_with_seed(&key, seed, base)
     }
 
+    #[cfg(feature = "borsh")]
     #[test]
     fn test_create_with_seed_rejects_illegal_owner() {
         assert_eq!(

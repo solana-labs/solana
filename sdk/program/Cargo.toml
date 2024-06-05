@@ -14,8 +14,8 @@ rust-version = "1.75.0" # solana platform-tools rust version
 [dependencies]
 bincode = { workspace = true }
 blake3 = { workspace = true, features = ["digest", "traits-preview"] }
-borsh = { workspace = true }
-borsh0-10 = { package = "borsh", version = "0.10.3" }
+borsh = { workspace = true, optional = true }
+borsh0-10 = { package = "borsh", version = "0.10.3", optional = true }
 bs58 = { workspace = true }
 bv = { workspace = true, features = ["serde"] }
 bytemuck = { workspace = true, features = ["derive"] }
@@ -92,5 +92,6 @@ targets = ["x86_64-unknown-linux-gnu"]
 crate-type = ["cdylib", "rlib"]
 
 [features]
-default = []
+default = ["borsh"]
+borsh = ["dep:borsh", "dep:borsh0-10"]
 frozen-abi = ["dep:solana-frozen-abi", "dep:solana-frozen-abi-macro"]

@@ -24,11 +24,9 @@
 //! [sp]: crate::secp256k1_program
 //! [`ecrecover`]: https://docs.soliditylang.org/en/v0.8.14/units-and-global-variables.html?highlight=ecrecover#mathematical-and-cryptographic-functions
 
-use {
-    borsh::{BorshDeserialize, BorshSchema, BorshSerialize},
-    core::convert::TryFrom,
-    thiserror::Error,
-};
+#[cfg(feature = "borsh")]
+use borsh::{BorshDeserialize, BorshSchema, BorshSerialize};
+use {core::convert::TryFrom, thiserror::Error};
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum Secp256k1RecoverError {
@@ -66,10 +64,12 @@ pub const SECP256K1_PUBLIC_KEY_LENGTH: usize = 64;
 
 #[repr(transparent)]
 #[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
-#[derive(
-    BorshSerialize, BorshDeserialize, BorshSchema, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash,
+#[cfg_attr(
+    feature = "borsh",
+    derive(BorshSerialize, BorshDeserialize, BorshSchema),
+    borsh(crate = "borsh")
 )]
-#[borsh(crate = "borsh")]
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct Secp256k1Pubkey(pub [u8; SECP256K1_PUBLIC_KEY_LENGTH]);
 
 impl Secp256k1Pubkey {

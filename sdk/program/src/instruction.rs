@@ -13,10 +13,11 @@
 
 #![allow(clippy::arithmetic_side_effects)]
 
+#[cfg(feature = "borsh")]
+use borsh::BorshSerialize;
 use {
     crate::{pubkey::Pubkey, sanitize::Sanitize, short_vec, wasm_bindgen},
     bincode::serialize,
-    borsh::BorshSerialize,
     serde::Serialize,
     thiserror::Error,
 };
@@ -339,6 +340,7 @@ pub struct Instruction {
 }
 
 impl Instruction {
+    #[cfg(feature = "borsh")]
     /// Create a new instruction from a value, encoded with [`borsh`].
     ///
     /// [`borsh`]: https://docs.rs/borsh/latest/borsh/

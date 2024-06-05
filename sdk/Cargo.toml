@@ -17,6 +17,7 @@ edition = { workspace = true }
 program = []
 
 default = [
+  "borsh",
   "full" # functionality that is not compatible or needed for on-chain programs
 ]
 full = [
@@ -33,6 +34,7 @@ full = [
     "sha3",
     "digest",
 ]
+borsh = ["dep:borsh", "solana-program/borsh"]
 dev-context-only-utils = [
   "qualifier_attr"
 ]
@@ -45,7 +47,7 @@ frozen-abi = [
 [dependencies]
 bincode = { workspace = true }
 bitflags = { workspace = true, features = ["serde"] }
-borsh = { workspace = true }
+borsh = { workspace = true, optional = true }
 bs58 = { workspace = true }
 bytemuck = { workspace = true, features = ["derive"] }
 byteorder = { workspace = true, optional = true }

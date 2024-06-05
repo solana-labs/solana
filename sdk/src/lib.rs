@@ -42,8 +42,8 @@ pub use solana_program::program_stubs;
 // These solana_program imports could be *-imported, but that causes a bunch of
 // confusing duplication in the docs due to a rustdoc bug. #26211
 pub use solana_program::{
-    account_info, address_lookup_table, alt_bn128, big_mod_exp, blake3, borsh, borsh0_10, borsh1,
-    bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable, clock, config, custom_heap_default,
+    account_info, address_lookup_table, alt_bn128, big_mod_exp, blake3, bpf_loader,
+    bpf_loader_deprecated, bpf_loader_upgradeable, clock, config, custom_heap_default,
     custom_panic_default, debug_account_data, declare_deprecated_sysvar_id, declare_sysvar_id,
     decode_error, ed25519_program, epoch_rewards, epoch_schedule, fee_calculator, impl_sysvar_get,
     incinerator, instruction, keccak, lamports, loader_instruction, loader_upgradeable_instruction,
@@ -55,6 +55,8 @@ pub use solana_program::{
 };
 #[allow(deprecated)]
 pub use solana_program::{address_lookup_table_account, sdk_ids};
+#[cfg(feature = "borsh")]
+pub use solana_program::{borsh, borsh0_10, borsh1};
 
 pub mod account;
 pub mod account_utils;

@@ -1,26 +1,19 @@
+#[cfg(feature = "borsh")]
 use borsh::{BorshDeserialize, BorshSchema, BorshSerialize};
 
 /// Additional flags for stake state.
 #[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
-#[derive(
-    Serialize,
-    Deserialize,
-    BorshDeserialize,
-    BorshSchema,
-    BorshSerialize,
-    Copy,
-    PartialEq,
-    Eq,
-    Clone,
-    PartialOrd,
-    Ord,
-    Hash,
-    Debug,
+#[cfg_attr(
+    feature = "borsh",
+    derive(BorshSerialize, BorshDeserialize, BorshSchema),
+    borsh(crate = "borsh")
 )]
-#[borsh(crate = "borsh")]
+#[derive(Serialize, Deserialize, Copy, PartialEq, Eq, Clone, PartialOrd, Ord, Hash, Debug)]
 pub struct StakeFlags {
     bits: u8,
 }
+
+#[cfg(feature = "borsh")]
 impl borsh0_10::de::BorshDeserialize for StakeFlags {
     fn deserialize_reader<R: borsh0_10::maybestd::io::Read>(
         reader: &mut R,
@@ -30,6 +23,8 @@ impl borsh0_10::de::BorshDeserialize for StakeFlags {
         })
     }
 }
+
+#[cfg(feature = "borsh")]
 impl borsh0_10::BorshSchema for StakeFlags {
     fn declaration() -> borsh0_10::schema::Declaration {
         "StakeFlags".to_string()
@@ -55,6 +50,8 @@ impl borsh0_10::BorshSchema for StakeFlags {
         <u8 as borsh0_10::BorshSchema>::add_definitions_recursively(definitions);
     }
 }
+
+#[cfg(feature = "borsh")]
 impl borsh0_10::ser::BorshSerialize for StakeFlags {
     fn serialize<W: borsh0_10::maybestd::io::Write>(
         &self,
