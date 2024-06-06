@@ -22,8 +22,9 @@ The hardware recommendations below are provided as a guide.  Operators are encou
   - 12 cores / 24 threads, or more
   - 2.8GHz base clock speed, or faster
   - SHA extensions instruction support
-    - AMD Gen 3 or newer
-    - Intel Ice Lake or newer
+  - AMD Gen 3 or newer
+  - Intel Ice Lake or newer
+  - Higher clock speed is preferable over more cores
   - AVX2 instruction support (to use official release binaries, self-compile
     otherwise)
   - Support for AVX512f is helpful
@@ -35,6 +36,7 @@ The hardware recommendations below are provided as a guide.  Operators are encou
   - PCIe Gen3 x4 NVME SSD, or better
   - Accounts: 500GB, or larger. High TBW (Total Bytes Written)
   - Ledger: 1TB or larger. High TBW suggested
+  - Snapshots: 250GB or larger. High TBW suggested
   - OS: (Optional) 500GB, or larger. SATA OK
   - The OS may be installed on the ledger disk, though testing has shown better
     performance with the ledger on its own disk
@@ -55,28 +57,18 @@ made.
 - CPU
   - 16 cores / 32 threads, or more
 - RAM
-  - 512 GB or more if `account-index` is used
+  - **1.17** 512 GB or more if an `account-index` is used, 1TB+ for all three [account indexes](https://docs.solanalabs.com/operations/setup-an-rpc-node#account-indexing)
+  - **1.18 or newer** 512 GB or more for all three indexes
 - Disk
   - Consider a larger ledger disk if longer transaction history is required
   - Accounts and ledger should not be stored on the same disk
 
 ## Virtual machines on Cloud Platforms
 
-While you can run a validator on a cloud computing platform, it may not
-be cost-efficient over the long term.
-
-However, it may be convenient to run non-voting api nodes on VM instances for
-your own internal usage. This use case includes exchanges and services built on
-Solana.
-
-In fact, the mainnet-beta validators operated by the team are currently
-(Mar. 2021) run on GCE `n2-standard-32` (32 vCPUs, 128 GB memory) instances with
-2048 GB SSD for operational convenience.
-
-For other cloud platforms, select instance types with similar specs.
-
-Also note that egress internet traffic usage may turn out to be high,
-especially for the case of running staked validators.
+Running a solana node in the cloud requires significantly greater
+operational expertise to achieve stability and performance. Do not
+expect to find sympathetic voices should you chose this route and
+find yourself in need of support.
 
 ## Docker
 
@@ -97,7 +89,7 @@ Prebuilt binaries are available for Linux x86_64 on CPUs supporting AVX2 \(Ubunt
 MacOS or WSL users may build from source.
 
 ## Networking
-Internet service should be at least 1GBbit/s symmetric, commercial. 10GBit/s preferred.
+Internet service should be at least 1GBbit/s symmetric, commercial. 10GBit/s preferred (especially for mainnet-beta).
 
 ### Port Forwarding
 The following ports need to be open to the internet for both inbound and outbound
