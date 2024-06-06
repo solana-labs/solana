@@ -14,10 +14,18 @@ fn main() {
                 .index(1)
                 .takes_value(true)
                 .value_name("PATH")
-                .help("account storage file to open"),
+                .help("Account storage file to open"),
+        )
+        .arg(
+            Arg::with_name("verbose")
+                .short("v")
+                .long("verbose")
+                .takes_value(false)
+                .help("Show additional account information"),
         )
         .get_matches();
 
+    let verbose = matches.is_present("verbose");
     let file = value_t_or_exit!(matches, "file", String);
     let store = AppendVec::new_for_store_tool(&file).unwrap_or_else(|err| {
         eprintln!("failed to open storage file '{file}': {err}");
@@ -35,14 +43,18 @@ fn main() {
     let mut num_accounts = Saturating(0usize);
     let mut stored_accounts_size = Saturating(0);
     store.scan_accounts(|account| {
-        println!(
-            "{:#0offset_width$x}: {:44}, owner: {:44}, data size: {:data_size_width$}, lamports: {}",
-            account.offset(),
-            account.pubkey().to_string(),
-            account.owner().to_string(),
-            account.data_len(),
-            account.lamports(),
-        );
+        if verbose {
+            println!("{account:?}");
+        } else {
+            println!(
+                "{:#0offset_width$x}: {:44}, owner: {:44}, data size: {:data_size_width$}, lamports: {}",
+                account.offset(),
+                account.pubkey().to_string(),
+                account.owner().to_string(),
+                account.data_len(),
+                account.lamports(),
+            );
+        }
         num_accounts += 1;
         stored_accounts_size += account.stored_size();
     });
