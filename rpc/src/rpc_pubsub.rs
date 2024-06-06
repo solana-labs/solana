@@ -610,7 +610,7 @@ mod tests {
         base64::{prelude::BASE64_STANDARD, Engine},
         jsonrpc_core::{IoHandler, Response},
         serial_test::serial,
-        solana_account_decoder::{parse_account_data::parse_account_data, UiAccountEncoding},
+        solana_account_decoder::{parse_account_data::parse_account_data_v2, UiAccountEncoding},
         solana_rpc_client_api::response::{
             ProcessedSignatureResult, ReceivedSignatureResult, RpcSignatureResult, SlotInfo,
         },
@@ -1049,7 +1049,7 @@ mod tests {
             .get_account(&nonce_account.pubkey())
             .unwrap();
         let expected_data = account.data();
-        let expected_data = parse_account_data(
+        let expected_data = parse_account_data_v2(
             &nonce_account.pubkey(),
             &system_program::id(),
             expected_data,

@@ -44,12 +44,13 @@ pub(in crate::parse_token) fn parse_transfer_fee_instruction(
             fee,
         } => {
             check_num_token_accounts(account_indexes, 4)?;
+            let additional_data = SplTokenAdditionalData::with_decimals(decimals);
             let mut value = json!({
                 "source": account_keys[account_indexes[0] as usize].to_string(),
                 "mint": account_keys[account_indexes[1] as usize].to_string(),
                 "destination": account_keys[account_indexes[2] as usize].to_string(),
-                "tokenAmount": token_amount_to_ui_amount(amount, decimals),
-                "feeAmount": token_amount_to_ui_amount(fee, decimals),
+                "tokenAmount": token_amount_to_ui_amount_v2(amount, &additional_data),
+                "feeAmount": token_amount_to_ui_amount_v2(fee, &additional_data),
             });
             let map = value.as_object_mut().unwrap();
             parse_signers(

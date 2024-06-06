@@ -10,7 +10,10 @@ use {
         transfer_hook::*,
     },
     serde_json::{json, Map, Value},
-    solana_account_decoder::parse_token::{token_amount_to_ui_amount, UiAccountState},
+    solana_account_decoder::{
+        parse_account_data::SplTokenAdditionalData,
+        parse_token::{token_amount_to_ui_amount_v2, UiAccountState},
+    },
     solana_sdk::{
         instruction::{AccountMeta, CompiledInstruction, Instruction},
         message::AccountKeys,
@@ -363,11 +366,12 @@ pub fn parse_token(
             }
             TokenInstruction::TransferChecked { amount, decimals } => {
                 check_num_token_accounts(&instruction.accounts, 4)?;
+                let additional_data = SplTokenAdditionalData::with_decimals(decimals);
                 let mut value = json!({
                     "source": account_keys[instruction.accounts[0] as usize].to_string(),
                     "mint": account_keys[instruction.accounts[1] as usize].to_string(),
                     "destination": account_keys[instruction.accounts[2] as usize].to_string(),
-                    "tokenAmount": token_amount_to_ui_amount(amount, decimals),
+                    "tokenAmount": token_amount_to_ui_amount_v2(amount, &additional_data),
                 });
                 let map = value.as_object_mut().unwrap();
                 parse_signers(
@@ -385,11 +389,12 @@ pub fn parse_token(
             }
             TokenInstruction::ApproveChecked { amount, decimals } => {
                 check_num_token_accounts(&instruction.accounts, 4)?;
+                let additional_data = SplTokenAdditionalData::with_decimals(decimals);
                 let mut value = json!({
                     "source": account_keys[instruction.accounts[0] as usize].to_string(),
                     "mint": account_keys[instruction.accounts[1] as usize].to_string(),
                     "delegate": account_keys[instruction.accounts[2] as usize].to_string(),
-                    "tokenAmount": token_amount_to_ui_amount(amount, decimals),
+                    "tokenAmount": token_amount_to_ui_amount_v2(amount, &additional_data),
                 });
                 let map = value.as_object_mut().unwrap();
                 parse_signers(
@@ -407,10 +412,11 @@ pub fn parse_token(
             }
             TokenInstruction::MintToChecked { amount, decimals } => {
                 check_num_token_accounts(&instruction.accounts, 3)?;
+                let additional_data = SplTokenAdditionalData::with_decimals(decimals);
                 let mut value = json!({
                     "mint": account_keys[instruction.accounts[0] as usize].to_string(),
                     "account": account_keys[instruction.accounts[1] as usize].to_string(),
-                    "tokenAmount": token_amount_to_ui_amount(amount, decimals),
+                    "tokenAmount": token_amount_to_ui_amount_v2(amount, &additional_data),
                 });
                 let map = value.as_object_mut().unwrap();
                 parse_signers(
@@ -428,10 +434,11 @@ pub fn parse_token(
             }
             TokenInstruction::BurnChecked { amount, decimals } => {
                 check_num_token_accounts(&instruction.accounts, 3)?;
+                let additional_data = SplTokenAdditionalData::with_decimals(decimals);
                 let mut value = json!({
                     "account": account_keys[instruction.accounts[0] as usize].to_string(),
                     "mint": account_keys[instruction.accounts[1] as usize].to_string(),
-                    "tokenAmount": token_amount_to_ui_amount(amount, decimals),
+                    "tokenAmount": token_amount_to_ui_amount_v2(amount, &additional_data),
                 });
                 let map = value.as_object_mut().unwrap();
                 parse_signers(

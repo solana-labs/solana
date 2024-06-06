@@ -18,7 +18,7 @@ pub mod parse_vote;
 pub mod validator_info;
 
 use {
-    crate::parse_account_data::{parse_account_data, AccountAdditionalData, ParsedAccount},
+    crate::parse_account_data::{parse_account_data_v2, AccountAdditionalDataV2, ParsedAccount},
     base64::{prelude::BASE64_STANDARD, Engine},
     solana_sdk::{
         account::{ReadableAccount, WritableAccount},
@@ -108,7 +108,7 @@ impl UiAccount {
         pubkey: &Pubkey,
         account: &T,
         encoding: UiAccountEncoding,
-        additional_data: Option<AccountAdditionalData>,
+        additional_data: Option<AccountAdditionalDataV2>,
         data_slice_config: Option<UiDataSliceConfig>,
     ) -> Self {
         let space = account.data().len();
@@ -142,7 +142,7 @@ impl UiAccount {
             }
             UiAccountEncoding::JsonParsed => {
                 if let Ok(parsed_data) =
-                    parse_account_data(pubkey, account.owner(), account.data(), additional_data)
+                    parse_account_data_v2(pubkey, account.owner(), account.data(), additional_data)
                 {
                     UiAccountData::Json(parsed_data)
                 } else {

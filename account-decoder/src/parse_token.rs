@@ -1,6 +1,6 @@
 use {
     crate::{
-        parse_account_data::{ParsableAccount, ParseAccountError},
+        parse_account_data::{ParsableAccount, ParseAccountError, SplTokenAdditionalData},
         parse_token_extension::{parse_extension, UiExtension},
         StringAmount, StringDecimals,
     },
@@ -57,12 +57,21 @@ pub fn pubkey_from_spl_token(pubkey: &SplTokenPubkey) -> Pubkey {
     Pubkey::new_from_array(pubkey.to_bytes())
 }
 
+#[deprecated(since = "2.0.0", note = "Use `parse_token_v2` instead")]
 pub fn parse_token(
     data: &[u8],
-    mint_decimals: Option<u8>,
+    decimals: Option<u8>,
+) -> Result<TokenAccountType, ParseAccountError> {
+    let additional_data = decimals.map(SplTokenAdditionalData::with_decimals);
+    parse_token_v2(data, additional_data.as_ref())
+}
+
+pub fn parse_token_v2(
+    data: &[u8],
+    additional_data: Option<&SplTokenAdditionalData>,
 ) -> Result<TokenAccountType, ParseAccountError> {
     if let Ok(account) = StateWithExtensions::<Account>::unpack(data) {
-        let decimals = mint_decimals.ok_or_else(|| {
+        let additional_data = additional_data.as_ref().ok_or_else(|| {
             ParseAccountError::AdditionalDataMissing(
                 "no mint_decimals provided to parse spl-token account".to_string(),
             )
@@ -75,7 +84,7 @@ pub fn parse_token(
         return Ok(TokenAccountType::Account(UiTokenAccount {
             mint: account.base.mint.to_string(),
             owner: account.base.owner.to_string(),
-            token_amount: token_amount_to_ui_amount(account.base.amount, decimals),
+            token_amount: token_amount_to_ui_amount_v2(account.base.amount, additional_data),
             delegate: match account.base.delegate {
                 COption::Some(pubkey) => Some(pubkey.to_string()),
                 COption::None => None,
@@ -83,15 +92,17 @@ pub fn parse_token(
             state: account.base.state.into(),
             is_native: account.base.is_native(),
             rent_exempt_reserve: match account.base.is_native {
-                COption::Some(reserve) => Some(token_amount_to_ui_amount(reserve, decimals)),
+                COption::Some(reserve) => {
+                    Some(token_amount_to_ui_amount_v2(reserve, additional_data))
+                }
                 COption::None => None,
             },
             delegated_amount: if account.base.delegate.is_none() {
                 None
             } else {
-                Some(token_amount_to_ui_amount(
+                Some(token_amount_to_ui_amount_v2(
                     account.base.delegated_amount,
-                    decimals,
+                    additional_data,
                 ))
             },
             close_authority: match account.base.close_authority {
@@ -246,15 +257,38 @@ impl UiTokenAmount {
     }
 }
 
+#[deprecated(since = "2.0.0", note = "Use `token_amount_to_ui_amount_v2` instead")]
 pub fn token_amount_to_ui_amount(amount: u64, decimals: u8) -> UiTokenAmount {
-    let amount_decimals = 10_usize
-        .checked_pow(decimals as u32)
-        .map(|dividend| amount as f64 / dividend as f64);
+    token_amount_to_ui_amount_v2(amount, &SplTokenAdditionalData::with_decimals(decimals))
+}
+
+pub fn token_amount_to_ui_amount_v2(
+    amount: u64,
+    additional_data: &SplTokenAdditionalData,
+) -> UiTokenAmount {
+    let decimals = additional_data.decimals;
+    let (ui_amount, ui_amount_string) = if let Some((interest_bearing_config, unix_timestamp)) =
+        additional_data.interest_bearing_config
+    {
+        let ui_amount_string =
+            interest_bearing_config.amount_to_ui_amount(amount, decimals, unix_timestamp);
+        (
+            ui_amount_string
+                .as_ref()
+                .and_then(|x| f64::from_str(x).ok()),
+            ui_amount_string.unwrap_or("".to_string()),
+        )
+    } else {
+        let ui_amount = 10_usize
+            .checked_pow(decimals as u32)
+            .map(|dividend| amount as f64 / dividend as f64);
+        (ui_amount, real_number_string_trimmed(amount, decimals))
+    };
     UiTokenAmount {
-        ui_amount: amount_decimals,
+        ui_amount,
         decimals,
         amount: amount.to_string(),
-        ui_amount_string: real_number_string_trimmed(amount, decimals),
+        ui_amount_string,
     }
 }
 
@@ -292,11 +326,13 @@ mod test {
         crate::parse_token_extension::{UiMemoTransfer, UiMintCloseAuthority},
         spl_pod::optional_keys::OptionalNonZeroPubkey,
         spl_token_2022::extension::{
-            immutable_owner::ImmutableOwner, memo_transfer::MemoTransfer,
-            mint_close_authority::MintCloseAuthority, BaseStateWithExtensionsMut, ExtensionType,
-            StateWithExtensionsMut,
+            immutable_owner::ImmutableOwner, interest_bearing_mint::InterestBearingConfig,
+            memo_transfer::MemoTransfer, mint_close_authority::MintCloseAuthority,
+            BaseStateWithExtensionsMut, ExtensionType, StateWithExtensionsMut,
         },
     };
+
+    const INT_SECONDS_PER_YEAR: i64 = 6 * 6 * 24 * 36524;
 
     #[test]
     fn test_parse_token() {
@@ -312,9 +348,13 @@ mod test {
         account.close_authority = COption::Some(owner_pubkey);
         Account::pack(account, &mut account_data).unwrap();
 
-        assert!(parse_token(&account_data, None).is_err());
+        assert!(parse_token_v2(&account_data, None).is_err());
         assert_eq!(
-            parse_token(&account_data, Some(2)).unwrap(),
+            parse_token_v2(
+                &account_data,
+                Some(&SplTokenAdditionalData::with_decimals(2))
+            )
+            .unwrap(),
             TokenAccountType::Account(UiTokenAccount {
                 mint: mint_pubkey.to_string(),
                 owner: owner_pubkey.to_string(),
@@ -344,7 +384,7 @@ mod test {
         Mint::pack(mint, &mut mint_data).unwrap();
 
         assert_eq!(
-            parse_token(&mint_data, None).unwrap(),
+            parse_token_v2(&mint_data, None).unwrap(),
             TokenAccountType::Mint(UiMint {
                 mint_authority: Some(owner_pubkey.to_string()),
                 supply: 42.to_string(),
@@ -371,7 +411,7 @@ mod test {
         Multisig::pack(multisig, &mut multisig_data).unwrap();
 
         assert_eq!(
-            parse_token(&multisig_data, None).unwrap(),
+            parse_token_v2(&multisig_data, None).unwrap(),
             TokenAccountType::Multisig(UiMultisig {
                 num_required_signers: 2,
                 num_valid_signers: 3,
@@ -385,7 +425,7 @@ mod test {
         );
 
         let bad_data = vec![0; 4];
-        assert!(parse_token(&bad_data, None).is_err());
+        assert!(parse_token_v2(&bad_data, None).is_err());
     }
 
     #[test]
@@ -408,7 +448,8 @@ mod test {
     fn test_ui_token_amount_real_string() {
         assert_eq!(&real_number_string(1, 0), "1");
         assert_eq!(&real_number_string_trimmed(1, 0), "1");
-        let token_amount = token_amount_to_ui_amount(1, 0);
+        let token_amount =
+            token_amount_to_ui_amount_v2(1, &SplTokenAdditionalData::with_decimals(0));
         assert_eq!(
             token_amount.ui_amount_string,
             real_number_string_trimmed(1, 0)
@@ -416,7 +457,8 @@ mod test {
         assert_eq!(token_amount.ui_amount, Some(1.0));
         assert_eq!(&real_number_string(10, 0), "10");
         assert_eq!(&real_number_string_trimmed(10, 0), "10");
-        let token_amount = token_amount_to_ui_amount(10, 0);
+        let token_amount =
+            token_amount_to_ui_amount_v2(10, &SplTokenAdditionalData::with_decimals(0));
         assert_eq!(
             token_amount.ui_amount_string,
             real_number_string_trimmed(10, 0)
@@ -424,7 +466,8 @@ mod test {
         assert_eq!(token_amount.ui_amount, Some(10.0));
         assert_eq!(&real_number_string(1, 9), "0.000000001");
         assert_eq!(&real_number_string_trimmed(1, 9), "0.000000001");
-        let token_amount = token_amount_to_ui_amount(1, 9);
+        let token_amount =
+            token_amount_to_ui_amount_v2(1, &SplTokenAdditionalData::with_decimals(9));
         assert_eq!(
             token_amount.ui_amount_string,
             real_number_string_trimmed(1, 9)
@@ -432,7 +475,8 @@ mod test {
         assert_eq!(token_amount.ui_amount, Some(0.000000001));
         assert_eq!(&real_number_string(1_000_000_000, 9), "1.000000000");
         assert_eq!(&real_number_string_trimmed(1_000_000_000, 9), "1");
-        let token_amount = token_amount_to_ui_amount(1_000_000_000, 9);
+        let token_amount =
+            token_amount_to_ui_amount_v2(1_000_000_000, &SplTokenAdditionalData::with_decimals(9));
         assert_eq!(
             token_amount.ui_amount_string,
             real_number_string_trimmed(1_000_000_000, 9)
@@ -440,7 +484,8 @@ mod test {
         assert_eq!(token_amount.ui_amount, Some(1.0));
         assert_eq!(&real_number_string(1_234_567_890, 3), "1234567.890");
         assert_eq!(&real_number_string_trimmed(1_234_567_890, 3), "1234567.89");
-        let token_amount = token_amount_to_ui_amount(1_234_567_890, 3);
+        let token_amount =
+            token_amount_to_ui_amount_v2(1_234_567_890, &SplTokenAdditionalData::with_decimals(3));
         assert_eq!(
             token_amount.ui_amount_string,
             real_number_string_trimmed(1_234_567_890, 3)
@@ -454,7 +499,8 @@ mod test {
             &real_number_string_trimmed(1_234_567_890, 25),
             "0.000000000000000123456789"
         );
-        let token_amount = token_amount_to_ui_amount(1_234_567_890, 20);
+        let token_amount =
+            token_amount_to_ui_amount_v2(1_234_567_890, &SplTokenAdditionalData::with_decimals(20));
         assert_eq!(
             token_amount.ui_amount_string,
             real_number_string_trimmed(1_234_567_890, 20)
@@ -463,10 +509,49 @@ mod test {
     }
 
     #[test]
+    fn test_ui_token_amount_with_interest() {
+        // constant 5%
+        let config = InterestBearingConfig {
+            initialization_timestamp: 0.into(),
+            pre_update_average_rate: 500.into(),
+            last_update_timestamp: INT_SECONDS_PER_YEAR.into(),
+            current_rate: 500.into(),
+            ..Default::default()
+        };
+        let additional_data = SplTokenAdditionalData {
+            decimals: 0,
+            interest_bearing_config: Some((config, INT_SECONDS_PER_YEAR)),
+        };
+        let token_amount = token_amount_to_ui_amount_v2(1, &additional_data);
+        assert_eq!(token_amount.ui_amount_string, "1.0512710963760241");
+        assert!((token_amount.ui_amount.unwrap() - 1.0512710963760241f64).abs() < f64::EPSILON);
+        let token_amount = token_amount_to_ui_amount_v2(10, &additional_data);
+        assert_eq!(token_amount.ui_amount_string, "10.512710963760242");
+        assert!((token_amount.ui_amount.unwrap() - 10.512710963760241f64).abs() < f64::EPSILON);
+
+        // huge case
+        let config = InterestBearingConfig {
+            initialization_timestamp: 0.into(),
+            pre_update_average_rate: 32767.into(),
+            last_update_timestamp: 0.into(),
+            current_rate: 32767.into(),
+            ..Default::default()
+        };
+        let additional_data = SplTokenAdditionalData {
+            decimals: 0,
+            interest_bearing_config: Some((config, INT_SECONDS_PER_YEAR * 1_000)),
+        };
+        let token_amount = token_amount_to_ui_amount_v2(u64::MAX, &additional_data);
+        assert_eq!(token_amount.ui_amount, Some(f64::INFINITY));
+        assert_eq!(token_amount.ui_amount_string, "inf");
+    }
+
+    #[test]
     fn test_ui_token_amount_real_string_zero() {
         assert_eq!(&real_number_string(0, 0), "0");
         assert_eq!(&real_number_string_trimmed(0, 0), "0");
-        let token_amount = token_amount_to_ui_amount(0, 0);
+        let token_amount =
+            token_amount_to_ui_amount_v2(0, &SplTokenAdditionalData::with_decimals(0));
         assert_eq!(
             token_amount.ui_amount_string,
             real_number_string_trimmed(0, 0)
@@ -474,7 +559,8 @@ mod test {
         assert_eq!(token_amount.ui_amount, Some(0.0));
         assert_eq!(&real_number_string(0, 9), "0.000000000");
         assert_eq!(&real_number_string_trimmed(0, 9), "0");
-        let token_amount = token_amount_to_ui_amount(0, 9);
+        let token_amount =
+            token_amount_to_ui_amount_v2(0, &SplTokenAdditionalData::with_decimals(9));
         assert_eq!(
             token_amount.ui_amount_string,
             real_number_string_trimmed(0, 9)
@@ -482,7 +568,8 @@ mod test {
         assert_eq!(token_amount.ui_amount, Some(0.0));
         assert_eq!(&real_number_string(0, 25), "0.0000000000000000000000000");
         assert_eq!(&real_number_string_trimmed(0, 25), "0");
-        let token_amount = token_amount_to_ui_amount(0, 20);
+        let token_amount =
+            token_amount_to_ui_amount_v2(0, &SplTokenAdditionalData::with_decimals(20));
         assert_eq!(
             token_amount.ui_amount_string,
             real_number_string_trimmed(0, 20)
@@ -518,9 +605,13 @@ mod test {
         account_state.pack_base();
         account_state.init_account_type().unwrap();
 
-        assert!(parse_token(&account_data, None).is_err());
+        assert!(parse_token_v2(&account_data, None).is_err());
         assert_eq!(
-            parse_token(&account_data, Some(2)).unwrap(),
+            parse_token_v2(
+                &account_data,
+                Some(&SplTokenAdditionalData::with_decimals(2))
+            )
+            .unwrap(),
             TokenAccountType::Account(UiTokenAccount {
                 mint: mint_pubkey.to_string(),
                 owner: owner_pubkey.to_string(),
@@ -554,9 +645,13 @@ mod test {
         let memo_transfer = account_state.init_extension::<MemoTransfer>(true).unwrap();
         memo_transfer.require_incoming_transfer_memos = true.into();
 
-        assert!(parse_token(&account_data, None).is_err());
+        assert!(parse_token_v2(&account_data, None).is_err());
         assert_eq!(
-            parse_token(&account_data, Some(2)).unwrap(),
+            parse_token_v2(
+                &account_data,
+                Some(&SplTokenAdditionalData::with_decimals(2))
+            )
+            .unwrap(),
             TokenAccountType::Account(UiTokenAccount {
                 mint: mint_pubkey.to_string(),
                 owner: owner_pubkey.to_string(),
@@ -604,7 +699,7 @@ mod test {
         mint_state.init_account_type().unwrap();
 
         assert_eq!(
-            parse_token(&mint_data, None).unwrap(),
+            parse_token_v2(&mint_data, None).unwrap(),
             TokenAccountType::Mint(UiMint {
                 mint_authority: Some(owner_pubkey.to_string()),
                 supply: 42.to_string(),
@@ -630,7 +725,7 @@ mod test {
         mint_state.init_account_type().unwrap();
 
         assert_eq!(
-            parse_token(&mint_data, None).unwrap(),
+            parse_token_v2(&mint_data, None).unwrap(),
             TokenAccountType::Mint(UiMint {
                 mint_authority: Some(owner_pubkey.to_string()),
                 supply: 42.to_string(),
