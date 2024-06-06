@@ -26,15 +26,6 @@ pub(super) struct ReceiveResults {
     pub last_tick_height: u64,
 }
 
-#[derive(Clone)]
-pub struct UnfinishedSlotInfo {
-    pub(super) chained_merkle_root: Hash,
-    pub next_shred_index: u32,
-    pub(crate) next_code_index: u32,
-    pub slot: Slot,
-    pub parent: Slot,
-}
-
 pub(super) fn recv_slot_entries(receiver: &Receiver<WorkingBankEntry>) -> Result<ReceiveResults> {
     let target_serialized_batch_byte_count: u64 =
         32 * ShredData::capacity(/*merkle_proof_size*/ None).unwrap() as u64;
