@@ -716,11 +716,14 @@ impl Accounts {
                 TransactionExecutionResult::NotExecuted(_) => continue,
             };
 
-            let maybe_nonce = match (execution_status, &loaded_transaction.nonce) {
-                (Ok(_), _) => None, // Success, don't do any additional nonce processing
-                (Err(_), Some(nonce)) => {
-                    Some((nonce, true /* rollback */))
-                }
+            enum AccountCollectionMode<'a> {
+                Normal,
+                FailedWithNonce { nonce: &'a NonceFull },
+            }
+
+            let collection_mode = match (execution_status, &loaded_transaction.nonce) {
+                (Ok(_), _) => AccountCollectionMode::Normal,
+                (Err(_), Some(nonce)) => AccountCollectionMode::FailedWithNonce { nonce },
                 (Err(_), None) => {
                     // Fees for failed transactions which don't use durable nonces are
                     // deducted in Bank::filter_program_errors_and_collect_fee
@@ -750,18 +753,25 @@ impl Accounts {
                 .filter(|(i, _)| is_storable_account(message, *i))
             {
                 if message.is_writable(i) {
-                    let is_fee_payer = i == 0;
-                    let is_nonce_account = prepare_if_nonce_account(
-                        address,
-                        account,
-                        execution_status,
-                        is_fee_payer,
-                        maybe_nonce,
-                        durable_nonce,
-                        lamports_per_signature,
-                    );
+                    let should_collect_account = match collection_mode {
+                        AccountCollectionMode::Normal => true,
+                        AccountCollectionMode::FailedWithNonce { nonce } => {
+                            let is_fee_payer = i == 0;
+                            let is_nonce_account = address == nonce.address();
+                            post_process_failed_nonce(
+                                account,
+                                is_fee_payer,
+                                is_nonce_account,
+                                nonce,
+                                durable_nonce,
+                                lamports_per_signature,
+                            );
 
-                    if execution_status.is_ok() || is_nonce_account || is_fee_payer {
+                            is_fee_payer || is_nonce_account
+                        }
+                    };
+
+                    if should_collect_account {
                         // Add to the accounts to store
                         accounts.push((&*address, &*account));
                         transactions.push(Some(tx));
@@ -773,56 +783,41 @@ impl Accounts {
     }
 }
 
-fn prepare_if_nonce_account(
-    address: &Pubkey,
+fn post_process_failed_nonce(
     account: &mut AccountSharedData,
-    execution_result: &Result<()>,
     is_fee_payer: bool,
-    maybe_nonce: Option<(&NonceFull, bool)>,
+    is_nonce_account: bool,
+    nonce: &NonceFull,
     &durable_nonce: &DurableNonce,
     lamports_per_signature: u64,
-) -> bool {
-    if let Some((nonce, rollback)) = maybe_nonce {
-        if address == nonce.address() {
-            if rollback {
-                // The transaction failed which would normally drop the account
-                // processing changes, since this account is now being included
-                // in the accounts written back to the db, roll it back to
-                // pre-processing state.
-                *account = nonce.account().clone();
-            }
+) {
+    if is_nonce_account {
+        // The transaction failed which would normally drop the account
+        // processing changes, since this account is now being included
+        // in the accounts written back to the db, roll it back to
+        // pre-processing state.
+        *account = nonce.account().clone();
 
-            // Advance the stored blockhash to prevent fee theft by someone
-            // replaying nonce transactions that have failed with an
-            // `InstructionError`.
-            //
-            // Since we know we are dealing with a valid nonce account,
-            // unwrap is safe here
-            let nonce_versions = StateMut::<NonceVersions>::state(nonce.account()).unwrap();
-            if let NonceState::Initialized(ref data) = nonce_versions.state() {
-                let nonce_state = NonceState::new_initialized(
-                    &data.authority,
-                    durable_nonce,
-                    lamports_per_signature,
-                );
-                let nonce_versions = NonceVersions::new(nonce_state);
-                account.set_state(&nonce_versions).unwrap();
-            }
-            true
-        } else {
-            if execution_result.is_err() && is_fee_payer {
-                if let Some(fee_payer_account) = nonce.fee_payer_account() {
-                    // Instruction error and fee-payer for this nonce tx is not
-                    // the nonce account itself, rollback the fee payer to the
-                    // fee-paid original state.
-                    *account = fee_payer_account.clone();
-                }
-            }
-
-            false
+        // Advance the stored blockhash to prevent fee theft by someone
+        // replaying nonce transactions that have failed with an
+        // `InstructionError`.
+        //
+        // Since we know we are dealing with a valid nonce account,
+        // unwrap is safe here
+        let nonce_versions = StateMut::<NonceVersions>::state(account).unwrap();
+        if let NonceState::Initialized(ref data) = nonce_versions.state() {
+            let nonce_state =
+                NonceState::new_initialized(&data.authority, durable_nonce, lamports_per_signature);
+            let nonce_versions = NonceVersions::new(nonce_state);
+            account.set_state(&nonce_versions).unwrap();
         }
-    } else {
-        false
+    } else if is_fee_payer {
+        if let Some(fee_payer_account) = nonce.fee_payer_account() {
+            // Instruction error and fee-payer for this nonce tx is not
+            // the nonce account itself, rollback the fee payer to the
+            // fee-paid original state.
+            *account = fee_payer_account.clone();
+        }
     }
 }
 
@@ -1661,7 +1656,7 @@ mod tests {
         accounts.accounts_db.clean_accounts_for_tests();
     }
 
-    fn create_accounts_prepare_if_nonce_account() -> (
+    fn create_accounts_post_process_failed_nonce() -> (
         Pubkey,
         AccountSharedData,
         AccountSharedData,
@@ -1684,32 +1679,29 @@ mod tests {
         )
     }
 
-    fn run_prepare_if_nonce_account_test(
-        account_address: &Pubkey,
+    fn run_post_process_failed_nonce_test(
         account: &mut AccountSharedData,
-        tx_result: &Result<()>,
         is_fee_payer: bool,
-        maybe_nonce: Option<(&NonceFull, bool)>,
+        is_nonce_account: bool,
+        nonce: &NonceFull,
         durable_nonce: &DurableNonce,
         lamports_per_signature: u64,
         expect_account: &AccountSharedData,
     ) -> bool {
         // Verify expect_account's relationship
         if !is_fee_payer {
-            match maybe_nonce {
-                Some((nonce, _)) if nonce.address() == account_address => {
-                    assert_ne!(expect_account, nonce.account())
-                }
-                _ => assert_eq!(expect_account, account),
+            if is_nonce_account {
+                assert_ne!(expect_account, nonce.account());
+            } else {
+                assert_eq!(expect_account, account);
             }
         }
 
-        prepare_if_nonce_account(
-            account_address,
+        post_process_failed_nonce(
             account,
-            tx_result,
             is_fee_payer,
-            maybe_nonce,
+            is_nonce_account,
+            nonce,
             durable_nonce,
             lamports_per_signature,
         );
@@ -1718,7 +1710,7 @@ mod tests {
     }
 
     #[test]
-    fn test_prepare_if_nonce_account_expected() {
+    fn test_post_process_failed_nonce_expected() {
         let (
             pre_account_address,
             pre_account,
@@ -1726,8 +1718,7 @@ mod tests {
             blockhash,
             lamports_per_signature,
             maybe_fee_payer_account,
-        ) = create_accounts_prepare_if_nonce_account();
-        let post_account_address = pre_account_address;
+        ) = create_accounts_post_process_failed_nonce();
         let nonce = NonceFull::new(
             pre_account_address,
             pre_account.clone(),
@@ -1741,12 +1732,11 @@ mod tests {
             )))
             .unwrap();
 
-        assert!(run_prepare_if_nonce_account_test(
-            &post_account_address,
+        assert!(run_post_process_failed_nonce_test(
             &mut post_account,
-            &Ok(()),
-            false,
-            Some((&nonce, true)),
+            false, // is_fee_payer
+            true,  // is_nonce_account
+            &nonce,
             &blockhash,
             lamports_per_signature,
             &expect_account,
@@ -1754,33 +1744,7 @@ mod tests {
     }
 
     #[test]
-    fn test_prepare_if_nonce_account_not_nonce_tx() {
-        let (
-            pre_account_address,
-            _pre_account,
-            _post_account,
-            blockhash,
-            lamports_per_signature,
-            _maybe_fee_payer_account,
-        ) = create_accounts_prepare_if_nonce_account();
-        let post_account_address = pre_account_address;
-
-        let mut post_account = AccountSharedData::default();
-        let expect_account = post_account.clone();
-        assert!(run_prepare_if_nonce_account_test(
-            &post_account_address,
-            &mut post_account,
-            &Ok(()),
-            false,
-            None,
-            &blockhash,
-            lamports_per_signature,
-            &expect_account,
-        ));
-    }
-
-    #[test]
-    fn test_prepare_if_nonce_account_not_nonce_address() {
+    fn test_post_process_failed_nonce_not_nonce_address() {
         let (
             pre_account_address,
             pre_account,
@@ -1788,54 +1752,16 @@ mod tests {
             blockhash,
             lamports_per_signature,
             maybe_fee_payer_account,
-        ) = create_accounts_prepare_if_nonce_account();
+        ) = create_accounts_post_process_failed_nonce();
 
         let nonce = NonceFull::new(pre_account_address, pre_account, maybe_fee_payer_account);
 
         let expect_account = post_account.clone();
-        // Wrong key
-        assert!(run_prepare_if_nonce_account_test(
-            &Pubkey::from([1u8; 32]),
+        assert!(run_post_process_failed_nonce_test(
             &mut post_account,
-            &Ok(()),
-            false,
-            Some((&nonce, true)),
-            &blockhash,
-            lamports_per_signature,
-            &expect_account,
-        ));
-    }
-
-    #[test]
-    fn test_prepare_if_nonce_account_tx_error() {
-        let (
-            pre_account_address,
-            pre_account,
-            mut post_account,
-            blockhash,
-            lamports_per_signature,
-            maybe_fee_payer_account,
-        ) = create_accounts_prepare_if_nonce_account();
-        let post_account_address = pre_account_address;
-        let mut expect_account = pre_account.clone();
-
-        let nonce = NonceFull::new(pre_account_address, pre_account, maybe_fee_payer_account);
-
-        expect_account
-            .set_state(&NonceVersions::new(NonceState::Initialized(
-                nonce::state::Data::new(Pubkey::default(), blockhash, lamports_per_signature),
-            )))
-            .unwrap();
-
-        assert!(run_prepare_if_nonce_account_test(
-            &post_account_address,
-            &mut post_account,
-            &Err(TransactionError::InstructionError(
-                0,
-                InstructionError::InvalidArgument,
-            )),
-            false,
-            Some((&nonce, true)),
+            false, // is_fee_payer
+            false, // is_nonce_account
+            &nonce,
             &blockhash,
             lamports_per_signature,
             &expect_account,
@@ -1847,7 +1773,7 @@ mod tests {
         let nonce_account = AccountSharedData::new_data(1, &(), &system_program::id()).unwrap();
         let pre_fee_payer_account =
             AccountSharedData::new_data(42, &(), &system_program::id()).unwrap();
-        let mut post_fee_payer_account =
+        let post_fee_payer_account =
             AccountSharedData::new_data(84, &[1, 2, 3, 4], &system_program::id()).unwrap();
         let nonce = NonceFull::new(
             Pubkey::new_unique(),
@@ -1855,54 +1781,21 @@ mod tests {
             Some(pre_fee_payer_account.clone()),
         );
 
-        assert!(run_prepare_if_nonce_account_test(
-            &Pubkey::new_unique(),
+        assert!(run_post_process_failed_nonce_test(
             &mut post_fee_payer_account.clone(),
-            &Err(TransactionError::InstructionError(
-                0,
-                InstructionError::InvalidArgument,
-            )),
-            false,
-            Some((&nonce, true)),
+            false, // is_fee_payer
+            false, // is_nonce_account
+            &nonce,
             &DurableNonce::default(),
             1,
             &post_fee_payer_account,
         ));
 
-        assert!(run_prepare_if_nonce_account_test(
-            &Pubkey::new_unique(),
+        assert!(run_post_process_failed_nonce_test(
             &mut post_fee_payer_account.clone(),
-            &Ok(()),
-            true,
-            Some((&nonce, true)),
-            &DurableNonce::default(),
-            1,
-            &post_fee_payer_account,
-        ));
-
-        assert!(run_prepare_if_nonce_account_test(
-            &Pubkey::new_unique(),
-            &mut post_fee_payer_account.clone(),
-            &Err(TransactionError::InstructionError(
-                0,
-                InstructionError::InvalidArgument,
-            )),
-            true,
-            None,
-            &DurableNonce::default(),
-            1,
-            &post_fee_payer_account,
-        ));
-
-        assert!(run_prepare_if_nonce_account_test(
-            &Pubkey::new_unique(),
-            &mut post_fee_payer_account,
-            &Err(TransactionError::InstructionError(
-                0,
-                InstructionError::InvalidArgument,
-            )),
-            true,
-            Some((&nonce, true)),
+            true,  // is_fee_payer
+            false, // is_nonce_account
+            &nonce,
             &DurableNonce::default(),
             1,
             &pre_fee_payer_account,
