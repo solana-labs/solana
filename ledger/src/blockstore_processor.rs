@@ -42,6 +42,7 @@ use {
         prioritization_fee_cache::PrioritizationFeeCache,
         runtime_config::RuntimeConfig,
         transaction_batch::TransactionBatch,
+        vote_sender_types::ReplayVoteSender,
     },
     solana_sdk::{
         clock::{Slot, MAX_PROCESSING_AGE},
@@ -65,7 +66,7 @@ use {
         },
     },
     solana_transaction_status::token_balances::TransactionTokenBalancesSet,
-    solana_vote::{vote_account::VoteAccountsHashMap, vote_sender_types::ReplayVoteSender},
+    solana_vote::vote_account::VoteAccountsHashMap,
     std::{
         borrow::Cow,
         collections::{HashMap, HashSet},

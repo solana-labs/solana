@@ -10,7 +10,6 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
-crossbeam-channel = { workspace = true }
 itertools = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true, features = ["rc"] }

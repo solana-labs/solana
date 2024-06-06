@@ -27,7 +27,7 @@ use {
     },
     solana_runtime::{
         bank::Bank, bank_forks::BankForks, commitment::VOTE_THRESHOLD_SIZE,
-        epoch_stakes::EpochStakes,
+        epoch_stakes::EpochStakes, vote_sender_types::ReplayVoteReceiver,
     },
     solana_sdk::{
         clock::{Slot, DEFAULT_MS_PER_SLOT, DEFAULT_TICKS_PER_SLOT},
@@ -40,7 +40,6 @@ use {
     },
     solana_vote::{
         vote_parser::{self, ParsedVote},
-        vote_sender_types::ReplayVoteReceiver,
         vote_transaction::VoteTransaction,
     },
     std::{
@@ -907,13 +906,13 @@ mod tests {
             genesis_utils::{
                 self, create_genesis_config, GenesisConfigInfo, ValidatorVoteKeypairs,
             },
+            vote_sender_types::ReplayVoteSender,
         },
         solana_sdk::{
             hash::Hash,
             pubkey::Pubkey,
             signature::{Keypair, Signature, Signer},
         },
-        solana_vote::vote_sender_types::ReplayVoteSender,
         solana_vote_program::{
             vote_state::{TowerSync, Vote},
             vote_transaction,

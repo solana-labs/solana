@@ -34,6 +34,7 @@ pub mod stakes;
 pub mod static_ids;
 pub mod status_cache;
 pub mod transaction_batch;
+pub mod vote_sender_types;
 
 #[macro_use]
 extern crate solana_metrics;

@@ -3,7 +3,6 @@
 
 pub mod vote_account;
 pub mod vote_parser;
-pub mod vote_sender_types;
 pub mod vote_transaction;
 
 #[macro_use]

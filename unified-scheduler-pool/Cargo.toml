@@ -21,7 +21,6 @@ solana-program-runtime = { workspace = true }
 solana-runtime = { workspace = true }
 solana-sdk = { workspace = true }
 solana-unified-scheduler-logic = { workspace = true }
-solana-vote = { workspace = true }
 
 [dev-dependencies]
 assert_matches = { workspace = true }

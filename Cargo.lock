@@ -7614,7 +7614,6 @@ dependencies = [
  "solana-runtime",
  "solana-sdk",
  "solana-unified-scheduler-logic",
- "solana-vote",
 ]
 
 [[package]]
@@ -7644,7 +7643,6 @@ name = "solana-vote"
 version = "2.0.0"
 dependencies = [
  "bincode",
- "crossbeam-channel",
  "itertools",
  "log",
  "rand 0.8.5",
