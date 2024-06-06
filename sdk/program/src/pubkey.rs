@@ -971,7 +971,6 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "borsh")]
     fn pubkey_from_seed_by_marker(marker: &[u8]) -> Result<Pubkey, PubkeyError> {
         let key = Pubkey::new_unique();
         let owner = Pubkey::default();
@@ -980,12 +979,11 @@ mod tests {
         to_fake.extend_from_slice(marker);
 
         let seed = &String::from_utf8(to_fake[..to_fake.len() - 32].to_vec()).expect("not utf8");
-        let base = &Pubkey::try_from_slice(&to_fake[to_fake.len() - 32..]).unwrap();
+        let base = &Pubkey::try_from(&to_fake[to_fake.len() - 32..]).unwrap();
 
         Pubkey::create_with_seed(&key, seed, base)
     }
 
-    #[cfg(feature = "borsh")]
     #[test]
     fn test_create_with_seed_rejects_illegal_owner() {
         assert_eq!(
