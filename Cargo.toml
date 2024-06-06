@@ -287,7 +287,7 @@ rand = "0.8.5"
 rand_chacha = "0.3.1"
 rayon = "1.10.0"
 reed-solomon-erasure = "6.0.0"
-regex = "1.10.3"
+regex = "1.10.4"
 reqwest = { version = "0.11.23", default-features = false }
 reqwest-middleware = "0.2.5"
 rolling-file = "0.2.0"
