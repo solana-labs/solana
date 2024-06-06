@@ -194,6 +194,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "agave-store-tool"
+version = "2.0.0"
+dependencies = [
+ "clap 2.33.3",
+ "solana-accounts-db",
+ "solana-sdk",
+ "solana-version",
+]
+
+[[package]]
 name = "agave-validator"
 version = "2.0.0"
 dependencies = [
@@ -7260,16 +7270,6 @@ dependencies = [
  "solana-sdk",
  "solana-transaction-status",
  "tonic-build",
-]
-
-[[package]]
-name = "solana-store-tool"
-version = "2.0.0"
-dependencies = [
- "clap 2.33.3",
- "solana-accounts-db",
- "solana-sdk",
- "solana-version",
 ]
 
 [[package]]

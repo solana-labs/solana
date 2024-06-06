@@ -1,6 +1,6 @@
 [package]
-name = "solana-store-tool"
-description = "Tool to inspect append vecs"
+name = "agave-store-tool"
+description = "Tool to inspect account storage files"
 publish = false
 version = { workspace = true }
 authors = { workspace = true }
