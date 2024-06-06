@@ -574,23 +574,6 @@ impl AppendVec {
         self.get_stored_account_meta_callback(offset, |account| account.to_account_shared_data())
     }
 
-    /// note this fn can return account meta for an account whose fields have been truncated (ie. if `len` isn't long enough.)
-    /// This fn doesn't even load the data_len field, so this fn does not know how big `len` needs to be.
-    fn get_account_meta(&self, offset: usize) -> Option<&AccountMeta> {
-        match &self.backing {
-            AppendVecFileBacking::MmapOnly(mmap) => {
-                let slice = self.get_valid_slice_from_mmap(mmap);
-                // Skip over StoredMeta data in the account
-                let offset = offset.checked_add(mem::size_of::<StoredMeta>())?;
-                // u64_align! does an unchecked add for alignment. Check that it won't cause an overflow.
-                offset.checked_add(ALIGN_BOUNDARY_OFFSET - 1)?;
-                let (account_meta, _): (&AccountMeta, _) =
-                    Self::get_type(slice, u64_align!(offset))?;
-                Some(account_meta)
-            }
-        }
-    }
-
     /// Return Ok(index_of_matching_owner) if the account owner at `offset` is one of the pubkeys in `owners`.
     /// Return Err(MatchAccountOwnerError::NoMatch) if the account has 0 lamports or the owner is not one of
     /// the pubkeys in `owners`.
@@ -600,17 +583,17 @@ impl AppendVec {
         offset: usize,
         owners: &[Pubkey],
     ) -> std::result::Result<usize, MatchAccountOwnerError> {
-        let account_meta = self
-            .get_account_meta(offset)
-            .ok_or(MatchAccountOwnerError::UnableToLoad)?;
-        if account_meta.lamports == 0 {
-            Err(MatchAccountOwnerError::NoMatch)
-        } else {
-            owners
-                .iter()
-                .position(|entry| &account_meta.owner == entry)
-                .ok_or(MatchAccountOwnerError::NoMatch)
-        }
+        self.get_stored_account_meta_callback(offset, |stored_account_meta| {
+            if stored_account_meta.lamports() == 0 {
+                Err(MatchAccountOwnerError::NoMatch)
+            } else {
+                owners
+                    .iter()
+                    .position(|entry| stored_account_meta.owner() == entry)
+                    .ok_or(MatchAccountOwnerError::NoMatch)
+            }
+        })
+        .unwrap_or(Err(MatchAccountOwnerError::UnableToLoad))
     }
 
     #[cfg(test)]
@@ -621,18 +604,8 @@ impl AppendVec {
         let sizes = self.get_account_sizes(&[offset]);
         let result = self.get_stored_account_meta_callback(offset, |r_callback| {
             let r2 = self.get_account_shared_data(offset);
-            let r3 = self.get_account_meta(offset);
             assert!(accounts_equal(&r_callback, r2.as_ref().unwrap()));
-            // r3 can return Some when r_callback and r2 do not
-            assert!(r3.is_some());
             assert_eq!(sizes, vec![r_callback.stored_size()]);
-            if let Some(r2) = r2.as_ref() {
-                let meta = r3.unwrap();
-                assert_eq!(meta.executable, r2.executable());
-                assert_eq!(meta.owner, *r2.owner());
-                assert_eq!(meta.lamports, r2.lamports());
-                assert_eq!(meta.rent_epoch, r2.rent_epoch());
-            }
             let meta = r_callback.meta().clone();
             Some((meta, r_callback.to_account_shared_data()))
         });
@@ -641,7 +614,6 @@ impl AppendVec {
                 .get_stored_account_meta_callback(offset, |_| {})
                 .is_none());
             assert!(self.get_account_shared_data(offset).is_none());
-            // note that sometimes `get_account_meta` can return Some(..) // assert!(self.get_account_meta(offset).is_none());
             // it has different rules for checking len and returning None
             assert!(sizes.is_empty());
         }
