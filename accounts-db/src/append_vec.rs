@@ -83,7 +83,7 @@ pub enum AppendVecError {
 }
 
 /// A slice whose contents are known to be valid.
-/// The slice contians no undefined bytes.
+/// The slice contains no undefined bytes.
 #[derive(Debug, Copy, Clone)]
 struct ValidSlice<'a>(&'a [u8]);
 
