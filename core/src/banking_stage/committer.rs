@@ -25,7 +25,10 @@ use {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CommitTransactionDetails {
-    Committed { compute_units: u64 },
+    Committed {
+        compute_units: u64,
+        loaded_accounts_data_size: usize,
+    },
     NotCommitted,
 }
 
@@ -104,12 +107,21 @@ impl Committer {
         let commit_transaction_statuses = tx_results
             .execution_results
             .iter()
-            .map(|execution_result| match execution_result.details() {
-                Some(details) => CommitTransactionDetails::Committed {
-                    compute_units: details.executed_units,
+            .zip(tx_results.loaded_accounts_stats.iter())
+            .map(
+                |(execution_result, loaded_accounts_stats)| match execution_result.details() {
+                    // reports actual execution CUs, and actual loaded accounts size for
+                    // transaction committed to block. qos_service uses these information to adjust
+                    // reserved block space.
+                    Some(details) => CommitTransactionDetails::Committed {
+                        compute_units: details.executed_units,
+                        loaded_accounts_data_size: loaded_accounts_stats
+                            .as_ref()
+                            .map_or(0, |stats| stats.loaded_accounts_data_size),
+                    },
+                    None => CommitTransactionDetails::NotCommitted,
                 },
-                None => CommitTransactionDetails::NotCommitted,
-            })
+            )
             .collect();
 
         let ((), find_and_send_votes_us) = measure_us!({

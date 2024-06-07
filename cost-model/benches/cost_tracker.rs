@@ -58,7 +58,7 @@ fn bench_cost_tracker_non_contentious_transaction(bencher: &mut Bencher) {
             if cost_tracker.try_add(tx_cost).is_err() {
                 break;
             } // stop when hit limits
-            cost_tracker.update_execution_cost(tx_cost, 0); // update execution cost down to zero
+            cost_tracker.update_execution_cost(tx_cost, 0, 0); // update execution cost down to zero
         }
     });
 }
@@ -75,7 +75,7 @@ fn bench_cost_tracker_contentious_transaction(bencher: &mut Bencher) {
             if cost_tracker.try_add(tx_cost).is_err() {
                 break;
             } // stop when hit limits
-            cost_tracker.update_execution_cost(tx_cost, 0); // update execution cost down to zero
+            cost_tracker.update_execution_cost(tx_cost, 0, 0); // update execution cost down to zero
         }
     });
 }

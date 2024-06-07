@@ -1559,9 +1559,18 @@ mod tests {
             assert_eq!(retryable_transaction_indexes, vec![1]);
 
             let expected_block_cost = if !apply_cost_tracker_during_replay_enabled {
-                let actual_programs_execution_cost =
+                let (actual_programs_execution_cost, actual_loaded_accounts_data_size_cost) =
                     match commit_transactions_result.first().unwrap() {
-                        CommitTransactionDetails::Committed { compute_units } => *compute_units,
+                        CommitTransactionDetails::Committed {
+                            compute_units,
+                            loaded_accounts_data_size,
+                        } => (
+                            *compute_units,
+                            CostModel::calculate_loaded_accounts_data_size_cost(
+                                *loaded_accounts_data_size,
+                                &bank.feature_set,
+                            ),
+                        ),
                         CommitTransactionDetails::NotCommitted => {
                             unreachable!()
                         }
@@ -1570,6 +1579,8 @@ mod tests {
                 let mut cost = CostModel::calculate_cost(&transactions[0], &bank.feature_set);
                 if let TransactionCost::Transaction(ref mut usage_cost) = cost {
                     usage_cost.programs_execution_cost = actual_programs_execution_cost;
+                    usage_cost.loaded_accounts_data_size_cost =
+                        actual_loaded_accounts_data_size_cost;
                 }
 
                 block_cost + cost.sum()
