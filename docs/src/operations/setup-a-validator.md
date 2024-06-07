@@ -409,6 +409,7 @@ nano /home/sol/bin/validator.sh
 Copy and paste the following contents into `validator.sh` then save the file:
 
 ```
+#!/bin/sh
 exec solana-validator \
     --identity validator-keypair.json \
     --vote-account vote-account-keypair.json \
@@ -419,6 +420,7 @@ exec solana-validator \
     --only-known-rpc \
     --log /home/sol/solana-validator.log \
     --ledger /mnt/ledger \
+    --accounts /mnt/accounts \
     --rpc-port 8899 \
     --dynamic-port-range 8000-8020 \
     --entrypoint entrypoint.testnet.solana.com:8001 \
