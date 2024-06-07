@@ -16,7 +16,6 @@ use {
             program::{BuiltinFunction, BuiltinProgram, FunctionRegistry},
             vm::Config,
         },
-        timings::ExecuteTimings,
     },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
@@ -468,13 +467,11 @@ fn svm_integration() {
         },
         ..Default::default()
     };
-    let mut timings = ExecuteTimings::default();
 
     let result = batch_processor.load_and_execute_sanitized_transactions(
         &mock_bank,
         &transactions,
         check_results.as_mut_slice(),
-        &mut timings,
         &processing_config,
     );
 

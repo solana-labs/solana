@@ -37,7 +37,7 @@ impl MessageProcessor {
         message: &SanitizedMessage,
         program_indices: &[Vec<IndexOfAccount>],
         invoke_context: &mut InvokeContext,
-        timings: &mut ExecuteTimings,
+        execute_timings: &mut ExecuteTimings,
         accumulated_consumed_units: &mut u64,
     ) -> Result<(), TransactionError> {
         debug_assert_eq!(program_indices.len(), message.instructions().len());
@@ -112,23 +112,26 @@ impl MessageProcessor {
                     &instruction_accounts,
                     program_indices,
                     &mut compute_units_consumed,
-                    timings,
+                    execute_timings,
                 );
                 let time = time.end_as_us();
                 *accumulated_consumed_units =
                     accumulated_consumed_units.saturating_add(compute_units_consumed);
-                timings.details.accumulate_program(
+                execute_timings.details.accumulate_program(
                     program_id,
                     time,
                     compute_units_consumed,
                     result.is_err(),
                 );
                 invoke_context.timings = {
-                    timings.details.accumulate(&invoke_context.timings);
+                    execute_timings.details.accumulate(&invoke_context.timings);
                     ExecuteDetailsTimings::default()
                 };
                 saturating_add_assign!(
-                    timings.execute_accessories.process_instructions.total_us,
+                    execute_timings
+                        .execute_accessories
+                        .process_instructions
+                        .total_us,
                     time
                 );
                 result

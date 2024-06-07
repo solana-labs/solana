@@ -295,7 +295,6 @@ fn run_fixture(fixture: InstrFixture, filename: OsString, execute_as_instr: bool
         limit_to_load_programs: true,
         recording_config,
     };
-    let mut timings = ExecuteTimings::default();
 
     if execute_as_instr {
         execute_fixture_as_instr(
@@ -314,7 +313,6 @@ fn run_fixture(fixture: InstrFixture, filename: OsString, execute_as_instr: bool
         &mock_bank,
         &transactions,
         transaction_check.as_mut_slice(),
-        &mut timings,
         &processor_config,
     );
 
