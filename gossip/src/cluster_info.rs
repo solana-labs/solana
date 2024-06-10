@@ -2473,7 +2473,7 @@ impl ClusterInfo {
         let mut rng = rand::thread_rng();
         let keypair: Arc<Keypair> = self.keypair().clone();
         let mut verify_gossip_addr = |value: &CrdsValue| {
-            verify_gossip_addr(
+            if verify_gossip_addr(
                 &mut rng,
                 &keypair,
                 value,
@@ -2481,7 +2481,12 @@ impl ClusterInfo {
                 &self.socket_addr_space,
                 &self.ping_cache,
                 &mut pings,
-            )
+            ) {
+                true
+            } else {
+                self.stats.num_unverifed_gossip_addrs.add_relaxed(1);
+                false
+            }
         };
         // Split packets based on their types.
         let mut pull_requests = vec![];
