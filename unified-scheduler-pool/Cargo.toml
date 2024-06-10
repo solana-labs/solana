@@ -16,6 +16,7 @@ dashmap = { workspace = true }
 derivative = { workspace = true }
 log = { workspace = true }
 qualifier_attr = { workspace = true }
+scopeguard = { workspace = true }
 solana-ledger = { workspace = true }
 solana-program-runtime = { workspace = true }
 solana-runtime = { workspace = true }

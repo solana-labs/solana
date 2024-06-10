@@ -6495,6 +6495,7 @@ dependencies = [
  "derivative",
  "log",
  "qualifier_attr",
+ "scopeguard",
  "solana-ledger",
  "solana-program-runtime",
  "solana-runtime",

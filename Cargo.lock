@@ -7608,6 +7608,7 @@ dependencies = [
  "lazy_static",
  "log",
  "qualifier_attr",
+ "scopeguard",
  "solana-ledger",
  "solana-logger",
  "solana-program-runtime",
