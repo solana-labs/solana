@@ -6500,6 +6500,7 @@ dependencies = [
  "solana-runtime",
  "solana-sdk",
  "solana-unified-scheduler-logic",
+ "vec_extract_if_polyfill",
 ]
 
 [[package]]
@@ -7697,6 +7698,12 @@ name = "vcpkg"
 version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
+
+[[package]]
+name = "vec_extract_if_polyfill"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "40c9cb5fb67c2692310b6eb3fce7dd4b6e4c9a75be4f2f46b27f0b2b7799759c"
 
 [[package]]
 name = "vec_map"
