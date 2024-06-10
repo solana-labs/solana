@@ -4867,6 +4867,7 @@ dependencies = [
 name = "solana-compute-budget"
 version = "2.0.0"
 dependencies = [
+ "rustc_version",
  "solana-sdk",
 ]
 

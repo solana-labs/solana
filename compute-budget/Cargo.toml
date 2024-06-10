@@ -13,6 +13,9 @@ edition = { workspace = true }
 solana-frozen-abi = { workspace = true, optional = true }
 solana-sdk = { workspace = true }
 
+[build-dependencies]
+rustc_version = { workspace = true }
+
 [features]
 frozen-abi = [
     "dep:solana-frozen-abi",
