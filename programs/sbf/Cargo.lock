@@ -85,7 +85,7 @@ dependencies = [
  "crossbeam-channel",
  "fd-lock",
  "indicatif",
- "itertools",
+ "itertools 0.12.1",
  "jsonrpc-core",
  "jsonrpc-core-client",
  "jsonrpc-derive",
@@ -238,7 +238,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d1da02abba9f9063d786eab1509833ebb2fac0f966862ca59439c76b9c566760"
 dependencies = [
  "include_dir",
- "itertools",
+ "itertools 0.10.5",
  "proc-macro-error",
  "proc-macro2",
  "quote",
@@ -274,7 +274,7 @@ dependencies = [
  "ark-std",
  "derivative",
  "hashbrown 0.13.2",
- "itertools",
+ "itertools 0.10.5",
  "num-traits",
  "zeroize",
 ]
@@ -291,7 +291,7 @@ dependencies = [
  "ark-std",
  "derivative",
  "digest 0.10.7",
- "itertools",
+ "itertools 0.10.5",
  "num-bigint 0.4.5",
  "num-traits",
  "paste",
@@ -645,7 +645,7 @@ dependencies = [
  "bitflags 2.5.0",
  "cexpr",
  "clang-sys",
- "itertools",
+ "itertools 0.10.5",
  "lazy_static",
  "lazycell",
  "proc-macro2",
@@ -2384,6 +2384,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "itertools"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ba291022dbbd398a455acf126c1e341954079855bc60dfdda641363bd6922569"
+dependencies = [
+ "either",
+]
+
+[[package]]
 name = "itoa"
 version = "1.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3520,7 +3529,7 @@ checksum = "59230a63c37f3e18569bdb90e4a89cbf5bf8b06fea0b84e65ea10cc4df47addd"
 dependencies = [
  "difflib",
  "float-cmp",
- "itertools",
+ "itertools 0.10.5",
  "normalize-line-endings",
  "predicates-core",
  "regex",
@@ -3633,7 +3642,7 @@ checksum = "119533552c9a7ffacc21e099c24a0ac8bb19c2a2a3f363de84cd9b844feab270"
 dependencies = [
  "bytes",
  "heck",
- "itertools",
+ "itertools 0.10.5",
  "lazy_static",
  "log",
  "multimap",
@@ -3654,7 +3663,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e5d2d8d10f3c6ded6da8b05b5fb3b8a5082514344d56c9f871412d29b4e075b4"
 dependencies = [
  "anyhow",
- "itertools",
+ "itertools 0.10.5",
  "proc-macro2",
  "quote",
  "syn 1.0.109",
@@ -4619,7 +4628,7 @@ dependencies = [
  "dashmap",
  "index_list",
  "indexmap 2.2.6",
- "itertools",
+ "itertools 0.12.1",
  "lazy_static",
  "log",
  "lz4",
@@ -4915,7 +4924,7 @@ dependencies = [
  "etcd-client",
  "futures 0.3.30",
  "histogram",
- "itertools",
+ "itertools 0.12.1",
  "lazy_static",
  "log",
  "lru",
@@ -5097,7 +5106,7 @@ dependencies = [
  "crossbeam-channel",
  "flate2",
  "indexmap 2.2.6",
- "itertools",
+ "itertools 0.12.1",
  "log",
  "lru",
  "num-traits",
@@ -5156,7 +5165,7 @@ dependencies = [
  "eager",
  "fs_extra",
  "futures 0.3.30",
- "itertools",
+ "itertools 0.12.1",
  "lazy-lru",
  "lazy_static",
  "libc",
@@ -5356,7 +5365,7 @@ dependencies = [
  "console_log",
  "curve25519-dalek",
  "getrandom 0.2.10",
- "itertools",
+ "itertools 0.12.1",
  "js-sys",
  "lazy_static",
  "libsecp256k1 0.6.0",
@@ -5387,7 +5396,7 @@ dependencies = [
  "bincode",
  "eager",
  "enum-iterator",
- "itertools",
+ "itertools 0.12.1",
  "libc",
  "log",
  "num-derive",
@@ -5464,7 +5473,7 @@ dependencies = [
  "async-mutex",
  "async-trait",
  "futures 0.3.30",
- "itertools",
+ "itertools 0.12.1",
  "lazy_static",
  "log",
  "quinn",
@@ -5515,7 +5524,7 @@ dependencies = [
  "bs58",
  "crossbeam-channel",
  "dashmap",
- "itertools",
+ "itertools 0.12.1",
  "jsonrpc-core",
  "jsonrpc-core-client",
  "jsonrpc-derive",
@@ -5641,7 +5650,7 @@ dependencies = [
  "fnv",
  "im",
  "index_list",
- "itertools",
+ "itertools 0.12.1",
  "lazy_static",
  "libc",
  "log",
@@ -5703,7 +5712,7 @@ dependencies = [
  "bincode",
  "byteorder 1.5.0",
  "elf",
- "itertools",
+ "itertools 0.10.5",
  "log",
  "miow",
  "net2",
@@ -6139,7 +6148,7 @@ dependencies = [
  "generic-array 0.14.7",
  "getrandom 0.1.14",
  "hmac 0.12.1",
- "itertools",
+ "itertools 0.12.1",
  "js-sys",
  "lazy_static",
  "libsecp256k1 0.6.0",
@@ -6271,7 +6280,7 @@ dependencies = [
  "futures-util",
  "histogram",
  "indexmap 2.2.6",
- "itertools",
+ "itertools 0.12.1",
  "libc",
  "log",
  "nix",
@@ -6296,7 +6305,7 @@ dependencies = [
 name = "solana-svm"
 version = "2.0.0"
 dependencies = [
- "itertools",
+ "itertools 0.12.1",
  "log",
  "percentage",
  "prost-build",
@@ -6437,7 +6446,7 @@ dependencies = [
  "bytes",
  "crossbeam-channel",
  "futures 0.3.30",
- "itertools",
+ "itertools 0.12.1",
  "log",
  "lru",
  "quinn",
@@ -6520,7 +6529,7 @@ dependencies = [
 name = "solana-vote"
 version = "2.0.0"
 dependencies = [
- "itertools",
+ "itertools 0.12.1",
  "log",
  "rustc_version",
  "serde",
@@ -6593,7 +6602,7 @@ dependencies = [
  "byteorder 1.5.0",
  "curve25519-dalek",
  "getrandom 0.1.14",
- "itertools",
+ "itertools 0.12.1",
  "lazy_static",
  "merlin",
  "num-derive",
