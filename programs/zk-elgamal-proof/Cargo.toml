@@ -1,0 +1,17 @@
+[package]
+name = "solana-zk-elgamal-proof-program"
+description = "Solana Zk ElGamal Proof Program"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+bytemuck = { workspace = true, features = ["derive"] }
+num-derive = { workspace = true }
+num-traits = { workspace = true }
+solana-program-runtime = { workspace = true }
+solana-sdk = { workspace = true }
+solana-zk-sdk = { workspace = true }

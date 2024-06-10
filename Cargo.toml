@@ -75,6 +75,7 @@ members = [
     "programs/stake",
     "programs/system",
     "programs/vote",
+    "programs/zk-elgamal-proof",
     "programs/zk-token-proof",
     "programs/zk-token-proof-tests",
     "pubsub-client",
@@ -396,6 +397,7 @@ solana-version = { path = "version", version = "=2.0.0" }
 solana-vote = { path = "vote", version = "=2.0.0" }
 solana-vote-program = { path = "programs/vote", version = "=2.0.0" }
 solana-wen-restart = { path = "wen-restart", version = "=2.0.0" }
+solana-zk-elgamal-proof-program = { path = "programs/zk-elgamal-proof", version = "=2.0.0" }
 solana-zk-keygen = { path = "zk-keygen", version = "=2.0.0" }
 solana-zk-sdk = { path = "zk-sdk", version = "=2.0.0" }
 solana-zk-token-proof-program = { path = "programs/zk-token-proof", version = "=2.0.0" }
