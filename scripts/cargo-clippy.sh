@@ -15,8 +15,5 @@ set -o errexit
 
 here="$(dirname "$0")"
 
-# stable
-"$here/cargo-clippy-stable.sh"
-
 # nightly
 "$here/cargo-clippy-nightly.sh"

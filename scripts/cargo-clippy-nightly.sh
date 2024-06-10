@@ -29,5 +29,4 @@ source "$here/../ci/rust-version.sh" nightly
   --deny=clippy::default_trait_access \
   --deny=clippy::arithmetic_side_effects \
   --deny=clippy::manual_let_else \
-  --deny=clippy::used_underscore_binding \
-  --allow=clippy::redundant_clone
+  --deny=clippy::used_underscore_binding

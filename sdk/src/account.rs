@@ -1011,7 +1011,6 @@ pub mod tests {
     }
 
     #[test]
-    #[allow(clippy::redundant_clone)]
     fn test_account_shared_data_all_fields() {
         let key = Pubkey::new_unique();
         let key2 = Pubkey::new_unique();
