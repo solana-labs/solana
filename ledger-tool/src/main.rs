@@ -808,6 +808,7 @@ fn main() {
             Arg::with_name("snapshots")
                 .long("snapshots")
                 .alias("snapshot-archive-path")
+                .alias("full-snapshot-archive-path")
                 .value_name("DIR")
                 .takes_value(true)
                 .global(true)

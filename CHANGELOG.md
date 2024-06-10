@@ -24,6 +24,7 @@ Release channels have their own copy of this changelog:
   * RPC's `simulateTransaction` now returns an extra `replacementBlockhash` field in the response
     when the `replaceRecentBlockhash` config param is `true` (#380)
   * SDK: `cargo test-sbf` accepts `--tools-version`, just like `build-sbf` (#1359)
+  * CLI: Can specify `--full-snapshot-archive-path` (#1631)
 
 ## [1.18.0]
 * Changes
