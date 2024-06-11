@@ -43,6 +43,7 @@ impl ProgramTiming {
 #[derive(Debug, Sequence)]
 pub enum ExecuteTimingType {
     CheckUs,
+    ValidateFeesUs,
     LoadUs,
     ExecuteUs,
     StoreUs,
@@ -93,6 +94,13 @@ eager_macro_rules! { $eager_1
                 *$self
                     .metrics
                     .index(ExecuteTimingType::CheckUs),
+                i64
+            ),
+            (
+                "validate_fees_us",
+                *$self
+                    .metrics
+                    .index(ExecuteTimingType::ValidateFeesUs),
                 i64
             ),
             (

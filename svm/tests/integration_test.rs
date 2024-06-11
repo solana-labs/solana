@@ -441,7 +441,7 @@ fn prepare_transactions(
 #[test]
 fn svm_integration() {
     let mut mock_bank = MockBankCallback::default();
-    let (transactions, mut check_results) = prepare_transactions(&mut mock_bank);
+    let (transactions, check_results) = prepare_transactions(&mut mock_bank);
     let batch_processor = TransactionBatchProcessor::<MockForkGraph>::new(
         EXECUTION_SLOT,
         EXECUTION_EPOCH,
@@ -471,7 +471,7 @@ fn svm_integration() {
     let result = batch_processor.load_and_execute_sanitized_transactions(
         &mock_bank,
         &transactions,
-        check_results.as_mut_slice(),
+        check_results,
         &processing_config,
     );
 

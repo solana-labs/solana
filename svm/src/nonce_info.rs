@@ -2,7 +2,6 @@ use solana_sdk::{
     account::{AccountSharedData, ReadableAccount, WritableAccount},
     nonce_account,
     pubkey::Pubkey,
-    rent_debits::RentDebits,
 };
 
 pub trait NonceInfo {
@@ -60,24 +59,28 @@ impl NonceFull {
             fee_payer_account,
         }
     }
+
     pub fn from_partial(
-        partial: &NoncePartial,
+        partial: NoncePartial,
         fee_payer_address: &Pubkey,
         mut fee_payer_account: AccountSharedData,
-        rent_debits: &RentDebits,
+        fee_payer_rent_debit: u64,
     ) -> Self {
-        let rent_debit = rent_debits.get_account_rent_debit(fee_payer_address);
-        fee_payer_account.set_lamports(fee_payer_account.lamports().saturating_add(rent_debit));
+        fee_payer_account.set_lamports(
+            fee_payer_account
+                .lamports()
+                .saturating_add(fee_payer_rent_debit),
+        );
 
-        let nonce_address = *partial.address();
+        let NoncePartial {
+            address: nonce_address,
+            account: nonce_account,
+        } = partial;
+
         if *fee_payer_address == nonce_address {
             Self::new(nonce_address, fee_payer_account, None)
         } else {
-            Self::new(
-                nonce_address,
-                partial.account().clone(),
-                Some(fee_payer_account),
-            )
+            Self::new(nonce_address, nonce_account, Some(fee_payer_account))
         }
     }
 }
@@ -173,29 +176,16 @@ mod tests {
         );
         assert_eq!(partial.fee_payer_account(), None);
 
-        // Add rent debits to ensure the rollback captures accounts without rent fees
-        let mut rent_debits = RentDebits::default();
-        rent_debits.insert(
-            &from_address,
-            TEST_RENT_DEBIT,
-            rent_collected_from_account.lamports(),
-        );
-        rent_debits.insert(
-            &nonce_address,
-            TEST_RENT_DEBIT,
-            rent_collected_nonce_account.lamports(),
-        );
-
         // NonceFull create + NonceInfo impl
         {
             let message = new_sanitized_message(&instructions, Some(&from_address));
             let fee_payer_address = message.account_keys().get(0).unwrap();
             let fee_payer_account = rent_collected_from_account.clone();
             let full = NonceFull::from_partial(
-                &partial,
+                partial.clone(),
                 fee_payer_address,
                 fee_payer_account,
-                &rent_debits,
+                TEST_RENT_DEBIT,
             );
             assert_eq!(*full.address(), nonce_address);
             assert_eq!(*full.account(), rent_collected_nonce_account);
@@ -213,10 +203,10 @@ mod tests {
             let fee_payer_address = message.account_keys().get(0).unwrap();
             let fee_payer_account = rent_collected_nonce_account;
             let full = NonceFull::from_partial(
-                &partial,
+                partial,
                 fee_payer_address,
                 fee_payer_account,
-                &rent_debits,
+                TEST_RENT_DEBIT,
             );
             assert_eq!(*full.address(), nonce_address);
             assert_eq!(*full.account(), nonce_account);

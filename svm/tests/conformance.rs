@@ -233,7 +233,7 @@ fn run_fixture(fixture: InstrFixture, filename: OsString, execute_as_instr: bool
     };
 
     let transactions = vec![transaction];
-    let mut transaction_check = vec![Ok(CheckedTransactionDetails {
+    let transaction_check = vec![Ok(CheckedTransactionDetails {
         nonce: None,
         lamports_per_signature: 30,
     })];
@@ -312,7 +312,7 @@ fn run_fixture(fixture: InstrFixture, filename: OsString, execute_as_instr: bool
     let result = batch_processor.load_and_execute_sanitized_transactions(
         &mock_bank,
         &transactions,
-        transaction_check.as_mut_slice(),
+        transaction_check,
         &processor_config,
     );
 

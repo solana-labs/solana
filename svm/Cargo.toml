@@ -39,8 +39,11 @@ prost = { workspace = true }
 prost-types = { workspace = true }
 rand = { workspace = true }
 solana-bpf-loader-program = { workspace = true }
+solana-compute-budget-program = { workspace = true }
 solana-logger = { workspace = true }
 solana-sdk = { workspace = true, features = ["dev-context-only-utils"] }
+# See order-crates-for-publishing.py for using this unusual `path = "."`
+solana-svm = { path = ".", features = ["dev-context-only-utils"] }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
