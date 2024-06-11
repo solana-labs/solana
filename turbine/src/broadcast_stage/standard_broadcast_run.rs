@@ -243,20 +243,20 @@ impl StandardBroadcastRun {
                 return Err(Error::DuplicateSlotBroadcast(bank.slot()));
             }
             // Reinitialize state for this slot.
-            let chained_merkle_root = (self.slot == bank.parent_slot())
-                .then_some(self.chained_merkle_root)
-                .ok_or_else(|| {
-                    broadcast_utils::get_chained_merkle_root_from_parent(
-                        bank.slot(),
-                        bank.parent_slot(),
-                        blockstore,
-                    )
-                })
-                .unwrap_or_else(|err| {
+            let chained_merkle_root = if self.slot == bank.parent_slot() {
+                self.chained_merkle_root
+            } else {
+                broadcast_utils::get_chained_merkle_root_from_parent(
+                    bank.slot(),
+                    bank.parent_slot(),
+                    blockstore,
+                )
+                .unwrap_or_else(|err: Error| {
                     error!("Unknown chained Merkle root: {err:?}");
                     process_stats.err_unknown_chained_merkle_root += 1;
                     Hash::default()
-                });
+                })
+            };
             self.slot = bank.slot();
             self.parent = bank.parent_slot();
             self.chained_merkle_root = chained_merkle_root;
