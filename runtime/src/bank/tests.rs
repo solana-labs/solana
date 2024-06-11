@@ -27,6 +27,7 @@ use {
     solana_accounts_db::{
         accounts::AccountAddressFilter,
         accounts_db::{AccountShrinkThreshold, DEFAULT_ACCOUNTS_SHRINK_RATIO},
+        accounts_hash::{AccountsDeltaHash, AccountsHasher},
         accounts_index::{
             AccountIndex, AccountSecondaryIndexes, IndexKey, ScanConfig, ScanError, ITER_BATCH_SIZE,
         },
@@ -12831,6 +12832,75 @@ fn test_rebuild_skipped_rewrites() {
     // Ensure the snapshot bank's skipped rewrites match the original bank's
     let snapshot_skipped_rewrites = snapshot_bank.calculate_skipped_rewrites();
     assert_eq!(snapshot_skipped_rewrites, actual_skipped_rewrites);
+}
+
+/// Test that getting accounts for BankHashDetails works with skipped rewrites
+#[test_case(true; "skip rewrites")]
+#[test_case(false; "do rewrites")]
+fn test_get_accounts_for_bank_hash_details(skip_rewrites: bool) {
+    let genesis_config = GenesisConfig::default();
+    let accounts_db_config = AccountsDbConfig {
+        test_skip_rewrites_but_include_in_bank_hash: skip_rewrites,
+        ..ACCOUNTS_DB_CONFIG_FOR_TESTING
+    };
+    let bank = Arc::new(Bank::new_with_paths(
+        &genesis_config,
+        Arc::new(RuntimeConfig::default()),
+        Vec::default(),
+        None,
+        None,
+        AccountSecondaryIndexes::default(),
+        AccountShrinkThreshold::default(),
+        false,
+        Some(accounts_db_config.clone()),
+        None,
+        Some(Pubkey::new_unique()),
+        Arc::new(AtomicBool::new(false)),
+    ));
+    // This test is only meaningful while the bank hash contains rewrites.
+    // Once this feature is enabled, it may be possible to remove this test entirely.
+    assert!(!bank.bank_hash_skips_rent_rewrites());
+
+    // Store an account *in this bank* that will be checked for rent collection *in the next bank*
+    let pubkey = {
+        let rent_collection_partition = bank
+            .variable_cycle_partitions_between_slots(bank.slot(), bank.slot() + 1)
+            .last()
+            .copied()
+            .unwrap();
+        let pubkey_range =
+            accounts_partition::pubkey_range_from_partition(rent_collection_partition);
+        *pubkey_range.end()
+    };
+    let mut account = AccountSharedData::new(123_456_789, 0, &Pubkey::default());
+    // The account's rent epoch must be set to EXEMPT
+    // in order for its rewrite to be skipped by rent collection.
+    account.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH);
+    bank.store_account_and_update_capitalization(&pubkey, &account);
+
+    // Create a new bank that will do rent collection on the account stored in the previous slot
+    let bank = Bank::new_from_parent(bank.clone(), &Pubkey::new_unique(), bank.slot() + 1);
+
+    // Freeze the bank to do rent collection and calculate the accounts delta hash
+    bank.freeze();
+
+    // Ensure that the accounts returned by `get_accounts_for_bank_hash_details()` produces the
+    // same AccountsDeltaHash as the actual value stored in the Bank.
+    let calculated_accounts_delta_hash = {
+        let accounts = bank.get_accounts_for_bank_hash_details();
+        let hashes = accounts
+            .into_iter()
+            .map(|account| (account.pubkey, account.hash))
+            .collect();
+        AccountsDeltaHash(AccountsHasher::accumulate_account_hashes(hashes))
+    };
+    let actual_accounts_delta_hash = bank
+        .rc
+        .accounts
+        .accounts_db
+        .get_accounts_delta_hash(bank.slot())
+        .unwrap();
+    assert_eq!(calculated_accounts_delta_hash, actual_accounts_delta_hash);
 }
 
 /// Test that simulations report the compute units of failed transactions

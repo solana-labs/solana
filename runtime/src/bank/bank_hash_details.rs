@@ -136,14 +136,8 @@ impl TryFrom<&Bank> for BankHashSlotDetails {
             .accounts_db
             .get_accounts_delta_hash(slot)
             .unwrap();
-        let mut accounts = bank
-            .rc
-            .accounts
-            .accounts_db
-            .get_pubkey_hash_account_for_slot(slot);
-        // get_pubkey_hash_account_for_slot() returns an arbitrary ordering;
-        // sort by pubkey to match the ordering used for accounts delta hash
-        accounts.sort_by_key(|account| account.pubkey);
+
+        let accounts = bank.get_accounts_for_bank_hash_details();
 
         Ok(Self::new(
             slot,

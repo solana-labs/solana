@@ -73,7 +73,7 @@ use {
         accounts::{AccountAddressFilter, Accounts, PubkeyAccountSlot},
         accounts_db::{
             AccountShrinkThreshold, AccountStorageEntry, AccountsDb, AccountsDbConfig,
-            CalcAccountsHashDataSource, VerifyAccountsHashAndLamportsConfig,
+            CalcAccountsHashDataSource, PubkeyHashAccount, VerifyAccountsHashAndLamportsConfig,
         },
         accounts_hash::{
             AccountHash, AccountsHash, CalcAccountsHashConfig, HashStats, IncrementalAccountsHash,
@@ -4254,20 +4254,65 @@ impl Bank {
     fn calculate_skipped_rewrites(&self) -> HashMap<Pubkey, AccountHash> {
         // The returned skipped rewrites may include accounts that were actually *not* skipped!
         // (This is safe, as per the fn's documentation above.)
-        HashMap::from_iter(
-            self.rent_collection_partitions()
-                .into_iter()
-                .map(accounts_partition::pubkey_range_from_partition)
-                .flat_map(|pubkey_range| {
-                    self.rc
-                        .accounts
-                        .load_to_collect_rent_eagerly(&self.ancestors, pubkey_range)
-                })
-                .map(|(pubkey, account, _slot)| {
-                    let account_hash = AccountsDb::hash_account(&account, &pubkey);
-                    (pubkey, account_hash)
-                }),
-        )
+        self.get_accounts_for_skipped_rewrites()
+            .map(|(pubkey, account_hash, _account)| (pubkey, account_hash))
+            .collect()
+    }
+
+    /// Loads accounts that were selected for rent collection this slot.
+    /// After loading the accounts, also calculate and return the account hashes.
+    /// This is used when dealing with skipped rewrites.
+    fn get_accounts_for_skipped_rewrites(
+        &self,
+    ) -> impl Iterator<Item = (Pubkey, AccountHash, AccountSharedData)> + '_ {
+        self.rent_collection_partitions()
+            .into_iter()
+            .map(accounts_partition::pubkey_range_from_partition)
+            .flat_map(|pubkey_range| {
+                self.rc
+                    .accounts
+                    .load_to_collect_rent_eagerly(&self.ancestors, pubkey_range)
+            })
+            .map(|(pubkey, account, _slot)| {
+                let account_hash = AccountsDb::hash_account(&account, &pubkey);
+                (pubkey, account_hash, account)
+            })
+    }
+
+    /// Returns the accounts, sorted by pubkey, that were part of accounts delta hash calculation
+    /// This is used when writing a bank hash details file.
+    pub(crate) fn get_accounts_for_bank_hash_details(&self) -> Vec<PubkeyHashAccount> {
+        let accounts_db = &self.rc.accounts.accounts_db;
+
+        let mut accounts_written_this_slot =
+            accounts_db.get_pubkey_hash_account_for_slot(self.slot());
+
+        // If we are skipping rewrites but also include them in the accounts delta hash, then we
+        // need to go load those accounts and add them to the list of accounts written this slot.
+        if !self.bank_hash_skips_rent_rewrites()
+            && accounts_db.test_skip_rewrites_but_include_in_bank_hash
+        {
+            let pubkeys_written_this_slot: HashSet<_> = accounts_written_this_slot
+                .iter()
+                .map(|pubkey_hash_account| pubkey_hash_account.pubkey)
+                .collect();
+
+            let rent_collection_accounts = self.get_accounts_for_skipped_rewrites();
+            for (pubkey, hash, account) in rent_collection_accounts {
+                if !pubkeys_written_this_slot.contains(&pubkey) {
+                    accounts_written_this_slot.push(PubkeyHashAccount {
+                        pubkey,
+                        hash,
+                        account,
+                    });
+                }
+            }
+        }
+
+        // Sort the accounts by pubkey to match the order of the accounts delta hash.
+        // This also makes comparison of files from different nodes deterministic.
+        accounts_written_this_slot.sort_unstable_by_key(|account| account.pubkey);
+        accounts_written_this_slot
     }
 
     fn collect_rent_eagerly(&self) {
