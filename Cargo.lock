@@ -7331,6 +7331,7 @@ dependencies = [
  "prost",
  "prost-build",
  "prost-types",
+ "qualifier_attr",
  "rand 0.8.5",
  "rustc_version 0.4.0",
  "serde",

@@ -13,6 +13,7 @@ edition = { workspace = true }
 itertools = { workspace = true }
 log = { workspace = true }
 percentage = { workspace = true }
+qualifier_attr = { workspace = true }
 serde = { workspace = true, features = ["rc"] }
 serde_derive = { workspace = true }
 solana-bpf-loader-program = { workspace = true }

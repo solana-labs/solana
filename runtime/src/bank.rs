@@ -169,7 +169,6 @@ use {
         },
         account_overrides::AccountOverrides,
         nonce_info::NoncePartial,
-        program_loader::load_program_with_pubkey,
         transaction_error_metrics::TransactionErrorMetrics,
         transaction_processing_callback::TransactionProcessingCallback,
         transaction_processor::{
@@ -209,6 +208,7 @@ use {
         ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
     },
     solana_program_runtime::{loaded_programs::ProgramCacheForTxBatch, sysvar_cache::SysvarCache},
+    solana_svm::program_loader::load_program_with_pubkey,
 };
 
 /// params to `verify_accounts_hash`
@@ -6794,25 +6794,6 @@ impl Bank {
         self.check_program_modification_slot = true;
     }
 
-    pub fn load_program(
-        &self,
-        pubkey: &Pubkey,
-        reload: bool,
-        effective_epoch: Epoch,
-    ) -> Option<Arc<ProgramCacheEntry>> {
-        let environments = self
-            .transaction_processor
-            .get_environments_for_epoch(effective_epoch);
-        load_program_with_pubkey(
-            self,
-            &environments,
-            pubkey,
-            self.slot(),
-            self.epoch_schedule(),
-            reload,
-        )
-    }
-
     pub fn fee_structure(&self) -> &FeeStructure {
         &self.transaction_processor.fee_structure
     }
@@ -7157,6 +7138,25 @@ impl Bank {
 
     pub fn set_fee_structure(&mut self, fee_structure: &FeeStructure) {
         self.transaction_processor.fee_structure = fee_structure.clone();
+    }
+
+    pub fn load_program(
+        &self,
+        pubkey: &Pubkey,
+        reload: bool,
+        effective_epoch: Epoch,
+    ) -> Option<Arc<ProgramCacheEntry>> {
+        let environments = self
+            .transaction_processor
+            .get_environments_for_epoch(effective_epoch)?;
+        load_program_with_pubkey(
+            self,
+            &environments,
+            pubkey,
+            self.slot(),
+            self.epoch_schedule(),
+            reload,
+        )
     }
 }
 

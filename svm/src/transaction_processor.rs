@@ -1,3 +1,5 @@
+#[cfg(feature = "dev-context-only-utils")]
+use qualifier_attr::qualifiers;
 use {
     crate::{
         account_loader::{
@@ -208,11 +210,13 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
     }
 
     /// Returns the current environments depending on the given epoch
-    pub fn get_environments_for_epoch(&self, epoch: Epoch) -> ProgramRuntimeEnvironments {
+    /// Returns None if the call could result in a deadlock
+    #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
+    pub fn get_environments_for_epoch(&self, epoch: Epoch) -> Option<ProgramRuntimeEnvironments> {
         self.program_cache
-            .read()
-            .unwrap()
-            .get_environments_for_epoch(epoch)
+            .try_read()
+            .ok()
+            .map(|cache| cache.get_environments_for_epoch(epoch))
     }
 
     /// Main entrypoint to the SVM.
@@ -620,14 +624,16 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
             if let Some((key, program_to_recompile)) = program_cache.programs_to_recompile.pop() {
                 let effective_epoch = program_cache.latest_root_epoch.saturating_add(1);
                 drop(program_cache);
+                let program_cache_read = self.program_cache.read().unwrap();
                 if let Some(recompiled) = load_program_with_pubkey(
                     callbacks,
-                    &self.get_environments_for_epoch(effective_epoch),
+                    &program_cache_read.get_environments_for_epoch(effective_epoch),
                     &key,
                     self.slot,
                     &self.epoch_schedule,
                     false,
                 ) {
+                    drop(program_cache_read);
                     recompiled
                         .tx_usage_counter
                         .fetch_add(program_to_recompile.tx_usage_counter.load(Relaxed), Relaxed);

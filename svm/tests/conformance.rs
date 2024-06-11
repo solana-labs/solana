@@ -439,7 +439,7 @@ fn execute_fixture_as_instr(
 
     let loaded_program = program_loader::load_program_with_pubkey(
         mock_bank,
-        &batch_processor.get_environments_for_epoch(2),
+        &batch_processor.get_environments_for_epoch(2).unwrap(),
         &program_id,
         42,
         &batch_processor.epoch_schedule,

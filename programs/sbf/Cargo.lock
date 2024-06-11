@@ -6311,6 +6311,7 @@ dependencies = [
  "log",
  "percentage",
  "prost-build",
+ "qualifier_attr",
  "rustc_version",
  "serde",
  "serde_derive",
