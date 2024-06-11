@@ -278,6 +278,8 @@ mod tests {
         let mut programs_modified_by_tx = ProgramCacheForTxBatch::default();
         let environment_config = EnvironmentConfig::new(
             Hash::default(),
+            None,
+            None,
             Arc::new(FeatureSet::all_enabled()),
             0,
             &sysvar_cache,
@@ -332,6 +334,8 @@ mod tests {
         let mut programs_modified_by_tx = ProgramCacheForTxBatch::default();
         let environment_config = EnvironmentConfig::new(
             Hash::default(),
+            None,
+            None,
             Arc::new(FeatureSet::all_enabled()),
             0,
             &sysvar_cache,
@@ -376,6 +380,8 @@ mod tests {
         let mut programs_modified_by_tx = ProgramCacheForTxBatch::default();
         let environment_config = EnvironmentConfig::new(
             Hash::default(),
+            None,
+            None,
             Arc::new(FeatureSet::all_enabled()),
             0,
             &sysvar_cache,
@@ -511,6 +517,8 @@ mod tests {
         let mut programs_modified_by_tx = ProgramCacheForTxBatch::default();
         let environment_config = EnvironmentConfig::new(
             Hash::default(),
+            None,
+            None,
             Arc::new(FeatureSet::all_enabled()),
             0,
             &sysvar_cache,
@@ -550,6 +558,8 @@ mod tests {
         let mut programs_modified_by_tx = ProgramCacheForTxBatch::default();
         let environment_config = EnvironmentConfig::new(
             Hash::default(),
+            None,
+            None,
             Arc::new(FeatureSet::all_enabled()),
             0,
             &sysvar_cache,
@@ -586,6 +596,8 @@ mod tests {
         let mut programs_modified_by_tx = ProgramCacheForTxBatch::default();
         let environment_config = EnvironmentConfig::new(
             Hash::default(),
+            None,
+            None,
             Arc::new(FeatureSet::all_enabled()),
             0,
             &sysvar_cache,
@@ -683,6 +695,8 @@ mod tests {
         let mut programs_modified_by_tx = ProgramCacheForTxBatch::default();
         let environment_config = EnvironmentConfig::new(
             Hash::default(),
+            None,
+            None,
             Arc::new(FeatureSet::all_enabled()),
             0,
             &sysvar_cache,

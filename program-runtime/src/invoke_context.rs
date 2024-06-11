@@ -36,6 +36,7 @@ use {
             IndexOfAccount, InstructionAccount, TransactionAccount, TransactionContext,
         },
     },
+    solana_vote::vote_account::VoteAccountsHashMap,
     std::{
         alloc::Layout,
         cell::RefCell,
@@ -146,6 +147,8 @@ impl BpfAllocator {
 
 pub struct EnvironmentConfig<'a> {
     pub blockhash: Hash,
+    epoch_total_stake: Option<u64>,
+    epoch_vote_accounts: Option<&'a VoteAccountsHashMap>,
     pub feature_set: Arc<FeatureSet>,
     pub lamports_per_signature: u64,
     sysvar_cache: &'a SysvarCache,
@@ -153,12 +156,16 @@ pub struct EnvironmentConfig<'a> {
 impl<'a> EnvironmentConfig<'a> {
     pub fn new(
         blockhash: Hash,
+        epoch_total_stake: Option<u64>,
+        epoch_vote_accounts: Option<&'a VoteAccountsHashMap>,
         feature_set: Arc<FeatureSet>,
         lamports_per_signature: u64,
         sysvar_cache: &'a SysvarCache,
     ) -> Self {
         Self {
             blockhash,
+            epoch_total_stake,
+            epoch_vote_accounts,
             feature_set,
             lamports_per_signature,
             sysvar_cache,
@@ -614,6 +621,16 @@ impl<'a> InvokeContext<'a> {
         self.environment_config.sysvar_cache
     }
 
+    /// Get cached epoch total stake.
+    pub fn get_epoch_total_stake(&self) -> Option<u64> {
+        self.environment_config.epoch_total_stake
+    }
+
+    /// Get cached epoch vote accounts.
+    pub fn get_epoch_vote_accounts(&self) -> Option<&VoteAccountsHashMap> {
+        self.environment_config.epoch_vote_accounts
+    }
+
     // Should alignment be enforced during user pointer translation
     pub fn get_check_aligned(&self) -> bool {
         self.transaction_context
@@ -710,6 +727,8 @@ macro_rules! with_mock_invoke_context {
         });
         let environment_config = EnvironmentConfig::new(
             Hash::default(),
+            None,
+            None,
             Arc::new(FeatureSet::all_enabled()),
             0,
             &sysvar_cache,

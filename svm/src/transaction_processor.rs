@@ -631,6 +631,8 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
             program_cache_for_tx_batch,
             EnvironmentConfig::new(
                 blockhash,
+                callback.get_epoch_total_stake(),
+                callback.get_epoch_vote_accounts(),
                 callback.get_feature_set(),
                 lamports_per_signature,
                 sysvar_cache,
@@ -866,6 +868,7 @@ mod tests {
             transaction::{SanitizedTransaction, Transaction, TransactionError},
             transaction_context::TransactionContext,
         },
+        solana_vote::vote_account::VoteAccountsHashMap,
         std::{
             env,
             fs::{self, File},
@@ -927,6 +930,14 @@ mod tests {
 
         fn get_feature_set(&self) -> Arc<FeatureSet> {
             self.feature_set.clone()
+        }
+
+        fn get_epoch_total_stake(&self) -> Option<u64> {
+            None
+        }
+
+        fn get_epoch_vote_accounts(&self) -> Option<&VoteAccountsHashMap> {
+            None
         }
 
         fn add_builtin_account(&self, name: &str, program_id: &Pubkey) {

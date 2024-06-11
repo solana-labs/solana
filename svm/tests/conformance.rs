@@ -463,6 +463,8 @@ fn execute_fixture_as_instr(
     let sysvar_cache = &batch_processor.sysvar_cache.read().unwrap();
     let env_config = EnvironmentConfig::new(
         mock_bank.blockhash,
+        None,
+        None,
         mock_bank.feature_set.clone(),
         mock_bank.lamports_per_sginature,
         sysvar_cache,

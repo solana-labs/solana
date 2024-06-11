@@ -817,6 +817,10 @@ pub mod migrate_config_program_to_core_bpf {
     solana_sdk::declare_id!("2Fr57nzzkLYXW695UdDxDeR5fhnZWSttZeZYemrnpGFV");
 }
 
+pub mod enable_get_epoch_stake_syscall {
+    solana_sdk::declare_id!("7mScTYkJXsbdrcwTQRs7oeCSXoJm4WjzBsRyf8bCU3Np");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -1016,6 +1020,7 @@ lazy_static! {
         (migrate_feature_gate_program_to_core_bpf::id(), "Migrate Feature Gate program to Core BPF (programify) #1003"),
         (vote_only_full_fec_sets::id(), "vote only full fec sets"),
         (migrate_config_program_to_core_bpf::id(), "Migrate Config program to Core BPF #1378"),
+        (enable_get_epoch_stake_syscall::id(), "Enable syscall: sol_get_epoch_stake #884"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

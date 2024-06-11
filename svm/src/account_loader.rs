@@ -513,6 +513,7 @@ mod tests {
             transaction::{Result, SanitizedTransaction, Transaction, TransactionError},
             transaction_context::{TransactionAccount, TransactionContext},
         },
+        solana_vote::vote_account::VoteAccountsHashMap,
         std::{borrow::Cow, collections::HashMap, convert::TryFrom, sync::Arc},
     };
 
@@ -542,6 +543,14 @@ mod tests {
 
         fn get_feature_set(&self) -> Arc<FeatureSet> {
             self.feature_set.clone()
+        }
+
+        fn get_epoch_total_stake(&self) -> Option<u64> {
+            None
+        }
+
+        fn get_epoch_vote_accounts(&self) -> Option<&VoteAccountsHashMap> {
+            None
         }
     }
 

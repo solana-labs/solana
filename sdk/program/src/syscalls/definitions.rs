@@ -66,6 +66,7 @@ define_syscall!(fn sol_big_mod_exp(params: *const u8, result: *mut u8) -> u64);
 define_syscall!(fn sol_remaining_compute_units() -> u64);
 define_syscall!(fn sol_alt_bn128_compression(op: u64, input: *const u8, input_size: u64, result: *mut u8) -> u64);
 define_syscall!(fn sol_get_sysvar(sysvar_id_addr: *const u8, result: *mut u8, offset: u64, length: u64) -> u64);
+define_syscall!(fn sol_get_epoch_stake(vote_address: *const u8) -> u64);
 
 // these are to be deprecated once they are superceded by sol_get_sysvar
 define_syscall!(fn sol_get_clock_sysvar(addr: *mut u8) -> u64);

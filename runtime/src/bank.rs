@@ -6155,6 +6155,13 @@ impl Bank {
         Some(self.epoch_stakes.get(&epoch)?.stakes().staked_nodes())
     }
 
+    /// Get the total epoch stake for the given epoch.
+    pub fn epoch_total_stake(&self, epoch: Epoch) -> Option<u64> {
+        self.epoch_stakes
+            .get(&epoch)
+            .map(|epoch_stakes| epoch_stakes.total_stake())
+    }
+
     /// vote accounts for the specific epoch along with the stake
     ///   attributed to each account
     pub fn epoch_vote_accounts(&self, epoch: Epoch) -> Option<&VoteAccountsHashMap> {
@@ -6836,6 +6843,14 @@ impl TransactionProcessingCallback for Bank {
 
     fn get_feature_set(&self) -> Arc<FeatureSet> {
         self.feature_set.clone()
+    }
+
+    fn get_epoch_total_stake(&self) -> Option<u64> {
+        self.epoch_total_stake(self.epoch())
+    }
+
+    fn get_epoch_vote_accounts(&self) -> Option<&VoteAccountsHashMap> {
+        self.epoch_vote_accounts(self.epoch())
     }
 
     fn get_program_match_criteria(&self, program: &Pubkey) -> ProgramCacheMatchCriteria {
