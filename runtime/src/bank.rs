@@ -3337,12 +3337,10 @@ impl Bank {
         transaction: &'a SanitizedTransaction,
     ) -> TransactionBatch<'_, '_> {
         let tx_account_lock_limit = self.get_transaction_account_lock_limit();
-        // Note that switching this to .get_account_locks_unchecked() is unacceptable currently.
-        // The unified scheduler relies on the checks enforced here.
-        // See a comment in SchedulingStateMachine::create_task().
-        let lock_result = transaction
-            .get_account_locks(tx_account_lock_limit)
-            .map(|_| ());
+        let lock_result = SanitizedTransaction::validate_account_locks(
+            transaction.message(),
+            tx_account_lock_limit,
+        );
         let mut batch = TransactionBatch::new(
             vec![lock_result],
             self,
