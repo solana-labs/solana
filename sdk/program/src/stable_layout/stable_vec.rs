@@ -30,19 +30,27 @@ pub struct StableVec<T> {
     _marker: PhantomData<T>,
 }
 
+// We shadow these slice methods of the same name to avoid going through
+// `deref`, which creates an intermediate reference.
 impl<T> StableVec<T> {
     #[inline]
     pub fn as_ptr(&self) -> *const T {
-        // We shadow the slice method of the same name to avoid going through
-        // `deref`, which creates an intermediate reference.
         self.ptr.as_ptr()
     }
 
     #[inline]
     pub fn as_mut_ptr(&mut self) -> *mut T {
-        // We shadow the slice method of the same name to avoid going through
-        // `deref_mut`, which creates an intermediate reference.
         self.ptr.as_ptr()
+    }
+
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.len
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
     }
 }
 
