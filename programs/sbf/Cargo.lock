@@ -4752,17 +4752,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-bpf-rust-big-mod-exp"
-version = "2.0.0"
-dependencies = [
- "array-bytes",
- "serde",
- "serde_derive",
- "serde_json",
- "solana-program",
-]
-
-[[package]]
 name = "solana-bucket-map"
 version = "2.0.0"
 dependencies = [
@@ -5777,6 +5766,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-sbf-rust-big-mod-exp"
+version = "2.0.0"
+dependencies = [
+ "array-bytes",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "solana-program",
+]
+
+[[package]]
 name = "solana-sbf-rust-call-depth"
 version = "2.0.0"
 dependencies = [
@@ -6070,14 +6070,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-sbf-rust-sibling-instructions"
+name = "solana-sbf-rust-sibling-inner-instructions"
 version = "2.0.0"
 dependencies = [
  "solana-program",
 ]
 
 [[package]]
-name = "solana-sbf-rust-sibling_inner-instructions"
+name = "solana-sbf-rust-sibling-instructions"
 version = "2.0.0"
 dependencies = [
  "solana-program",

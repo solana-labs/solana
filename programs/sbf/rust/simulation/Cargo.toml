@@ -1,7 +1,7 @@
 [package]
 name = "solana-sbf-rust-simulation"
-description = "Solana SBF Program Simulation Differences"
 version = { workspace = true }
+description = { workspace = true }
 authors = { workspace = true }
 repository = { workspace = true }
 homepage = { workspace = true }

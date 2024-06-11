@@ -1,5 +1,5 @@
 [package]
-name = "solana-sbf-rust-sibling_inner-instructions"
+name = "solana-sbf-rust-sibling-inner-instructions"
 version = { workspace = true }
 description = { workspace = true }
 authors = { workspace = true }
