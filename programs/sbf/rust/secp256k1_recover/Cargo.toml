@@ -1,6 +1,5 @@
 [package]
 name = "solana-sbf-rust-secp256k1-recover"
-documentation = "https://docs.rs/solana-sbf-rust-secp256k1-recover"
 version = { workspace = true }
 description = { workspace = true }
 authors = { workspace = true }
@@ -15,6 +14,3 @@ solana-program = { workspace = true }
 
 [lib]
 crate-type = ["cdylib"]
-
-[package.metadata.docs.rs]
-targets = ["x86_64-unknown-linux-gnu"]

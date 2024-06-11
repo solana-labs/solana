@@ -1,6 +1,5 @@
 [package]
 name = "solana-sbf-rust-noop"
-documentation = "https://docs.rs/solana-sbf-rust-noop"
 version = { workspace = true }
 description = { workspace = true }
 authors = { workspace = true }
@@ -14,6 +13,3 @@ solana-program = { workspace = true }
 
 [lib]
 crate-type = ["cdylib"]
-
-[package.metadata.docs.rs]
-targets = ["x86_64-unknown-linux-gnu"]

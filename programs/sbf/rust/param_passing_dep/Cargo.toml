@@ -1,8 +1,7 @@
 [package]
 name = "solana-sbf-rust-param-passing-dep"
-description = "Solana SBF program written in Rust"
-documentation = "https://docs.rs/solana-sbf-rust-param-passing-dep"
 version = { workspace = true }
+description = { workspace = true }
 authors = { workspace = true }
 repository = { workspace = true }
 homepage = { workspace = true }
@@ -11,6 +10,3 @@ edition = { workspace = true }
 
 [dependencies]
 solana-program = { workspace = true }
-
-[package.metadata.docs.rs]
-targets = ["x86_64-unknown-linux-gnu"]

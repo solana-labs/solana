@@ -1,6 +1,5 @@
 [package]
 name = "solana-sbf-rust-sysvar"
-documentation = "https://docs.rs/solana-sbf-rust-sysvar"
 version = { workspace = true }
 description = { workspace = true }
 authors = { workspace = true }
@@ -23,6 +22,3 @@ solana-sdk = { workspace = true }
 
 [lib]
 crate-type = ["cdylib", "lib"]
-
-[package.metadata.docs.rs]
-targets = ["x86_64-unknown-linux-gnu"]

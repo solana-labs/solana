@@ -1,6 +1,5 @@
 [package]
 name = "solana-bpf-rust-big-mod-exp"
-documentation = "https://docs.rs/solana-bpf-rust-big-mod-exp"
 version = { workspace = true }
 description = { workspace = true }
 authors = { workspace = true }
@@ -18,6 +17,3 @@ solana-program = { workspace = true }
 
 [lib]
 crate-type = ["cdylib"]
-
-[package.metadata.docs.rs]
-targets = ["x86_64-unknown-linux-gnu"]

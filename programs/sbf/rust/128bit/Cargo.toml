@@ -1,6 +1,5 @@
 [package]
 name = "solana-sbf-rust-128bit"
-documentation = "https://docs.rs/solana-sbf-rust-128bit"
 version = { workspace = true }
 description = { workspace = true }
 authors = { workspace = true }
@@ -15,6 +14,3 @@ solana-sbf-rust-128bit-dep = { workspace = true }
 
 [lib]
 crate-type = ["cdylib"]
-
-[package.metadata.docs.rs]
-targets = ["x86_64-unknown-linux-gnu"]

@@ -1,6 +1,5 @@
 [package]
 name = "solana-sbf-rust-log-data"
-documentation = "https://docs.rs/solana-sbf-rust-log-data"
 version = { workspace = true }
 description = { workspace = true }
 authors = { workspace = true }
@@ -18,6 +17,3 @@ program = []
 
 [lib]
 crate-type = ["lib", "cdylib"]
-
-[package.metadata.docs.rs]
-targets = ["x86_64-unknown-linux-gnu"]

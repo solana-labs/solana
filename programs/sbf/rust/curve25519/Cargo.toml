@@ -1,6 +1,5 @@
 [package]
 name = "solana-sbf-rust-curve25519"
-documentation = "https://docs.rs/solana-sbf-rust-zktoken_crypto"
 version = { workspace = true }
 description = { workspace = true }
 authors = { workspace = true }
@@ -15,6 +14,3 @@ solana-zk-token-sdk = { workspace = true }
 
 [lib]
 crate-type = ["cdylib"]
-
-[package.metadata.docs.rs]
-targets = ["x86_64-unknown-linux-gnu"]

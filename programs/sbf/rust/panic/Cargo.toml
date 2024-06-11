@@ -1,6 +1,5 @@
 [package]
 name = "solana-sbf-rust-panic"
-documentation = "https://docs.rs/solana-sbf-rust-panic"
 version = { workspace = true }
 description = { workspace = true }
 authors = { workspace = true }
@@ -18,6 +17,3 @@ custom-panic = []
 
 [lib]
 crate-type = ["cdylib"]
-
-[package.metadata.docs.rs]
-targets = ["x86_64-unknown-linux-gnu"]

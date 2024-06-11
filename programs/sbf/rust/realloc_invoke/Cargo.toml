@@ -1,6 +1,5 @@
 [package]
 name = "solana-sbf-rust-realloc-invoke"
-documentation = "https://docs.rs/solana-sbf-rust-realloc-invoke"
 version = { workspace = true }
 description = { workspace = true }
 authors = { workspace = true }
@@ -19,6 +18,3 @@ solana-sbf-rust-realloc = { workspace = true }
 
 [lib]
 crate-type = ["lib", "cdylib"]
-
-[package.metadata.docs.rs]
-targets = ["x86_64-unknown-linux-gnu"]
