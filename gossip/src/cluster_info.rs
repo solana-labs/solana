@@ -82,7 +82,7 @@ use {
     solana_vote::vote_parser,
     solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY,
     std::{
-        borrow::Cow,
+        borrow::{Borrow, Cow},
         collections::{HashMap, HashSet, VecDeque},
         fmt::Debug,
         fs::{self, File},
@@ -128,6 +128,8 @@ pub const MAX_INCREMENTAL_SNAPSHOT_HASHES: usize = 25;
 /// Maximum number of origin nodes that a PruneData may contain, such that the
 /// serialized size of the PruneMessage stays below PACKET_DATA_SIZE.
 const MAX_PRUNE_DATA_NODES: usize = 32;
+/// Prune data prefix for PruneMessage
+const PRUNE_DATA_PREFIX: &[u8] = b"\xffSOLANA_PRUNE_DATA";
 /// Number of bytes in the randomly generated token sent with ping messages.
 const GOSSIP_PING_TOKEN_SIZE: usize = 32;
 const GOSSIP_PING_CACHE_CAPACITY: usize = 126976;
@@ -185,7 +187,7 @@ pub struct ClusterInfo {
 }
 
 #[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
 pub(crate) struct PruneData {
     /// Pubkey of the node that sent this prune data
     pubkey: Pubkey,
@@ -218,6 +220,52 @@ impl PruneData {
         prune_data.sign(self_keypair);
         prune_data
     }
+
+    fn signable_data_without_prefix(&self) -> Cow<[u8]> {
+        #[derive(Serialize)]
+        struct SignData<'a> {
+            pubkey: &'a Pubkey,
+            prunes: &'a [Pubkey],
+            destination: &'a Pubkey,
+            wallclock: u64,
+        }
+        let data = SignData {
+            pubkey: &self.pubkey,
+            prunes: &self.prunes,
+            destination: &self.destination,
+            wallclock: self.wallclock,
+        };
+        Cow::Owned(serialize(&data).expect("should serialize PruneData"))
+    }
+
+    fn signable_data_with_prefix(&self) -> Cow<[u8]> {
+        #[derive(Serialize)]
+        struct SignDataWithPrefix<'a> {
+            prefix: &'a [u8],
+            pubkey: &'a Pubkey,
+            prunes: &'a [Pubkey],
+            destination: &'a Pubkey,
+            wallclock: u64,
+        }
+        let data = SignDataWithPrefix {
+            prefix: PRUNE_DATA_PREFIX,
+            pubkey: &self.pubkey,
+            prunes: &self.prunes,
+            destination: &self.destination,
+            wallclock: self.wallclock,
+        };
+        Cow::Owned(serialize(&data).expect("should serialize PruneDataWithPrefix"))
+    }
+
+    fn verify_data(&self, use_prefix: bool) -> bool {
+        let data = if !use_prefix {
+            self.signable_data_without_prefix()
+        } else {
+            self.signable_data_with_prefix()
+        };
+        self.get_signature()
+            .verify(self.pubkey().as_ref(), data.borrow())
+    }
 }
 
 impl Sanitize for PruneData {
@@ -235,20 +283,8 @@ impl Signable for PruneData {
     }
 
     fn signable_data(&self) -> Cow<[u8]> {
-        #[derive(Serialize)]
-        struct SignData<'a> {
-            pubkey: &'a Pubkey,
-            prunes: &'a [Pubkey],
-            destination: &'a Pubkey,
-            wallclock: u64,
-        }
-        let data = SignData {
-            pubkey: &self.pubkey,
-            prunes: &self.prunes,
-            destination: &self.destination,
-            wallclock: self.wallclock,
-        };
-        Cow::Owned(serialize(&data).expect("serialize PruneData"))
+        // Continue to return signable data without a prefix until cluster has upgraded
+        self.signable_data_without_prefix()
     }
 
     fn get_signature(&self) -> Signature {
@@ -257,6 +293,12 @@ impl Signable for PruneData {
 
     fn set_signature(&mut self, signature: Signature) {
         self.signature = signature
+    }
+
+    // override Signable::verify default
+    fn verify(&self) -> bool {
+        // Try to verify PruneData with both prefixed and non-prefixed data
+        self.verify_data(false) || self.verify_data(true)
     }
 }
 
@@ -4937,5 +4979,66 @@ mod tests {
         let trace = cluster_info43.rpc_info_trace();
         info!("rpc:\n{}", trace);
         assert_eq!(trace.len(), 335);
+    }
+
+    #[test]
+    fn test_prune_data_sign_and_verify_without_prefix() {
+        let mut rng = thread_rng();
+        let keypair = Keypair::new();
+        let mut prune_data = PruneData::new_rand(&mut rng, &keypair, Some(3));
+
+        prune_data.sign(&keypair);
+
+        let is_valid = prune_data.verify();
+        assert!(is_valid, "Signature should be valid without prefix");
+    }
+
+    #[test]
+    fn test_prune_data_sign_and_verify_with_prefix() {
+        let mut rng = thread_rng();
+        let keypair = Keypair::new();
+        let mut prune_data = PruneData::new_rand(&mut rng, &keypair, Some(3));
+
+        // Manually set the signature with prefixed data
+        let prefixed_data = prune_data.signable_data_with_prefix();
+        let signature_with_prefix = keypair.sign_message(prefixed_data.borrow());
+        prune_data.set_signature(signature_with_prefix);
+
+        let is_valid = prune_data.verify();
+        assert!(is_valid, "Signature should be valid with prefix");
+    }
+
+    #[test]
+    fn test_prune_data_verify_with_and_without_prefix() {
+        let mut rng = thread_rng();
+        let keypair = Keypair::new();
+        let mut prune_data = PruneData::new_rand(&mut rng, &keypair, Some(3));
+
+        // Sign with non-prefixed data
+        prune_data.sign(&keypair);
+        let is_valid_non_prefixed = prune_data.verify();
+        assert!(
+            is_valid_non_prefixed,
+            "Signature should be valid without prefix"
+        );
+
+        // Save the original non-prefixed, serialized data for last check
+        let non_prefixed_data = prune_data.signable_data_without_prefix().into_owned();
+
+        // Manually set the signature with prefixed, serialized data
+        let prefixed_data = prune_data.signable_data_with_prefix();
+        let signature_with_prefix = keypair.sign_message(prefixed_data.borrow());
+        prune_data.set_signature(signature_with_prefix);
+
+        let is_valid_prefixed = prune_data.verify();
+        assert!(is_valid_prefixed, "Signature should be valid with prefix");
+
+        // Ensure prefixed and non-prefixed serialized data are different
+        let prefixed_data = prune_data.signable_data_with_prefix();
+        assert_ne!(
+            prefixed_data.as_ref(),
+            non_prefixed_data.as_slice(),
+            "Prefixed and non-prefixed serialized data should be different"
+        );
     }
 }
