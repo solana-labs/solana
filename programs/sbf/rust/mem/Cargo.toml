@@ -8,18 +8,9 @@ homepage = { workspace = true }
 license = { workspace = true }
 edition = { workspace = true }
 
-[features]
-no-entrypoint = []
-test-bpf = []
-dummy-for-ci-check = ["test-bpf"]
-
 [dependencies]
 solana-program = { workspace = true }
-
-[dev-dependencies]
-solana-program-runtime = { workspace = true }
-solana-program-test = { workspace = true }
-solana-sdk = { workspace = true }
+solana-sbf-rust-mem-dep = { workspace = true }
 
 [lib]
 crate-type = ["cdylib", "lib"]

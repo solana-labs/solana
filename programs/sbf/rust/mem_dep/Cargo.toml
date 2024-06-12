@@ -1,5 +1,5 @@
 [package]
-name = "solana-sbf-rust-sysvar"
+name = "solana-sbf-rust-mem-dep"
 version = { workspace = true }
 description = { workspace = true }
 authors = { workspace = true }
@@ -12,4 +12,4 @@ edition = { workspace = true }
 solana-program = { workspace = true }
 
 [lib]
-crate-type = ["cdylib", "lib"]
+crate-type = ["lib"]

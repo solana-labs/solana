@@ -2,7 +2,7 @@
 
 use {
     solana_program_test::*,
-    solana_sbf_rust_mem::entrypoint::process_instruction,
+    solana_sbf_rust_mem::process_instruction,
     solana_sdk::{
         instruction::Instruction, pubkey::Pubkey, signature::Signer, transaction::Transaction,
     },
