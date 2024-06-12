@@ -1266,7 +1266,7 @@ pub fn main() {
         .value_of("accounts_db_access_storages_method")
         .map(|method| match method {
             "mmap" => StorageAccess::Mmap,
-            "file" => unimplemented!(),
+            "file" => StorageAccess::File,
             _ => {
                 // clap will enforce one of the above values is given
                 unreachable!("invalid value given to accounts-db-access-storages-method")

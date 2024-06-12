@@ -278,6 +278,7 @@ mod serde_snapshot_tests {
     }
 
     #[test_case(StorageAccess::Mmap)]
+    #[test_case(StorageAccess::File)]
     fn test_remove_unrooted_slot_snapshot(storage_access: StorageAccess) {
         solana_logger::setup();
         let unrooted_slot = 9;
@@ -313,6 +314,7 @@ mod serde_snapshot_tests {
     }
 
     #[test_case(StorageAccess::Mmap)]
+    #[test_case(StorageAccess::File)]
     fn test_accounts_db_serialize1(storage_access: StorageAccess) {
         for pass in 0..2 {
             solana_logger::setup();
@@ -428,6 +430,7 @@ mod serde_snapshot_tests {
     }
 
     #[test_case(StorageAccess::Mmap)]
+    #[test_case(StorageAccess::File)]
     fn test_accounts_db_serialize_zero_and_free(storage_access: StorageAccess) {
         solana_logger::setup();
 
@@ -548,6 +551,7 @@ mod serde_snapshot_tests {
     }
 
     #[test_case(StorageAccess::Mmap)]
+    #[test_case(StorageAccess::File)]
     fn test_accounts_purge_chained_purge_before_snapshot_restore(storage_access: StorageAccess) {
         solana_logger::setup();
         with_chained_zero_lamport_accounts(|accounts, current_slot| {
@@ -557,6 +561,7 @@ mod serde_snapshot_tests {
     }
 
     #[test_case(StorageAccess::Mmap)]
+    #[test_case(StorageAccess::File)]
     fn test_accounts_purge_chained_purge_after_snapshot_restore(storage_access: StorageAccess) {
         solana_logger::setup();
         with_chained_zero_lamport_accounts(|accounts, current_slot| {
@@ -569,6 +574,7 @@ mod serde_snapshot_tests {
     }
 
     #[test_case(StorageAccess::Mmap)]
+    #[test_case(StorageAccess::File)]
     fn test_accounts_purge_long_chained_after_snapshot_restore(storage_access: StorageAccess) {
         solana_logger::setup();
         let old_lamport = 223;
@@ -638,6 +644,7 @@ mod serde_snapshot_tests {
     }
 
     #[test_case(StorageAccess::Mmap)]
+    #[test_case(StorageAccess::File)]
     fn test_accounts_clean_after_snapshot_restore_then_old_revives(storage_access: StorageAccess) {
         solana_logger::setup();
         let old_lamport = 223;
@@ -773,6 +780,7 @@ mod serde_snapshot_tests {
     }
 
     #[test_case(StorageAccess::Mmap)]
+    #[test_case(StorageAccess::File)]
     fn test_shrink_stale_slots_processed(storage_access: StorageAccess) {
         solana_logger::setup();
 

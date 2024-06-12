@@ -53,6 +53,8 @@ pub enum StorageAccess {
     #[default]
     /// storages should be accessed by Mmap
     Mmap,
+    /// ancient storages are created by 1-shot write to pack multiple accounts together more efficiently with new formats
+    File,
 }
 
 pub type Result<T> = std::result::Result<T, AccountsFileError>;

@@ -1761,6 +1761,7 @@ mod tests {
     }
 
     #[test_case(StorageAccess::Mmap)]
+    #[test_case(StorageAccess::File)]
     fn test_bank_fields_from_snapshot(storage_access: StorageAccess) {
         let collector = Pubkey::new_unique();
         let key1 = Keypair::new();
@@ -2130,6 +2131,7 @@ mod tests {
     }
 
     #[test_case(StorageAccess::Mmap)]
+    #[test_case(StorageAccess::File)]
     fn test_bank_from_snapshot_dir(storage_access: StorageAccess) {
         let genesis_config = GenesisConfig::default();
         let bank_snapshots_dir = tempfile::TempDir::new().unwrap();
