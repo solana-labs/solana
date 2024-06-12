@@ -41,7 +41,6 @@ solana-inline-spl = { workspace = true }
 solana-measure = { workspace = true }
 solana-metrics = { workspace = true }
 solana-nohash-hasher = { workspace = true }
-solana-program-runtime = { workspace = true }
 solana-rayon-threadlimit = { workspace = true }
 solana-sdk = { workspace = true }
 solana-stake-program = { workspace = true, optional = true }
@@ -84,7 +83,6 @@ dev-context-only-utils = ["dep:qualifier_attr", "dep:solana-stake-program", "dep
 frozen-abi = [
     "dep:solana-frozen-abi",
     "dep:solana-frozen-abi-macro",
-    "solana-program-runtime/frozen-abi",
     "solana-sdk/frozen-abi",
     "solana-svm/frozen-abi",
     "solana-vote-program/frozen-abi",

@@ -43,7 +43,7 @@ use {
     solana_logger,
     solana_program_runtime::{
         declare_process_instruction,
-        loaded_programs::{ProgramCacheEntry, ProgramCacheEntryType, ProgramCacheForTxBatch},
+        loaded_programs::{ProgramCacheEntry, ProgramCacheEntryType},
         timings::ExecuteTimings,
     },
     solana_sdk::{
@@ -247,7 +247,7 @@ fn new_execution_result(
             executed_units: 0,
             accounts_data_len_delta: 0,
         },
-        programs_modified_by_tx: Box::<ProgramCacheForTxBatch>::default(),
+        programs_modified_by_tx: HashMap::new(),
     }
 }
 

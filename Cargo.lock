@@ -5423,7 +5423,6 @@ dependencies = [
  "solana-measure",
  "solana-metrics",
  "solana-nohash-hasher",
- "solana-program-runtime",
  "solana-rayon-threadlimit",
  "solana-sdk",
  "solana-stake-program",

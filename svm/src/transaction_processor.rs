@@ -868,7 +868,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                 executed_units,
                 accounts_data_len_delta,
             },
-            programs_modified_by_tx: Box::new(programs_modified_by_tx),
+            programs_modified_by_tx: programs_modified_by_tx.take_entries(),
         }
     }
 

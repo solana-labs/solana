@@ -716,6 +716,14 @@ impl ProgramCacheForTxBatch {
         }
     }
 
+    pub fn entries(&self) -> &HashMap<Pubkey, Arc<ProgramCacheEntry>> {
+        &self.entries
+    }
+
+    pub fn take_entries(&mut self) -> HashMap<Pubkey, Arc<ProgramCacheEntry>> {
+        std::mem::take(&mut self.entries)
+    }
+
     /// Returns the current environments depending on the given epoch
     pub fn get_environments_for_epoch(&self, epoch: Epoch) -> &ProgramRuntimeEnvironments {
         if epoch != self.latest_root_epoch {
@@ -764,8 +772,8 @@ impl ProgramCacheForTxBatch {
         self.slot = slot;
     }
 
-    pub fn merge(&mut self, other: &Self) {
-        other.entries.iter().for_each(|(key, entry)| {
+    pub fn merge(&mut self, modified_entries: &HashMap<Pubkey, Arc<ProgramCacheEntry>>) {
+        modified_entries.iter().for_each(|(key, entry)| {
             self.merged_modified = true;
             self.replenish(*key, entry.clone());
         })
@@ -1156,8 +1164,8 @@ impl<FG: ForkGraph> ProgramCache<FG> {
         }
     }
 
-    pub fn merge(&mut self, tx_batch_cache: &ProgramCacheForTxBatch) {
-        tx_batch_cache.entries.iter().for_each(|(key, entry)| {
+    pub fn merge(&mut self, modified_entries: &HashMap<Pubkey, Arc<ProgramCacheEntry>>) {
+        modified_entries.iter().for_each(|(key, entry)| {
             self.assign_program(*key, entry.clone());
         })
     }
