@@ -662,6 +662,9 @@ impl AccountsDb {
                 .collect::<Vec<_>>()
         });
 
+        let mut slots_cannot_move_count = 0;
+        let mut many_refs_old_alive_count = 0;
+
         // We want ceiling, so we add 1.
         // 0 < alive_bytes < `ideal_storage_size`, then `min_resulting_packed_slots` = 0.
         // We obviously require 1 packed slot if we have at 1 alive byte.
@@ -713,6 +716,7 @@ impl AccountsDb {
             }
 
             if !many_refs_old_alive.accounts.is_empty() {
+                many_refs_old_alive_count += many_refs_old_alive.accounts.len();
                 many_refs_old_alive.accounts.iter().for_each(|account| {
                     // these accounts could indicate clean bugs or low memory conditions where we are forced to flush non-roots
                     log::info!(
@@ -741,6 +745,7 @@ impl AccountsDb {
                     remove.push(i);
                     continue;
                 }
+                slots_cannot_move_count += 1;
                 accounts_keep_slots.insert(info.slot, std::mem::take(many_refs_old_alive));
             } else {
                 // No alive accounts in this slot have a ref_count > 1. So, ALL alive accounts in this slot can be written to any other slot
@@ -753,6 +758,12 @@ impl AccountsDb {
             self.addref_accounts_failed_to_shrink_ancient(vec![accounts_to_combine.remove(i)]);
         });
         target_slots_sorted.sort_unstable();
+        self.shrink_ancient_stats
+            .slots_cannot_move_count
+            .fetch_add(slots_cannot_move_count, Ordering::Relaxed);
+        self.shrink_ancient_stats
+            .many_refs_old_alive
+            .fetch_add(many_refs_old_alive_count as u64, Ordering::Relaxed);
         AccountsToCombine {
             accounts_to_combine,
             accounts_keep_slots,
