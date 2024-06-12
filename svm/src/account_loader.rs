@@ -509,16 +509,16 @@ mod tests {
 
     fn load_accounts_with_features_and_rent(
         tx: Transaction,
-        ka: &[TransactionAccount],
+        accounts: &[TransactionAccount],
         rent_collector: &RentCollector,
         error_metrics: &mut TransactionErrorMetrics,
         feature_set: &mut FeatureSet,
     ) -> Vec<TransactionLoadResult> {
         feature_set.deactivate(&feature_set::disable_rent_fees_collection::id());
         let sanitized_tx = SanitizedTransaction::from_transaction_for_tests(tx);
-        let fee_payer_account = ka[0].1.clone();
+        let fee_payer_account = accounts[0].1.clone();
         let mut accounts_map = HashMap::new();
-        for (pubkey, account) in ka {
+        for (pubkey, account) in accounts {
             accounts_map.insert(*pubkey, account.clone());
         }
         let callbacks = TestCallbacks {
@@ -558,12 +558,12 @@ mod tests {
 
     fn load_accounts_aux_test(
         tx: Transaction,
-        ka: &[TransactionAccount],
+        accounts: &[TransactionAccount],
         error_metrics: &mut TransactionErrorMetrics,
     ) -> Vec<TransactionLoadResult> {
         load_accounts_with_features_and_rent(
             tx,
-            ka,
+            accounts,
             &RentCollector::default(),
             error_metrics,
             &mut FeatureSet::all_enabled(),
@@ -572,13 +572,13 @@ mod tests {
 
     fn load_accounts_with_excluded_features(
         tx: Transaction,
-        ka: &[TransactionAccount],
+        accounts: &[TransactionAccount],
         error_metrics: &mut TransactionErrorMetrics,
         exclude_features: Option<&[Pubkey]>,
     ) -> Vec<TransactionLoadResult> {
         load_accounts_with_features_and_rent(
             tx,
-            ka,
+            accounts,
             &RentCollector::default(),
             error_metrics,
             &mut all_features_except(exclude_features),
@@ -800,7 +800,7 @@ mod tests {
     }
 
     fn load_accounts_no_store(
-        ka: &[TransactionAccount],
+        accounts: &[TransactionAccount],
         tx: Transaction,
         account_overrides: Option<&AccountOverrides>,
     ) -> Vec<TransactionLoadResult> {
@@ -808,7 +808,7 @@ mod tests {
 
         let mut error_metrics = TransactionErrorMetrics::default();
         let mut accounts_map = HashMap::new();
-        for (pubkey, account) in ka {
+        for (pubkey, account) in accounts {
             accounts_map.insert(*pubkey, account.clone());
         }
         let callbacks = TestCallbacks {
