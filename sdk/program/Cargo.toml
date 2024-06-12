@@ -61,6 +61,7 @@ wasm-bindgen = { workspace = true }
 
 [target.'cfg(not(target_os = "solana"))'.dev-dependencies]
 arbitrary = { workspace = true, features = ["derive"] }
+libsecp256k1 = { workspace = true, features = ["hmac"] } # used by doctests
 solana-logger = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
