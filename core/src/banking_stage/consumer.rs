@@ -606,11 +606,13 @@ impl Consumer {
                 &mut execute_and_commit_timings.execute_timings,
                 TransactionProcessingConfig {
                     account_overrides: None,
+                    compute_budget: bank.compute_budget(),
                     log_messages_bytes_limit: self.log_messages_bytes_limit,
                     limit_to_load_programs: true,
                     recording_config: ExecutionRecordingConfig::new_single_setting(
                         transaction_status_sender_enabled
                     ),
+                    transaction_account_lock_limit: Some(bank.get_transaction_account_lock_limit()),
                 }
             ));
         execute_and_commit_timings.load_execute_us = load_execute_us;

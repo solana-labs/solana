@@ -11,7 +11,6 @@ use {
         message_processor::MessageProcessor,
         nonce_info::NonceFull,
         program_loader::load_program_with_pubkey,
-        runtime_config::RuntimeConfig,
         transaction_account_state_info::TransactionAccountStateInfo,
         transaction_error_metrics::TransactionErrorMetrics,
         transaction_processing_callback::TransactionProcessingCallback,
@@ -106,6 +105,8 @@ pub struct TransactionProcessingConfig<'a> {
     /// Encapsulates overridden accounts, typically used for transaction
     /// simulation.
     pub account_overrides: Option<&'a AccountOverrides>,
+    /// The compute budget to use for transaction execution.
+    pub compute_budget: Option<ComputeBudget>,
     /// The maximum number of bytes that log messages can consume.
     pub log_messages_bytes_limit: Option<usize>,
     /// Whether to limit the number of programs loaded for the transaction
@@ -113,6 +114,8 @@ pub struct TransactionProcessingConfig<'a> {
     pub limit_to_load_programs: bool,
     /// Recording capabilities for transaction execution.
     pub recording_config: ExecutionRecordingConfig,
+    /// The max number of accounts that a transaction may lock.
+    pub transaction_account_lock_limit: Option<usize>,
 }
 
 #[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
@@ -128,9 +131,6 @@ pub struct TransactionBatchProcessor<FG: ForkGraph> {
 
     /// Transaction fee structure
     pub fee_structure: FeeStructure,
-
-    /// Optional config parameters that can override runtime behavior
-    pub runtime_config: Arc<RuntimeConfig>,
 
     /// SysvarCache is a collection of system variables that are
     /// accessible from on chain programs. It is passed to SVM from
@@ -151,7 +151,6 @@ impl<FG: ForkGraph> Debug for TransactionBatchProcessor<FG> {
             .field("epoch", &self.epoch)
             .field("epoch_schedule", &self.epoch_schedule)
             .field("fee_structure", &self.fee_structure)
-            .field("runtime_config", &self.runtime_config)
             .field("sysvar_cache", &self.sysvar_cache)
             .field("program_cache", &self.program_cache)
             .finish()
@@ -165,7 +164,6 @@ impl<FG: ForkGraph> Default for TransactionBatchProcessor<FG> {
             epoch: Epoch::default(),
             epoch_schedule: EpochSchedule::default(),
             fee_structure: FeeStructure::default(),
-            runtime_config: Arc::<RuntimeConfig>::default(),
             sysvar_cache: RwLock::<SysvarCache>::default(),
             program_cache: Arc::new(RwLock::new(ProgramCache::new(
                 Slot::default(),
@@ -181,7 +179,6 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         slot: Slot,
         epoch: Epoch,
         epoch_schedule: EpochSchedule,
-        runtime_config: Arc<RuntimeConfig>,
         builtin_program_ids: HashSet<Pubkey>,
     ) -> Self {
         Self {
@@ -189,7 +186,6 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
             epoch,
             epoch_schedule,
             fee_structure: FeeStructure::default(),
-            runtime_config,
             sysvar_cache: RwLock::<SysvarCache>::default(),
             program_cache: Arc::new(RwLock::new(ProgramCache::new(slot, epoch))),
             builtin_program_ids: RwLock::new(builtin_program_ids),
@@ -202,7 +198,6 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
             epoch,
             epoch_schedule: self.epoch_schedule.clone(),
             fee_structure: self.fee_structure.clone(),
-            runtime_config: self.runtime_config.clone(),
             sysvar_cache: RwLock::<SysvarCache>::default(),
             program_cache: self.program_cache.clone(),
             builtin_program_ids: RwLock::new(self.builtin_program_ids.read().unwrap().clone()),
@@ -288,27 +283,26 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
             .map(|(load_result, tx)| match load_result {
                 Err(e) => TransactionExecutionResult::NotExecuted(e.clone()),
                 Ok(loaded_transaction) => {
-                    let compute_budget =
-                        if let Some(compute_budget) = self.runtime_config.compute_budget {
-                            compute_budget
-                        } else {
-                            let mut compute_budget_process_transaction_time =
-                                Measure::start("compute_budget_process_transaction_time");
-                            let maybe_compute_budget = ComputeBudget::try_from_instructions(
-                                tx.message().program_instructions_iter(),
-                            );
-                            compute_budget_process_transaction_time.stop();
-                            saturating_add_assign!(
-                                execute_timings
-                                    .execute_accessories
-                                    .compute_budget_process_transaction_us,
-                                compute_budget_process_transaction_time.as_us()
-                            );
-                            if let Err(err) = maybe_compute_budget {
-                                return TransactionExecutionResult::NotExecuted(err);
-                            }
-                            maybe_compute_budget.unwrap()
-                        };
+                    let compute_budget = if let Some(compute_budget) = config.compute_budget {
+                        compute_budget
+                    } else {
+                        let mut compute_budget_process_transaction_time =
+                            Measure::start("compute_budget_process_transaction_time");
+                        let maybe_compute_budget = ComputeBudget::try_from_instructions(
+                            tx.message().program_instructions_iter(),
+                        );
+                        compute_budget_process_transaction_time.stop();
+                        saturating_add_assign!(
+                            execute_timings
+                                .execute_accessories
+                                .compute_budget_process_transaction_us,
+                            compute_budget_process_transaction_time.as_us()
+                        );
+                        if let Err(err) = maybe_compute_budget {
+                            return TransactionExecutionResult::NotExecuted(err);
+                        }
+                        maybe_compute_budget.unwrap()
+                    };
 
                     let result = self.execute_loaded_transaction(
                         callbacks,
@@ -610,6 +604,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         &self,
         callbacks: &CB,
         upcoming_feature_set: &FeatureSet,
+        compute_budget: &ComputeBudget,
     ) {
         // Recompile loaded programs one at a time before the next epoch hits
         let (_epoch, slot_index) = self.epoch_schedule.get_epoch_and_slot_index(self.slot);
@@ -653,13 +648,13 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
             let mut program_cache = self.program_cache.write().unwrap();
             let program_runtime_environment_v1 = create_program_runtime_environment_v1(
                 upcoming_feature_set,
-                &self.runtime_config.compute_budget.unwrap_or_default(),
+                compute_budget,
                 false, /* deployment */
                 false, /* debugging_features */
             )
             .unwrap();
             let program_runtime_environment_v2 = create_program_runtime_environment_v2(
-                &self.runtime_config.compute_budget.unwrap_or_default(),
+                compute_budget,
                 false, /* debugging_features */
             );
             let mut upcoming_environments = program_cache.environments.clone();
@@ -1853,7 +1848,6 @@ mod tests {
             5,
             5,
             EpochSchedule::default(),
-            Arc::new(RuntimeConfig::default()),
             HashSet::new(),
         );
         batch_processor.program_cache.write().unwrap().fork_graph =

@@ -89,7 +89,10 @@ use {
         storable_accounts::StorableAccounts,
     },
     solana_bpf_loader_program::syscalls::create_program_runtime_environment_v1,
-    solana_compute_budget::compute_budget_processor::process_compute_budget_instructions,
+    solana_compute_budget::{
+        compute_budget::ComputeBudget,
+        compute_budget_processor::process_compute_budget_instructions,
+    },
     solana_cost_model::cost_tracker::CostTracker,
     solana_loader_v4_program::create_program_runtime_environment_v2,
     solana_measure::{measure, measure::Measure, measure_us},
@@ -595,6 +598,8 @@ impl PartialEq for Bank {
             transaction_processor: _,
             check_program_modification_slot: _,
             collector_fee_details: _,
+            compute_budget: _,
+            transaction_account_lock_limit: _,
             // Ignore new fields explicitly if they do not impact PartialEq.
             // Adding ".." will remove compile-time checks that if a new field
             // is added to the struct, this PartialEq is accordingly updated.
@@ -874,6 +879,12 @@ pub struct Bank {
 
     /// Collected fee details
     collector_fee_details: RwLock<CollectorFeeDetails>,
+
+    /// The compute budget to use for transaction execution.
+    compute_budget: Option<ComputeBudget>,
+
+    /// The max number of accounts that a transaction may lock.
+    transaction_account_lock_limit: Option<usize>,
 }
 
 struct VoteWithStakeDelegations {
@@ -989,13 +1000,14 @@ impl Bank {
             transaction_processor: TransactionBatchProcessor::default(),
             check_program_modification_slot: false,
             collector_fee_details: RwLock::new(CollectorFeeDetails::default()),
+            compute_budget: None,
+            transaction_account_lock_limit: None,
         };
 
         bank.transaction_processor = TransactionBatchProcessor::new(
             bank.slot,
             bank.epoch,
             bank.epoch_schedule.clone(),
-            Arc::new(RuntimeConfig::default()),
             HashSet::default(),
         );
 
@@ -1032,8 +1044,9 @@ impl Bank {
         let accounts = Accounts::new(Arc::new(accounts_db));
         let mut bank = Self::default_with_accounts(accounts);
         bank.ancestors = Ancestors::from(vec![bank.slot()]);
+        bank.compute_budget = runtime_config.compute_budget;
+        bank.transaction_account_lock_limit = runtime_config.transaction_account_lock_limit;
         bank.transaction_debug_keys = debug_keys;
-        bank.transaction_processor.runtime_config = runtime_config;
         bank.cluster_type = Some(genesis_config.cluster_type);
 
         #[cfg(not(feature = "dev-context-only-utils"))]
@@ -1236,6 +1249,8 @@ impl Bank {
             transaction_processor,
             check_program_modification_slot: false,
             collector_fee_details: RwLock::new(CollectorFeeDetails::default()),
+            compute_budget: parent.compute_budget,
+            transaction_account_lock_limit: parent.transaction_account_lock_limit,
         };
 
         let (_, ancestors_time_us) = measure_us!({
@@ -1270,7 +1285,8 @@ impl Bank {
             .transaction_processor
             .prepare_program_cache_for_upcoming_feature_set(
                 &new,
-                &new.compute_active_feature_set(true).0
+                &new.compute_active_feature_set(true).0,
+                &new.compute_budget.unwrap_or_default(),
             ));
 
         // Update sysvars before processing transactions
@@ -1619,13 +1635,14 @@ impl Bank {
             check_program_modification_slot: false,
             // collector_fee_details is not serialized to snapshot
             collector_fee_details: RwLock::new(CollectorFeeDetails::default()),
+            compute_budget: runtime_config.compute_budget,
+            transaction_account_lock_limit: runtime_config.transaction_account_lock_limit,
         };
 
         bank.transaction_processor = TransactionBatchProcessor::new(
             bank.slot,
             bank.epoch,
             bank.epoch_schedule.clone(),
-            runtime_config,
             HashSet::default(),
         );
 
@@ -3260,9 +3277,7 @@ impl Bank {
 
     /// Get the max number of accounts that a transaction may lock in this block
     pub fn get_transaction_account_lock_limit(&self) -> usize {
-        if let Some(transaction_account_lock_limit) =
-            self.runtime_config().transaction_account_lock_limit
-        {
+        if let Some(transaction_account_lock_limit) = self.transaction_account_lock_limit {
             transaction_account_lock_limit
         } else if self
             .feature_set
@@ -3387,6 +3402,7 @@ impl Bank {
             &mut timings,
             TransactionProcessingConfig {
                 account_overrides: Some(&account_overrides),
+                compute_budget: self.compute_budget(),
                 log_messages_bytes_limit: None,
                 limit_to_load_programs: true,
                 recording_config: ExecutionRecordingConfig {
@@ -3394,6 +3410,7 @@ impl Bank {
                     enable_log_recording: true,
                     enable_return_data_recording: true,
                 },
+                transaction_account_lock_limit: Some(self.get_transaction_account_lock_limit()),
             },
         );
 
@@ -4857,9 +4874,11 @@ impl Bank {
             timings,
             TransactionProcessingConfig {
                 account_overrides: None,
+                compute_budget: self.compute_budget(),
                 log_messages_bytes_limit,
                 limit_to_load_programs: false,
                 recording_config,
+                transaction_account_lock_limit: Some(self.get_transaction_account_lock_limit()),
             },
         );
 
@@ -5183,7 +5202,7 @@ impl Bank {
         program_cache.environments.program_runtime_v1 = Arc::new(
             create_program_runtime_environment_v1(
                 &self.feature_set,
-                &self.runtime_config().compute_budget.unwrap_or_default(),
+                &self.compute_budget().unwrap_or_default(),
                 false, /* deployment */
                 false, /* debugging_features */
             )
@@ -5191,7 +5210,7 @@ impl Bank {
         );
         program_cache.environments.program_runtime_v2 =
             Arc::new(create_program_runtime_environment_v2(
-                &self.runtime_config().compute_budget.unwrap_or_default(),
+                &self.compute_budget().unwrap_or_default(),
                 false, /* debugging_features */
             ));
     }
@@ -6798,8 +6817,8 @@ impl Bank {
         &self.transaction_processor.fee_structure
     }
 
-    pub fn runtime_config(&self) -> &RuntimeConfig {
-        &self.transaction_processor.runtime_config
+    pub fn compute_budget(&self) -> Option<ComputeBudget> {
+        self.compute_budget
     }
 
     pub fn add_builtin(&self, program_id: Pubkey, name: &str, builtin: ProgramCacheEntry) {

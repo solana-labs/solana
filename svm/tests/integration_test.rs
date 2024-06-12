@@ -31,7 +31,6 @@ use {
     },
     solana_svm::{
         account_loader::{CheckedTransactionDetails, TransactionCheckResult},
-        runtime_config::RuntimeConfig,
         transaction_processing_callback::TransactionProcessingCallback,
         transaction_processor::{
             ExecutionRecordingConfig, TransactionBatchProcessor, TransactionProcessingConfig,
@@ -446,7 +445,6 @@ fn svm_integration() {
         EXECUTION_SLOT,
         EXECUTION_EPOCH,
         EpochSchedule::default(),
-        Arc::new(RuntimeConfig::default()),
         HashSet::new(),
     );
 
