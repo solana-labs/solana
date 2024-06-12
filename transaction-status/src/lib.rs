@@ -142,7 +142,7 @@ pub enum UiInstruction {
 }
 
 impl UiInstruction {
-    fn parse(
+    pub fn parse(
         instruction: &CompiledInstruction,
         account_keys: &AccountKeys,
         stack_height: Option<u32>,

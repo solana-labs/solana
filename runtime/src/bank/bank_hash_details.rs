@@ -18,6 +18,8 @@ use {
         hash::Hash,
         pubkey::Pubkey,
     },
+    solana_svm::transaction_results::TransactionExecutionDetails,
+    solana_transaction_status::UiInstruction,
     std::str::FromStr,
 };
 
@@ -28,11 +30,11 @@ pub struct BankHashDetails {
     /// The encoding format for account data buffers
     pub account_data_encoding: String,
     /// Bank hash details for a collection of banks
-    pub bank_hash_details: Vec<BankHashSlotDetails>,
+    pub bank_hash_details: Vec<SlotDetails>,
 }
 
 impl BankHashDetails {
-    pub fn new(bank_hash_details: Vec<BankHashSlotDetails>) -> Self {
+    pub fn new(bank_hash_details: Vec<SlotDetails>) -> Self {
         Self {
             version: solana_version::version!().to_string(),
             account_data_encoding: "base64".to_string(),
@@ -65,9 +67,18 @@ impl BankHashDetails {
     }
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, Default)]
+pub struct TransactionDetails {
+    pub index: usize,
+    pub accounts: Vec<String>,
+    pub instructions: Vec<UiInstruction>,
+    pub is_simple_vote_tx: bool,
+    pub execution_results: Option<TransactionExecutionDetails>,
+}
+
 /// The components that go into a bank hash calculation for a single bank/slot.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, Default)]
-pub struct BankHashSlotDetails {
+pub struct SlotDetails {
     pub slot: Slot,
     pub bank_hash: String,
     #[serde(skip_serializing_if = "String::is_empty")]
@@ -82,20 +93,23 @@ pub struct BankHashSlotDetails {
     #[serde(skip_serializing_if = "String::is_empty")]
     #[serde(default)]
     pub last_blockhash: String,
-    #[serde(skip_serializing_if = "bankhashaccounts_is_empty")]
+    #[serde(skip_serializing_if = "accounts_is_empty")]
     #[serde(default)]
-    pub accounts: BankHashAccounts,
+    pub accounts: AccountsDetails,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
+    pub transactions: Vec<TransactionDetails>,
 }
 
 fn u64_is_zero(val: &u64) -> bool {
     *val == 0
 }
 
-fn bankhashaccounts_is_empty(accounts: &BankHashAccounts) -> bool {
+fn accounts_is_empty(accounts: &AccountsDetails) -> bool {
     accounts.accounts.is_empty()
 }
 
-impl BankHashSlotDetails {
+impl SlotDetails {
     pub fn new(
         slot: Slot,
         bank_hash: Hash,
@@ -103,7 +117,7 @@ impl BankHashSlotDetails {
         accounts_delta_hash: Hash,
         signature_count: u64,
         last_blockhash: Hash,
-        accounts: BankHashAccounts,
+        accounts: AccountsDetails,
     ) -> Self {
         Self {
             slot,
@@ -113,11 +127,12 @@ impl BankHashSlotDetails {
             signature_count,
             last_blockhash: last_blockhash.to_string(),
             accounts,
+            transactions: Vec::new(),
         }
     }
 }
 
-impl TryFrom<&Bank> for BankHashSlotDetails {
+impl TryFrom<&Bank> for SlotDetails {
     type Error = String;
 
     fn try_from(bank: &Bank) -> Result<Self, Self::Error> {
@@ -146,7 +161,7 @@ impl TryFrom<&Bank> for BankHashSlotDetails {
             accounts_delta_hash,
             bank.signature_count(),
             bank.last_blockhash(),
-            BankHashAccounts { accounts },
+            AccountsDetails { accounts },
         ))
     }
 }
@@ -154,7 +169,7 @@ impl TryFrom<&Bank> for BankHashSlotDetails {
 /// Wrapper around a Vec<_> to facilitate custom Serialize/Deserialize trait
 /// implementations.
 #[derive(Clone, Debug, Eq, PartialEq, Default)]
-pub struct BankHashAccounts {
+pub struct AccountsDetails {
     pub accounts: Vec<PubkeyHashAccount>,
 }
 
@@ -215,7 +230,7 @@ impl TryFrom<SerdeAccount> for PubkeyHashAccount {
     }
 }
 
-impl Serialize for BankHashAccounts {
+impl Serialize for AccountsDetails {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -229,7 +244,7 @@ impl Serialize for BankHashAccounts {
     }
 }
 
-impl<'de> Deserialize<'de> for BankHashAccounts {
+impl<'de> Deserialize<'de> for AccountsDetails {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -240,7 +255,7 @@ impl<'de> Deserialize<'de> for BankHashAccounts {
             .map(PubkeyHashAccount::try_from)
             .collect();
         let pubkey_hash_accounts = pubkey_hash_accounts.map_err(de::Error::custom)?;
-        Ok(BankHashAccounts {
+        Ok(AccountsDetails {
             accounts: pubkey_hash_accounts,
         })
     }
@@ -248,7 +263,7 @@ impl<'de> Deserialize<'de> for BankHashAccounts {
 
 /// Output the components that comprise the overall bank hash for the supplied `Bank`
 pub fn write_bank_hash_details_file(bank: &Bank) -> std::result::Result<(), String> {
-    let slot_details = BankHashSlotDetails::try_from(bank)?;
+    let slot_details = SlotDetails::try_from(bank)?;
     let details = BankHashDetails::new(vec![slot_details]);
 
     let parent_dir = bank
@@ -300,7 +315,7 @@ pub mod tests {
                 });
                 let account_pubkey = Pubkey::new_unique();
                 let account_hash = AccountHash(hash("account".as_bytes()));
-                let accounts = BankHashAccounts {
+                let accounts = AccountsDetails {
                     accounts: vec![PubkeyHashAccount {
                         pubkey: account_pubkey,
                         hash: account_hash,
@@ -313,7 +328,7 @@ pub mod tests {
                 let accounts_delta_hash = hash("accounts_delta".as_bytes());
                 let last_blockhash = hash("last_blockhash".as_bytes());
 
-                BankHashSlotDetails::new(
+                SlotDetails::new(
                     slot as Slot,
                     bank_hash,
                     parent_bank_hash,

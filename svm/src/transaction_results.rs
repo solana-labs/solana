@@ -5,6 +5,7 @@
 )]
 pub use solana_sdk::inner_instruction::{InnerInstruction, InnerInstructionsList};
 use {
+    serde::{Deserialize, Serialize},
     solana_program_runtime::loaded_programs::ProgramCacheForTxBatch,
     solana_sdk::{
         fee::FeeDetails,
@@ -76,7 +77,7 @@ impl TransactionExecutionResult {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TransactionExecutionDetails {
     pub status: transaction::Result<()>,
     pub log_messages: Option<Vec<String>>,

@@ -93,6 +93,7 @@ fn load_blockstore(ledger_path: &Path, arg_matches: &ArgMatches<'_>) -> Arc<Bank
         process_options,
         snapshot_archive_path,
         incremental_snapshot_archive_path,
+        None,
     );
     let bank = bank_forks.read().unwrap().working_bank();
     bank

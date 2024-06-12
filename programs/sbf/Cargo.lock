@@ -5681,6 +5681,7 @@ dependencies = [
  "solana-stake-program",
  "solana-svm",
  "solana-system-program",
+ "solana-transaction-status",
  "solana-version",
  "solana-vote",
  "solana-vote-program",
