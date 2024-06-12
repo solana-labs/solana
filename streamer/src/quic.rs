@@ -95,6 +95,12 @@ pub(crate) fn configure_server(
     config.max_concurrent_bidi_streams(MAX_CONCURRENT_BIDI_STREAMS.into());
     config.datagram_receive_buffer_size(None);
 
+    // Disable GSO. The server only accepts inbound unidirectional streams initiated by clients,
+    // which means that reply data never exceeds one MTU. By disabling GSO, we make
+    // quinn_proto::Connection::poll_transmit allocate only 1 MTU vs 10 * MTU for _each_ transmit.
+    // See https://github.com/anza-xyz/agave/pull/1647.
+    config.enable_segmentation_offload(false);
+
     Ok((server_config, cert_chain_pem))
 }
 
