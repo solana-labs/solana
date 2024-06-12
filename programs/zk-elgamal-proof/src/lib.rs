@@ -3,10 +3,7 @@
 use {
     bytemuck::Pod,
     solana_program_runtime::{declare_process_instruction, ic_msg, invoke_context::InvokeContext},
-    solana_sdk::{
-        instruction::{InstructionError, TRANSACTION_LEVEL_STACK_HEIGHT},
-        system_program,
-    },
+    solana_sdk::{instruction::InstructionError, system_program},
     solana_zk_sdk::elgamal_program::{
         id,
         instruction::ProofInstruction,
@@ -177,13 +174,6 @@ declare_process_instruction!(Entrypoint, 0, |invoke_context| {
     let instruction_data = instruction_context.get_instruction_data();
     let instruction = ProofInstruction::instruction_type(instruction_data)
         .ok_or(InstructionError::InvalidInstructionData)?;
-
-    if invoke_context.get_stack_height() != TRANSACTION_LEVEL_STACK_HEIGHT
-        && instruction != ProofInstruction::CloseContextState
-    {
-        // Proof verification instructions are not supported as an inner instruction
-        return Err(InstructionError::UnsupportedProgramId);
-    }
 
     match instruction {
         ProofInstruction::CloseContextState => {
