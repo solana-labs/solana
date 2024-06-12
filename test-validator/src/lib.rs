@@ -37,7 +37,7 @@ use {
         runtime_config::RuntimeConfig, snapshot_config::SnapshotConfig,
     },
     solana_sdk::{
-        account::{Account, AccountSharedData, WritableAccount},
+        account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
         bpf_loader_upgradeable::UpgradeableLoaderState,
         clock::{Slot, DEFAULT_MS_PER_SLOT},
         commitment_config::CommitmentConfig,
@@ -183,6 +183,42 @@ impl Default for TestValidatorGenesis {
             admin_rpc_service_post_init:
                 Arc::<RwLock<Option<AdminRpcRequestMetadataPostInit>>>::default(),
         }
+    }
+}
+
+fn try_transform_program_data(
+    address: &Pubkey,
+    account: &mut AccountSharedData,
+) -> Result<(), String> {
+    if account.owner() == &solana_sdk::bpf_loader_upgradeable::id() {
+        let programdata_offset = UpgradeableLoaderState::size_of_programdata_metadata();
+        let programdata_meta = account.data().get(0..programdata_offset).ok_or(format!(
+            "Failed to get upgradeable programdata data from {address}"
+        ))?;
+        // Ensure the account is a proper programdata account before
+        // attempting to serialize into it.
+        if let Ok(UpgradeableLoaderState::ProgramData {
+            upgrade_authority_address,
+            ..
+        }) = bincode::deserialize::<UpgradeableLoaderState>(programdata_meta)
+        {
+            // Serialize new programdata metadata into the resulting account,
+            // to overwrite the deployment slot to `0`.
+            bincode::serialize_into(
+                account.data_as_mut_slice(),
+                &UpgradeableLoaderState::ProgramData {
+                    slot: 0,
+                    upgrade_authority_address,
+                },
+            )
+            .map_err(|_| format!("Failed to write to upgradeable programdata account {address}"))
+        } else {
+            Err(format!(
+                "Failed to read upgradeable programdata account {address}"
+            ))
+        }
+    } else {
+        Err(format!("Account {address} not owned by upgradeable loader"))
     }
 }
 
@@ -348,7 +384,12 @@ impl TestValidatorGenesis {
             addresses,
             rpc_client,
             skip_missing,
-            |_address, account| Ok(AccountSharedData::from(account)),
+            |address, account| {
+                let mut account_shared_data = AccountSharedData::from(account);
+                // ignore the error
+                try_transform_program_data(address, &mut account_shared_data).ok();
+                Ok(account_shared_data)
+            },
         )
     }
 
@@ -366,35 +407,9 @@ impl TestValidatorGenesis {
             rpc_client,
             skip_missing,
             |address, account| {
-                let programdata_offset = UpgradeableLoaderState::size_of_programdata_metadata();
-                // Ensure the account is a proper programdata account before
-                // attempting to serialize into it.
-                if let Ok(UpgradeableLoaderState::ProgramData {
-                    upgrade_authority_address,
-                    ..
-                }) = bincode::deserialize(&account.data[..programdata_offset])
-                {
-                    // Serialize new programdata metadata into the resulting account,
-                    // to overwrite the deployment slot to `0`.
-                    let mut programdata_account = AccountSharedData::from(account);
-                    bincode::serialize_into(
-                        programdata_account.data_as_mut_slice(),
-                        &UpgradeableLoaderState::ProgramData {
-                            slot: 0,
-                            upgrade_authority_address,
-                        },
-                    )
-                    .map(|()| Ok(programdata_account))
-                    .unwrap_or_else(|_| {
-                        Err(format!(
-                            "Failed to write to upgradeable programdata account {address}",
-                        ))
-                    })
-                } else {
-                    Err(format!(
-                        "Failed to read upgradeable programdata account {address}",
-                    ))
-                }
+                let mut account_shared_data = AccountSharedData::from(account);
+                try_transform_program_data(address, &mut account_shared_data)?;
+                Ok(account_shared_data)
             },
         )
     }
