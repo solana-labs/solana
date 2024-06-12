@@ -19,13 +19,13 @@
 // `clippy::op_ref` is turned off to prevent clippy from warning that this is not idiomatic code.
 #![allow(clippy::arithmetic_side_effects, clippy::op_ref)]
 
-pub mod elgamal_program;
 pub mod encryption;
 pub mod errors;
 pub mod pod;
 mod range_proof;
 mod sigma_proofs;
 mod transcript;
+pub mod zk_elgamal_proof_program;
 
 /// Byte length of a compressed Ristretto point or scalar in Curve255519
 const UNIT_LEN: usize = 32;

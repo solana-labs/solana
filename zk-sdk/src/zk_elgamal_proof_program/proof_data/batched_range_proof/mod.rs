@@ -27,8 +27,8 @@ use {
 #[cfg(not(target_os = "solana"))]
 use {
     crate::{
-        elgamal_program::errors::{ProofGenerationError, ProofVerificationError},
         encryption::pedersen::{PedersenCommitment, PedersenOpening},
+        zk_elgamal_proof_program::errors::{ProofGenerationError, ProofVerificationError},
     },
     bytemuck::bytes_of,
     curve25519_dalek::traits::IsIdentity,

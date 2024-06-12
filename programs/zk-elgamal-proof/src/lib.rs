@@ -4,7 +4,7 @@ use {
     bytemuck::Pod,
     solana_program_runtime::{declare_process_instruction, ic_msg, invoke_context::InvokeContext},
     solana_sdk::{instruction::InstructionError, system_program},
-    solana_zk_sdk::elgamal_program::{
+    solana_zk_sdk::zk_elgamal_proof_program::{
         id,
         instruction::ProofInstruction,
         proof_data::*,

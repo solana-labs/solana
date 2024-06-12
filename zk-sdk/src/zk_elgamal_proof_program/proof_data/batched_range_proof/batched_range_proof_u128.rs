@@ -1,25 +1,25 @@
 //! The 128-bit batched range proof instruction.
 
-use {
-    crate::{
-        elgamal_program::proof_data::{
-            batched_range_proof::BatchedRangeProofContext, ProofType, ZkProofData,
-        },
-        range_proof::pod::PodRangeProofU128,
-    },
-    bytemuck::{Pod, Zeroable},
-};
 #[cfg(not(target_os = "solana"))]
 use {
     crate::{
-        elgamal_program::{
+        encryption::pedersen::{PedersenCommitment, PedersenOpening},
+        range_proof::RangeProof,
+        zk_elgamal_proof_program::{
             errors::{ProofGenerationError, ProofVerificationError},
             proof_data::batched_range_proof::MAX_COMMITMENTS,
         },
-        encryption::pedersen::{PedersenCommitment, PedersenOpening},
-        range_proof::RangeProof,
     },
     std::convert::TryInto,
+};
+use {
+    crate::{
+        range_proof::pod::PodRangeProofU128,
+        zk_elgamal_proof_program::proof_data::{
+            batched_range_proof::BatchedRangeProofContext, ProofType, ZkProofData,
+        },
+    },
+    bytemuck::{Pod, Zeroable},
 };
 
 /// The instruction data that is needed for the
@@ -102,8 +102,8 @@ mod test {
     use {
         super::*,
         crate::{
-            elgamal_program::errors::ProofVerificationError, encryption::pedersen::Pedersen,
-            range_proof::errors::RangeProofVerificationError,
+            encryption::pedersen::Pedersen, range_proof::errors::RangeProofVerificationError,
+            zk_elgamal_proof_program::errors::ProofVerificationError,
         },
     };
 

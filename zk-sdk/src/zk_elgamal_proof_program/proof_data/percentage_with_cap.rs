@@ -9,9 +9,9 @@
 #[cfg(not(target_os = "solana"))]
 use {
     crate::{
-        elgamal_program::errors::{ProofGenerationError, ProofVerificationError},
         encryption::pedersen::{PedersenCommitment, PedersenOpening},
         sigma_proofs::percentage_with_cap::PercentageWithCapProof,
+        zk_elgamal_proof_program::errors::{ProofGenerationError, ProofVerificationError},
     },
     bytemuck::bytes_of,
     merlin::Transcript,
@@ -19,10 +19,10 @@ use {
 };
 use {
     crate::{
-        elgamal_program::proof_data::{ProofType, ZkProofData},
         encryption::pod::pedersen::PodPedersenCommitment,
         pod::PodU64,
         sigma_proofs::pod::PodPercentageWithCapProof,
+        zk_elgamal_proof_program::proof_data::{ProofType, ZkProofData},
     },
     bytemuck::{Pod, Zeroable},
 };

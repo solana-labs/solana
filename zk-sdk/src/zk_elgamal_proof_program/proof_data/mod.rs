@@ -1,5 +1,5 @@
 #[cfg(not(target_os = "solana"))]
-use crate::elgamal_program::errors::ProofVerificationError;
+use crate::zk_elgamal_proof_program::errors::ProofVerificationError;
 use {
     bytemuck::Pod,
     num_derive::{FromPrimitive, ToPrimitive},

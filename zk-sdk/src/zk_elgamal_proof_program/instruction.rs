@@ -33,7 +33,7 @@
 //! [`context-state`]: https://docs.solanalabs.com/runtime/zk-token-proof#context-data
 
 use {
-    crate::elgamal_program::proof_data::ZkProofData,
+    crate::zk_elgamal_proof_program::proof_data::ZkProofData,
     bytemuck::{bytes_of, Pod},
     num_derive::{FromPrimitive, ToPrimitive},
     num_traits::{FromPrimitive, ToPrimitive},
@@ -306,7 +306,7 @@ pub fn close_context_state(
     let data = vec![ToPrimitive::to_u8(&ProofInstruction::CloseContextState).unwrap()];
 
     Instruction {
-        program_id: crate::elgamal_program::id(),
+        program_id: crate::zk_elgamal_proof_program::id(),
         accounts,
         data,
     }
@@ -335,7 +335,7 @@ impl ProofInstruction {
         data.extend_from_slice(bytes_of(proof_data));
 
         Instruction {
-            program_id: crate::elgamal_program::id(),
+            program_id: crate::zk_elgamal_proof_program::id(),
             accounts,
             data,
         }
@@ -361,7 +361,7 @@ impl ProofInstruction {
         data.extend_from_slice(&offset.to_le_bytes());
 
         Instruction {
-            program_id: crate::elgamal_program::id(),
+            program_id: crate::zk_elgamal_proof_program::id(),
             accounts,
             data,
         }

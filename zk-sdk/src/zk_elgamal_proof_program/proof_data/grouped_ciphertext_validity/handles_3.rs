@@ -5,28 +5,28 @@
 //! decryption handles. To generate the proof, a prover must provide the Pedersen opening
 //! associated with the grouped ciphertext's commitment.
 
+use {
+    crate::{
+        encryption::pod::{
+            elgamal::PodElGamalPubkey, grouped_elgamal::PodGroupedElGamalCiphertext3Handles,
+        },
+        sigma_proofs::pod::PodGroupedCiphertext3HandlesValidityProof,
+        zk_elgamal_proof_program::proof_data::{ProofType, ZkProofData},
+    },
+    bytemuck::{Pod, Zeroable},
+};
 #[cfg(not(target_os = "solana"))]
 use {
     crate::{
-        elgamal_program::errors::{ProofGenerationError, ProofVerificationError},
         encryption::{
             elgamal::ElGamalPubkey, grouped_elgamal::GroupedElGamalCiphertext,
             pedersen::PedersenOpening,
         },
         sigma_proofs::grouped_ciphertext_validity::GroupedCiphertext3HandlesValidityProof,
+        zk_elgamal_proof_program::errors::{ProofGenerationError, ProofVerificationError},
     },
     bytemuck::bytes_of,
     merlin::Transcript,
-};
-use {
-    crate::{
-        elgamal_program::proof_data::{ProofType, ZkProofData},
-        encryption::pod::{
-            elgamal::PodElGamalPubkey, grouped_elgamal::PodGroupedElGamalCiphertext3Handles,
-        },
-        sigma_proofs::pod::PodGroupedCiphertext3HandlesValidityProof,
-    },
-    bytemuck::{Pod, Zeroable},
 };
 
 /// The instruction data that is needed for the

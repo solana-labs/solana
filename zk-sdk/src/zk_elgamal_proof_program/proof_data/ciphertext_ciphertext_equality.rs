@@ -5,27 +5,27 @@
 //! the proof, a prover must provide the decryption key for the first ciphertext and the randomness
 //! used to generate the second ciphertext.
 
+use {
+    crate::{
+        encryption::pod::elgamal::{PodElGamalCiphertext, PodElGamalPubkey},
+        sigma_proofs::pod::PodCiphertextCiphertextEqualityProof,
+        zk_elgamal_proof_program::proof_data::{ProofType, ZkProofData},
+    },
+    bytemuck::{Pod, Zeroable},
+};
 #[cfg(not(target_os = "solana"))]
 use {
     crate::{
-        elgamal_program::errors::{ProofGenerationError, ProofVerificationError},
         encryption::{
             elgamal::{ElGamalCiphertext, ElGamalKeypair, ElGamalPubkey},
             pedersen::PedersenOpening,
         },
         sigma_proofs::ciphertext_ciphertext_equality::CiphertextCiphertextEqualityProof,
+        zk_elgamal_proof_program::errors::{ProofGenerationError, ProofVerificationError},
     },
     bytemuck::bytes_of,
     merlin::Transcript,
     std::convert::TryInto,
-};
-use {
-    crate::{
-        elgamal_program::proof_data::{ProofType, ZkProofData},
-        encryption::pod::elgamal::{PodElGamalCiphertext, PodElGamalPubkey},
-        sigma_proofs::pod::PodCiphertextCiphertextEqualityProof,
-    },
-    bytemuck::{Pod, Zeroable},
 };
 
 /// The instruction data that is needed for the

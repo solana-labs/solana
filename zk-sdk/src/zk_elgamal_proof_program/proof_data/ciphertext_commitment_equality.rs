@@ -5,30 +5,30 @@
 //! encrypts/encodes the same message. To generate the proof, a prover must provide the decryption
 //! key for the first ciphertext and the Pedersen opening for the commitment.
 
-#[cfg(not(target_os = "solana"))]
 use {
     crate::{
-        elgamal_program::errors::{ProofGenerationError, ProofVerificationError},
-        encryption::{
-            elgamal::{ElGamalCiphertext, ElGamalKeypair},
-            pedersen::{PedersenCommitment, PedersenOpening},
-        },
-        sigma_proofs::ciphertext_commitment_equality::CiphertextCommitmentEqualityProof,
-    },
-    bytemuck::bytes_of,
-    merlin::Transcript,
-    std::convert::TryInto,
-};
-use {
-    crate::{
-        elgamal_program::proof_data::{ProofType, ZkProofData},
         encryption::pod::{
             elgamal::{PodElGamalCiphertext, PodElGamalPubkey},
             pedersen::PodPedersenCommitment,
         },
         sigma_proofs::pod::PodCiphertextCommitmentEqualityProof,
+        zk_elgamal_proof_program::proof_data::{ProofType, ZkProofData},
     },
     bytemuck::{Pod, Zeroable},
+};
+#[cfg(not(target_os = "solana"))]
+use {
+    crate::{
+        encryption::{
+            elgamal::{ElGamalCiphertext, ElGamalKeypair},
+            pedersen::{PedersenCommitment, PedersenOpening},
+        },
+        sigma_proofs::ciphertext_commitment_equality::CiphertextCommitmentEqualityProof,
+        zk_elgamal_proof_program::errors::{ProofGenerationError, ProofVerificationError},
+    },
+    bytemuck::bytes_of,
+    merlin::Transcript,
+    std::convert::TryInto,
 };
 /// The instruction data that is needed for the
 /// `ProofInstruction::VerifyCiphertextCommitmentEquality` instruction.
