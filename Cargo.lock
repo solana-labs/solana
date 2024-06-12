@@ -3353,9 +3353,9 @@ dependencies = [
 
 [[package]]
 name = "memoffset"
-version = "0.9.0"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a634b1c61a95585bd15607c6ab0c4e5b226e695ff2800ba0cdccddf208c406c"
+checksum = "488016bfae457b036d996092f6cb448677611ce4449e970ceaf42695203f218a"
 dependencies = [
  "autocfg",
 ]
@@ -3513,7 +3513,7 @@ dependencies = [
  "cfg-if 1.0.0",
  "cfg_aliases 0.1.1",
  "libc",
- "memoffset 0.9.0",
+ "memoffset 0.9.1",
 ]
 
 [[package]]
@@ -5399,7 +5399,7 @@ dependencies = [
  "log",
  "lz4",
  "memmap2",
- "memoffset 0.9.0",
+ "memoffset 0.9.1",
  "modular-bitfield",
  "num_cpus",
  "num_enum",
@@ -5616,7 +5616,7 @@ dependencies = [
  "byteorder",
  "libsecp256k1",
  "log",
- "memoffset 0.9.0",
+ "memoffset 0.9.1",
  "rand 0.8.5",
  "scopeguard",
  "solana-compute-budget",
@@ -6692,7 +6692,7 @@ dependencies = [
  "lazy_static",
  "libsecp256k1",
  "log",
- "memoffset 0.9.0",
+ "memoffset 0.9.1",
  "num-bigint 0.4.5",
  "num-derive",
  "num-traits",
@@ -7042,7 +7042,7 @@ dependencies = [
  "log",
  "lz4",
  "memmap2",
- "memoffset 0.9.0",
+ "memoffset 0.9.1",
  "mockall",
  "modular-bitfield",
  "num-derive",
