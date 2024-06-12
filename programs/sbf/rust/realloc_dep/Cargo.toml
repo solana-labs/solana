@@ -1,5 +1,5 @@
 [package]
-name = "solana-sbf-rust-sibling-inner-instructions"
+name = "solana-sbf-rust-realloc-dep"
 version = { workspace = true }
 description = { workspace = true }
 authors = { workspace = true }
@@ -12,4 +12,4 @@ edition = { workspace = true }
 solana-program = { workspace = true }
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["lib"]

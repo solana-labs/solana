@@ -1,6 +1,5 @@
 //! Example Rust-based SBF program that queries sibling instructions
 
-#![cfg(feature = "program")]
 #![allow(clippy::arithmetic_side_effects)]
 
 use solana_program::{

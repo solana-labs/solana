@@ -40,13 +40,13 @@ solana-program-runtime = { path = "../../program-runtime", version = "=2.0.0" }
 solana-program-test = { path = "../../program-test", version = "=2.0.0" }
 solana-runtime = { path = "../../runtime", version = "=2.0.0" }
 solana-sbf-rust-128bit-dep = { path = "rust/128bit_dep", version = "=2.0.0" }
-solana-sbf-rust-invoke = { path = "rust/invoke", version = "=2.0.0" }
-solana-sbf-rust-invoked = { path = "rust/invoked", version = "=2.0.0", default-features = false }
+solana-sbf-rust-invoke-dep = { path = "rust/invoke_dep", version = "=2.0.0" }
+solana-sbf-rust-invoked-dep = { path = "rust/invoked_dep", version = "=2.0.0" }
 solana-sbf-rust-many-args-dep = { path = "rust/many_args_dep", version = "=2.0.0" }
 solana-sbf-rust-mem = { path = "rust/mem", version = "=2.0.0" }
 solana-sbf-rust-param-passing-dep = { path = "rust/param_passing_dep", version = "=2.0.0" }
-solana-sbf-rust-realloc = { path = "rust/realloc", version = "=2.0.0", default-features = false }
-solana-sbf-rust-realloc-invoke = { path = "rust/realloc_invoke", version = "=2.0.0" }
+solana-sbf-rust-realloc-dep = { path = "rust/realloc_dep", version = "=2.0.0" }
+solana-sbf-rust-realloc-invoke-dep = { path = "rust/realloc_invoke_dep", version = "=2.0.0" }
 solana-sdk = { path = "../../sdk", version = "=2.0.0" }
 solana-svm = { path = "../../svm", version = "=2.0.0" }
 solana-transaction-status = { path = "../../transaction-status", version = "=2.0.0" }
@@ -92,9 +92,9 @@ solana-logger = { workspace = true }
 solana-measure = { workspace = true }
 solana-program-runtime = { workspace = true }
 solana-runtime = { workspace = true, features = ["dev-context-only-utils"] }
-solana-sbf-rust-invoke = { workspace = true }
-solana-sbf-rust-realloc = { workspace = true, features = ["default"] }
-solana-sbf-rust-realloc-invoke = { workspace = true }
+solana-sbf-rust-invoke-dep = { workspace = true }
+solana-sbf-rust-realloc-dep = { workspace = true }
+solana-sbf-rust-realloc-invoke-dep = { workspace = true }
 solana-sdk = { workspace = true }
 solana-svm = { workspace = true }
 solana-transaction-status = { workspace = true }

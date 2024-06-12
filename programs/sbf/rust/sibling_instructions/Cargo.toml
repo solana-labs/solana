@@ -11,9 +11,5 @@ edition = { workspace = true }
 [dependencies]
 solana-program = { workspace = true }
 
-[features]
-default = ["program"]
-program = []
-
 [lib]
-crate-type = ["lib", "cdylib"]
+crate-type = ["cdylib"]

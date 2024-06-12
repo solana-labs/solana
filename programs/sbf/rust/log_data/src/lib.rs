@@ -1,7 +1,5 @@
 //! Example Rust-based SBF program that uses sol_log_data syscall
 
-#![cfg(feature = "program")]
-
 use solana_program::{
     account_info::AccountInfo, entrypoint::ProgramResult, log::sol_log_data,
     program::set_return_data, pubkey::Pubkey,

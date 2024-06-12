@@ -28,9 +28,9 @@ use {
             load_upgradeable_program_wrapper, set_upgrade_authority, upgrade_program,
         },
     },
-    solana_sbf_rust_invoke::instructions::*,
-    solana_sbf_rust_realloc::instructions::*,
-    solana_sbf_rust_realloc_invoke::instructions::*,
+    solana_sbf_rust_invoke_dep::*,
+    solana_sbf_rust_realloc_dep::*,
+    solana_sbf_rust_realloc_invoke_dep::*,
     solana_sdk::{
         account::{ReadableAccount, WritableAccount},
         account_utils::StateMut,

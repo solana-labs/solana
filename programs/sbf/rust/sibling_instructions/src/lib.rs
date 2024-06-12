@@ -1,7 +1,5 @@
 //! Example Rust-based SBF program that queries sibling instructions
 
-#![cfg(feature = "program")]
-
 use solana_program::{
     account_info::AccountInfo,
     entrypoint::ProgramResult,
