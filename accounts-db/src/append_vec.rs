@@ -23,7 +23,7 @@ use {
     log::*,
     memmap2::MmapMut,
     solana_sdk::{
-        account::{AccountSharedData, ReadableAccount},
+        account::{AccountSharedData, ReadableAccount, WritableAccount},
         hash::Hash,
         pubkey::Pubkey,
         stake_history::Epoch,
@@ -679,61 +679,106 @@ impl AppendVec {
             AppendVecFileBacking::File(file) => {
                 // 4096 was just picked to be a single page size
                 let mut buf = [0u8; PAGE_SIZE as usize];
-                if let Ok(bytes_read) = read_into_buffer(file, self.len(), offset, &mut buf) {
-                    let valid_bytes = ValidSlice(&buf[..bytes_read]);
-                    let (meta, next): (&StoredMeta, _) = Self::get_type(valid_bytes, 0)?;
-                    let (account_meta, next): (&AccountMeta, _) =
-                        Self::get_type(valid_bytes, next)?;
-                    let (hash, next): (&AccountHash, _) = Self::get_type(valid_bytes, next)?;
-                    let data_len = meta.data_len;
-                    let remaining_bytes_for_data = bytes_read - next;
-                    if remaining_bytes_for_data >= data_len as usize {
-                        // we already read enough data to load this account
-                        let (data, next) =
-                            Self::get_slice(valid_bytes, next, meta.data_len as usize)?;
-                        let stored_size = next;
-                        let account = StoredAccountMeta::AppendVec(AppendVecStoredAccountMeta {
-                            meta,
-                            account_meta,
-                            data,
-                            offset,
-                            stored_size,
-                            hash,
-                        });
-                        return Some(callback(account));
-                    } else {
-                        // not enough was read from file to get `data`
-                        assert!(data_len <= MAX_PERMITTED_DATA_LENGTH, "{data_len}");
-                        let mut data = vec![0u8; data_len as usize];
-                        // instead, we could piece together what we already read here. Maybe we just needed 1 more byte.
-                        // Note here `next` is a 0-based offset from the beginning of this account.
-                        let bytes_read =
-                            read_into_buffer(file, self.len(), offset + next, &mut data).ok()?;
-                        if bytes_read < data_len as usize {
-                            // eof or otherwise couldn't read all the data
-                            return None;
-                        }
-                        let stored_size = aligned_stored_size(data_len as usize);
-                        let account = StoredAccountMeta::AppendVec(AppendVecStoredAccountMeta {
-                            meta,
-                            account_meta,
-                            data: &data[..],
-                            offset,
-                            stored_size,
-                            hash,
-                        });
-                        return Some(callback(account));
+                let bytes_read = read_into_buffer(file, self.len(), offset, &mut buf).ok()?;
+                let valid_bytes = ValidSlice(&buf[..bytes_read]);
+                let (meta, next): (&StoredMeta, _) = Self::get_type(valid_bytes, 0)?;
+                let (account_meta, next): (&AccountMeta, _) = Self::get_type(valid_bytes, next)?;
+                let (hash, next): (&AccountHash, _) = Self::get_type(valid_bytes, next)?;
+                let data_len = meta.data_len;
+                let remaining_bytes_for_data = bytes_read - next;
+                Some(if remaining_bytes_for_data >= data_len as usize {
+                    // we already read enough data to load this account
+                    let (data, next) = Self::get_slice(valid_bytes, next, meta.data_len as usize)?;
+                    let stored_size = next;
+                    let account = StoredAccountMeta::AppendVec(AppendVecStoredAccountMeta {
+                        meta,
+                        account_meta,
+                        data,
+                        offset,
+                        stored_size,
+                        hash,
+                    });
+                    callback(account)
+                } else {
+                    // not enough was read from file to get `data`
+                    assert!(data_len <= MAX_PERMITTED_DATA_LENGTH, "{data_len}");
+                    let mut data = vec![0u8; data_len as usize];
+                    // instead, we could piece together what we already read here. Maybe we just needed 1 more byte.
+                    // Note here `next` is a 0-based offset from the beginning of this account.
+                    let bytes_read =
+                        read_into_buffer(file, self.len(), offset + next, &mut data).ok()?;
+                    if bytes_read < data_len as usize {
+                        // eof or otherwise couldn't read all the data
+                        return None;
                     }
-                }
-                None
+                    let stored_size = aligned_stored_size(data_len as usize);
+                    let account = StoredAccountMeta::AppendVec(AppendVecStoredAccountMeta {
+                        meta,
+                        account_meta,
+                        data: &data[..],
+                        offset,
+                        stored_size,
+                        hash,
+                    });
+                    callback(account)
+                })
             }
         }
     }
 
     /// return an `AccountSharedData` for an account at `offset`.
     /// This fn can efficiently return exactly what is needed by a caller.
+    /// This is on the critical path of tx processing for accounts not in the read or write caches.
     pub(crate) fn get_account_shared_data(&self, offset: usize) -> Option<AccountSharedData> {
-        self.get_stored_account_meta_callback(offset, |account| account.to_account_shared_data())
+        match &self.backing {
+            AppendVecFileBacking::Mmap(_) => self
+                .get_stored_account_meta_callback(offset, |account| {
+                    account.to_account_shared_data()
+                }),
+            AppendVecFileBacking::File(file) => {
+                let mut buf = [0u8; PAGE_SIZE as usize];
+                let bytes_read = read_into_buffer(file, self.len(), offset, &mut buf).ok()?;
+                let valid_bytes = ValidSlice(&buf[..bytes_read]);
+                let (meta, next): (&StoredMeta, _) = Self::get_type(valid_bytes, 0)?;
+                let (account_meta, next): (&AccountMeta, _) = Self::get_type(valid_bytes, next)?;
+                let (hash, next): (&AccountHash, _) = Self::get_type(valid_bytes, next)?;
+                let data_len = meta.data_len;
+                let remaining_bytes_for_data = bytes_read - next;
+                Some(if remaining_bytes_for_data >= data_len as usize {
+                    // we already read enough data to load this account
+                    let (data, next) = Self::get_slice(valid_bytes, next, meta.data_len as usize)?;
+                    let stored_size = next;
+                    let account = StoredAccountMeta::AppendVec(AppendVecStoredAccountMeta {
+                        meta,
+                        account_meta,
+                        data,
+                        offset,
+                        stored_size,
+                        hash,
+                    });
+                    // data is within `buf`, so just allocate a new vec for data
+                    account.to_account_shared_data()
+                } else {
+                    // not enough was read from file to get `data`
+                    assert!(data_len <= MAX_PERMITTED_DATA_LENGTH, "{data_len}");
+                    let mut data = vec![0u8; data_len as usize];
+                    // Note here `next` is a 0-based offset from the beginning of this account.
+                    let bytes_read =
+                        read_into_buffer(file, self.len(), offset + next, &mut data).ok()?;
+                    if bytes_read < data_len as usize {
+                        // eof or otherwise couldn't read all the data
+                        return None;
+                    }
+                    AccountSharedData::create(
+                        account_meta.lamports,
+                        data,
+                        account_meta.owner,
+                        account_meta.executable,
+                        account_meta.rent_epoch,
+                    )
+                })
+            }
+        }
     }
 
     /// Return Ok(index_of_matching_owner) if the account owner at `offset` is one of the pubkeys in `owners`.
@@ -1106,7 +1151,7 @@ pub mod tests {
         memoffset::offset_of,
         rand::{thread_rng, Rng},
         solana_sdk::{
-            account::{Account, AccountSharedData, WritableAccount},
+            account::{Account, AccountSharedData},
             clock::Slot,
             timing::duration_as_ms,
         },
@@ -1732,5 +1777,33 @@ pub mod tests {
         assert_eq!(offset_of!(AccountMeta, owner), 0x10);
         assert_eq!(offset_of!(AccountMeta, executable), 0x30);
         assert_eq!(mem::size_of::<AccountMeta>(), 0x38);
+    }
+
+    #[test_case(StorageAccess::Mmap)]
+    #[test_case(StorageAccess::File)]
+    fn test_get_account_shared_data_from_truncated_file(storage_access: StorageAccess) {
+        let file = get_append_vec_path("test_get_account_shared_data_from_truncated_file");
+        let path = &file.path;
+
+        {
+            // Set up a test account with data_len larger than PAGE_SIZE (i.e.
+            // AppendVec internal buffer size is PAGESIZE).
+            let data_len: usize = 2 * PAGE_SIZE as usize;
+            let account = create_test_account_with(data_len);
+            // wrap AppendVec in ManuallyDrop to ensure we do not remove the backing file when dropped
+            let av = ManuallyDrop::new(AppendVec::new(path, true, aligned_stored_size(data_len)));
+            av.append_account_test(&account).unwrap();
+            av.flush().unwrap();
+        }
+
+        // Truncate the AppendVec to PAGESIZE. This will cause get_account* to fail to load the account.
+        let truncated_accounts_len: usize = PAGE_SIZE as usize;
+        let av = AppendVec::new_from_file_unchecked(path, truncated_accounts_len, storage_access)
+            .unwrap();
+        let account = av.get_account_shared_data(0);
+        assert!(account.is_none()); // Expect None to be returned.
+
+        let result = av.get_stored_account_meta_callback(0, |_| true);
+        assert!(result.is_none()); // Expect None to be returned.
     }
 }

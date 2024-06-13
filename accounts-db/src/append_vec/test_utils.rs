@@ -49,3 +49,15 @@ pub fn create_test_account(sample: usize) -> (StoredMeta, AccountSharedData) {
     };
     (stored_meta, account)
 }
+
+/// Create a test account for the given `data_len`.
+/// This is useful to create very large test account.
+pub fn create_test_account_with(data_len: usize) -> (StoredMeta, AccountSharedData) {
+    let account = AccountSharedData::new(100, data_len, &Pubkey::default());
+    let stored_meta = StoredMeta {
+        write_version_obsolete: 0,
+        pubkey: Pubkey::default(),
+        data_len: data_len as u64,
+    };
+    (stored_meta, account)
+}
