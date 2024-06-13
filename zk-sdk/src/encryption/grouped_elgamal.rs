@@ -132,6 +132,15 @@ pub struct GroupedElGamalCiphertext<const N: usize> {
 }
 
 impl<const N: usize> GroupedElGamalCiphertext<N> {
+    /// Converts a grouped ElGamal ciphertext into a regular ElGamal ciphertext using the decrypt
+    /// handle at a specified index.
+    pub fn to_elgamal_ciphertext(
+        &self,
+        index: usize,
+    ) -> Result<ElGamalCiphertext, GroupedElGamalError> {
+        GroupedElGamal::to_elgamal_ciphertext(self, index)
+    }
+
     /// Decrypts the grouped ElGamal ciphertext using an ElGamal secret key pertaining to a
     /// specified index.
     ///
