@@ -1048,6 +1048,14 @@ fn main() {
                         ),
                 )
                 .arg(
+                    Arg::with_name("print_bank_hash")
+                        .long("print-bank-hash")
+                        .takes_value(false)
+                        .help(
+                            "After verifying the ledger, print the working bank's hash"
+                        ),
+                )
+                .arg(
                     Arg::with_name("write_bank_file")
                         .long("write-bank-file")
                         .takes_value(false)
@@ -1620,24 +1628,11 @@ fn main() {
                         )
                     );
                 }
-                ("bank-hash", Some(arg_matches)) => {
-                    let process_options = parse_process_options(&ledger_path, arg_matches);
-                    let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
-                    let blockstore = open_blockstore(
-                        &ledger_path,
-                        arg_matches,
-                        get_access_type(&process_options),
+                ("bank-hash", Some(_)) => {
+                    eprintln!(
+                        "The bank-hash command has been deprecated, use \
+                        agave-ledger-tool verify --print-bank-hash ... instead"
                     );
-                    let (bank_forks, _) = load_and_process_ledger_or_exit(
-                        arg_matches,
-                        &genesis_config,
-                        Arc::new(blockstore),
-                        process_options,
-                        snapshot_archive_path,
-                        incremental_snapshot_archive_path,
-                        None,
-                    );
-                    println!("{}", &bank_forks.read().unwrap().working_bank().hash());
                 }
                 ("verify", Some(arg_matches)) => {
                     let exit_signal = Arc::new(AtomicBool::new(false));
@@ -1797,6 +1792,7 @@ fn main() {
                     process_options.slot_callback = slot_callback;
 
                     let print_accounts_stats = arg_matches.is_present("print_accounts_stats");
+                    let print_bank_hash = arg_matches.is_present("print_bank_hash");
                     let write_bank_file = arg_matches.is_present("write_bank_file");
                     let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
                     info!("genesis hash: {}", genesis_config.hash());
@@ -1816,12 +1812,18 @@ fn main() {
                         transaction_status_sender,
                     );
 
+                    let working_bank = bank_forks.read().unwrap().working_bank();
                     if print_accounts_stats {
-                        let working_bank = bank_forks.read().unwrap().working_bank();
                         working_bank.print_accounts_stats();
                     }
+                    if print_bank_hash {
+                        println!(
+                            "Bank hash for slot {}: {}",
+                            working_bank.slot(),
+                            working_bank.hash()
+                        );
+                    }
                     if write_bank_file {
-                        let working_bank = bank_forks.read().unwrap().working_bank();
                         bank_hash_details::write_bank_hash_details_file(&working_bank)
                             .map_err(|err| {
                                 warn!("Unable to write bank hash_details file: {err}");
