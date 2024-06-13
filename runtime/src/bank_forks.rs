@@ -232,7 +232,9 @@ impl BankForks {
         let bank = if let Some(scheduler_pool) = &self.scheduler_pool {
             let context = SchedulingContext::new(bank.clone());
             let scheduler = scheduler_pool.take_scheduler(context);
-            BankWithScheduler::new(bank, Some(scheduler))
+            let bank_with_scheduler = BankWithScheduler::new(bank, Some(scheduler));
+            scheduler_pool.register_timeout_listener(bank_with_scheduler.create_timeout_listener());
+            bank_with_scheduler
         } else {
             BankWithScheduler::new_without_scheduler(bank)
         };
