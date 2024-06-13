@@ -1065,7 +1065,6 @@ async fn test_verify_proof_without_context<T, U>(
 
     let client = &mut context.banks_client;
     let payer = &context.payer;
-    let recent_blockhash = context.last_blockhash;
 
     // verify a valid proof (wihtout creating a context account)
     let instructions = vec![proof_instruction.encode_verify_proof(None, success_proof_data)];
@@ -1073,7 +1072,7 @@ async fn test_verify_proof_without_context<T, U>(
         &instructions.with_max_compute_unit_limit(),
         Some(&payer.pubkey()),
         &[payer],
-        recent_blockhash,
+        client.get_latest_blockhash().await.unwrap(),
     );
     client.process_transaction(transaction).await.unwrap();
 
@@ -1083,7 +1082,7 @@ async fn test_verify_proof_without_context<T, U>(
         &instructions.with_max_compute_unit_limit(),
         Some(&payer.pubkey()),
         &[payer],
-        recent_blockhash,
+        client.get_latest_blockhash().await.unwrap(),
     );
     let err = client
         .process_transaction(transaction)
@@ -1107,7 +1106,7 @@ async fn test_verify_proof_without_context<T, U>(
             &instruction.with_max_compute_unit_limit(),
             Some(&payer.pubkey()),
             &[payer],
-            recent_blockhash,
+            client.get_latest_blockhash().await.unwrap(),
         );
         let err = client
             .process_transaction(transaction)
@@ -1127,7 +1126,7 @@ async fn test_verify_proof_without_context<T, U>(
         &instruction,
         Some(&payer.pubkey()),
         &[payer],
-        recent_blockhash,
+        client.get_latest_blockhash().await.unwrap(),
     );
     client.process_transaction(transaction).await.unwrap();
 
@@ -1138,7 +1137,7 @@ async fn test_verify_proof_without_context<T, U>(
         &instruction,
         Some(&payer.pubkey()),
         &[payer],
-        recent_blockhash,
+        client.get_latest_blockhash().await.unwrap(),
     );
     client
         .process_transaction(transaction)
@@ -1168,7 +1167,6 @@ async fn test_verify_proof_with_context<T, U>(
 
     let client = &mut context.banks_client;
     let payer = &context.payer;
-    let recent_blockhash = context.last_blockhash;
 
     let context_state_account = Keypair::new();
     let context_state_authority = Keypair::new();
@@ -1193,7 +1191,7 @@ async fn test_verify_proof_with_context<T, U>(
         &instructions.with_max_compute_unit_limit(),
         Some(&payer.pubkey()),
         &[payer, &context_state_account],
-        recent_blockhash,
+        client.get_latest_blockhash().await.unwrap(),
     );
     let err = client
         .process_transaction(transaction)
@@ -1220,7 +1218,7 @@ async fn test_verify_proof_with_context<T, U>(
         &instructions.with_max_compute_unit_limit(),
         Some(&payer.pubkey()),
         &[payer, &context_state_account],
-        recent_blockhash,
+        client.get_latest_blockhash().await.unwrap(),
     );
     let err = client
         .process_transaction(transaction)
@@ -1247,7 +1245,7 @@ async fn test_verify_proof_with_context<T, U>(
         &instructions.with_max_compute_unit_limit(),
         Some(&payer.pubkey()),
         &[payer, &context_state_account],
-        recent_blockhash,
+        client.get_latest_blockhash().await.unwrap(),
     );
     let err = client
         .process_transaction(transaction)
@@ -1280,7 +1278,7 @@ async fn test_verify_proof_with_context<T, U>(
             &instructions.with_max_compute_unit_limit(),
             Some(&payer.pubkey()),
             &[payer, &context_state_account],
-            recent_blockhash,
+            client.get_latest_blockhash().await.unwrap(),
         );
         let err = client
             .process_transaction(transaction)
@@ -1308,7 +1306,7 @@ async fn test_verify_proof_with_context<T, U>(
         &instructions.with_max_compute_unit_limit(),
         Some(&payer.pubkey()),
         &[payer, &context_state_account],
-        recent_blockhash,
+        client.get_latest_blockhash().await.unwrap(),
     );
     client.process_transaction(transaction).await.unwrap();
 
@@ -1319,7 +1317,7 @@ async fn test_verify_proof_with_context<T, U>(
         &instructions.with_max_compute_unit_limit(),
         Some(&payer.pubkey()),
         &[payer],
-        recent_blockhash,
+        client.get_latest_blockhash().await.unwrap(),
     );
     let err = client
         .process_transaction(transaction)
@@ -1352,7 +1350,7 @@ async fn test_verify_proof_with_context<T, U>(
         &instructions.with_max_compute_unit_limit(),
         Some(&payer.pubkey()),
         &[payer, &context_state_account_and_authority],
-        recent_blockhash,
+        client.get_latest_blockhash().await.unwrap(),
     );
     client.process_transaction(transaction).await.unwrap();
 }
@@ -1394,7 +1392,6 @@ async fn test_verify_proof_from_account_with_context<T, U>(
 
     let client = &mut context.banks_client;
     let payer = &context.payer;
-    let recent_blockhash = context.last_blockhash;
 
     let context_state_account = Keypair::new();
     let context_state_authority = Keypair::new();
@@ -1423,7 +1420,7 @@ async fn test_verify_proof_from_account_with_context<T, U>(
         &instructions,
         Some(&payer.pubkey()),
         &[payer, &context_state_account],
-        recent_blockhash,
+        client.get_latest_blockhash().await.unwrap(),
     );
     let err = client
         .process_transaction(transaction)
@@ -1454,7 +1451,7 @@ async fn test_verify_proof_from_account_with_context<T, U>(
         &instructions,
         Some(&payer.pubkey()),
         &[payer, &context_state_account],
-        recent_blockhash,
+        client.get_latest_blockhash().await.unwrap(),
     );
     client.process_transaction(transaction).await.unwrap();
 
@@ -1468,7 +1465,7 @@ async fn test_verify_proof_from_account_with_context<T, U>(
         &instructions,
         Some(&payer.pubkey()),
         &[payer],
-        recent_blockhash,
+        client.get_latest_blockhash().await.unwrap(),
     );
     let err = client
         .process_transaction(transaction)
@@ -1505,7 +1502,7 @@ async fn test_verify_proof_from_account_with_context<T, U>(
         &instructions,
         Some(&payer.pubkey()),
         &[payer, &context_state_account_and_authority],
-        recent_blockhash,
+        client.get_latest_blockhash().await.unwrap(),
     );
     client.process_transaction(transaction).await.unwrap();
 }
@@ -1526,7 +1523,6 @@ async fn test_close_context_state<T, U>(
 
     let client = &mut context.banks_client;
     let payer = &context.payer;
-    let recent_blockhash = context.last_blockhash;
 
     let context_state_account = Keypair::new();
     let context_state_authority = Keypair::new();
@@ -1553,7 +1549,7 @@ async fn test_close_context_state<T, U>(
         &instructions.with_max_compute_unit_limit(),
         Some(&payer.pubkey()),
         &[payer, &context_state_account],
-        recent_blockhash,
+        client.get_latest_blockhash().await.unwrap(),
     );
     client.process_transaction(transaction).await.unwrap();
 
@@ -1570,7 +1566,7 @@ async fn test_close_context_state<T, U>(
         &vec![instruction].with_max_compute_unit_limit(),
         Some(&payer.pubkey()),
         &[payer, &incorrect_authority],
-        recent_blockhash,
+        client.get_latest_blockhash().await.unwrap(),
     );
     let err = client
         .process_transaction(transaction)
@@ -1594,7 +1590,7 @@ async fn test_close_context_state<T, U>(
         &vec![instruction.clone()].with_max_compute_unit_limit(),
         Some(&payer.pubkey()),
         &[payer, &context_state_authority],
-        recent_blockhash,
+        client.get_latest_blockhash().await.unwrap(),
     );
     client.process_transaction(transaction).await.unwrap();
 
@@ -1620,7 +1616,7 @@ async fn test_close_context_state<T, U>(
         &instructions.with_max_compute_unit_limit(),
         Some(&payer.pubkey()),
         &[payer, &context_state_account, &context_state_authority],
-        recent_blockhash,
+        client.get_latest_blockhash().await.unwrap(),
     );
     client.process_transaction(transaction).await.unwrap();
 
@@ -1646,7 +1642,7 @@ async fn test_close_context_state<T, U>(
         &instructions.with_max_compute_unit_limit(),
         Some(&payer.pubkey()),
         &[payer, &context_state_account, &context_state_authority],
-        recent_blockhash,
+        client.get_latest_blockhash().await.unwrap(),
     );
     client.process_transaction(transaction).await.unwrap();
 
@@ -1672,7 +1668,7 @@ async fn test_close_context_state<T, U>(
         &instructions.with_max_compute_unit_limit(),
         Some(&payer.pubkey()),
         &[payer, &context_state_account, &context_state_authority],
-        recent_blockhash,
+        client.get_latest_blockhash().await.unwrap(),
     );
     let err = client
         .process_transaction(transaction)
@@ -1706,7 +1702,7 @@ async fn test_close_context_state<T, U>(
         &instructions.with_max_compute_unit_limit(),
         Some(&payer.pubkey()),
         &[payer, &context_state_account_and_authority],
-        recent_blockhash,
+        client.get_latest_blockhash().await.unwrap(),
     );
     client.process_transaction(transaction).await.unwrap();
 }
