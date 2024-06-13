@@ -113,11 +113,22 @@ impl AeKey {
             return Err(SignerError::Custom("Rejecting default signature".into()));
         }
 
+        Ok(Self::seed_from_signature(&signature))
+    }
+
+    /// Derive an authenticated encryption key from a signature.
+    pub fn new_from_signature(signature: &Signature) -> Result<Self, Box<dyn error::Error>> {
+        let seed = Self::seed_from_signature(signature);
+        Self::from_seed(&seed)
+    }
+
+    /// Derive a seed from a signature used to generate an authenticated encryption key.
+    pub fn seed_from_signature(signature: &Signature) -> Vec<u8> {
         let mut hasher = Sha3_512::new();
-        hasher.update(signature.as_ref());
+        hasher.update(signature);
         let result = hasher.finalize();
 
-        Ok(result.to_vec())
+        result.to_vec()
     }
 
     /// Generates a random authenticated encryption key.

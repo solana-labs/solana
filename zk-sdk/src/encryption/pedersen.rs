@@ -44,7 +44,6 @@ impl Pedersen {
     /// corresponding Pedersen commitment.
     ///
     /// This function is deterministic.
-    #[allow(non_snake_case)]
     pub fn with<T: Into<Scalar>>(amount: T, opening: &PedersenOpening) -> PedersenCommitment {
         let x: Scalar = amount.into();
         let r = opening.get_scalar();
