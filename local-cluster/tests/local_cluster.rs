@@ -9,7 +9,6 @@ use {
     solana_accounts_db::{
         hardened_unpack::open_genesis_config, utils::create_accounts_run_and_snapshot_dirs,
     },
-    solana_client::thin_client::ThinClient,
     solana_core::{
         consensus::{
             tower_storage::FileTowerStorage, Tower, SWITCH_FORK_THRESHOLD, VOTE_THRESHOLD_DEPTH,
@@ -31,7 +30,7 @@ use {
         use_snapshot_archives_at_startup::UseSnapshotArchivesAtStartup,
     },
     solana_local_cluster::{
-        cluster::{Cluster, ClusterValidatorInfo},
+        cluster::{Cluster, ClusterValidatorInfo, QuicTpuClient},
         cluster_tests,
         integration_tests::{
             copy_blocks, create_custom_leader_schedule,
@@ -62,7 +61,7 @@ use {
     },
     solana_sdk::{
         account::AccountSharedData,
-        client::{AsyncClient, SyncClient},
+        client::AsyncClient,
         clock::{self, Slot, DEFAULT_TICKS_PER_SLOT, MAX_PROCESSING_AGE},
         commitment_config::CommitmentConfig,
         epoch_schedule::{DEFAULT_SLOTS_PER_EPOCH, MINIMUM_SLOTS_PER_EPOCH},
@@ -216,17 +215,14 @@ fn test_local_cluster_signature_subscribe() {
         .unwrap();
     let non_bootstrap_info = cluster.get_contact_info(&non_bootstrap_id).unwrap();
 
-    let (rpc, tpu) = cluster_tests::get_client_facing_addr(
-        cluster.connection_cache.protocol(),
-        non_bootstrap_info,
-    );
-    let tx_client = ThinClient::new(rpc, tpu, cluster.connection_cache.clone());
+    let tx_client = cluster.build_tpu_quic_client().unwrap();
 
     let (blockhash, _) = tx_client
+        .rpc_client()
         .get_latest_blockhash_with_commitment(CommitmentConfig::processed())
         .unwrap();
 
-    let mut transaction = system_transaction::transfer(
+    let transaction = system_transaction::transfer(
         &cluster.funding_keypair,
         &solana_sdk::pubkey::new_rand(),
         10,
@@ -244,7 +240,7 @@ fn test_local_cluster_signature_subscribe() {
     .unwrap();
 
     tx_client
-        .retry_transfer(&cluster.funding_keypair, &mut transaction, 5)
+        .send_transaction_to_upcoming_leaders(&transaction)
         .unwrap();
 
     let mut got_received_notification = false;
@@ -371,6 +367,7 @@ fn test_restart_node() {
             ticks_per_slot,
             slots_per_epoch,
             stakers_slot_offset: slots_per_epoch,
+            skip_warmup_slots: true,
             ..ClusterConfig::default()
         },
         SocketAddrSpace::Unspecified,
@@ -422,11 +419,7 @@ fn test_mainnet_beta_cluster_type() {
     .unwrap();
     assert_eq!(cluster_nodes.len(), 1);
 
-    let (rpc, tpu) = cluster_tests::get_client_facing_addr(
-        cluster.connection_cache.protocol(),
-        &cluster.entry_point_info,
-    );
-    let client = ThinClient::new(rpc, tpu, cluster.connection_cache.clone());
+    let client = cluster.build_tpu_quic_client().unwrap();
 
     // Programs that are available at epoch 0
     for program_id in [
@@ -444,8 +437,10 @@ fn test_mainnet_beta_cluster_type() {
             (
                 program_id,
                 client
+                    .rpc_client()
                     .get_account_with_commitment(program_id, CommitmentConfig::processed())
                     .unwrap()
+                    .value
             ),
             (_program_id, Some(_))
         );
@@ -457,8 +452,10 @@ fn test_mainnet_beta_cluster_type() {
             (
                 program_id,
                 client
+                    .rpc_client()
                     .get_account_with_commitment(program_id, CommitmentConfig::processed())
                     .unwrap()
+                    .value
             ),
             (program_id, None)
         );
@@ -995,6 +992,7 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
         let validator_current_slot = cluster
             .get_validator_client(&validator_identity.pubkey())
             .unwrap()
+            .rpc_client()
             .get_slot_with_commitment(CommitmentConfig::finalized())
             .unwrap();
         trace!("validator current slot: {validator_current_slot}");
@@ -1230,6 +1228,7 @@ fn test_snapshot_restart_tower() {
             safe_clone_config(&leader_snapshot_test_config.validator_config),
             safe_clone_config(&validator_snapshot_test_config.validator_config),
         ],
+        skip_warmup_slots: true,
         ..ClusterConfig::default()
     };
 
@@ -1373,7 +1372,10 @@ fn test_snapshots_blockstore_floor() {
     let target_slot = slot_floor + 40;
     while current_slot <= target_slot {
         trace!("current_slot: {}", current_slot);
-        if let Ok(slot) = validator_client.get_slot_with_commitment(CommitmentConfig::processed()) {
+        if let Ok(slot) = validator_client
+            .rpc_client()
+            .get_slot_with_commitment(CommitmentConfig::processed())
+        {
             current_slot = slot;
         } else {
             continue;
@@ -1565,6 +1567,7 @@ fn test_no_voting() {
         .unwrap();
     loop {
         let last_slot = client
+            .rpc_client()
             .get_slot_with_commitment(CommitmentConfig::processed())
             .expect("Couldn't get slot");
         if last_slot > 4 * VOTE_THRESHOLD_DEPTH as u64 {
@@ -1628,6 +1631,7 @@ fn test_optimistic_confirmation_violation_detection() {
     let mut prev_voted_slot = 0;
     loop {
         let last_voted_slot = client
+            .rpc_client()
             .get_slot_with_commitment(CommitmentConfig::processed())
             .unwrap();
         if last_voted_slot > 50 {
@@ -1681,6 +1685,7 @@ fn test_optimistic_confirmation_violation_detection() {
         let client = cluster.get_validator_client(&node_to_restart).unwrap();
         loop {
             let last_root = client
+                .rpc_client()
                 .get_slot_with_commitment(CommitmentConfig::finalized())
                 .unwrap();
             if last_root > prev_voted_slot {
@@ -1758,7 +1763,10 @@ fn test_validator_saves_tower() {
 
     // Wait for some votes to be generated
     loop {
-        if let Ok(slot) = validator_client.get_slot_with_commitment(CommitmentConfig::processed()) {
+        if let Ok(slot) = validator_client
+            .rpc_client()
+            .get_slot_with_commitment(CommitmentConfig::processed())
+        {
             trace!("current slot: {}", slot);
             if slot > 2 {
                 break;
@@ -1783,7 +1791,10 @@ fn test_validator_saves_tower() {
         #[allow(deprecated)]
         // This test depends on knowing the immediate root, without any delay from the commitment
         // service, so the deprecated CommitmentConfig::root() is retained
-        if let Ok(root) = validator_client.get_slot_with_commitment(CommitmentConfig::root()) {
+        if let Ok(root) = validator_client
+            .rpc_client()
+            .get_slot_with_commitment(CommitmentConfig::root())
+        {
             trace!("current root: {}", root);
             if root > 0 {
                 break root;
@@ -1812,7 +1823,10 @@ fn test_validator_saves_tower() {
         #[allow(deprecated)]
         // This test depends on knowing the immediate root, without any delay from the commitment
         // service, so the deprecated CommitmentConfig::root() is retained
-        if let Ok(root) = validator_client.get_slot_with_commitment(CommitmentConfig::root()) {
+        if let Ok(root) = validator_client
+            .rpc_client()
+            .get_slot_with_commitment(CommitmentConfig::root())
+        {
             trace!(
                 "current root: {}, last_replayed_root: {}",
                 root,
@@ -1845,7 +1859,10 @@ fn test_validator_saves_tower() {
         #[allow(deprecated)]
         // This test depends on knowing the immediate root, without any delay from the commitment
         // service, so the deprecated CommitmentConfig::root() is retained
-        if let Ok(root) = validator_client.get_slot_with_commitment(CommitmentConfig::root()) {
+        if let Ok(root) = validator_client
+            .rpc_client()
+            .get_slot_with_commitment(CommitmentConfig::root())
+        {
             trace!("current root: {}, last tower root: {}", root, tower3_root);
             if root > tower3_root {
                 break root;
@@ -2651,12 +2668,7 @@ fn test_oc_bad_signatures() {
     );
 
     // 3) Start up a spy to listen for and push votes to leader TPU
-    let (rpc, tpu) = cluster_tests::get_client_facing_addr(
-        cluster.connection_cache.protocol(),
-        &cluster.entry_point_info,
-    );
-    let client = ThinClient::new(rpc, tpu, cluster.connection_cache.clone());
-    let cluster_funding_keypair = cluster.funding_keypair.insecure_clone();
+    let client = cluster.build_tpu_quic_client().unwrap();
     let voter_thread_sleep_ms: usize = 100;
     let num_votes_simulated = Arc::new(AtomicUsize::new(0));
     let gossip_voter = cluster_tests::start_gossip_voter(
@@ -2691,7 +2703,7 @@ fn test_oc_bad_signatures() {
                 let vote_slots: Vec<Slot> = vec![vote_slot];
 
                 let bad_authorized_signer_keypair = Keypair::new();
-                let mut vote_tx = vote_transaction::new_vote_transaction(
+                let vote_tx = vote_transaction::new_vote_transaction(
                     vote_slots,
                     vote_hash,
                     leader_vote_tx.message.recent_blockhash,
@@ -2702,7 +2714,7 @@ fn test_oc_bad_signatures() {
                     None,
                 );
                 client
-                    .retry_transfer(&cluster_funding_keypair, &mut vote_tx, 5)
+                    .send_transaction_to_upcoming_leaders(&vote_tx)
                     .unwrap();
 
                 num_votes_simulated.fetch_add(1, Ordering::Relaxed);
@@ -2856,8 +2868,8 @@ fn setup_transfer_scan_threads(
     num_starting_accounts: usize,
     exit: Arc<AtomicBool>,
     scan_commitment: CommitmentConfig,
-    update_client_receiver: Receiver<ThinClient>,
-    scan_client_receiver: Receiver<ThinClient>,
+    update_client_receiver: Receiver<QuicTpuClient>,
+    scan_client_receiver: Receiver<QuicTpuClient>,
 ) -> (
     JoinHandle<()>,
     JoinHandle<()>,
@@ -2895,6 +2907,7 @@ fn setup_transfer_scan_threads(
                     return;
                 }
                 let (blockhash, _) = client
+                    .rpc_client()
                     .get_latest_blockhash_with_commitment(CommitmentConfig::processed())
                     .unwrap();
                 for i in 0..starting_keypairs_.len() {
@@ -2941,6 +2954,7 @@ fn setup_transfer_scan_threads(
                     return;
                 }
                 if let Some(total_scan_balance) = client
+                    .rpc_client()
                     .get_program_accounts_with_config(
                         &system_program::id(),
                         scan_commitment_config.clone(),

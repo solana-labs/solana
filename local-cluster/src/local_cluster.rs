@@ -8,9 +8,7 @@ use {
     itertools::izip,
     log::*,
     solana_accounts_db::utils::create_accounts_run_and_snapshot_dirs,
-    solana_client::{
-        connection_cache::ConnectionCache, rpc_client::RpcClient, thin_client::ThinClient,
-    },
+    solana_client::{connection_cache::ConnectionCache, rpc_client::RpcClient},
     solana_core::{
         consensus::tower_storage::FileTowerStorage,
         validator::{Validator, ValidatorConfig, ValidatorStartProgress},
@@ -30,7 +28,6 @@ use {
     },
     solana_sdk::{
         account::{Account, AccountSharedData},
-        client::SyncClient,
         clock::{Slot, DEFAULT_DEV_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT},
         commitment_config::CommitmentConfig,
         epoch_schedule::EpochSchedule,
@@ -482,11 +479,7 @@ impl LocalCluster {
         mut voting_keypair: Option<Arc<Keypair>>,
         socket_addr_space: SocketAddrSpace,
     ) -> Pubkey {
-        let (rpc, tpu) = cluster_tests::get_client_facing_addr(
-            self.connection_cache.protocol(),
-            &self.entry_point_info,
-        );
-        let client = ThinClient::new(rpc, tpu, self.connection_cache.clone());
+        let client = self.build_tpu_quic_client().expect("tpu_client");
 
         // Must have enough tokens to fund vote account and set delegate
         let should_create_vote_pubkey = voting_keypair.is_none();
@@ -579,11 +572,7 @@ impl LocalCluster {
     }
 
     pub fn transfer(&self, source_keypair: &Keypair, dest_pubkey: &Pubkey, lamports: u64) -> u64 {
-        let (rpc, tpu) = cluster_tests::get_client_facing_addr(
-            self.connection_cache.protocol(),
-            &self.entry_point_info,
-        );
-        let client = ThinClient::new(rpc, tpu, self.connection_cache.clone());
+        let client = self.build_tpu_quic_client().expect("new tpu quic client");
         Self::transfer_with_client(&client, source_keypair, dest_pubkey, lamports)
     }
 
@@ -677,36 +666,39 @@ impl LocalCluster {
     }
 
     fn transfer_with_client(
-        client: &ThinClient,
+        client: &QuicTpuClient,
         source_keypair: &Keypair,
         dest_pubkey: &Pubkey,
         lamports: u64,
     ) -> u64 {
         trace!("getting leader blockhash");
         let (blockhash, _) = client
+            .rpc_client()
             .get_latest_blockhash_with_commitment(CommitmentConfig::processed())
             .unwrap();
-        let mut tx = system_transaction::transfer(source_keypair, dest_pubkey, lamports, blockhash);
+        let tx = system_transaction::transfer(source_keypair, dest_pubkey, lamports, blockhash);
         info!(
             "executing transfer of {} from {} to {}",
             lamports,
             source_keypair.pubkey(),
             *dest_pubkey
         );
+
         client
-            .retry_transfer(source_keypair, &mut tx, 10)
-            .expect("client transfer");
+            .send_transaction_to_upcoming_leaders(&tx)
+            .expect("client transfer should succeed");
         client
+            .rpc_client()
             .wait_for_balance_with_commitment(
                 dest_pubkey,
                 Some(lamports),
                 CommitmentConfig::processed(),
             )
-            .expect("get balance")
+            .expect("get balance should succeed")
     }
 
     fn setup_vote_and_stake_accounts(
-        client: &ThinClient,
+        client: &QuicTpuClient,
         vote_account: &Keypair,
         from_account: &Arc<Keypair>,
         amount: u64,
@@ -722,6 +714,7 @@ impl LocalCluster {
 
         // Create the vote account if necessary
         if client
+            .rpc_client()
             .poll_get_balance_with_commitment(&vote_account_pubkey, CommitmentConfig::processed())
             .unwrap_or(0)
             == 0
@@ -731,6 +724,7 @@ impl LocalCluster {
             // as the cluster is already running, and using the wrong account size will cause the
             // InitializeAccount tx to fail
             let use_current_vote_state = client
+                .rpc_client()
                 .poll_get_balance_with_commitment(
                     &feature_set::vote_state_add_vote_latency::id(),
                     CommitmentConfig::processed(),
@@ -755,18 +749,20 @@ impl LocalCluster {
                 },
             );
             let message = Message::new(&instructions, Some(&from_account.pubkey()));
-            let mut transaction = Transaction::new(
+            let transaction = Transaction::new(
                 &[from_account.as_ref(), vote_account],
                 message,
                 client
+                    .rpc_client()
                     .get_latest_blockhash_with_commitment(CommitmentConfig::processed())
                     .unwrap()
                     .0,
             );
             client
-                .retry_transfer(from_account, &mut transaction, 10)
+                .send_transaction_to_upcoming_leaders(&transaction)
                 .expect("fund vote");
             client
+                .rpc_client()
                 .wait_for_balance_with_commitment(
                     &vote_account_pubkey,
                     Some(amount),
@@ -783,24 +779,21 @@ impl LocalCluster {
                 amount,
             );
             let message = Message::new(&instructions, Some(&from_account.pubkey()));
-            let mut transaction = Transaction::new(
+            let transaction = Transaction::new(
                 &[from_account.as_ref(), &stake_account_keypair],
                 message,
                 client
+                    .rpc_client()
                     .get_latest_blockhash_with_commitment(CommitmentConfig::processed())
                     .unwrap()
                     .0,
             );
 
             client
-                .send_and_confirm_transaction(
-                    &[from_account.as_ref(), &stake_account_keypair],
-                    &mut transaction,
-                    5,
-                    0,
-                )
+                .send_transaction_to_upcoming_leaders(&transaction)
                 .expect("delegate stake");
             client
+                .rpc_client()
                 .wait_for_balance_with_commitment(
                     &stake_account_pubkey,
                     Some(amount),
@@ -816,36 +809,58 @@ impl LocalCluster {
         info!("Checking for vote account registration of {}", node_pubkey);
         match (
             client
+                .rpc_client()
                 .get_account_with_commitment(&stake_account_pubkey, CommitmentConfig::processed()),
-            client.get_account_with_commitment(&vote_account_pubkey, CommitmentConfig::processed()),
+            client
+                .rpc_client()
+                .get_account_with_commitment(&vote_account_pubkey, CommitmentConfig::processed()),
         ) {
-            (Ok(Some(stake_account)), Ok(Some(vote_account))) => {
-                match (
-                    stake_state::stake_from(&stake_account),
-                    vote_state::from(&vote_account),
-                ) {
-                    (Some(stake_state), Some(vote_state)) => {
-                        if stake_state.delegation.voter_pubkey != vote_account_pubkey
-                            || stake_state.delegation.stake != amount
-                        {
-                            Err(Error::new(ErrorKind::Other, "invalid stake account state"))
-                        } else if vote_state.node_pubkey != node_pubkey {
-                            Err(Error::new(ErrorKind::Other, "invalid vote account state"))
-                        } else {
-                            info!("node {} {:?} {:?}", node_pubkey, stake_state, vote_state);
+            (Ok(stake_account), Ok(vote_account)) => {
+                match (stake_account.value, vote_account.value) {
+                    (Some(stake_account), Some(vote_account)) => {
+                        match (
+                            stake_state::stake_from(&stake_account),
+                            vote_state::from(&vote_account),
+                        ) {
+                            (Some(stake_state), Some(vote_state)) => {
+                                if stake_state.delegation.voter_pubkey != vote_account_pubkey
+                                    || stake_state.delegation.stake != amount
+                                {
+                                    Err(Error::new(ErrorKind::Other, "invalid stake account state"))
+                                } else if vote_state.node_pubkey != node_pubkey {
+                                    Err(Error::new(ErrorKind::Other, "invalid vote account state"))
+                                } else {
+                                    info!(
+                                        "node {} {:?} {:?}",
+                                        node_pubkey, stake_state, vote_state
+                                    );
 
-                            Ok(())
+                                    return Ok(());
+                                }
+                            }
+                            (None, _) => {
+                                Err(Error::new(ErrorKind::Other, "invalid stake account data"))
+                            }
+                            (_, None) => {
+                                Err(Error::new(ErrorKind::Other, "invalid vote account data"))
+                            }
                         }
                     }
-                    (None, _) => Err(Error::new(ErrorKind::Other, "invalid stake account data")),
-                    (_, None) => Err(Error::new(ErrorKind::Other, "invalid vote account data")),
+                    (None, _) => Err(Error::new(
+                        ErrorKind::Other,
+                        "unable to retrieve stake account data",
+                    )),
+                    (_, None) => Err(Error::new(
+                        ErrorKind::Other,
+                        "unable to retrieve vote account data",
+                    )),
                 }
             }
-            (Ok(None), _) | (Err(_), _) => Err(Error::new(
+            (Err(_), _) => Err(Error::new(
                 ErrorKind::Other,
                 "unable to retrieve stake account data",
             )),
-            (_, Ok(None)) | (_, Err(_)) => Err(Error::new(
+            (_, Err(_)) => Err(Error::new(
                 ErrorKind::Other,
                 "unable to retrieve vote account data",
             )),
@@ -897,13 +912,10 @@ impl Cluster for LocalCluster {
         self.validators.keys().cloned().collect()
     }
 
-    fn get_validator_client(&self, pubkey: &Pubkey) -> Option<ThinClient> {
-        self.validators.get(pubkey).map(|f| {
-            let (rpc, tpu) = cluster_tests::get_client_facing_addr(
-                self.connection_cache.protocol(),
-                &f.info.contact_info,
-            );
-            ThinClient::new(rpc, tpu, self.connection_cache.clone())
+    fn get_validator_client(&self, pubkey: &Pubkey) -> Option<QuicTpuClient> {
+        self.validators.get(pubkey).map(|_| {
+            self.build_tpu_quic_client()
+                .expect("should build tpu quic client")
         })
     }
 

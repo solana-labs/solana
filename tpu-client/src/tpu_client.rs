@@ -2,11 +2,20 @@ pub use crate::nonblocking::tpu_client::TpuSenderError;
 use {
     crate::nonblocking::tpu_client::TpuClient as NonblockingTpuClient,
     rayon::iter::{IntoParallelIterator, ParallelIterator},
-    solana_connection_cache::connection_cache::{
-        ConnectionCache, ConnectionManager, ConnectionPool, NewConnectionConfig,
+    solana_connection_cache::{
+        client_connection::ClientConnection,
+        connection_cache::{
+            ConnectionCache, ConnectionManager, ConnectionPool, NewConnectionConfig,
+        },
     },
     solana_rpc_client::rpc_client::RpcClient,
-    solana_sdk::{clock::Slot, transaction::Transaction, transport::Result as TransportResult},
+    solana_sdk::{
+        client::AsyncClient,
+        clock::Slot,
+        signature::Signature,
+        transaction::{Transaction, VersionedTransaction},
+        transport::Result as TransportResult,
+    },
     std::{
         collections::VecDeque,
         net::UdpSocket,
@@ -95,6 +104,32 @@ where
         self.invoke(self.tpu_client.try_send_transaction(transaction))
     }
 
+    /// Serialize and send transaction to the current and upcoming leader TPUs according to fanout
+    /// NOTE: send_wire_transaction() and try_send_transaction() above both fail in a specific case when used in LocalCluster
+    /// They both invoke the nonblocking TPUClient and both fail when calling "transfer_with_client()" multiple times
+    /// I do not full understand WHY the nonblocking TPUClient fails in this specific case. But the method defined below
+    /// does work although it has only been tested in LocalCluster integration tests
+    pub fn send_transaction_to_upcoming_leaders(
+        &self,
+        transaction: &Transaction,
+    ) -> TransportResult<()> {
+        let wire_transaction =
+            bincode::serialize(&transaction).expect("should serialize transaction");
+
+        let leaders = self
+            .tpu_client
+            .get_leader_tpu_service()
+            .leader_tpu_sockets(self.tpu_client.get_fanout_slots());
+
+        for tpu_address in &leaders {
+            let cache = self.tpu_client.get_connection_cache();
+            let conn = cache.get_connection(tpu_address);
+            conn.send_data_async(wire_transaction.clone())?;
+        }
+
+        Ok(())
+    }
+
     /// Serialize and send a batch of transactions to the current and upcoming leader TPUs according
     /// to fanout size
     /// Returns the last error if all sends fail
@@ -113,6 +148,16 @@ where
     /// Returns the last error if all sends fail
     pub fn try_send_wire_transaction(&self, wire_transaction: Vec<u8>) -> TransportResult<()> {
         self.invoke(self.tpu_client.try_send_wire_transaction(wire_transaction))
+    }
+
+    pub fn try_send_wire_transaction_batch(
+        &self,
+        wire_transactions: Vec<Vec<u8>>,
+    ) -> TransportResult<()> {
+        self.invoke(
+            self.tpu_client
+                .try_send_wire_transaction_batch(wire_transactions),
+        )
     }
 
     /// Create a new client that disconnects when dropped
@@ -184,6 +229,37 @@ where
         // `block_in_place()` only panics if called from a current_thread runtime, which is the
         // lesser evil.
         tokio::task::block_in_place(move || self.rpc_client.runtime().block_on(f))
+    }
+}
+
+// Methods below are required for calls to client.async_transfer()
+// where client is of type TpuClient<P, M, C>
+impl<P, M, C> AsyncClient for TpuClient<P, M, C>
+where
+    P: ConnectionPool<NewConnectionConfig = C>,
+    M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
+    C: NewConnectionConfig,
+{
+    fn async_send_versioned_transaction(
+        &self,
+        transaction: VersionedTransaction,
+    ) -> TransportResult<Signature> {
+        let wire_transaction =
+            bincode::serialize(&transaction).expect("serialize Transaction in send_batch");
+        self.send_wire_transaction(wire_transaction);
+        Ok(transaction.signatures[0])
+    }
+
+    fn async_send_versioned_transaction_batch(
+        &self,
+        batch: Vec<VersionedTransaction>,
+    ) -> TransportResult<()> {
+        let buffers = batch
+            .into_par_iter()
+            .map(|tx| bincode::serialize(&tx).expect("serialize Transaction in send_batch"))
+            .collect::<Vec<_>>();
+        self.try_send_wire_transaction_batch(buffers)?;
+        Ok(())
     }
 }
 
