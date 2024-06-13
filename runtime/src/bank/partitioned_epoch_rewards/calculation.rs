@@ -603,142 +603,27 @@ mod tests {
         crate::{
             bank::{
                 null_tracer,
-                partitioned_epoch_rewards::{EpochRewardStatus, StartBlockHeightAndRewards},
-                tests::{create_genesis_config, new_bank_from_parent_with_bank_forks},
+                partitioned_epoch_rewards::{
+                    tests::{
+                        create_default_reward_bank, create_reward_bank, RewardBank, SLOTS_PER_EPOCH,
+                    },
+                    EpochRewardStatus, StartBlockHeightAndRewards,
+                },
+                tests::create_genesis_config,
                 VoteReward,
             },
-            genesis_utils::{
-                create_genesis_config_with_vote_accounts, GenesisConfigInfo, ValidatorVoteKeypairs,
-            },
-            runtime_config::RuntimeConfig,
             stake_account::StakeAccount,
             stakes::Stakes,
         },
         rayon::ThreadPoolBuilder,
-        solana_accounts_db::{
-            accounts_db::{
-                AccountShrinkThreshold, AccountsDbConfig, ACCOUNTS_DB_CONFIG_FOR_TESTING,
-            },
-            accounts_index::AccountSecondaryIndexes,
-            partitioned_rewards::{PartitionedEpochRewardsConfig, TestPartitionedEpochRewards},
-        },
         solana_sdk::{
             account::{accounts_equal, ReadableAccount, WritableAccount},
-            epoch_schedule::EpochSchedule,
             native_token::{sol_to_lamports, LAMPORTS_PER_SOL},
             reward_type::RewardType,
-            signature::Signer,
             stake::state::Delegation,
-            vote::state::{VoteStateVersions, MAX_LOCKOUT_HISTORY},
         },
-        solana_vote_program::vote_state,
         std::sync::{Arc, RwLockReadGuard},
     };
-
-    const SLOTS_PER_EPOCH: u64 = 32;
-
-    struct RewardBank {
-        bank: Arc<Bank>,
-        voters: Vec<Pubkey>,
-        stakers: Vec<Pubkey>,
-    }
-
-    /// Helper functions to create a bank that pays some rewards
-    fn create_default_reward_bank(
-        expected_num_delegations: usize,
-        advance_num_slots: u64,
-    ) -> RewardBank {
-        create_reward_bank(
-            expected_num_delegations,
-            PartitionedEpochRewardsConfig::default().stake_account_stores_per_block,
-            advance_num_slots,
-        )
-    }
-
-    fn create_reward_bank(
-        expected_num_delegations: usize,
-        stake_account_stores_per_block: u64,
-        advance_num_slots: u64,
-    ) -> RewardBank {
-        let validator_keypairs = (0..expected_num_delegations)
-            .map(|_| ValidatorVoteKeypairs::new_rand())
-            .collect::<Vec<_>>();
-
-        let GenesisConfigInfo {
-            mut genesis_config, ..
-        } = create_genesis_config_with_vote_accounts(
-            1_000_000_000,
-            &validator_keypairs,
-            vec![2_000_000_000; expected_num_delegations],
-        );
-        genesis_config.epoch_schedule = EpochSchedule::new(SLOTS_PER_EPOCH);
-
-        let mut accounts_db_config: AccountsDbConfig = ACCOUNTS_DB_CONFIG_FOR_TESTING.clone();
-        accounts_db_config.test_partitioned_epoch_rewards =
-            TestPartitionedEpochRewards::PartitionedEpochRewardsConfigRewardBlocks {
-                stake_account_stores_per_block,
-            };
-
-        let bank = Bank::new_with_paths(
-            &genesis_config,
-            Arc::new(RuntimeConfig::default()),
-            Vec::new(),
-            None,
-            None,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-            false,
-            Some(accounts_db_config),
-            None,
-            Some(Pubkey::new_unique()),
-            Arc::default(),
-        );
-
-        // Fill bank_forks with banks with votes landing in the next slot
-        // Create enough banks such that vote account will root
-        for validator_vote_keypairs in &validator_keypairs {
-            let vote_id = validator_vote_keypairs.vote_keypair.pubkey();
-            let mut vote_account = bank.get_account(&vote_id).unwrap();
-            // generate some rewards
-            let mut vote_state = Some(vote_state::from(&vote_account).unwrap());
-            for i in 0..MAX_LOCKOUT_HISTORY + 42 {
-                if let Some(v) = vote_state.as_mut() {
-                    vote_state::process_slot_vote_unchecked(v, i as u64)
-                }
-                let versioned = VoteStateVersions::Current(Box::new(vote_state.take().unwrap()));
-                vote_state::to(&versioned, &mut vote_account).unwrap();
-                match versioned {
-                    VoteStateVersions::Current(v) => {
-                        vote_state = Some(*v);
-                    }
-                    _ => panic!("Has to be of type Current"),
-                };
-            }
-            bank.store_account_and_update_capitalization(&vote_id, &vote_account);
-        }
-
-        // Advance some num slots; usually to the next epoch boundary to update
-        // EpochStakes
-        let (bank, bank_forks) = bank.wrap_with_bank_forks_for_tests();
-        let bank = new_bank_from_parent_with_bank_forks(
-            &bank_forks,
-            bank,
-            &Pubkey::default(),
-            advance_num_slots,
-        );
-
-        RewardBank {
-            bank,
-            voters: validator_keypairs
-                .iter()
-                .map(|k| k.vote_keypair.pubkey())
-                .collect(),
-            stakers: validator_keypairs
-                .iter()
-                .map(|k| k.stake_keypair.pubkey())
-                .collect(),
-        }
-    }
 
     #[test]
     fn test_store_vote_accounts_partitioned() {
