@@ -6755,7 +6755,12 @@ fn test_add_builtin_account() {
         activate_all_features(&mut genesis_config);
 
         let slot = 123;
-        let program_id = solana_sdk::pubkey::new_rand();
+        // The account at program_id will be created initially with just 1 lamport.
+        // This is below the rent-exempt minimum.  If the program_id is in the
+        // rent collection partition for the banks used in this test, then the
+        // account will be rent-collected away.  That'll make the test fail.
+        // So pick a pubkey that is guaranteed to *not* be part of rent collection.
+        let program_id = Pubkey::new_from_array([0xFF; 32]);
 
         let bank = Arc::new(Bank::new_from_parent(
             Arc::new(Bank::new_for_tests(&genesis_config)),
