@@ -64,6 +64,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "agave-accounts-hash-cache-tool"
+version = "2.0.0"
+dependencies = [
+ "bytemuck",
+ "clap 2.33.3",
+ "solana-accounts-db",
+ "solana-version",
+]
+
+[[package]]
 name = "agave-cargo-registry"
 version = "2.0.0"
 dependencies = [

@@ -43,6 +43,12 @@ pub mod utils;
 mod verify_accounts_hash_in_background;
 pub mod waitable_condvar;
 
+// the accounts-hash-cache-tool needs access to these types
+pub use {
+    accounts_hash::CalculateHashIntermediate as CacheHashDataFileEntry,
+    cache_hash_data::Header as CacheHashDataFileHeader,
+};
+
 #[macro_use]
 extern crate solana_metrics;
 #[macro_use]

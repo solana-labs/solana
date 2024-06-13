@@ -34,6 +34,7 @@ declare tainted_packages=(
   agave-ledger-tool
   solana-bench-tps
   agave-store-tool
+  agave-accounts-hash-cache-tool
 )
 
 # convert to comma separeted (ref: https://stackoverflow.com/a/53839433)

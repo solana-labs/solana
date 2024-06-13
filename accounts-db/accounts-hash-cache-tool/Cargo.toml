@@ -1,0 +1,19 @@
+[package]
+name = "agave-accounts-hash-cache-tool"
+description = "Tool to inspect accounts hash cache files"
+publish = false
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+bytemuck = { workspace = true }
+clap = { workspace = true }
+solana-accounts-db = { workspace = true }
+solana-version = { workspace = true }
+
+[features]
+dev-context-only-utils = []

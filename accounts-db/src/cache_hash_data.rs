@@ -25,7 +25,7 @@ pub type SavedType = Vec<Vec<EntryType>>;
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 pub struct Header {
-    count: usize,
+    pub count: usize,
 }
 
 // In order to safely guarantee Header is Pod, it cannot have any padding
