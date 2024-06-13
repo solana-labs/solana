@@ -6710,6 +6710,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-package-metadata-macro"
+version = "2.0.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.66",
+ "toml 0.8.12",
+]
+
+[[package]]
 name = "solana-perf"
 version = "2.0.0"
 dependencies = [
@@ -7305,7 +7315,6 @@ dependencies = [
  "quote",
  "rustversion",
  "syn 2.0.66",
- "toml 0.8.12",
 ]
 
 [[package]]
