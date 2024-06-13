@@ -662,7 +662,6 @@ impl AccountsDb {
                 .collect::<Vec<_>>()
         });
 
-        let mut slots_cannot_move_count = 0;
         let mut many_refs_old_alive_count = 0;
 
         // We want ceiling, so we add 1.
@@ -745,7 +744,6 @@ impl AccountsDb {
                     remove.push(i);
                     continue;
                 }
-                slots_cannot_move_count += 1;
                 accounts_keep_slots.insert(info.slot, std::mem::take(many_refs_old_alive));
             } else {
                 // No alive accounts in this slot have a ref_count > 1. So, ALL alive accounts in this slot can be written to any other slot
@@ -760,7 +758,7 @@ impl AccountsDb {
         target_slots_sorted.sort_unstable();
         self.shrink_ancient_stats
             .slots_cannot_move_count
-            .fetch_add(slots_cannot_move_count, Ordering::Relaxed);
+            .fetch_add(accounts_keep_slots.len() as u64, Ordering::Relaxed);
         self.shrink_ancient_stats
             .many_refs_old_alive
             .fetch_add(many_refs_old_alive_count as u64, Ordering::Relaxed);
