@@ -619,16 +619,19 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
             if let Some((key, program_to_recompile)) = program_cache.programs_to_recompile.pop() {
                 let effective_epoch = program_cache.latest_root_epoch.saturating_add(1);
                 drop(program_cache);
-                let program_cache_read = self.program_cache.read().unwrap();
+                let environments_for_epoch = self
+                    .program_cache
+                    .read()
+                    .unwrap()
+                    .get_environments_for_epoch(effective_epoch);
                 if let Some(recompiled) = load_program_with_pubkey(
                     callbacks,
-                    &program_cache_read.get_environments_for_epoch(effective_epoch),
+                    &environments_for_epoch,
                     &key,
                     self.slot,
                     &self.epoch_schedule,
                     false,
                 ) {
-                    drop(program_cache_read);
                     recompiled
                         .tx_usage_counter
                         .fetch_add(program_to_recompile.tx_usage_counter.load(Relaxed), Relaxed);
