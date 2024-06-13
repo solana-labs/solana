@@ -2979,10 +2979,11 @@ impl ReplayStage {
                 match replay_result {
                     Ok(replay_tx_count) => tx_count += replay_tx_count,
                     Err(err) => {
+                        let root = bank_forks.read().unwrap().root();
                         Self::mark_dead_slot(
                             blockstore,
                             bank,
-                            bank_forks.read().unwrap().root(),
+                            root,
                             err,
                             rpc_subscriptions,
                             duplicate_slots_tracker,
@@ -3022,10 +3023,11 @@ impl ReplayStage {
                         .accumulate(metrics);
 
                     if let Err(err) = result {
+                        let root = bank_forks.read().unwrap().root();
                         Self::mark_dead_slot(
                             blockstore,
                             bank,
-                            bank_forks.read().unwrap().root(),
+                            root,
                             &BlockstoreProcessorError::InvalidTransaction(err),
                             rpc_subscriptions,
                             duplicate_slots_tracker,
