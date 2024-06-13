@@ -19,6 +19,8 @@ on:
       - "cargo-test-sbf"
       - "ci/downstream-projects/run-spl.sh"
       - ".github/workflows/downstream-project-spl.yml"
+      - ".github/scripts/downstream-project-spl-common.sh"
+      - ".github/scripts/downstream-project-spl-install-deps.sh"
   workflow_call:
     inputs:
       branch:
