@@ -252,7 +252,6 @@ pub trait RemoteWallet<T> {
 /// `RemoteWallet` device
 #[derive(Debug)]
 pub struct Device {
-    #[allow(dead_code)]
     pub(crate) path: String,
     pub(crate) info: RemoteWalletInfo,
     pub wallet_type: RemoteWalletType,

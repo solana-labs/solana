@@ -180,7 +180,6 @@ impl ToTokens for ProgramSdkIdDeprecated {
     }
 }
 
-#[allow(dead_code)] // `respan` may be compiled out
 struct RespanInput {
     to_respan: Path,
     respan_using: Span,

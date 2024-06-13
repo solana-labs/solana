@@ -124,7 +124,6 @@ pub fn sol_log_data(data: &[&[u8]]) {
 }
 
 /// Print the hexadecimal representation of a slice.
-#[allow(dead_code)]
 pub fn sol_log_slice(slice: &[u8]) {
     for (i, s) in slice.iter().enumerate() {
         sol_log_64(0, 0, 0, i as u64, *s as u64);
@@ -135,7 +134,6 @@ pub fn sol_log_slice(slice: &[u8]) {
 ///
 /// - `accounts` - A slice of [`AccountInfo`].
 /// - `data` - The instruction data.
-#[allow(dead_code)]
 pub fn sol_log_params(accounts: &[AccountInfo], data: &[u8]) {
     for (i, account) in accounts.iter().enumerate() {
         msg!("AccountInfo");

@@ -588,9 +588,7 @@ struct SolAccountInfo {
     data_addr: u64,
     owner_addr: u64,
     rent_epoch: u64,
-    #[allow(dead_code)]
     is_signer: bool,
-    #[allow(dead_code)]
     is_writable: bool,
     executable: bool,
 }

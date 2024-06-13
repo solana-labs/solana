@@ -590,7 +590,6 @@ impl Blockstore {
         }))
     }
 
-    #[allow(dead_code)]
     pub fn live_slots_iterator(&self, root: Slot) -> impl Iterator<Item = (Slot, SlotMeta)> + '_ {
         let root_forks = NextSlotsIterator::new(root, self);
 

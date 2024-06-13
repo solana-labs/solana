@@ -681,7 +681,6 @@ fn test_return_data_and_log_data_syscall() {
 fn test_program_sbf_invoke_sanity() {
     solana_logger::setup();
 
-    #[allow(dead_code)]
     #[derive(Debug)]
     enum Languages {
         C,

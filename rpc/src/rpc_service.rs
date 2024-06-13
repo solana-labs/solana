@@ -114,7 +114,6 @@ impl RpcRequestMiddleware {
             .unwrap()
     }
 
-    #[allow(dead_code)]
     fn internal_server_error() -> hyper::Response<hyper::Body> {
         hyper::Response::builder()
             .status(hyper::StatusCode::INTERNAL_SERVER_ERROR)

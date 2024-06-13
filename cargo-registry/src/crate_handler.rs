@@ -43,7 +43,6 @@ pub(crate) enum DependencyType {
     Normal,
 }
 
-#[allow(dead_code)]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub(crate) struct Dependency {
     pub name: String,
