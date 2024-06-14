@@ -92,65 +92,105 @@ mod tests {
     fn test_read_into_buffer() {
         // Setup a sample file with 32 bytes of data
         let mut sample_file = tempfile().unwrap();
-        let bytes: Vec<u8> = (0..32).collect();
+        let file_size = 32;
+        let bytes: Vec<u8> = (0..file_size as u8).collect();
         sample_file.write_all(&bytes).unwrap();
 
         // Read all 32 bytes into buffer
         let mut buffer = [0; 32];
-        let num_bytes_read = read_into_buffer(&sample_file, 32, 0, &mut buffer).unwrap();
-        assert_eq!(num_bytes_read, 32);
+        let mut buffer_len = buffer.len();
+        let mut valid_len = 32;
+        let mut start_offset = 0;
+        let num_bytes_read =
+            read_into_buffer(&sample_file, valid_len, start_offset, &mut buffer).unwrap();
+        assert_eq!(num_bytes_read, buffer_len);
         assert_eq!(bytes, buffer);
 
         // Given a 64-byte buffer, it should only read 32 bytes into the buffer
         let mut buffer = [0; 64];
-        let num_bytes_read = read_into_buffer(&sample_file, 32, 0, &mut buffer).unwrap();
-        assert_eq!(num_bytes_read, 32);
-        assert_eq!(bytes, buffer[0..32]);
-        assert_eq!(buffer[32..64], [0; 32]);
+        buffer_len = buffer.len();
+        let num_bytes_read =
+            read_into_buffer(&sample_file, valid_len, start_offset, &mut buffer).unwrap();
+        assert_eq!(num_bytes_read, valid_len);
+        assert_eq!(bytes, buffer[0..valid_len]);
+        assert_eq!(buffer[valid_len..buffer_len], [0; 32]);
 
         // Given the `valid_file_len` is 16, it should only read 16 bytes into the buffer
         let mut buffer = [0; 32];
-        let num_bytes_read = read_into_buffer(&sample_file, 16, 0, &mut buffer).unwrap();
-        assert_eq!(num_bytes_read, 16);
-        assert_eq!(bytes[0..16], buffer[0..16]);
+        buffer_len = buffer.len();
+        valid_len = 16;
+        let num_bytes_read =
+            read_into_buffer(&sample_file, valid_len, start_offset, &mut buffer).unwrap();
+        assert_eq!(num_bytes_read, valid_len);
+        assert_eq!(bytes[0..valid_len], buffer[0..valid_len]);
         // As a side effect of the `read_into_buffer` the data passed `valid_file_len` was
         // read and put into the buffer, though these data should not be
         // consumed.
-        assert_eq!(buffer[16..32], bytes[16..32]);
+        assert_eq!(buffer[valid_len..buffer_len], bytes[valid_len..buffer_len]);
 
         // Given the start offset 8, it should only read 24 bytes into buffer
         let mut buffer = [0; 32];
-        let num_bytes_read = read_into_buffer(&sample_file, 32, 8, &mut buffer).unwrap();
-        assert_eq!(num_bytes_read, 24);
-        assert_eq!(buffer[0..24], bytes[8..32]);
-        assert_eq!(buffer[24..32], [0; 8])
+        buffer_len = buffer.len();
+        valid_len = 32;
+        start_offset = 8;
+        let num_bytes_read =
+            read_into_buffer(&sample_file, valid_len, start_offset, &mut buffer).unwrap();
+        assert_eq!(num_bytes_read, valid_len - start_offset);
+        assert_eq!(buffer[0..num_bytes_read], bytes[start_offset..buffer_len]);
+        assert_eq!(buffer[num_bytes_read..buffer_len], [0; 8])
     }
 
     #[test]
     fn test_read_more_buffer() {
         // Setup a sample file with 32 bytes of data
         let mut sample_file = tempfile().unwrap();
-        let bytes: Vec<u8> = (0..32).collect();
+        let file_size = 32;
+        let bytes: Vec<u8> = (0..file_size as u8).collect();
         sample_file.write_all(&bytes).unwrap();
 
         // Should move left-over 8 bytes to and read 24 bytes from file
         let mut buffer = [0xFFu8; 32];
+        let buffer_len = buffer.len();
         let mut offset = 0;
         let mut valid_bytes = 24..32;
-        read_more_buffer(&sample_file, 32, &mut offset, &mut buffer, &mut valid_bytes).unwrap();
-        assert_eq!(offset, 24);
-        assert_eq!(valid_bytes, 0..32);
-        assert_eq!(buffer[0..8], [0xFFu8; 8]);
-        assert_eq!(buffer[8..32], bytes[0..24]);
+        let mut valid_bytes_len = valid_bytes.len();
+        let valid_len = 32;
+        read_more_buffer(
+            &sample_file,
+            valid_len,
+            &mut offset,
+            &mut buffer,
+            &mut valid_bytes,
+        )
+        .unwrap();
+        assert_eq!(offset, buffer_len - valid_bytes_len);
+        assert_eq!(valid_bytes, 0..buffer_len);
+        assert_eq!(buffer[0..valid_bytes_len], [0xFFu8; 8]);
+        assert_eq!(
+            buffer[valid_bytes_len..buffer_len],
+            bytes[0..buffer_len - valid_bytes_len]
+        );
 
         // Should move left-over 8 bytes to and read 16 bytes from file due to EOF
         let mut buffer = [0xFFu8; 32];
+        let start_offset = 16;
         let mut offset = 16;
         let mut valid_bytes = 24..32;
-        read_more_buffer(&sample_file, 32, &mut offset, &mut buffer, &mut valid_bytes).unwrap();
-        assert_eq!(offset, 32);
+        valid_bytes_len = valid_bytes.len();
+        read_more_buffer(
+            &sample_file,
+            valid_len,
+            &mut offset,
+            &mut buffer,
+            &mut valid_bytes,
+        )
+        .unwrap();
+        assert_eq!(offset, file_size);
         assert_eq!(valid_bytes, 0..24);
-        assert_eq!(buffer[0..8], [0xFFu8; 8]);
-        assert_eq!(buffer[8..24], bytes[16..32]);
+        assert_eq!(buffer[0..valid_bytes_len], [0xFFu8; 8]);
+        assert_eq!(
+            buffer[valid_bytes_len..valid_bytes.end],
+            bytes[start_offset..file_size]
+        );
     }
 }

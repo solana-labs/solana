@@ -119,147 +119,209 @@ mod tests {
     #[test]
     fn test_buffered_reader() {
         // Setup a sample file with 32 bytes of data
+        let file_size = 32;
         let mut sample_file = tempfile().unwrap();
-        let bytes: Vec<u8> = (0..32).collect();
+        let bytes: Vec<u8> = (0..file_size as u8).collect();
         sample_file.write_all(&bytes).unwrap();
 
         // First read 16 bytes to fill buffer
-        let mut reader = BufferedReader::new(16, 32, &sample_file, 8);
+        let buffer_size = 16;
+        let file_len_valid = 32;
+        let default_min_read = 8;
+        let mut reader =
+            BufferedReader::new(buffer_size, file_len_valid, &sample_file, default_min_read);
         let result = reader.read().unwrap();
         assert_eq!(result, BufferedReaderStatus::Success);
         let (offset, slice) = reader.get_offset_and_data();
-        assert_eq!(offset, 0);
-        assert_eq!(slice.len(), 16);
-        assert_eq!(slice.slice(), &bytes[0..16]);
+        let mut expected_offset = 0;
+        assert_eq!(offset, expected_offset);
+        assert_eq!(slice.len(), buffer_size);
+        assert_eq!(slice.slice(), &bytes[0..buffer_size]);
 
         // Consume the data and attempt to read next 32 bytes, expect to hit EOF and only read 16 bytes
-        reader.advance_offset(16);
-        reader.set_required_data_len(32);
+        let advance = 16;
+        let mut required_len = 32;
+        reader.advance_offset(advance);
+        reader.set_required_data_len(required_len);
         let result = reader.read().unwrap();
         assert_eq!(result, BufferedReaderStatus::Eof);
         let (offset, slice) = reader.get_offset_and_data();
-        assert_eq!(offset, 16);
-        assert_eq!(slice.len(), 16);
-        assert_eq!(slice.slice(), &bytes[16..32]);
+        expected_offset += advance;
+        let expected_slice_len = 16;
+        assert_eq!(offset, expected_offset);
+        assert_eq!(slice.len(), expected_slice_len);
+        assert_eq!(slice.slice(), &bytes[offset..file_size]);
 
         // Continue reading should yield EOF and empty slice.
-        reader.advance_offset(16);
-        reader.set_required_data_len(32);
+        reader.advance_offset(advance);
+        reader.set_required_data_len(required_len);
         let result = reader.read().unwrap();
         assert_eq!(result, BufferedReaderStatus::Eof);
         let (offset, slice) = reader.get_offset_and_data();
-        assert_eq!(offset, 32);
-        assert_eq!(slice.len(), 0);
+        expected_offset += advance;
+        assert_eq!(offset, expected_offset);
+        let expected_slice_len = 0;
+        assert_eq!(slice.len(), expected_slice_len);
 
         // set_required_data to zero and offset should not change, and slice should be empty.
-        reader.set_required_data_len(0);
+        required_len = 0;
+        reader.set_required_data_len(required_len);
         let result = reader.read().unwrap();
         assert_eq!(result, BufferedReaderStatus::Success);
         let (offset, slice) = reader.get_offset_and_data();
-        assert_eq!(offset, 32);
-        assert_eq!(slice.len(), 0);
+        let expected_offset = file_len_valid;
+        assert_eq!(offset, expected_offset);
+        let expected_slice_len = 0;
+        assert_eq!(slice.len(), expected_slice_len);
     }
 
     #[test]
     fn test_buffered_reader_with_extra_data_in_file() {
         // Setup a sample file with 32 bytes of data
         let mut sample_file = tempfile().unwrap();
-        let bytes: Vec<u8> = (0..32).collect();
+        let file_size = 32;
+        let bytes: Vec<u8> = (0..file_size as u8).collect();
         sample_file.write_all(&bytes).unwrap();
 
         // Set file valid_len to 30 (i.e. 2 garbage bytes at the end of the file)
         let valid_len = 30;
 
         // First read 16 bytes to fill buffer
-        let mut reader = BufferedReader::new(16, valid_len, &sample_file, 8);
+        let buffer_size = 16;
+        let default_min_read_size = 8;
+        let mut reader =
+            BufferedReader::new(buffer_size, valid_len, &sample_file, default_min_read_size);
         let result = reader.read().unwrap();
         assert_eq!(result, BufferedReaderStatus::Success);
         let (offset, slice) = reader.get_offset_and_data();
-        assert_eq!(offset, 0);
-        assert_eq!(slice.len(), 16);
-        assert_eq!(slice.slice(), &bytes[0..16]);
+        let mut expected_offset = 0;
+        assert_eq!(offset, expected_offset);
+        assert_eq!(slice.len(), buffer_size);
+        assert_eq!(slice.slice(), &bytes[0..buffer_size]);
 
         // Consume the data and attempt read next 32 bytes, expect to hit `valid_len`, and only read 14 bytes
-        reader.advance_offset(16);
-        reader.set_required_data_len(32);
+        let mut advance = 16;
+        let mut required_data_len = 32;
+        reader.advance_offset(advance);
+        reader.set_required_data_len(required_data_len);
         let result = reader.read().unwrap();
         assert_eq!(result, BufferedReaderStatus::Eof);
         let (offset, slice) = reader.get_offset_and_data();
-        assert_eq!(offset, 16);
-        assert_eq!(slice.len(), 14);
-        assert_eq!(slice.slice(), &bytes[16..30]);
+        expected_offset += advance;
+        assert_eq!(offset, expected_offset);
+        let expected_slice_len = valid_len - offset;
+        assert_eq!(slice.len(), expected_slice_len);
+        let expected_slice_range = 16..30;
+        assert_eq!(slice.slice(), &bytes[expected_slice_range]);
 
         // Continue reading should yield EOF and empty slice.
-        reader.advance_offset(14);
-        reader.set_required_data_len(32);
+        advance = 14;
+        required_data_len = 32;
+        reader.advance_offset(advance);
+        reader.set_required_data_len(required_data_len);
         let result = reader.read().unwrap();
         assert_eq!(result, BufferedReaderStatus::Eof);
         let (offset, slice) = reader.get_offset_and_data();
-        assert_eq!(offset, 30);
-        assert_eq!(slice.len(), 0);
+        expected_offset += advance;
+        assert_eq!(offset, expected_offset);
+        let expected_slice_len = 0;
+        assert_eq!(slice.len(), expected_slice_len);
 
         // Move the offset passed `valid_len`, expect to hit EOF and return empty slice.
-        reader.advance_offset(1);
-        reader.set_required_data_len(8);
+        advance = 1;
+        required_data_len = 8;
+        reader.advance_offset(advance);
+        reader.set_required_data_len(required_data_len);
         let result = reader.read().unwrap();
         assert_eq!(result, BufferedReaderStatus::Eof);
         let (offset, slice) = reader.get_offset_and_data();
-        assert_eq!(offset, 31);
-        assert_eq!(slice.len(), 0);
+        expected_offset += advance;
+        assert_eq!(offset, expected_offset);
+        let expected_slice_len = 0;
+        assert_eq!(slice.len(), expected_slice_len);
 
         // Move the offset passed file_len, expect to hit EOF and return empty slice.
-        reader.advance_offset(3);
-        reader.set_required_data_len(8);
+        advance = 3;
+        required_data_len = 8;
+        reader.advance_offset(advance);
+        reader.set_required_data_len(required_data_len);
         let result = reader.read().unwrap();
         assert_eq!(result, BufferedReaderStatus::Eof);
         let (offset, slice) = reader.get_offset_and_data();
-        assert_eq!(offset, 34);
-        assert_eq!(slice.len(), 0);
+        expected_offset += advance;
+        assert_eq!(offset, expected_offset);
+        let expected_slice_len = 0;
+        assert_eq!(slice.len(), expected_slice_len);
     }
 
     #[test]
     fn test_buffered_reader_partial_consume() {
         // Setup a sample file with 32 bytes of data
         let mut sample_file = tempfile().unwrap();
-        let bytes: Vec<u8> = (0..32).collect();
+        let file_size = 32;
+        let bytes: Vec<u8> = (0..file_size as u8).collect();
         sample_file.write_all(&bytes).unwrap();
 
         // First read 16 bytes to fill buffer
-        let mut reader = BufferedReader::new(16, 32, &sample_file, 8);
+        let buffer_size = 16;
+        let file_len_valid = 32;
+        let default_min_read_size = 8;
+        let mut reader = BufferedReader::new(
+            buffer_size,
+            file_len_valid,
+            &sample_file,
+            default_min_read_size,
+        );
         let result = reader.read().unwrap();
         assert_eq!(result, BufferedReaderStatus::Success);
         let (offset, slice) = reader.get_offset_and_data();
-        assert_eq!(offset, 0);
-        assert_eq!(slice.len(), 16);
-        assert_eq!(slice.slice(), &bytes[0..16]);
+        let mut expected_offset = 0;
+        assert_eq!(offset, expected_offset);
+        assert_eq!(slice.len(), buffer_size);
+        assert_eq!(slice.slice(), &bytes[0..buffer_size]);
 
         // Consume the partial data (8 byte) and attempt to read next 8 bytes
-        reader.advance_offset(8);
-        reader.set_required_data_len(8);
+        let mut advance = 8;
+        let mut required_len = 8;
+        reader.advance_offset(advance);
+        reader.set_required_data_len(required_len);
         let result = reader.read().unwrap();
         assert_eq!(result, BufferedReaderStatus::Success);
         let (offset, slice) = reader.get_offset_and_data();
-        assert_eq!(offset, 8);
-        assert_eq!(slice.len(), 8);
-        assert_eq!(slice.slice(), &bytes[8..16]); // no need to read more
+        expected_offset += advance;
+        assert_eq!(offset, expected_offset);
+        assert_eq!(slice.len(), required_len);
+        assert_eq!(
+            slice.slice(),
+            &bytes[expected_offset..expected_offset + required_len]
+        ); // no need to read more
 
         // Continue reading should succeed and read the rest 16 bytes.
-        reader.advance_offset(8);
-        reader.set_required_data_len(16);
+        advance = 8;
+        required_len = 16;
+        reader.advance_offset(advance);
+        reader.set_required_data_len(required_len);
         let result = reader.read().unwrap();
         assert_eq!(result, BufferedReaderStatus::Success);
         let (offset, slice) = reader.get_offset_and_data();
-        assert_eq!(offset, 16);
-        assert_eq!(slice.len(), 16);
-        assert_eq!(slice.slice(), &bytes[16..32]);
+        expected_offset += advance;
+        assert_eq!(offset, expected_offset);
+        assert_eq!(slice.len(), required_len);
+        assert_eq!(
+            slice.slice(),
+            &bytes[expected_offset..expected_offset + required_len]
+        );
 
         // Continue reading should yield EOF and empty slice.
-        reader.advance_offset(16);
-        reader.set_required_data_len(32);
+        advance = 16;
+        required_len = 32;
+        reader.advance_offset(advance);
+        reader.set_required_data_len(required_len);
         let result = reader.read().unwrap();
         assert_eq!(result, BufferedReaderStatus::Eof);
         let (offset, slice) = reader.get_offset_and_data();
-        assert_eq!(offset, 32);
+        expected_offset += advance;
+        assert_eq!(offset, expected_offset);
         assert_eq!(slice.len(), 0);
     }
 
@@ -267,37 +329,55 @@ mod tests {
     fn test_buffered_reader_partial_consume_with_move() {
         // Setup a sample file with 32 bytes of data
         let mut sample_file = tempfile().unwrap();
-        let bytes: Vec<u8> = (0..32).collect();
+        let file_size = 32;
+        let bytes: Vec<u8> = (0..file_size as u8).collect();
         sample_file.write_all(&bytes).unwrap();
 
         // First read 16 bytes to fill buffer
-        let mut reader = BufferedReader::new(16, 32, &sample_file, 8);
+        let buffer_size = 16;
+        let valid_len = 32;
+        let default_min_read = 8;
+        let mut reader =
+            BufferedReader::new(buffer_size, valid_len, &sample_file, default_min_read);
         let result = reader.read().unwrap();
         assert_eq!(result, BufferedReaderStatus::Success);
         let (offset, slice) = reader.get_offset_and_data();
-        assert_eq!(offset, 0);
-        assert_eq!(slice.len(), 16);
-        assert_eq!(slice.slice(), &bytes[0..16]);
+        let mut expected_offset = 0;
+        assert_eq!(offset, expected_offset);
+        assert_eq!(slice.len(), buffer_size);
+        assert_eq!(slice.slice(), &bytes[0..buffer_size]);
 
         // Consume the partial data (8 bytes) and attempt to read next 16 bytes
         // This will move the leftover 8bytes and read next 8 bytes.
-        reader.advance_offset(8);
-        reader.set_required_data_len(16);
+        let mut advance = 8;
+        let mut required_data_len = 16;
+        reader.advance_offset(advance);
+        reader.set_required_data_len(required_data_len);
         let result = reader.read().unwrap();
         assert_eq!(result, BufferedReaderStatus::Success);
         let (offset, slice) = reader.get_offset_and_data();
-        assert_eq!(offset, 8);
-        assert_eq!(slice.len(), 16);
-        assert_eq!(slice.slice(), &bytes[8..24]);
+        expected_offset += advance;
+        assert_eq!(offset, expected_offset);
+        assert_eq!(slice.len(), required_data_len);
+        assert_eq!(
+            slice.slice(),
+            &bytes[expected_offset..expected_offset + required_data_len]
+        );
 
         // Continue reading should succeed and read the rest 8 bytes.
-        reader.advance_offset(16);
-        reader.set_required_data_len(8);
+        advance = 16;
+        required_data_len = 8;
+        reader.advance_offset(advance);
+        reader.set_required_data_len(required_data_len);
         let result = reader.read().unwrap();
         assert_eq!(result, BufferedReaderStatus::Success);
         let (offset, slice) = reader.get_offset_and_data();
-        assert_eq!(offset, 24);
-        assert_eq!(slice.len(), 8);
-        assert_eq!(slice.slice(), &bytes[24..32]);
+        expected_offset += advance;
+        assert_eq!(offset, expected_offset);
+        assert_eq!(slice.len(), required_data_len);
+        assert_eq!(
+            slice.slice(),
+            &bytes[expected_offset..expected_offset + required_data_len]
+        );
     }
 }
