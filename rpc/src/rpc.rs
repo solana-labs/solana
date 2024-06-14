@@ -876,6 +876,7 @@ impl JsonRpcRequestProcessor {
     ) -> RpcCustomResult<RpcResponse<Vec<RpcAccountBalance>>> {
         let config = config.unwrap_or_default();
         let bank = self.bank(config.commitment);
+        let sort_results = config.sort_results.unwrap_or(true);
 
         if let Some((slot, accounts)) = self.get_cached_largest_accounts(&config.filter) {
             Ok(RpcResponse {
@@ -900,7 +901,12 @@ impl JsonRpcRequestProcessor {
                 (HashSet::new(), AccountAddressFilter::Exclude)
             };
             let accounts = bank
-                .get_largest_accounts(NUM_LARGEST_ACCOUNTS, &addresses, address_filter)
+                .get_largest_accounts(
+                    NUM_LARGEST_ACCOUNTS,
+                    &addresses,
+                    address_filter,
+                    sort_results,
+                )
                 .map_err(|e| RpcCustomError::ScanError {
                     message: e.to_string(),
                 })?

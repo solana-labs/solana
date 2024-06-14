@@ -1444,6 +1444,7 @@ pub fn process_largest_accounts(
         .get_largest_accounts_with_config(RpcLargestAccountsConfig {
             commitment: Some(config.commitment),
             filter,
+            sort_results: None,
         })?
         .value;
     let largest_accounts = CliAccountBalances { accounts };

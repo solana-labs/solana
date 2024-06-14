@@ -254,6 +254,7 @@ impl Accounts {
         num: usize,
         filter_by_address: &HashSet<Pubkey>,
         filter: AccountAddressFilter,
+        sort_results: bool,
     ) -> ScanResult<Vec<(Pubkey, u64)>> {
         if num == 0 {
             return Ok(vec![]);
@@ -287,7 +288,7 @@ impl Accounts {
                     account_balances.push(Reverse((account.lamports(), *pubkey)));
                 }
             },
-            &ScanConfig::default(),
+            &ScanConfig::new(!sort_results),
         )?;
         Ok(account_balances
             .into_sorted_vec()
@@ -480,6 +481,7 @@ impl Accounts {
         &self,
         ancestors: &Ancestors,
         bank_id: BankId,
+        sort_results: bool,
     ) -> ScanResult<Vec<PubkeyAccountSlot>> {
         let mut collector = Vec::new();
         self.accounts_db
@@ -493,7 +495,7 @@ impl Accounts {
                         collector.push((*pubkey, account, slot))
                     }
                 },
-                &ScanConfig::default(),
+                &ScanConfig::new(!sort_results),
             )
             .map(|_| collector)
     }
@@ -503,12 +505,17 @@ impl Accounts {
         ancestors: &Ancestors,
         bank_id: BankId,
         scan_func: F,
+        sort_results: bool,
     ) -> ScanResult<()>
     where
         F: FnMut(Option<(&Pubkey, AccountSharedData, Slot)>),
     {
-        self.accounts_db
-            .scan_accounts(ancestors, bank_id, scan_func, &ScanConfig::default())
+        self.accounts_db.scan_accounts(
+            ancestors,
+            bank_id,
+            scan_func,
+            &ScanConfig::new(!sort_results),
+        )
     }
 
     pub fn hold_range_in_memory<R>(
@@ -534,7 +541,7 @@ impl Accounts {
             "", // disable logging of this. We now parallelize it and this results in multiple parallel logs
             ancestors,
             range,
-            &ScanConfig::new(true),
+            &ScanConfig::default(),
             |option| Self::load_with_slot(&mut collector, option),
         );
         collector
@@ -2046,7 +2053,8 @@ mod tests {
                     bank_id,
                     0,
                     &HashSet::new(),
-                    AccountAddressFilter::Exclude
+                    AccountAddressFilter::Exclude,
+                    false
                 )
                 .unwrap(),
             vec![]
@@ -2058,7 +2066,8 @@ mod tests {
                     bank_id,
                     0,
                     &all_pubkeys,
-                    AccountAddressFilter::Include
+                    AccountAddressFilter::Include,
+                    false
                 )
                 .unwrap(),
             vec![]
@@ -2073,7 +2082,8 @@ mod tests {
                     bank_id,
                     1,
                     &HashSet::new(),
-                    AccountAddressFilter::Exclude
+                    AccountAddressFilter::Exclude,
+                    false
                 )
                 .unwrap(),
             vec![(pubkey1, 42)]
@@ -2085,7 +2095,8 @@ mod tests {
                     bank_id,
                     2,
                     &HashSet::new(),
-                    AccountAddressFilter::Exclude
+                    AccountAddressFilter::Exclude,
+                    false
                 )
                 .unwrap(),
             vec![(pubkey1, 42), (pubkey0, 42)]
@@ -2097,7 +2108,8 @@ mod tests {
                     bank_id,
                     3,
                     &HashSet::new(),
-                    AccountAddressFilter::Exclude
+                    AccountAddressFilter::Exclude,
+                    false
                 )
                 .unwrap(),
             vec![(pubkey1, 42), (pubkey0, 42), (pubkey2, 41)]
@@ -2111,7 +2123,8 @@ mod tests {
                     bank_id,
                     6,
                     &HashSet::new(),
-                    AccountAddressFilter::Exclude
+                    AccountAddressFilter::Exclude,
+                    false
                 )
                 .unwrap(),
             vec![(pubkey1, 42), (pubkey0, 42), (pubkey2, 41)]
@@ -2126,7 +2139,8 @@ mod tests {
                     bank_id,
                     1,
                     &exclude1,
-                    AccountAddressFilter::Exclude
+                    AccountAddressFilter::Exclude,
+                    false
                 )
                 .unwrap(),
             vec![(pubkey0, 42)]
@@ -2138,7 +2152,8 @@ mod tests {
                     bank_id,
                     2,
                     &exclude1,
-                    AccountAddressFilter::Exclude
+                    AccountAddressFilter::Exclude,
+                    false
                 )
                 .unwrap(),
             vec![(pubkey0, 42), (pubkey2, 41)]
@@ -2150,7 +2165,8 @@ mod tests {
                     bank_id,
                     3,
                     &exclude1,
-                    AccountAddressFilter::Exclude
+                    AccountAddressFilter::Exclude,
+                    false
                 )
                 .unwrap(),
             vec![(pubkey0, 42), (pubkey2, 41)]
@@ -2165,7 +2181,8 @@ mod tests {
                     bank_id,
                     1,
                     &include1_2,
-                    AccountAddressFilter::Include
+                    AccountAddressFilter::Include,
+                    false
                 )
                 .unwrap(),
             vec![(pubkey1, 42)]
@@ -2177,7 +2194,8 @@ mod tests {
                     bank_id,
                     2,
                     &include1_2,
-                    AccountAddressFilter::Include
+                    AccountAddressFilter::Include,
+                    false
                 )
                 .unwrap(),
             vec![(pubkey1, 42), (pubkey2, 41)]
@@ -2189,7 +2207,8 @@ mod tests {
                     bank_id,
                     3,
                     &include1_2,
-                    AccountAddressFilter::Include
+                    AccountAddressFilter::Include,
+                    false
                 )
                 .unwrap(),
             vec![(pubkey1, 42), (pubkey2, 41)]
@@ -2217,7 +2236,10 @@ mod tests {
     #[test]
     fn test_maybe_abort_scan() {
         assert!(Accounts::maybe_abort_scan(ScanResult::Ok(vec![]), &ScanConfig::default()).is_ok());
-        let config = ScanConfig::default().recreate_with_abort();
+        assert!(
+            Accounts::maybe_abort_scan(ScanResult::Ok(vec![]), &ScanConfig::new(false)).is_ok()
+        );
+        let config = ScanConfig::new(false).recreate_with_abort();
         assert!(Accounts::maybe_abort_scan(ScanResult::Ok(vec![]), &config).is_ok());
         config.abort();
         assert!(Accounts::maybe_abort_scan(ScanResult::Ok(vec![]), &config).is_err());

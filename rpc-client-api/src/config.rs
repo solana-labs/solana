@@ -119,6 +119,7 @@ pub struct RpcLargestAccountsConfig {
     #[serde(flatten)]
     pub commitment: Option<CommitmentConfig>,
     pub filter: Option<RpcLargestAccountsFilter>,
+    pub sort_results: Option<bool>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

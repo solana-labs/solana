@@ -1872,6 +1872,7 @@ impl RpcClient {
     /// let config = RpcLargestAccountsConfig {
     ///     commitment: Some(commitment_config),
     ///     filter: Some(RpcLargestAccountsFilter::Circulating),
+    ///     sort_results: None,
     /// };
     /// let accounts = rpc_client.get_largest_accounts_with_config(
     ///     config,
