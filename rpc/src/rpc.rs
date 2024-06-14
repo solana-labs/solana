@@ -3558,12 +3558,32 @@ pub mod rpc_full {
                         Some(RpcContactInfo {
                             pubkey: contact_info.pubkey().to_string(),
                             gossip: contact_info.gossip().ok(),
+                            tvu: contact_info
+                                .tvu(Protocol::UDP)
+                                .ok()
+                                .filter(|addr| socket_addr_space.check(addr)),
                             tpu: contact_info
                                 .tpu(Protocol::UDP)
                                 .ok()
                                 .filter(|addr| socket_addr_space.check(addr)),
                             tpu_quic: contact_info
                                 .tpu(Protocol::QUIC)
+                                .ok()
+                                .filter(|addr| socket_addr_space.check(addr)),
+                            tpu_forwards: contact_info
+                                .tpu_forwards(Protocol::UDP)
+                                .ok()
+                                .filter(|addr| socket_addr_space.check(addr)),
+                            tpu_forwards_quic: contact_info
+                                .tpu_forwards(Protocol::QUIC)
+                                .ok()
+                                .filter(|addr| socket_addr_space.check(addr)),
+                            tpu_vote: contact_info
+                                .tpu_vote()
+                                .ok()
+                                .filter(|addr| socket_addr_space.check(addr)),
+                            serve_repair: contact_info
+                                .serve_repair(Protocol::UDP)
                                 .ok()
                                 .filter(|addr| socket_addr_space.check(addr)),
                             rpc: contact_info
@@ -5327,8 +5347,13 @@ pub mod tests {
             "pubkey": rpc.identity.to_string(),
             "gossip": "127.0.0.1:8000",
             "shredVersion": 0u16,
+            "tvu": "127.0.0.1:8001",
             "tpu": "127.0.0.1:8003",
             "tpuQuic": "127.0.0.1:8009",
+            "tpuForwards": "127.0.0.1:8004",
+            "tpuForwardsQuic": "127.0.0.1:8010",
+            "tpuVote": "127.0.0.1:8005",
+            "serveRepair": "127.0.0.1:8008",
             "rpc": format!("127.0.0.1:{}", rpc_port::DEFAULT_RPC_PORT),
             "pubsub": format!("127.0.0.1:{}", rpc_port::DEFAULT_RPC_PUBSUB_PORT),
             "version": format!("{version}"),
@@ -5337,8 +5362,13 @@ pub mod tests {
             "pubkey": rpc.leader_pubkey().to_string(),
             "gossip": "127.0.0.1:1235",
             "shredVersion": 0u16,
+            "tvu": "127.0.0.1:1236",
             "tpu": "127.0.0.1:1234",
             "tpuQuic": "127.0.0.1:1240",
+            "tpuForwards": "127.0.0.1:1239",
+            "tpuForwardsQuic": "127.0.0.1:1245",
+            "tpuVote": "127.0.0.1:1241",
+            "serveRepair": "127.0.0.1:1242",
             "rpc": format!("127.0.0.1:{}", rpc_port::DEFAULT_RPC_PORT),
             "pubsub": format!("127.0.0.1:{}", rpc_port::DEFAULT_RPC_PUBSUB_PORT),
             "version": format!("{version}"),
