@@ -34,6 +34,7 @@ use {
         transaction_processing_callback::TransactionProcessingCallback,
         transaction_processor::{
             ExecutionRecordingConfig, TransactionBatchProcessor, TransactionProcessingConfig,
+            TransactionProcessingEnvironment,
         },
         transaction_results::TransactionExecutionResult,
     },
@@ -470,6 +471,7 @@ fn svm_integration() {
         &mock_bank,
         &transactions,
         check_results,
+        &TransactionProcessingEnvironment::default(),
         &processing_config,
     );
 

@@ -41,6 +41,7 @@ use {
         transaction_processing_callback::TransactionProcessingCallback,
         transaction_processor::{
             ExecutionRecordingConfig, TransactionBatchProcessor, TransactionProcessingConfig,
+            TransactionProcessingEnvironment,
         },
     },
     std::{
@@ -279,9 +280,6 @@ fn run_fixture(fixture: InstrFixture, filename: OsString, execute_as_instr: bool
         .map(|x| (x.blockhash, x.fee_calculator.lamports_per_signature))
         .unwrap_or_default();
 
-    mock_bank.lamports_per_sginature = lamports_per_signature;
-    mock_bank.blockhash = blockhash;
-
     let recording_config = ExecutionRecordingConfig {
         enable_log_recording: true,
         enable_return_data_recording: true,
@@ -313,6 +311,11 @@ fn run_fixture(fixture: InstrFixture, filename: OsString, execute_as_instr: bool
         &mock_bank,
         &transactions,
         transaction_check,
+        &TransactionProcessingEnvironment {
+            blockhash,
+            lamports_per_signature,
+            ..Default::default()
+        },
         &processor_config,
     );
 
@@ -462,11 +465,11 @@ fn execute_fixture_as_instr(
 
     let sysvar_cache = &batch_processor.sysvar_cache.read().unwrap();
     let env_config = EnvironmentConfig::new(
-        mock_bank.blockhash,
+        Hash::default(),
         None,
         None,
         mock_bank.feature_set.clone(),
-        mock_bank.lamports_per_sginature,
+        0,
         sysvar_cache,
     );
 
