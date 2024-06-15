@@ -118,6 +118,9 @@ impl HeaviestForkAggregate {
             );
             return None;
         }
+        if from == &self.my_pubkey {
+            return None;
+        }
         if received_heaviest_fork.shred_version != self.my_shred_version {
             warn!(
                 "Gossip should not accept RestartLastVotedFork with different shred version {} from {:?}",
@@ -445,6 +448,23 @@ mod tests {
                 .total_active_stake_seen_supermajority(),
             1500
         );
+
+        // test that message from my pubkey is ignored.
+        assert_eq!(
+            test_state
+                .heaviest_fork_aggregate
+                .aggregate(RestartHeaviestFork {
+                    from: test_state.validator_voting_keypairs[MY_INDEX]
+                        .node_keypair
+                        .pubkey(),
+                    wallclock: timestamp(),
+                    last_slot: test_state.heaviest_slot,
+                    last_slot_hash: test_state.heaviest_hash,
+                    observed_stake: 100,
+                    shred_version: SHRED_VERSION,
+                },),
+            None,
+        );
     }
 
     #[test]
@@ -535,6 +555,27 @@ mod tests {
         );
         // percentage doesn't change since the previous aggregate is ignored.
         assert_eq!(test_state.heaviest_fork_aggregate.total_active_stake(), 200);
+
+        // Record from my pubkey should be ignored.
+        assert_eq!(
+            test_state
+                .heaviest_fork_aggregate
+                .aggregate_from_record(
+                    &test_state.validator_voting_keypairs[MY_INDEX]
+                        .node_keypair
+                        .pubkey()
+                        .to_string(),
+                    &HeaviestForkRecord {
+                        wallclock: timestamp(),
+                        slot: test_state.heaviest_slot,
+                        bankhash: test_state.heaviest_hash.to_string(),
+                        shred_version: SHRED_VERSION as u32,
+                        total_active_stake: 100,
+                    }
+                )
+                .unwrap(),
+            None,
+        );
     }
 
     #[test]
