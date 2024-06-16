@@ -13,7 +13,10 @@ The Solana Foundation helps facilitate the growth of the consensus validator net
 
 ## Tour De Sun 22
 
-Delegation program participants who operate a performant testnet node, may also join Tour De Sun 22 (TdS22).  The program gives locked SOL incentive payments to operators for running approved hardware on Testnet. For more information, see [TdS22](https://solana.org/tds22).
+Tour De Sun 22 is winding down. Applications to the program are now closed
+March 2024 will be the final month of the program. The program is closed and will not accept new applicants.
+
+Please see the [End of Tour De Sun 22 blog post](https://solana.com/news/solana-foundation-announces-end-of-tour-de-sun-22) for more information.
 
 ## Solana Foundation Server Program
 
