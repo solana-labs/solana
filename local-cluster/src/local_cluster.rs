@@ -28,7 +28,7 @@ use {
     },
     solana_sdk::{
         account::{Account, AccountSharedData},
-        clock::{Slot, DEFAULT_DEV_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT},
+        clock::{Slot, DEFAULT_DEV_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT, MAX_PROCESSING_AGE},
         commitment_config::CommitmentConfig,
         epoch_schedule::EpochSchedule,
         feature_set,
@@ -36,13 +36,15 @@ use {
         message::Message,
         poh_config::PohConfig,
         pubkey::Pubkey,
-        signature::{Keypair, Signer},
+        signature::{Keypair, Signature, Signer},
+        signers::Signers,
         stake::{
             instruction as stake_instruction,
             state::{Authorized, Lockup},
         },
         system_transaction,
         transaction::Transaction,
+        transport::TransportError,
     },
     solana_stake_program::stake_state,
     solana_streamer::{socket::SocketAddrSpace, streamer::StakedNodes},
@@ -61,6 +63,7 @@ use {
         net::{IpAddr, Ipv4Addr, UdpSocket},
         path::{Path, PathBuf},
         sync::{Arc, RwLock},
+        time::Instant,
     },
 };
 
@@ -665,6 +668,53 @@ impl LocalCluster {
         info!("{} done waiting for roots", test_name);
     }
 
+    /// Attempt to send and confirm tx "attempts" times
+    /// Wait for signature confirmation before returning
+    /// Return the transaction signature
+    pub fn send_transaction_with_retries<T: Signers + ?Sized>(
+        client: &QuicTpuClient,
+        keypairs: &T,
+        transaction: &mut Transaction,
+        attempts: usize,
+        pending_confirmations: usize,
+    ) -> std::result::Result<Signature, TransportError> {
+        for attempt in 0..attempts {
+            let now = Instant::now();
+            let mut num_confirmed = 0;
+            let mut wait_time = MAX_PROCESSING_AGE;
+
+            while now.elapsed().as_secs() < wait_time as u64 {
+                if num_confirmed == 0 {
+                    client.send_transaction_to_upcoming_leaders(transaction)?;
+                }
+
+                if let Ok(confirmed_blocks) = client.rpc_client().poll_for_signature_confirmation(
+                    &transaction.signatures[0],
+                    pending_confirmations,
+                ) {
+                    num_confirmed = confirmed_blocks;
+                    if confirmed_blocks >= pending_confirmations {
+                        return Ok(transaction.signatures[0]);
+                    }
+                    // Since network has seen the transaction, wait longer to receive
+                    // all pending confirmations. Resending the transaction could result into
+                    // extra transaction fees
+                    wait_time = wait_time.max(
+                        MAX_PROCESSING_AGE * pending_confirmations.saturating_sub(num_confirmed),
+                    );
+                }
+            }
+            info!("{attempt} tries failed transfer");
+            let blockhash = client.rpc_client().get_latest_blockhash()?;
+            transaction.sign(keypairs, blockhash);
+        }
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "failed to confirm transaction".to_string(),
+        )
+        .into())
+    }
+
     fn transfer_with_client(
         client: &QuicTpuClient,
         source_keypair: &Keypair,
@@ -676,7 +726,7 @@ impl LocalCluster {
             .rpc_client()
             .get_latest_blockhash_with_commitment(CommitmentConfig::processed())
             .unwrap();
-        let tx = system_transaction::transfer(source_keypair, dest_pubkey, lamports, blockhash);
+        let mut tx = system_transaction::transfer(source_keypair, dest_pubkey, lamports, blockhash);
         info!(
             "executing transfer of {} from {} to {}",
             lamports,
@@ -684,8 +734,7 @@ impl LocalCluster {
             *dest_pubkey
         );
 
-        client
-            .send_transaction_to_upcoming_leaders(&tx)
+        LocalCluster::send_transaction_with_retries(client, &[source_keypair], &mut tx, 10, 0)
             .expect("client transfer should succeed");
         client
             .rpc_client()
@@ -749,7 +798,7 @@ impl LocalCluster {
                 },
             );
             let message = Message::new(&instructions, Some(&from_account.pubkey()));
-            let transaction = Transaction::new(
+            let mut transaction = Transaction::new(
                 &[from_account.as_ref(), vote_account],
                 message,
                 client
@@ -758,9 +807,14 @@ impl LocalCluster {
                     .unwrap()
                     .0,
             );
-            client
-                .send_transaction_to_upcoming_leaders(&transaction)
-                .expect("fund vote");
+            LocalCluster::send_transaction_with_retries(
+                client,
+                &[from_account],
+                &mut transaction,
+                10,
+                0,
+            )
+            .expect("should fund vote");
             client
                 .rpc_client()
                 .wait_for_balance_with_commitment(
@@ -779,7 +833,7 @@ impl LocalCluster {
                 amount,
             );
             let message = Message::new(&instructions, Some(&from_account.pubkey()));
-            let transaction = Transaction::new(
+            let mut transaction = Transaction::new(
                 &[from_account.as_ref(), &stake_account_keypair],
                 message,
                 client
@@ -789,9 +843,14 @@ impl LocalCluster {
                     .0,
             );
 
-            client
-                .send_transaction_to_upcoming_leaders(&transaction)
-                .expect("delegate stake");
+            LocalCluster::send_transaction_with_retries(
+                client,
+                &[from_account.as_ref(), &stake_account_keypair],
+                &mut transaction,
+                5,
+                0,
+            )
+            .expect("should delegate stake");
             client
                 .rpc_client()
                 .wait_for_balance_with_commitment(

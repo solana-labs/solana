@@ -4,7 +4,7 @@
 /// discover the rest of the network.
 use log::*;
 use {
-    crate::cluster::QuicTpuClient,
+    crate::{cluster::QuicTpuClient, local_cluster::LocalCluster},
     rand::{thread_rng, Rng},
     rayon::{prelude::*, ThreadPool},
     solana_client::connection_cache::{ConnectionCache, Protocol},
@@ -101,12 +101,17 @@ pub fn spend_and_verify_all_nodes<S: ::std::hash::BuildHasher + Sync + Send>(
             .rpc_client()
             .get_latest_blockhash_with_commitment(CommitmentConfig::confirmed())
             .unwrap();
-        let transaction =
+        let mut transaction =
             system_transaction::transfer(funding_keypair, &random_keypair.pubkey(), 1, blockhash);
         let confs = VOTE_THRESHOLD_DEPTH + 1;
-        client
-            .send_transaction_to_upcoming_leaders(&transaction)
-            .unwrap();
+        LocalCluster::send_transaction_with_retries(
+            &client,
+            &[funding_keypair],
+            &mut transaction,
+            10,
+            confs,
+        )
+        .unwrap();
         for validator in &cluster_nodes {
             if ignore_nodes.contains(validator.pubkey()) {
                 continue;
@@ -160,16 +165,21 @@ pub fn send_many_transactions(
             .unwrap();
         let transfer_amount = thread_rng().gen_range(1..max_tokens_per_transfer);
 
-        let transaction = system_transaction::transfer(
+        let mut transaction = system_transaction::transfer(
             funding_keypair,
             &random_keypair.pubkey(),
             transfer_amount,
             blockhash,
         );
 
-        client
-            .send_transaction_to_upcoming_leaders(&transaction)
-            .unwrap();
+        LocalCluster::send_transaction_with_retries(
+            &client,
+            &[funding_keypair],
+            &mut transaction,
+            5,
+            0,
+        )
+        .unwrap();
 
         expected_balances.insert(random_keypair.pubkey(), transfer_amount);
     }
@@ -292,7 +302,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
                 .rpc_client()
                 .get_latest_blockhash_with_commitment(CommitmentConfig::processed())
                 .unwrap();
-            let transaction = system_transaction::transfer(
+            let mut transaction = system_transaction::transfer(
                 funding_keypair,
                 &random_keypair.pubkey(),
                 1,
@@ -300,16 +310,29 @@ pub fn kill_entry_and_spend_and_verify_rest(
             );
 
             let confs = VOTE_THRESHOLD_DEPTH + 1;
-            if let Err(e) = client.send_transaction_to_upcoming_leaders(&transaction) {
-                result = Err(e);
-                continue;
-            }
+            let sig = {
+                let sig = LocalCluster::send_transaction_with_retries(
+                    &client,
+                    &[funding_keypair],
+                    &mut transaction,
+                    5,
+                    confs,
+                );
+                match sig {
+                    Err(e) => {
+                        result = Err(e);
+                        continue;
+                    }
+
+                    Ok(sig) => sig,
+                }
+            };
             info!("poll_all_nodes_for_signature()");
             match poll_all_nodes_for_signature(
                 entry_point_info,
                 &cluster_nodes,
                 connection_cache,
-                &transaction.signatures[0],
+                &sig,
                 confs,
             ) {
                 Err(e) => {
