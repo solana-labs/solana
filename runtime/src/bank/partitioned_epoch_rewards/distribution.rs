@@ -207,8 +207,8 @@ impl Bank {
                 }
                 Err(err) => {
                     error!(
-                        "bank::distribution::store_stake_accounts_in_partition() failed for {}: {:?}",
-                        stake_pubkey, err
+                        "bank::distribution::store_stake_accounts_in_partition() failed for \
+                         {stake_pubkey}, {reward_amount} lamports burned: {err:?}"
                     );
                     lamports_burned += reward_amount;
                 }
