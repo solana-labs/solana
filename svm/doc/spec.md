@@ -104,10 +104,6 @@ and `program_cache`.
     needed to check the validity of every transaction in a batch when
     the transaction accounts are being loaded and checked for
     compliance with required fees for transaction execution.
-- `runtime_config: Arc<RuntimeConfig>` is a reference to a
-    RuntimeConfig struct instance. The `RuntimeConfig` is a collection
-    of fields that control parameters of runtime, such as compute
-    budget, the maximal size of log messages in bytes, etc.
 - `program_cache: Arc<RwLock<ProgramCache<FG>>>` is a reference to
     a ProgramCache instance. All on chain programs used in transaction
     batch execution are loaded from the program cache.
@@ -119,44 +115,116 @@ The main entry point to the SVM is the method
 `load_and_execute_sanitized_transactions`.
 
 The method `load_and_execute_sanitized_transactions` takes the
-following arguments
-    - `callbacks` is a `TransactionProcessingCallback` trait instance
-      that enables access to data available from accounts-db and from
-      Bank,
-    - `sanitized_txs` a slice of `SanitizedTransaction`
-      - `SanitizedTransaction` contains
-        - `SanitizedMessage` is an enum with two kinds of messages
-          - `LegacyMessage` and `LoadedMessage`
-            Both `LegacyMessage` and `LoadedMessage` consist of
-            - `MessageHeader`
-            - vector of `Pubkey` of accounts used in the transaction
-            - `Hash` of recent block
-            - vector of `CompiledInstruction`
-            In addition `LoadedMessage` contains a vector of
-            `MessageAddressTableLookup` -- list of address table lookups to
-            load additional accounts for this transaction.
-        - a Hash of the message
-        - a boolean flag `is_simple_vote_tx` -- explain
-        - a vector of `Signature`  -- explain which signatures are in this vector
-    - `check_results` is a mutable slice of `TransactionCheckResult`
-    - `error_counters` is a mutable reference to `TransactionErrorMetrics`
-    - `recording_config` is a value of `ExecutionRecordingConfig` configuration parameters
-    - `timings` is a mutable reference to `ExecuteTimings`
-    - `account_overrides` is an optional reference to `AccountOverrides`
-    - `builtin_programs` is an iterator of `Pubkey` that represents builtin programs
-    - `log_messages_bytes_limit` is an optional `usize` limit on the size of log messages in bytes
-    - `limit_to_load_programs` is a boolean flag that instruct the function to only load the
-      programs and do not execute the transactions.
+following arguments:
 
-The method returns a value of
-`LoadAndExecuteSanitizedTransactionsOutput` which consists of two
-vectors
-    - a vector of `TransactionLoadResult`, and
-    - a vector of `TransactionExecutionResult`.
+- `callbacks`: A `TransactionProcessingCallback` trait instance which allows
+  the transaction processor to summon information about accounts, most
+  importantly loading them for transaction execution.
+- `sanitized_txs`: A slice of sanitized transactions.
+- `check_results`: A mutable slice of transaction check results.
+- `environment`: The runtime environment for transaction batch processing.
+- `config`: Configurations for customizing transaction processing behavior.
+
+The method returns a `LoadAndExecuteSanitizedTransactionsOutput`, which is
+defined below in more detail.
 
 An integration test `svm_integration` contains an example of
 instantiating `TransactionBatchProcessor` and calling its method
 `load_and_execute_sanitized_transactions`.
+
+### `TransactionProcessingCallback`
+
+Downstream consumers of the SVM must implement the
+`TransactionProcessingCallback` trait in order to provide the transaction
+processor with the ability to load accounts and retrieve other account-related
+information.
+
+```rust
+pub trait TransactionProcessingCallback {
+    fn account_matches_owners(&self, account: &Pubkey, owners: &[Pubkey]) -> Option<usize>;
+
+    fn get_account_shared_data(&self, pubkey: &Pubkey) -> Option<AccountSharedData>;
+
+    fn get_program_match_criteria(&self, _program: &Pubkey) -> ProgramCacheMatchCriteria {
+        ProgramCacheMatchCriteria::NoCriteria
+    }
+
+    fn add_builtin_account(&self, _name: &str, _program_id: &Pubkey) {}
+}
+```
+
+Consumers can customize this plug-in to use their own Solana account source,
+caching, and more.
+
+### `SanitizedTransaction`
+
+A "sanitized" Solana transaction is a transaction that has undergone the
+various checks required to evaluate a transaction against the Solana protocol
+ruleset. Some of these rules include signature verification and validation
+of account indices (`num_readonly_signers`, etc.).
+
+A `SanitizedTransaction` contains:
+
+- `SanitizedMessage`: Enum with two kinds of messages - `LegacyMessage` and
+  `LoadedMessage` - both of which contain:
+    - `MessageHeader`: Vector of `Pubkey` of accounts used in the transaction.
+    - `Hash` of recent block.
+    - Vector of `CompiledInstruction`.
+    - In addition, `LoadedMessage` contains a vector of
+      `MessageAddressTableLookup` - list of address table lookups to
+      load additional accounts for this transaction.
+- A Hash of the message
+- A boolean flag `is_simple_vote_tx` - shortcut for determining if the
+  transaction is merely a simple vote transaction produced by a validator.
+- A vector of `Signature` - the hash of the transaction message encrypted using
+  the signing key (for each signer in the transaction).
+
+### `TransactionCheckResult`
+
+Simply stores details about a transaction, including whether or not it contains
+a nonce, the nonce it contains (if applicable), and the lamports per signature
+to charge for fees.
+
+### `TransactionProcessingEnvironment`
+
+The transaction processor requires consumers to provide values describing
+the runtime environment to use for processing transactions.
+
+- `blockhash`: The blockhash to use for the transaction batch.
+- `epoch_total_stake`: The total stake for the current epoch.
+- `epoch_vote_accounts`: The vote accounts for the current epoch.
+- `feature_set`: Runtime feature set to use for the transaction batch.
+- `lamports_per_signature`: Lamports per signature to charge per transaction.
+- `rent_collector`: Rent collector to use for the transaction batch.
+
+### `TransactionProcessingConfig`
+
+Consumers can provide various configurations to adjust the default behavior of
+the transaction processor.
+
+- `account_overrides`: Encapsulates overridden accounts, typically used for
+  transaction simulation.
+- `compute_budget`: The compute budget to use for transaction execution.
+- `log_messages_bytes_limit`: The maximum number of bytes that log messages can
+  consume.
+- `limit_to_load_programs`: Whether to limit the number of programs loaded for
+  the transaction batch.
+- `recording_config`: Recording capabilities for transaction execution.
+- `transaction_account_lock_limit`: The max number of accounts that a
+  transaction may lock.
+
+### `LoadAndExecuteSanitizedTransactionsOutput`
+
+The output of the transaction batch processor's
+`load_and_execute_sanitized_transactions` method.
+
+- `error_metrics`: Error metrics for transactions that were processed.
+- `execute_timings`: Timings for transaction batch execution.
+- `execution_results`: Vector of results indicating whether a transaction was
+  executed or could not be executed. Note executed transactions can still have
+  failed!
+- `loaded_transactions`: Vector of loaded transactions from transactions that
+  were processed.
 
 # Functional Model
 
