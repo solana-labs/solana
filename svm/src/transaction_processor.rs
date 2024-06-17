@@ -38,7 +38,6 @@ use {
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, PROGRAM_OWNERS},
         clock::{Epoch, Slot},
-        epoch_schedule::EpochSchedule,
         feature_set::{
             include_loaded_accounts_data_size_in_fee_calculation,
             remove_rounding_in_fee_calculation, FeatureSet,
@@ -146,9 +145,6 @@ pub struct TransactionBatchProcessor<FG: ForkGraph> {
     /// Bank epoch
     epoch: Epoch,
 
-    /// initialized from genesis
-    pub epoch_schedule: EpochSchedule,
-
     /// Transaction fee structure
     pub fee_structure: FeeStructure,
 
@@ -169,7 +165,6 @@ impl<FG: ForkGraph> Debug for TransactionBatchProcessor<FG> {
         f.debug_struct("TransactionBatchProcessor")
             .field("slot", &self.slot)
             .field("epoch", &self.epoch)
-            .field("epoch_schedule", &self.epoch_schedule)
             .field("fee_structure", &self.fee_structure)
             .field("sysvar_cache", &self.sysvar_cache)
             .field("program_cache", &self.program_cache)
@@ -182,7 +177,6 @@ impl<FG: ForkGraph> Default for TransactionBatchProcessor<FG> {
         Self {
             slot: Slot::default(),
             epoch: Epoch::default(),
-            epoch_schedule: EpochSchedule::default(),
             fee_structure: FeeStructure::default(),
             sysvar_cache: RwLock::<SysvarCache>::default(),
             program_cache: Arc::new(RwLock::new(ProgramCache::new(
@@ -195,16 +189,10 @@ impl<FG: ForkGraph> Default for TransactionBatchProcessor<FG> {
 }
 
 impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
-    pub fn new(
-        slot: Slot,
-        epoch: Epoch,
-        epoch_schedule: EpochSchedule,
-        builtin_program_ids: HashSet<Pubkey>,
-    ) -> Self {
+    pub fn new(slot: Slot, epoch: Epoch, builtin_program_ids: HashSet<Pubkey>) -> Self {
         Self {
             slot,
             epoch,
-            epoch_schedule,
             fee_structure: FeeStructure::default(),
             sysvar_cache: RwLock::<SysvarCache>::default(),
             program_cache: Arc::new(RwLock::new(ProgramCache::new(slot, epoch))),
@@ -216,7 +204,6 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         Self {
             slot,
             epoch,
-            epoch_schedule: self.epoch_schedule.clone(),
             fee_structure: self.fee_structure.clone(),
             sysvar_cache: RwLock::<SysvarCache>::default(),
             program_cache: self.program_cache.clone(),
@@ -589,7 +576,6 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                         &program_cache.get_environments_for_epoch(self.epoch),
                         &key,
                         self.slot,
-                        &self.epoch_schedule,
                         false,
                     )
                     .expect("called load_program_with_pubkey() with nonexistent account");
@@ -637,10 +623,10 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         callbacks: &CB,
         upcoming_feature_set: &FeatureSet,
         compute_budget: &ComputeBudget,
+        slot_index: u64,
+        slots_in_epoch: u64,
     ) {
         // Recompile loaded programs one at a time before the next epoch hits
-        let (_epoch, slot_index) = self.epoch_schedule.get_epoch_and_slot_index(self.slot);
-        let slots_in_epoch = self.epoch_schedule.get_slots_in_epoch(self.epoch);
         let slots_in_recompilation_phase =
             (solana_program_runtime::loaded_programs::MAX_LOADED_ENTRY_COUNT as u64)
                 .min(slots_in_epoch)
@@ -661,7 +647,6 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                     &environments_for_epoch,
                     &key,
                     self.slot,
-                    &self.epoch_schedule,
                     false,
                 ) {
                     recompiled
@@ -1003,6 +988,7 @@ mod tests {
             bpf_loader,
             bpf_loader_upgradeable::{self, UpgradeableLoaderState},
             compute_budget::ComputeBudgetInstruction,
+            epoch_schedule::EpochSchedule,
             feature_set::FeatureSet,
             fee::FeeDetails,
             fee_calculator::FeeCalculator,
@@ -1849,12 +1835,7 @@ mod tests {
     #[test]
     fn fast_concur_test() {
         let mut mock_bank = MockBankCallback::default();
-        let batch_processor = TransactionBatchProcessor::<TestForkGraph>::new(
-            5,
-            5,
-            EpochSchedule::default(),
-            HashSet::new(),
-        );
+        let batch_processor = TransactionBatchProcessor::<TestForkGraph>::new(5, 5, HashSet::new());
         batch_processor.program_cache.write().unwrap().fork_graph =
             Some(Arc::new(RwLock::new(TestForkGraph {})));
 

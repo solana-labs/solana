@@ -21,7 +21,6 @@ use {
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         bpf_loader_upgradeable,
-        epoch_schedule::EpochSchedule,
         feature_set::{FeatureSet, FEATURE_NAMES},
         hash::Hash,
         instruction::AccountMeta,
@@ -247,12 +246,7 @@ fn run_fixture(fixture: InstrFixture, filename: OsString, execute_as_instr: bool
         create_program_runtime_environment_v1(&feature_set, &compute_budget, false, false).unwrap();
 
     mock_bank.override_feature_set(feature_set);
-    let batch_processor = TransactionBatchProcessor::<MockForkGraph>::new(
-        42,
-        2,
-        EpochSchedule::default(),
-        HashSet::new(),
-    );
+    let batch_processor = TransactionBatchProcessor::<MockForkGraph>::new(42, 2, HashSet::new());
 
     {
         let mut program_cache = batch_processor.program_cache.write().unwrap();
@@ -445,7 +439,6 @@ fn execute_fixture_as_instr(
         &batch_processor.get_environments_for_epoch(2).unwrap(),
         &program_id,
         42,
-        &batch_processor.epoch_schedule,
         false,
     )
     .unwrap();

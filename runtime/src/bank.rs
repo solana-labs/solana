@@ -1004,12 +1004,8 @@ impl Bank {
             transaction_account_lock_limit: None,
         };
 
-        bank.transaction_processor = TransactionBatchProcessor::new(
-            bank.slot,
-            bank.epoch,
-            bank.epoch_schedule.clone(),
-            HashSet::default(),
-        );
+        bank.transaction_processor =
+            TransactionBatchProcessor::new(bank.slot, bank.epoch, HashSet::default());
 
         let accounts_data_size_initial = bank.get_total_accounts_stats().unwrap().data_len as u64;
         bank.accounts_data_size_initial = accounts_data_size_initial;
@@ -1281,12 +1277,17 @@ impl Bank {
             }
         });
 
+        let (_epoch, slot_index) = new.epoch_schedule.get_epoch_and_slot_index(new.slot);
+        let slots_in_epoch = new.epoch_schedule.get_slots_in_epoch(new.epoch);
+
         let (_, cache_preparation_time_us) = measure_us!(new
             .transaction_processor
             .prepare_program_cache_for_upcoming_feature_set(
                 &new,
                 &new.compute_active_feature_set(true).0,
                 &new.compute_budget.unwrap_or_default(),
+                slot_index,
+                slots_in_epoch,
             ));
 
         // Update sysvars before processing transactions
@@ -1639,12 +1640,8 @@ impl Bank {
             transaction_account_lock_limit: runtime_config.transaction_account_lock_limit,
         };
 
-        bank.transaction_processor = TransactionBatchProcessor::new(
-            bank.slot,
-            bank.epoch,
-            bank.epoch_schedule.clone(),
-            HashSet::default(),
-        );
+        bank.transaction_processor =
+            TransactionBatchProcessor::new(bank.slot, bank.epoch, HashSet::default());
 
         let thread_pool = ThreadPoolBuilder::new()
             .thread_name(|i| format!("solBnkNewFlds{i:02}"))
@@ -2969,7 +2966,6 @@ impl Bank {
         self.slots_per_year = genesis_config.slots_per_year();
 
         self.epoch_schedule = genesis_config.epoch_schedule.clone();
-        self.transaction_processor.epoch_schedule = genesis_config.epoch_schedule.clone();
 
         self.inflation = Arc::new(RwLock::new(genesis_config.inflation));
 
@@ -7163,14 +7159,7 @@ impl Bank {
         let environments = self
             .transaction_processor
             .get_environments_for_epoch(effective_epoch)?;
-        load_program_with_pubkey(
-            self,
-            &environments,
-            pubkey,
-            self.slot(),
-            self.epoch_schedule(),
-            reload,
-        )
+        load_program_with_pubkey(self, &environments, pubkey, self.slot(), reload)
     }
 }
 

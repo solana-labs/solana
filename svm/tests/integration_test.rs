@@ -21,7 +21,6 @@ use {
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{Clock, Epoch, Slot, UnixTimestamp},
-        epoch_schedule::EpochSchedule,
         hash::Hash,
         instruction::AccountMeta,
         pubkey::Pubkey,
@@ -445,7 +444,6 @@ fn svm_integration() {
     let batch_processor = TransactionBatchProcessor::<MockForkGraph>::new(
         EXECUTION_SLOT,
         EXECUTION_EPOCH,
-        EpochSchedule::default(),
         HashSet::new(),
     );
 

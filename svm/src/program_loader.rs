@@ -13,7 +13,6 @@ use {
         bpf_loader, bpf_loader_deprecated,
         bpf_loader_upgradeable::UpgradeableLoaderState,
         clock::Slot,
-        epoch_schedule::EpochSchedule,
         instruction::InstructionError,
         loader_v4::{self, LoaderV4State, LoaderV4Status},
         pubkey::Pubkey,
@@ -126,7 +125,6 @@ pub fn load_program_with_pubkey<CB: TransactionProcessingCallback>(
     environments: &ProgramRuntimeEnvironments,
     pubkey: &Pubkey,
     slot: Slot,
-    _epoch_schedule: &EpochSchedule,
     reload: bool,
 ) -> Option<Arc<ProgramCacheEntry>> {
     let mut load_program_metrics = LoadProgramMetrics {
@@ -494,7 +492,6 @@ mod tests {
             &batch_processor.get_environments_for_epoch(50).unwrap(),
             &key,
             500,
-            &batch_processor.epoch_schedule,
             false,
         );
         assert!(result.is_none());
@@ -517,7 +514,6 @@ mod tests {
             &batch_processor.get_environments_for_epoch(20).unwrap(),
             &key,
             0, // Slot 0
-            &batch_processor.epoch_schedule,
             false,
         );
 
@@ -552,7 +548,6 @@ mod tests {
             &batch_processor.get_environments_for_epoch(20).unwrap(),
             &key,
             200,
-            &batch_processor.epoch_schedule,
             false,
         );
         let loaded_program = ProgramCacheEntry::new_tombstone(
@@ -580,7 +575,6 @@ mod tests {
             &batch_processor.get_environments_for_epoch(20).unwrap(),
             &key,
             200,
-            &batch_processor.epoch_schedule,
             false,
         );
 
@@ -634,7 +628,6 @@ mod tests {
             &batch_processor.get_environments_for_epoch(0).unwrap(),
             &key1,
             0,
-            &batch_processor.epoch_schedule,
             false,
         );
         let loaded_program = ProgramCacheEntry::new_tombstone(
@@ -672,7 +665,6 @@ mod tests {
             &batch_processor.get_environments_for_epoch(20).unwrap(),
             &key1,
             200,
-            &batch_processor.epoch_schedule,
             false,
         );
 
@@ -722,7 +714,6 @@ mod tests {
             &batch_processor.get_environments_for_epoch(0).unwrap(),
             &key,
             0,
-            &batch_processor.epoch_schedule,
             false,
         );
         let loaded_program = ProgramCacheEntry::new_tombstone(
@@ -756,7 +747,6 @@ mod tests {
             &batch_processor.get_environments_for_epoch(20).unwrap(),
             &key,
             200,
-            &batch_processor.epoch_schedule,
             false,
         );
 
@@ -807,7 +797,6 @@ mod tests {
                     .unwrap(),
                 &key,
                 200,
-                &batch_processor.epoch_schedule,
                 false,
             )
             .unwrap();
