@@ -47,7 +47,7 @@ jobs:
     strategy:
       matrix:
         os:
-          - macos-11
+          - macos-12
         target:
           - aarch64-apple-ios
           - x86_64-apple-ios
