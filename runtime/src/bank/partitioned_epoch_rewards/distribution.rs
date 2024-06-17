@@ -50,7 +50,7 @@ impl Bank {
             distribution_starting_block_height + status.stake_rewards_by_partition.len() as u64;
         assert!(
             self.epoch_schedule.get_slots_in_epoch(self.epoch)
-                > distribution_end_exclusive.saturating_sub(distribution_starting_block_height)
+                > status.stake_rewards_by_partition.len() as u64
         );
 
         if height >= distribution_starting_block_height && height < distribution_end_exclusive {
