@@ -36,6 +36,7 @@ pub(crate) struct ShredFetchStage {
 
 impl ShredFetchStage {
     // updates packets received on a channel and sends them on another channel
+    #[allow(clippy::clone_on_copy)]
     fn modify_packets(
         recvr: PacketBatchReceiver,
         sendr: Sender<PacketBatch>,

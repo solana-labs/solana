@@ -2553,6 +2553,7 @@ mod test {
         let stake = 100;
         let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys_for_tests(10, stake);
         let mut epoch_stakes = bank.epoch_stakes_map().clone();
+        #[allow(clippy::clone_on_copy)]
         let mut epoch_schedule = bank.epoch_schedule().clone();
 
         // Simulate epoch boundary at slot 10, where half of the stake deactivates

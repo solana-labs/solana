@@ -200,6 +200,7 @@ impl Tvu {
         let (dumped_slots_sender, dumped_slots_receiver) = unbounded();
         let (popular_pruned_forks_sender, popular_pruned_forks_receiver) = unbounded();
         let window_service = {
+            #[allow(clippy::clone_on_copy)]
             let epoch_schedule = bank_forks
                 .read()
                 .unwrap()

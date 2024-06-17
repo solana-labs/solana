@@ -40,6 +40,7 @@ pub struct LeaderScheduleCache {
 
 impl LeaderScheduleCache {
     pub fn new_from_bank(bank: &Bank) -> Self {
+        #[allow(clippy::clone_on_copy)]
         Self::new(bank.epoch_schedule().clone(), bank)
     }
 

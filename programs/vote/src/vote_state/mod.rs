@@ -1298,6 +1298,7 @@ mod tests {
         let processor_account = AccountSharedData::new(0, 0, &solana_sdk::native_loader::id());
         let transaction_context = TransactionContext::new(
             vec![(id(), processor_account), (node_pubkey, vote_account)],
+            #[allow(clippy::clone_on_copy)]
             rent.clone(),
             0,
             0,

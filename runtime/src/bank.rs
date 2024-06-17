@@ -1212,6 +1212,7 @@ impl Bank {
         parent.freeze();
         assert_ne!(slot, parent.slot());
 
+        #[allow(clippy::clone_on_copy)]
         let epoch_schedule = parent.epoch_schedule().clone();
         let epoch = epoch_schedule.get_epoch(slot);
 
@@ -1920,6 +1921,7 @@ impl Bank {
             fee_rate_governor: self.fee_rate_governor.clone(),
             collected_rent: self.collected_rent.load(Relaxed),
             rent_collector: self.rent_collector.clone(),
+            #[allow(clippy::clone_on_copy)]
             epoch_schedule: self.epoch_schedule.clone(),
             inflation: *self.inflation.read().unwrap(),
             stakes: &self.stakes_cache,
@@ -3748,6 +3750,7 @@ impl Bank {
         self.parent_hash
     }
 
+    #[allow(clippy::clone_on_copy)]
     fn process_genesis_config(
         &mut self,
         genesis_config: &GenesisConfig,
@@ -4781,6 +4784,7 @@ impl Bank {
 
         let mut transaction_context = TransactionContext::new(
             transaction_accounts,
+            #[allow(clippy::clone_on_copy)]
             self.rent_collector.rent.clone(),
             compute_budget.max_invoke_stack_height,
             compute_budget.max_instruction_trace_length,
@@ -7076,6 +7080,7 @@ impl Bank {
         if config.run_in_background {
             let ancestors = ancestors.clone();
             let accounts = Arc::clone(accounts);
+            #[allow(clippy::clone_on_copy)]
             let epoch_schedule = epoch_schedule.clone();
             let rent_collector = rent_collector.clone();
             let accounts_ = Arc::clone(&accounts);

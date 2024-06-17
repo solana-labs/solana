@@ -8997,8 +8997,10 @@ impl AccountsDb {
         let schedule = &genesis_config.epoch_schedule;
         let rent_collector = RentCollector::new(
             schedule.get_epoch(max_slot),
+            #[allow(clippy::clone_on_copy)]
             schedule.clone(),
             genesis_config.slots_per_year(),
+            #[allow(clippy::clone_on_copy)]
             genesis_config.rent.clone(),
         );
         let accounts_data_len = AtomicU64::new(0);

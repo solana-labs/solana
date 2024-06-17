@@ -1349,6 +1349,7 @@ mod test {
         fn new(bank_forks: Arc<RwLock<BankForks>>) -> Self {
             let ancestor_hashes_request_statuses = Arc::new(DashMap::new());
             let ancestor_hashes_request_socket = Arc::new(UdpSocket::bind("0.0.0.0:0").unwrap());
+            #[allow(clippy::clone_on_copy)]
             let epoch_schedule = bank_forks
                 .read()
                 .unwrap()

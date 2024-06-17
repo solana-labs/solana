@@ -3887,6 +3887,7 @@ pub mod tests {
             AccountSecondaryIndexes::default(),
             AccountShrinkThreshold::default(),
         );
+        #[allow(clippy::clone_on_copy)]
         bank.epoch_schedule().clone()
     }
 

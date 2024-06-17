@@ -843,6 +843,7 @@ impl TestValidator {
             validator_stake_lamports,
             validator_identity_lamports,
             config.fee_rate_governor.clone(),
+            #[allow(clippy::clone_on_copy)]
             config.rent.clone(),
             solana_sdk::genesis_config::ClusterType::Development,
             accounts.into_iter().collect(),

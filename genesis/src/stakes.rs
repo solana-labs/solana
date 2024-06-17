@@ -246,6 +246,7 @@ mod tests {
         let total_lamports = staker_reserve + reserve * 2 + 1;
         create_and_check_stakes(
             &mut GenesisConfig {
+                #[allow(clippy::clone_on_copy)]
                 rent: rent.clone(),
                 ..GenesisConfig::default()
             },
@@ -272,6 +273,7 @@ mod tests {
         let total_lamports = staker_reserve + reserve * 2 + 1;
         create_and_check_stakes(
             &mut GenesisConfig {
+                #[allow(clippy::clone_on_copy)]
                 rent: rent.clone(),
                 ..GenesisConfig::default()
             },
@@ -298,6 +300,7 @@ mod tests {
         let total_lamports = staker_reserve + (granularity + reserve) * 2;
         create_and_check_stakes(
             &mut GenesisConfig {
+                #[allow(clippy::clone_on_copy)]
                 rent: rent.clone(),
                 ..GenesisConfig::default()
             },
@@ -323,6 +326,7 @@ mod tests {
         let total_lamports = staker_reserve + (granularity + reserve + 1) * 2;
         create_and_check_stakes(
             &mut GenesisConfig {
+                #[allow(clippy::clone_on_copy)]
                 rent: rent.clone(),
                 ..GenesisConfig::default()
             },

@@ -636,6 +636,7 @@ impl JsonRpcRequestProcessor {
         // Since epoch schedule data comes from the genesis config, any commitment level should be
         // fine
         let bank = self.bank(Some(CommitmentConfig::finalized()));
+        #[allow(clippy::clone_on_copy)]
         bank.epoch_schedule().clone()
     }
 
