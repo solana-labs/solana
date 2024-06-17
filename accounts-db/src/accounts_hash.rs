@@ -838,9 +838,13 @@ impl<'a> AccountsHasher<'a> {
                 accum
             })
             .reduce(
-                || DedupResult {
-                    hashes_files: Vec::with_capacity(max_bin),
-                    ..Default::default()
+                || {
+                    DedupResult {
+                        // Allocate with Vec::new() so that no allocation actually happens. See
+                        // https://github.com/anza-xyz/agave/pull/1308.
+                        hashes_files: Vec::new(),
+                        ..Default::default()
+                    }
                 },
                 |mut a, mut b| {
                     a.lamports_sum = a
