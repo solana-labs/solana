@@ -35,7 +35,6 @@
 //! already been signed and verified.
 #[allow(deprecated)]
 use solana_sdk::recent_blockhashes_account;
-pub use solana_sdk::reward_type::RewardType;
 use {
     crate::{
         bank::{
@@ -204,6 +203,9 @@ use {
         thread::Builder,
         time::{Duration, Instant},
     },
+};
+pub use {
+    partitioned_epoch_rewards::KeyedRewardsAndNumPartitions, solana_sdk::reward_type::RewardType,
 };
 #[cfg(feature = "dev-context-only-utils")]
 use {

@@ -16,8 +16,9 @@ use {
     },
     solana_transaction_status::{
         ConfirmedBlock, EntrySummary, InnerInstruction, InnerInstructions, Reward, RewardType,
-        TransactionByAddrInfo, TransactionStatusMeta, TransactionTokenBalance,
-        TransactionWithStatusMeta, VersionedConfirmedBlock, VersionedTransactionWithStatusMeta,
+        RewardsAndNumPartitions, TransactionByAddrInfo, TransactionStatusMeta,
+        TransactionTokenBalance, TransactionWithStatusMeta, VersionedConfirmedBlock,
+        VersionedTransactionWithStatusMeta,
     },
     std::{
         convert::{TryFrom, TryInto},
@@ -47,6 +48,16 @@ impl From<Vec<Reward>> for generated::Rewards {
     fn from(rewards: Vec<Reward>) -> Self {
         Self {
             rewards: rewards.into_iter().map(|r| r.into()).collect(),
+            num_partitions: None,
+        }
+    }
+}
+
+impl From<RewardsAndNumPartitions> for generated::Rewards {
+    fn from(input: RewardsAndNumPartitions) -> Self {
+        Self {
+            rewards: input.rewards.into_iter().map(|r| r.into()).collect(),
+            num_partitions: input.num_partitions.map(|n| n.into()),
         }
     }
 }
@@ -54,6 +65,17 @@ impl From<Vec<Reward>> for generated::Rewards {
 impl From<generated::Rewards> for Vec<Reward> {
     fn from(rewards: generated::Rewards) -> Self {
         rewards.rewards.into_iter().map(|r| r.into()).collect()
+    }
+}
+
+impl From<generated::Rewards> for (Vec<Reward>, Option<u64>) {
+    fn from(rewards: generated::Rewards) -> Self {
+        (
+            rewards.rewards.into_iter().map(|r| r.into()).collect(),
+            rewards
+                .num_partitions
+                .map(|generated::NumPartitions { num_partitions }| num_partitions),
+        )
     }
 }
 
@@ -67,6 +89,7 @@ impl From<StoredExtendedRewards> for generated::Rewards {
                     r.into()
                 })
                 .collect(),
+            num_partitions: None,
         }
     }
 }
@@ -121,6 +144,12 @@ impl From<generated::Reward> for Reward {
     }
 }
 
+impl From<u64> for generated::NumPartitions {
+    fn from(num_partitions: u64) -> Self {
+        Self { num_partitions }
+    }
+}
+
 impl From<VersionedConfirmedBlock> for generated::ConfirmedBlock {
     fn from(confirmed_block: VersionedConfirmedBlock) -> Self {
         let VersionedConfirmedBlock {
@@ -129,6 +158,7 @@ impl From<VersionedConfirmedBlock> for generated::ConfirmedBlock {
             parent_slot,
             transactions,
             rewards,
+            num_partitions,
             block_time,
             block_height,
         } = confirmed_block;
@@ -139,6 +169,7 @@ impl From<VersionedConfirmedBlock> for generated::ConfirmedBlock {
             parent_slot,
             transactions: transactions.into_iter().map(|tx| tx.into()).collect(),
             rewards: rewards.into_iter().map(|r| r.into()).collect(),
+            num_partitions: num_partitions.map(Into::into),
             block_time: block_time.map(|timestamp| generated::UnixTimestamp { timestamp }),
             block_height: block_height.map(|block_height| generated::BlockHeight { block_height }),
         }
@@ -156,6 +187,7 @@ impl TryFrom<generated::ConfirmedBlock> for ConfirmedBlock {
             parent_slot,
             transactions,
             rewards,
+            num_partitions,
             block_time,
             block_height,
         } = confirmed_block;
@@ -169,6 +201,8 @@ impl TryFrom<generated::ConfirmedBlock> for ConfirmedBlock {
                 .map(|tx| tx.try_into())
                 .collect::<std::result::Result<Vec<_>, Self::Error>>()?,
             rewards: rewards.into_iter().map(|r| r.into()).collect(),
+            num_partitions: num_partitions
+                .map(|generated::NumPartitions { num_partitions }| num_partitions),
             block_time: block_time.map(|generated::UnixTimestamp { timestamp }| timestamp),
             block_height: block_height.map(|generated::BlockHeight { block_height }| block_height),
         })

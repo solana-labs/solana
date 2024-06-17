@@ -406,6 +406,7 @@ impl RpcSender for MockSender {
                     version: Some(TransactionVersion::LEGACY),
                 }],
                 rewards: Rewards::new(),
+                num_partitions: None,
                 block_time: None,
                 block_height: Some(428),
             })?,

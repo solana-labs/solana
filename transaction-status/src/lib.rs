@@ -628,6 +628,11 @@ pub struct Reward {
 
 pub type Rewards = Vec<Reward>;
 
+pub struct RewardsAndNumPartitions {
+    pub rewards: Rewards,
+    pub num_partitions: Option<u64>,
+}
+
 #[derive(Debug, Error)]
 pub enum ConvertBlockError {
     #[error("transactions missing after converted, before: {0}, after: {1}")]
@@ -641,6 +646,7 @@ pub struct ConfirmedBlock {
     pub parent_slot: Slot,
     pub transactions: Vec<TransactionWithStatusMeta>,
     pub rewards: Rewards,
+    pub num_partitions: Option<u64>,
     pub block_time: Option<UnixTimestamp>,
     pub block_height: Option<u64>,
 }
@@ -654,6 +660,7 @@ pub struct VersionedConfirmedBlock {
     pub parent_slot: Slot,
     pub transactions: Vec<VersionedTransactionWithStatusMeta>,
     pub rewards: Rewards,
+    pub num_partitions: Option<u64>,
     pub block_time: Option<UnixTimestamp>,
     pub block_height: Option<u64>,
 }
@@ -670,6 +677,7 @@ impl From<VersionedConfirmedBlock> for ConfirmedBlock {
                 .map(TransactionWithStatusMeta::Complete)
                 .collect(),
             rewards: block.rewards,
+            num_partitions: block.num_partitions,
             block_time: block.block_time,
             block_height: block.block_height,
         }
@@ -704,6 +712,7 @@ impl TryFrom<ConfirmedBlock> for VersionedConfirmedBlock {
             parent_slot: block.parent_slot,
             transactions: txs,
             rewards: block.rewards,
+            num_partitions: block.num_partitions,
             block_time: block.block_time,
             block_height: block.block_height,
         })
@@ -768,6 +777,7 @@ impl ConfirmedBlock {
             } else {
                 None
             },
+            num_reward_partitions: self.num_partitions,
             block_time: self.block_time,
             block_height: self.block_height,
         })
@@ -782,6 +792,7 @@ pub struct EncodedConfirmedBlock {
     pub parent_slot: Slot,
     pub transactions: Vec<EncodedTransactionWithStatusMeta>,
     pub rewards: Rewards,
+    pub num_partitions: Option<u64>,
     pub block_time: Option<UnixTimestamp>,
     pub block_height: Option<u64>,
 }
@@ -794,6 +805,7 @@ impl From<UiConfirmedBlock> for EncodedConfirmedBlock {
             parent_slot: block.parent_slot,
             transactions: block.transactions.unwrap_or_default(),
             rewards: block.rewards.unwrap_or_default(),
+            num_partitions: block.num_reward_partitions,
             block_time: block.block_time,
             block_height: block.block_height,
         }
@@ -812,6 +824,8 @@ pub struct UiConfirmedBlock {
     pub signatures: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rewards: Option<Rewards>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub num_reward_partitions: Option<u64>,
     pub block_time: Option<UnixTimestamp>,
     pub block_height: Option<u64>,
 }

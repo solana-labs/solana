@@ -985,6 +985,7 @@ mod tests {
             parent_slot,
             transactions,
             rewards,
+            num_partitions,
             block_time,
             block_height,
         } = confirmed_block;
@@ -995,6 +996,8 @@ mod tests {
             parent_slot,
             transactions: transactions.into_iter().map(|tx| tx.into()).collect(),
             rewards: rewards.into_iter().map(|r| r.into()).collect(),
+            num_partitions: num_partitions
+                .map(|num_partitions| generated::NumPartitions { num_partitions }),
             block_time: block_time.map(|timestamp| generated::UnixTimestamp { timestamp }),
             block_height: block_height.map(|block_height| generated::BlockHeight { block_height }),
         }
@@ -1028,6 +1031,7 @@ mod tests {
             blockhash: Hash::default().to_string(),
             previous_blockhash: Hash::default().to_string(),
             rewards: vec![],
+            num_partitions: None,
             block_time: Some(1_234_567_890),
             block_height: Some(1),
         };

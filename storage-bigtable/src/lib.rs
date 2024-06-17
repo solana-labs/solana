@@ -141,6 +141,7 @@ impl From<ConfirmedBlock> for StoredConfirmedBlock {
             parent_slot,
             transactions,
             rewards,
+            num_partitions: _num_partitions,
             block_time,
             block_height,
         } = confirmed_block;
@@ -175,6 +176,7 @@ impl From<StoredConfirmedBlock> for ConfirmedBlock {
             parent_slot,
             transactions: transactions.into_iter().map(|tx| tx.into()).collect(),
             rewards: rewards.into_iter().map(|reward| reward.into()).collect(),
+            num_partitions: None,
             block_time,
             block_height,
         }
