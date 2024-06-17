@@ -25,6 +25,7 @@ use {
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         commitment_config::CommitmentConfig,
         compute_budget::{self, ComputeBudgetInstruction},
+        feature_set::enable_alt_bn128_syscall,
         fee_calculator::FeeRateGovernor,
         pubkey::Pubkey,
         rent::Rent,
@@ -125,6 +126,7 @@ fn test_cli_program_deploy_non_upgradeable() {
         max_sign_attempts: 5,
         auto_extend: true,
         use_rpc: false,
+        skip_feature_verification: true,
     });
     config.output_format = OutputFormat::JsonCompact;
     let response = process_command(&config);
@@ -174,6 +176,7 @@ fn test_cli_program_deploy_non_upgradeable() {
         max_sign_attempts: 5,
         auto_extend: true,
         use_rpc: false,
+        skip_feature_verification: true,
     });
     process_command(&config).unwrap();
     let account1 = rpc_client
@@ -232,6 +235,7 @@ fn test_cli_program_deploy_non_upgradeable() {
         max_sign_attempts: 5,
         auto_extend: true,
         use_rpc: false,
+        skip_feature_verification: true,
     });
     expect_command_failure(
         &config,
@@ -258,6 +262,7 @@ fn test_cli_program_deploy_non_upgradeable() {
         max_sign_attempts: 5,
         auto_extend: true,
         use_rpc: false,
+        skip_feature_verification: true,
     });
     expect_command_failure(
         &config,
@@ -330,6 +335,7 @@ fn test_cli_program_deploy_no_authority() {
         max_sign_attempts: 5,
         auto_extend: true,
         use_rpc: false,
+        skip_feature_verification: true,
     });
     config.output_format = OutputFormat::JsonCompact;
     let response = process_command(&config);
@@ -360,12 +366,305 @@ fn test_cli_program_deploy_no_authority() {
         max_sign_attempts: 5,
         auto_extend: true,
         use_rpc: false,
+        skip_feature_verification: true,
     });
     expect_command_failure(
         &config,
         "Can not upgrade a program if it was deployed without the authority signature",
         &format!("Program {program_id} is no longer upgradeable"),
     );
+}
+
+#[test_case(true; "Feature enabled")]
+#[test_case(false; "Feature disabled")]
+fn test_cli_program_deploy_feature(enable_feature: bool) {
+    solana_logger::setup();
+
+    let mut program_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    program_path.push("tests");
+    program_path.push("fixtures");
+    program_path.push("alt_bn128");
+    program_path.set_extension("so");
+
+    let mint_keypair = Keypair::new();
+    let mint_pubkey = mint_keypair.pubkey();
+    let faucet_addr = run_local_faucet(mint_keypair, None);
+    let mut genesis = TestValidatorGenesis::default();
+    let mut test_validator_builder = genesis
+        .fee_rate_governor(FeeRateGovernor::new(0, 0))
+        .rent(Rent {
+            lamports_per_byte_year: 1,
+            exemption_threshold: 1.0,
+            ..Rent::default()
+        })
+        .faucet_addr(Some(faucet_addr));
+
+    // Deactivate the enable alt bn128 syscall and try to submit a program with that syscall
+    if !enable_feature {
+        test_validator_builder =
+            test_validator_builder.deactivate_features(&[enable_alt_bn128_syscall::id()]);
+    }
+
+    let test_validator = test_validator_builder
+        .start_with_mint_address(mint_pubkey, SocketAddrSpace::Unspecified)
+        .expect("validator start failed");
+
+    let rpc_client =
+        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
+
+    let mut file = File::open(program_path.to_str().unwrap()).unwrap();
+    let mut program_data = Vec::new();
+    file.read_to_end(&mut program_data).unwrap();
+    let max_len = program_data.len();
+    let minimum_balance_for_programdata = rpc_client
+        .get_minimum_balance_for_rent_exemption(UpgradeableLoaderState::size_of_programdata(
+            max_len,
+        ))
+        .unwrap();
+    let minimum_balance_for_program = rpc_client
+        .get_minimum_balance_for_rent_exemption(UpgradeableLoaderState::size_of_program())
+        .unwrap();
+    let upgrade_authority = Keypair::new();
+
+    let mut config = CliConfig::recent_for_tests();
+    let keypair = Keypair::new();
+    config.json_rpc_url = test_validator.rpc_url();
+    config.command = CliCommand::Airdrop {
+        pubkey: None,
+        lamports: 100 * minimum_balance_for_programdata + minimum_balance_for_program,
+    };
+    config.signers = vec![&keypair];
+    process_command(&config).unwrap();
+
+    config.signers = vec![&keypair, &upgrade_authority];
+    config.command = CliCommand::Program(ProgramCliCommand::Deploy {
+        program_location: Some(program_path.to_str().unwrap().to_string()),
+        fee_payer_signer_index: 0,
+        program_signer_index: None,
+        program_pubkey: None,
+        buffer_signer_index: None,
+        buffer_pubkey: None,
+        upgrade_authority_signer_index: 1,
+        is_final: true,
+        max_len: None,
+        skip_fee_check: false,
+        compute_unit_price: None,
+        max_sign_attempts: 5,
+        auto_extend: true,
+        use_rpc: false,
+        skip_feature_verification: false,
+    });
+    config.output_format = OutputFormat::JsonCompact;
+
+    if enable_feature {
+        let res = process_command(&config);
+        assert!(res.is_ok());
+    } else {
+        expect_command_failure(
+            &config,
+            "Program contains a syscall from a deactivated feature",
+            "ELF error: ELF error: Unresolved symbol (sol_alt_bn128_group_op) at instruction #49 (ELF file offset 0x188)"
+        );
+
+        // If we bypass the verification, there should be no error
+        config.command = CliCommand::Program(ProgramCliCommand::Deploy {
+            program_location: Some(program_path.to_str().unwrap().to_string()),
+            fee_payer_signer_index: 0,
+            program_signer_index: None,
+            program_pubkey: None,
+            buffer_signer_index: None,
+            buffer_pubkey: None,
+            upgrade_authority_signer_index: 1,
+            is_final: true,
+            max_len: None,
+            skip_fee_check: false,
+            compute_unit_price: None,
+            max_sign_attempts: 5,
+            auto_extend: true,
+            use_rpc: false,
+            skip_feature_verification: true,
+        });
+
+        // When we skip verification, we fail at a later stage
+        let response = process_command(&config);
+        assert!(response
+            .err()
+            .unwrap()
+            .to_string()
+            .contains("Deploying program failed: RPC response error -32002:"));
+    }
+}
+
+#[test_case(true; "Feature enabled")]
+#[test_case(false; "Feature disabled")]
+fn test_cli_program_upgrade_with_feature(enable_feature: bool) {
+    solana_logger::setup();
+
+    let mut noop_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    noop_path.push("tests");
+    noop_path.push("fixtures");
+    noop_path.push("noop");
+    noop_path.set_extension("so");
+
+    let mut syscall_program_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    syscall_program_path.push("tests");
+    syscall_program_path.push("fixtures");
+    syscall_program_path.push("alt_bn128");
+    syscall_program_path.set_extension("so");
+
+    let mint_keypair = Keypair::new();
+    let mint_pubkey = mint_keypair.pubkey();
+    let faucet_addr = run_local_faucet(mint_keypair, None);
+
+    let mut genesis = TestValidatorGenesis::default();
+    let mut test_validator_builder = genesis
+        .fee_rate_governor(FeeRateGovernor::new(0, 0))
+        .rent(Rent {
+            lamports_per_byte_year: 1,
+            exemption_threshold: 1.0,
+            ..Rent::default()
+        })
+        .faucet_addr(Some(faucet_addr));
+
+    // Deactivate the enable alt bn128 syscall and try to submit a program with that syscall
+    if !enable_feature {
+        test_validator_builder =
+            test_validator_builder.deactivate_features(&[enable_alt_bn128_syscall::id()]);
+    }
+
+    let test_validator = test_validator_builder
+        .start_with_mint_address(mint_pubkey, SocketAddrSpace::Unspecified)
+        .expect("validator start failed");
+
+    let rpc_client =
+        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
+
+    let blockhash = rpc_client.get_latest_blockhash().unwrap();
+
+    let mut file = File::open(syscall_program_path.to_str().unwrap()).unwrap();
+    let mut large_program_data = Vec::new();
+    file.read_to_end(&mut large_program_data).unwrap();
+    let max_program_data_len = large_program_data.len();
+    let minimum_balance_for_large_buffer = rpc_client
+        .get_minimum_balance_for_rent_exemption(UpgradeableLoaderState::size_of_programdata(
+            max_program_data_len,
+        ))
+        .unwrap();
+
+    let mut config = CliConfig::recent_for_tests();
+    config.json_rpc_url = test_validator.rpc_url();
+
+    let online_signer = Keypair::new();
+    let offline_signer = Keypair::new();
+    let buffer_signer = Keypair::new();
+    // Typically, keypair for program signer should be different from online signer or
+    // offline signer keypairs.
+    let program_signer = Keypair::new();
+
+    config.command = CliCommand::Airdrop {
+        pubkey: None,
+        lamports: 100 * minimum_balance_for_large_buffer, // gotta be enough for this test
+    };
+    config.signers = vec![&online_signer];
+    process_command(&config).unwrap();
+    config.command = CliCommand::Airdrop {
+        pubkey: None,
+        lamports: 100 * minimum_balance_for_large_buffer, // gotta be enough for this test
+    };
+    config.signers = vec![&offline_signer];
+    process_command(&config).unwrap();
+
+    // Deploy upgradeable program with authority set to offline signer
+    config.signers = vec![&online_signer, &offline_signer, &program_signer];
+    config.command = CliCommand::Program(ProgramCliCommand::Deploy {
+        program_location: Some(noop_path.to_str().unwrap().to_string()),
+        fee_payer_signer_index: 0,
+        program_signer_index: Some(2),
+        program_pubkey: Some(program_signer.pubkey()),
+        buffer_signer_index: None,
+        buffer_pubkey: None,
+        upgrade_authority_signer_index: 1, // must be offline signer for security reasons
+        is_final: false,
+        max_len: Some(max_program_data_len), // allows for larger program size with future upgrades
+        skip_fee_check: false,
+        compute_unit_price: None,
+        max_sign_attempts: 5,
+        auto_extend: true,
+        use_rpc: false,
+        skip_feature_verification: false,
+    });
+    config.output_format = OutputFormat::JsonCompact;
+    process_command(&config).unwrap();
+
+    // Prepare buffer to upgrade deployed program to a larger program
+    create_buffer_with_offline_authority(
+        &rpc_client,
+        &syscall_program_path,
+        &mut config,
+        &online_signer,
+        &offline_signer,
+        &buffer_signer,
+    );
+
+    config.signers = vec![&offline_signer];
+    config.command = CliCommand::Program(ProgramCliCommand::Upgrade {
+        fee_payer_signer_index: 0,
+        program_pubkey: program_signer.pubkey(),
+        buffer_pubkey: buffer_signer.pubkey(),
+        upgrade_authority_signer_index: 0,
+        sign_only: true,
+        dump_transaction_message: false,
+        blockhash_query: BlockhashQuery::new(Some(blockhash), true, None),
+        skip_feature_verification: false,
+    });
+    config.output_format = OutputFormat::JsonCompact;
+    let sig_response = process_command(&config).unwrap();
+    let sign_only = parse_sign_only_reply_string(&sig_response);
+    let offline_pre_signer = sign_only.presigner_of(&offline_signer.pubkey()).unwrap();
+    // Attempt to deploy from buffer using signature over correct message (should succeed)
+    config.signers = vec![&offline_pre_signer, &program_signer];
+
+    config.command = CliCommand::Program(ProgramCliCommand::Upgrade {
+        fee_payer_signer_index: 0,
+        program_pubkey: program_signer.pubkey(),
+        buffer_pubkey: buffer_signer.pubkey(),
+        upgrade_authority_signer_index: 0,
+        sign_only: false,
+        dump_transaction_message: false,
+        blockhash_query: BlockhashQuery::new(Some(blockhash), true, None),
+        skip_feature_verification: false,
+    });
+    config.output_format = OutputFormat::JsonCompact;
+    if enable_feature {
+        let res = process_command(&config);
+        assert!(res.is_ok());
+    } else {
+        expect_command_failure(
+            &config,
+            "Program contains a syscall to a disabled feature",
+            format!("Buffer account {} has invalid program data: \"ELF error: ELF error: Unresolved symbol (sol_alt_bn128_group_op) at instruction #49 (ELF file offset 0x188)\"", buffer_signer.pubkey()).as_str(),
+        );
+
+        // If we skip verification, the failure should be at a later stage
+        config.command = CliCommand::Program(ProgramCliCommand::Upgrade {
+            fee_payer_signer_index: 0,
+            program_pubkey: program_signer.pubkey(),
+            buffer_pubkey: buffer_signer.pubkey(),
+            upgrade_authority_signer_index: 0,
+            sign_only: false,
+            dump_transaction_message: false,
+            blockhash_query: BlockhashQuery::new(Some(blockhash), true, None),
+            skip_feature_verification: true,
+        });
+        config.output_format = OutputFormat::JsonCompact;
+
+        let response = process_command(&config);
+        assert!(response
+            .err()
+            .unwrap()
+            .to_string()
+            .contains("Upgrading program failed: RPC response error -32002"));
+    }
 }
 
 #[test]
@@ -429,6 +728,7 @@ fn test_cli_program_deploy_with_authority() {
         max_sign_attempts: 5,
         auto_extend: true,
         use_rpc: false,
+        skip_feature_verification: true,
     });
     config.output_format = OutputFormat::JsonCompact;
     let response = process_command(&config);
@@ -481,6 +781,7 @@ fn test_cli_program_deploy_with_authority() {
         max_sign_attempts: 5,
         auto_extend: true,
         use_rpc: false,
+        skip_feature_verification: true,
     });
     let response = process_command(&config);
     let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
@@ -527,6 +828,7 @@ fn test_cli_program_deploy_with_authority() {
         max_sign_attempts: 5,
         auto_extend: true,
         use_rpc: false,
+        skip_feature_verification: true,
     });
     process_command(&config).unwrap();
     let program_account = rpc_client.get_account(&program_pubkey).unwrap();
@@ -605,6 +907,7 @@ fn test_cli_program_deploy_with_authority() {
         max_sign_attempts: 5,
         auto_extend: true,
         use_rpc: false,
+        skip_feature_verification: true,
     });
     process_command(&config).unwrap();
     let program_account = rpc_client.get_account(&program_pubkey).unwrap();
@@ -687,6 +990,7 @@ fn test_cli_program_deploy_with_authority() {
         max_sign_attempts: 5,
         auto_extend: true,
         use_rpc: false,
+        skip_feature_verification: true,
     });
     expect_command_failure(
         &config,
@@ -711,6 +1015,7 @@ fn test_cli_program_deploy_with_authority() {
         max_sign_attempts: 5,
         auto_extend: true,
         use_rpc: false,
+        skip_feature_verification: true,
     });
     let response = process_command(&config);
     let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
@@ -830,6 +1135,7 @@ fn test_cli_program_upgrade_auto_extend() {
         max_sign_attempts: 5,
         auto_extend: true,
         use_rpc: false,
+        skip_feature_verification: true,
     });
     config.output_format = OutputFormat::JsonCompact;
     process_command(&config).unwrap();
@@ -852,6 +1158,7 @@ fn test_cli_program_upgrade_auto_extend() {
         max_sign_attempts: 5,
         auto_extend: false, // --no-auto-extend flag is present
         use_rpc: false,
+        skip_feature_verification: true,
     });
     expect_command_failure(
         &config,
@@ -884,6 +1191,7 @@ fn test_cli_program_upgrade_auto_extend() {
         max_sign_attempts: 5,
         auto_extend: true, // --no-auto-extend flag is absent
         use_rpc: false,
+        skip_feature_verification: true,
     });
     let response = process_command(&config);
     let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
@@ -974,6 +1282,7 @@ fn test_cli_program_close_program() {
         max_sign_attempts: 5,
         auto_extend: true,
         use_rpc: false,
+        skip_feature_verification: true,
     });
     config.output_format = OutputFormat::JsonCompact;
     process_command(&config).unwrap();
@@ -1092,6 +1401,7 @@ fn test_cli_program_extend_program() {
         max_sign_attempts: 5,
         auto_extend: false,
         use_rpc: false,
+        skip_feature_verification: true,
     });
     config.output_format = OutputFormat::JsonCompact;
     process_command(&config).unwrap();
@@ -1142,6 +1452,7 @@ fn test_cli_program_extend_program() {
         max_sign_attempts: 5,
         auto_extend: false,
         use_rpc: false,
+        skip_feature_verification: true,
     });
     expect_command_failure(
         &config,
@@ -1188,6 +1499,7 @@ fn test_cli_program_extend_program() {
         max_sign_attempts: 5,
         auto_extend: false,
         use_rpc: false,
+        skip_feature_verification: true,
     });
     process_command(&config).unwrap();
 }
@@ -1551,6 +1863,7 @@ fn test_cli_program_write_buffer() {
         max_sign_attempts: 5,
         auto_extend: true,
         use_rpc: false,
+        skip_feature_verification: true,
     });
     config.output_format = OutputFormat::JsonCompact;
     let buffer_account_len = {
@@ -1681,6 +1994,7 @@ fn test_cli_program_set_buffer_authority() {
         max_sign_attempts: 5,
         auto_extend: true,
         use_rpc: false,
+        skip_feature_verification: true,
     });
     config.output_format = OutputFormat::JsonCompact;
     expect_command_failure(
@@ -1737,6 +2051,7 @@ fn test_cli_program_set_buffer_authority() {
         max_sign_attempts: 5,
         auto_extend: true,
         use_rpc: false,
+        skip_feature_verification: true,
     });
     config.output_format = OutputFormat::JsonCompact;
     process_command(&config).unwrap();
@@ -1823,6 +2138,7 @@ fn test_cli_program_mismatch_buffer_authority() {
         max_sign_attempts: 5,
         auto_extend: true,
         use_rpc: false,
+        skip_feature_verification: true,
     });
     expect_command_failure(
         &config,
@@ -1851,6 +2167,7 @@ fn test_cli_program_mismatch_buffer_authority() {
         max_sign_attempts: 5,
         auto_extend: true,
         use_rpc: false,
+        skip_feature_verification: true,
     });
     process_command(&config).unwrap();
 }
@@ -1937,6 +2254,7 @@ fn test_cli_program_deploy_with_offline_signing(use_offline_signer_as_fee_payer:
         max_sign_attempts: 5,
         auto_extend: true,
         use_rpc: false,
+        skip_feature_verification: true,
     });
     config.output_format = OutputFormat::JsonCompact;
     process_command(&config).unwrap();
@@ -1967,6 +2285,7 @@ fn test_cli_program_deploy_with_offline_signing(use_offline_signer_as_fee_payer:
         sign_only: true,
         dump_transaction_message: false,
         blockhash_query: BlockhashQuery::new(Some(blockhash), true, None),
+        skip_feature_verification: true,
     });
     config.output_format = OutputFormat::JsonCompact;
     let sig_response = process_command(&config).unwrap();
@@ -1988,6 +2307,7 @@ fn test_cli_program_deploy_with_offline_signing(use_offline_signer_as_fee_payer:
         sign_only: false,
         dump_transaction_message: false,
         blockhash_query: BlockhashQuery::new(Some(blockhash), true, None),
+        skip_feature_verification: true,
     });
     config.output_format = OutputFormat::JsonCompact;
     expect_command_failure(
@@ -2012,6 +2332,7 @@ fn test_cli_program_deploy_with_offline_signing(use_offline_signer_as_fee_payer:
         sign_only: true,
         dump_transaction_message: false,
         blockhash_query: BlockhashQuery::new(Some(blockhash), true, None),
+        skip_feature_verification: true,
     });
     config.output_format = OutputFormat::JsonCompact;
     let sig_response = process_command(&config).unwrap();
@@ -2033,6 +2354,7 @@ fn test_cli_program_deploy_with_offline_signing(use_offline_signer_as_fee_payer:
         sign_only: false,
         dump_transaction_message: false,
         blockhash_query: BlockhashQuery::new(Some(blockhash), true, None),
+        skip_feature_verification: true,
     });
     config.output_format = OutputFormat::JsonCompact;
     process_command(&config).unwrap();
@@ -2174,6 +2496,7 @@ fn test_cli_program_show() {
         max_sign_attempts: 5,
         auto_extend: true,
         use_rpc: false,
+        skip_feature_verification: true,
     });
     config.output_format = OutputFormat::JsonCompact;
     let min_slot = rpc_client.get_slot().unwrap();
@@ -2451,6 +2774,7 @@ fn test_cli_program_deploy_with_args(compute_unit_price: Option<u64>, use_rpc: b
         max_sign_attempts: 5,
         auto_extend: true,
         use_rpc,
+        skip_feature_verification: true,
     });
     config.output_format = OutputFormat::JsonCompact;
     let response = process_command(&config);

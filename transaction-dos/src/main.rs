@@ -251,6 +251,7 @@ fn run_transactions_dos(
             use_rpc: false,
             skip_fee_check: true, // skip_fee_check
             auto_extend: true,
+            skip_feature_verification: true,
         });
 
         process_command(&config).expect("deploy didn't pass");

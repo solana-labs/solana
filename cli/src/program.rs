@@ -9,6 +9,7 @@ use {
             simulate_and_update_compute_unit_limit, ComputeUnitConfig,
             UpdateComputeUnitLimitResult, WithComputeUnitConfig,
         },
+        feature::{status_from_account, CliFeatureStatus},
     },
     bip39::{Language, Mnemonic, MnemonicType, Seed},
     clap::{App, AppSettings, Arg, ArgMatches, SubCommand},
@@ -47,6 +48,7 @@ use {
         client_error::ErrorKind as ClientErrorKind,
         config::{RpcAccountInfoConfig, RpcProgramAccountsConfig, RpcSendTransactionConfig},
         filter::{Memcmp, RpcFilterType},
+        request::MAX_MULTIPLE_ACCOUNTS,
     },
     solana_rpc_client_nonce_utils::blockhash_query::BlockhashQuery,
     solana_sdk::{
@@ -56,7 +58,7 @@ use {
         bpf_loader_upgradeable::{self, get_program_data_address, UpgradeableLoaderState},
         commitment_config::CommitmentConfig,
         compute_budget,
-        feature_set::FeatureSet,
+        feature_set::{FeatureSet, FEATURE_NAMES},
         instruction::{Instruction, InstructionError},
         message::Message,
         packet::PACKET_DATA_SIZE,
@@ -99,6 +101,7 @@ pub enum ProgramCliCommand {
         max_sign_attempts: usize,
         auto_extend: bool,
         use_rpc: bool,
+        skip_feature_verification: bool,
     },
     Upgrade {
         fee_payer_signer_index: SignerIndex,
@@ -108,6 +111,7 @@ pub enum ProgramCliCommand {
         sign_only: bool,
         dump_transaction_message: bool,
         blockhash_query: BlockhashQuery,
+        skip_feature_verification: bool,
     },
     WriteBuffer {
         program_location: String,
@@ -279,6 +283,14 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .long("no-auto-extend")
                                 .takes_value(false)
                                 .help("Don't automatically extend the program's data account size"),
+                        )
+                        .arg(
+                            Arg::with_name("skip_feature_verify")
+                                .long("skip-feature-verify")
+                                .takes_value(false)
+                                .help("Don't verify program against the activated feature set. \
+                                This setting means a program containing a syscall not yet active on \
+                                mainnet will succeed local verification, but fail during the last step of deployment.")
                         ),
                 )
                 .subcommand(
@@ -308,6 +320,14 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .help(
                                     "Upgrade authority [default: the default configured keypair]",
                                 ),
+                        )
+                        .arg(
+                            Arg::with_name("skip_feature_verify")
+                                .long("skip-feature-verify")
+                                .takes_value(false)
+                                .help("Don't verify program against the activated feature set. \
+                                This setting means a program containing a syscall not yet active on \
+                                mainnet will succeed local verification, but fail during the last step of deployment.")
                         )
                         .offline_args(),
                 )
@@ -673,6 +693,8 @@ pub fn parse_program_subcommand(
 
             let auto_extend = !matches.is_present("no_auto_extend");
 
+            let skip_feature_verify = matches.is_present("skip_feature_verify");
+
             CliCommandInfo {
                 command: CliCommand::Program(ProgramCliCommand::Deploy {
                     program_location,
@@ -691,6 +713,7 @@ pub fn parse_program_subcommand(
                     max_sign_attempts,
                     use_rpc: matches.is_present("use_rpc"),
                     auto_extend,
+                    skip_feature_verification: skip_feature_verify,
                 }),
                 signers: signer_info.signers,
             }
@@ -720,6 +743,8 @@ pub fn parse_program_subcommand(
             let signer_info =
                 default_signer.generate_unique_signers(bulk_signers, matches, wallet_manager)?;
 
+            let skip_feature_verify = matches.is_present("skip_feature_verify");
+
             CliCommandInfo {
                 command: CliCommand::Program(ProgramCliCommand::Upgrade {
                     fee_payer_signer_index: signer_info.index_of(fee_payer_pubkey).unwrap(),
@@ -731,6 +756,7 @@ pub fn parse_program_subcommand(
                     sign_only,
                     dump_transaction_message,
                     blockhash_query,
+                    skip_feature_verification: skip_feature_verify,
                 }),
                 signers: signer_info.signers,
             }
@@ -979,6 +1005,7 @@ pub fn process_program_subcommand(
             max_sign_attempts,
             auto_extend,
             use_rpc,
+            skip_feature_verification,
         } => process_program_deploy(
             rpc_client,
             config,
@@ -996,6 +1023,7 @@ pub fn process_program_subcommand(
             *max_sign_attempts,
             *auto_extend,
             *use_rpc,
+            *skip_feature_verification,
         ),
         ProgramCliCommand::Upgrade {
             fee_payer_signer_index,
@@ -1005,6 +1033,7 @@ pub fn process_program_subcommand(
             sign_only,
             dump_transaction_message,
             blockhash_query,
+            skip_feature_verification,
         } => process_program_upgrade(
             rpc_client,
             config,
@@ -1015,6 +1044,7 @@ pub fn process_program_subcommand(
             *sign_only,
             *dump_transaction_message,
             blockhash_query,
+            *skip_feature_verification,
         ),
         ProgramCliCommand::WriteBuffer {
             program_location,
@@ -1174,6 +1204,7 @@ fn process_program_deploy(
     max_sign_attempts: usize,
     auto_extend: bool,
     use_rpc: bool,
+    skip_feature_verification: bool,
 ) -> ProcessResult {
     let fee_payer_signer = config.signers[fee_payer_signer_index];
     let upgrade_authority_signer = config.signers[upgrade_authority_signer_index];
@@ -1265,9 +1296,15 @@ fn process_program_deploy(
         true
     };
 
+    let feature_set = if skip_feature_verification {
+        FeatureSet::all_enabled()
+    } else {
+        fetch_feature_set(&rpc_client)?
+    };
+
     let (program_data, program_len, buffer_program_data) =
         if let Some(program_location) = program_location {
-            let program_data = read_and_verify_elf(program_location)?;
+            let program_data = read_and_verify_elf(program_location, feature_set)?;
             let program_len = program_data.len();
 
             // If a buffer was provided, check if it has already been created and set up properly
@@ -1290,6 +1327,7 @@ fn process_program_deploy(
                 config,
                 buffer_pubkey,
                 upgrade_authority_signer.pubkey(),
+                feature_set,
             )?;
 
             (vec![], buffer_program_data.len(), Some(buffer_program_data))
@@ -1382,6 +1420,7 @@ fn fetch_verified_buffer_program_data(
     config: &CliConfig,
     buffer_pubkey: Pubkey,
     buffer_authority: Pubkey,
+    feature_set: FeatureSet,
 ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let Some(buffer_program_data) =
         fetch_buffer_program_data(rpc_client, config, None, buffer_pubkey, buffer_authority)?
@@ -1389,7 +1428,7 @@ fn fetch_verified_buffer_program_data(
         return Err(format!("Buffer account {buffer_pubkey} not found").into());
     };
 
-    verify_elf(&buffer_program_data).map_err(|err| {
+    verify_elf(&buffer_program_data, feature_set).map_err(|err| {
         format!(
             "Buffer account {buffer_pubkey} has invalid program data: {:?}",
             err
@@ -1466,6 +1505,7 @@ fn process_program_upgrade(
     sign_only: bool,
     dump_transaction_message: bool,
     blockhash_query: &BlockhashQuery,
+    skip_feature_verification: bool,
 ) -> ProcessResult {
     let fee_payer_signer = config.signers[fee_payer_signer_index];
     let upgrade_authority_signer = config.signers[upgrade_authority_signer_index];
@@ -1496,11 +1536,18 @@ fn process_program_upgrade(
             },
         )
     } else {
+        let feature_set = if skip_feature_verification {
+            FeatureSet::all_enabled()
+        } else {
+            fetch_feature_set(&rpc_client)?
+        };
+
         fetch_verified_buffer_program_data(
             &rpc_client,
             config,
             buffer_pubkey,
             upgrade_authority_signer.pubkey(),
+            feature_set,
         )?;
 
         let fee = rpc_client.get_fee_for_message(&message)?;
@@ -1543,7 +1590,7 @@ fn process_write_buffer(
     let fee_payer_signer = config.signers[fee_payer_signer_index];
     let buffer_authority = config.signers[buffer_authority_signer_index];
 
-    let program_data = read_and_verify_elf(program_location)?;
+    let program_data = read_and_verify_elf(program_location, FeatureSet::all_enabled())?;
     let program_len = program_data.len();
 
     // Create ephemeral keypair to use for Buffer account, if not provided
@@ -2749,27 +2796,29 @@ fn extend_program_data_if_needed(
     Ok(())
 }
 
-fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+fn read_and_verify_elf(
+    program_location: &str,
+    feature_set: FeatureSet,
+) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let mut file = File::open(program_location)
         .map_err(|err| format!("Unable to open program file: {err}"))?;
     let mut program_data = Vec::new();
     file.read_to_end(&mut program_data)
         .map_err(|err| format!("Unable to read program file: {err}"))?;
 
-    verify_elf(&program_data)?;
+    verify_elf(&program_data, feature_set)?;
 
     Ok(program_data)
 }
 
-fn verify_elf(program_data: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
+fn verify_elf(
+    program_data: &[u8],
+    feature_set: FeatureSet,
+) -> Result<(), Box<dyn std::error::Error>> {
     // Verify the program
-    let program_runtime_environment = create_program_runtime_environment_v1(
-        &FeatureSet::all_enabled(),
-        &ComputeBudget::default(),
-        true,
-        false,
-    )
-    .unwrap();
+    let program_runtime_environment =
+        create_program_runtime_environment_v1(&feature_set, &ComputeBudget::default(), true, false)
+            .unwrap();
     let executable =
         Executable::<InvokeContext>::from_elf(program_data, Arc::new(program_runtime_environment))
             .map_err(|err| format!("ELF error: {err}"))?;
@@ -2982,6 +3031,30 @@ fn report_ephemeral_mnemonic(words: usize, mnemonic: bip39::Mnemonic) {
     eprintln!("[BUFFER_ACCOUNT_ADDRESS] argument to `solana program close`.\n{divider}");
 }
 
+fn fetch_feature_set(rpc_client: &RpcClient) -> Result<FeatureSet, Box<dyn std::error::Error>> {
+    let mut feature_set = FeatureSet::default();
+    for feature_ids in FEATURE_NAMES
+        .keys()
+        .cloned()
+        .collect::<Vec<Pubkey>>()
+        .chunks(MAX_MULTIPLE_ACCOUNTS)
+    {
+        rpc_client
+            .get_multiple_accounts(feature_ids)?
+            .into_iter()
+            .zip(feature_ids)
+            .for_each(|(account, feature_id)| {
+                let activation_slot = account.and_then(status_from_account);
+
+                if let Some(CliFeatureStatus::Active(slot)) = activation_slot {
+                    feature_set.activate(feature_id, slot);
+                }
+            });
+    }
+
+    Ok(feature_set)
+}
+
 #[cfg(test)]
 mod tests {
     use {
@@ -3043,6 +3116,7 @@ mod tests {
                     max_sign_attempts: 5,
                     auto_extend: true,
                     use_rpc: false,
+                    skip_feature_verification: false,
                 }),
                 signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
@@ -3074,6 +3148,7 @@ mod tests {
                     max_sign_attempts: 5,
                     auto_extend: true,
                     use_rpc: false,
+                    skip_feature_verification: false,
                 }),
                 signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
@@ -3107,6 +3182,7 @@ mod tests {
                     max_sign_attempts: 5,
                     auto_extend: true,
                     use_rpc: false,
+                    skip_feature_verification: false,
                 }),
                 signers: vec![
                     Box::new(read_keypair_file(&keypair_file).unwrap()),
@@ -3142,6 +3218,7 @@ mod tests {
                     max_sign_attempts: 5,
                     auto_extend: true,
                     use_rpc: false,
+                    skip_feature_verification: false,
                 }),
                 signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
@@ -3176,6 +3253,7 @@ mod tests {
                     max_sign_attempts: 5,
                     auto_extend: true,
                     use_rpc: false,
+                    skip_feature_verification: false,
                 }),
                 signers: vec![
                     Box::new(read_keypair_file(&keypair_file).unwrap()),
@@ -3213,6 +3291,7 @@ mod tests {
                     max_sign_attempts: 5,
                     auto_extend: true,
                     use_rpc: false,
+                    skip_feature_verification: false,
                 }),
                 signers: vec![
                     Box::new(read_keypair_file(&keypair_file).unwrap()),
@@ -3246,6 +3325,7 @@ mod tests {
                     max_sign_attempts: 5,
                     auto_extend: true,
                     use_rpc: false,
+                    skip_feature_verification: false,
                 }),
                 signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
@@ -3277,6 +3357,7 @@ mod tests {
                     max_sign_attempts: 1,
                     auto_extend: true,
                     use_rpc: false,
+                    skip_feature_verification: false,
                 }),
                 signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
@@ -3307,6 +3388,75 @@ mod tests {
                     max_sign_attempts: 5,
                     auto_extend: true,
                     use_rpc: true,
+                    skip_feature_verification: false,
+                }),
+                signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
+            }
+        );
+
+        let test_command = test_commands.clone().get_matches_from(vec![
+            "test",
+            "program",
+            "deploy",
+            "/Users/test/program.so",
+            "--skip-feature-verify",
+        ]);
+        assert_eq!(
+            parse_command(&test_command, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::Program(ProgramCliCommand::Deploy {
+                    program_location: Some("/Users/test/program.so".to_string()),
+                    fee_payer_signer_index: 0,
+                    buffer_signer_index: None,
+                    buffer_pubkey: None,
+                    program_signer_index: None,
+                    program_pubkey: None,
+                    upgrade_authority_signer_index: 0,
+                    is_final: false,
+                    max_len: None,
+                    skip_fee_check: false,
+                    compute_unit_price: None,
+                    max_sign_attempts: 5,
+                    auto_extend: true,
+                    use_rpc: false,
+                    skip_feature_verification: true,
+                }),
+                signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
+            }
+        );
+    }
+
+    #[test]
+    fn test_cli_parse_upgrade() {
+        let test_commands = get_clap_app("test", "desc", "version");
+
+        let default_keypair = Keypair::new();
+        let keypair_file = make_tmp_path("keypair_file");
+        write_keypair_file(&default_keypair, &keypair_file).unwrap();
+        let default_signer = DefaultSigner::new("", &keypair_file);
+
+        let program_key = Pubkey::new_unique();
+        let buffer_key = Pubkey::new_unique();
+        let test_command = test_commands.clone().get_matches_from(vec![
+            "test",
+            "program",
+            "upgrade",
+            format!("{}", buffer_key).as_str(),
+            format!("{}", program_key).as_str(),
+            "--skip-feature-verify",
+        ]);
+        assert_eq!(
+            parse_command(&test_command, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::Program(ProgramCliCommand::Upgrade {
+                    fee_payer_signer_index: 0,
+                    program_pubkey: program_key,
+                    buffer_pubkey: buffer_key,
+                    upgrade_authority_signer_index: 0,
+                    sign_only: false,
+                    dump_transaction_message: false,
+                    blockhash_query: BlockhashQuery::default(),
+                    skip_feature_verification: true,
                 }),
                 signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
@@ -4050,6 +4200,7 @@ mod tests {
                 max_sign_attempts: 5,
                 auto_extend: true,
                 use_rpc: false,
+                skip_feature_verification: true,
             }),
             signers: vec![&default_keypair],
             output_format: OutputFormat::JsonCompact,

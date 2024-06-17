@@ -819,7 +819,7 @@ fn feature_activation_allowed(
     ))
 }
 
-fn status_from_account(account: Account) -> Option<CliFeatureStatus> {
+pub(super) fn status_from_account(account: Account) -> Option<CliFeatureStatus> {
     feature::from_account(&account).map(|feature| match feature.activated_at {
         None => CliFeatureStatus::Pending,
         Some(activation_slot) => CliFeatureStatus::Active(activation_slot),
