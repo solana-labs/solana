@@ -14,6 +14,7 @@ solana-compute-budget = { workspace = true }
 solana-measure = { workspace = true }
 solana-program-runtime = { workspace = true }
 solana-sdk = { workspace = true }
+solana-type-overrides = { workspace = true }
 solana_rbpf = { workspace = true }
 
 [dev-dependencies]
@@ -25,3 +26,6 @@ name = "solana_loader_v4_program"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
+
+[features]
+shuttle-test = ["solana-type-overrides/shuttle-test", "solana-program-runtime/shuttle-test"]

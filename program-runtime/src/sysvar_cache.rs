@@ -13,7 +13,7 @@ use {
         },
         transaction_context::{IndexOfAccount, InstructionContext, TransactionContext},
     },
-    std::sync::Arc,
+    solana_type_overrides::sync::Arc,
 };
 
 #[cfg(all(RUSTC_WITH_SPECIALIZATION, feature = "frozen-abi"))]

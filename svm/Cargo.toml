@@ -26,6 +26,7 @@ solana-metrics = { workspace = true }
 solana-program-runtime = { workspace = true }
 solana-sdk = { workspace = true }
 solana-system-program = { workspace = true }
+solana-type-overrides = { workspace = true }
 solana-vote = { workspace = true }
 
 [lib]
@@ -61,4 +62,10 @@ frozen-abi = [
     "solana-compute-budget/frozen-abi",
     "solana-program-runtime/frozen-abi",
     "solana-sdk/frozen-abi",
+]
+shuttle-test = [
+    "solana-type-overrides/shuttle-test",
+    "solana-program-runtime/shuttle-test",
+    "solana-bpf-loader-program/shuttle-test",
+    "solana-loader-v4-program/shuttle-test",
 ]

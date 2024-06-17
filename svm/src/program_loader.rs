@@ -17,7 +17,7 @@ use {
         loader_v4::{self, LoaderV4State, LoaderV4Status},
         pubkey::Pubkey,
     },
-    std::sync::Arc,
+    solana_type_overrides::sync::Arc,
 };
 
 #[derive(Debug)]

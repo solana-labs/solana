@@ -58,12 +58,12 @@ use {
         sysvar::{Sysvar, SysvarId},
         transaction_context::{IndexOfAccount, InstructionAccount},
     },
+    solana_type_overrides::sync::Arc,
     std::{
         alloc::Layout,
         mem::{align_of, size_of},
         slice::from_raw_parts_mut,
         str::{from_utf8, Utf8Error},
-        sync::Arc,
     },
     thiserror::Error as ThisError,
 };

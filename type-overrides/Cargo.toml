@@ -1,0 +1,18 @@
+[package]
+name = "solana-type-overrides"
+description = "Type overrides for specialized testing"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+futures = { workspace = true }
+lazy_static = { workspace = true }
+rand = { workspace = true }
+shuttle = { workspace = true, optional = true }
+
+[features]
+shuttle-test = ["dep:shuttle"]

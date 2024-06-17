@@ -30,11 +30,8 @@ use {
         saturating_add_assign,
         transaction_context::{BorrowedAccount, InstructionContext},
     },
-    std::{
-        cell::RefCell,
-        rc::Rc,
-        sync::{atomic::Ordering, Arc},
-    },
+    solana_type_overrides::sync::{atomic::Ordering, Arc},
+    std::{cell::RefCell, rc::Rc},
 };
 
 pub const DEFAULT_COMPUTE_UNITS: u64 = 2_000;

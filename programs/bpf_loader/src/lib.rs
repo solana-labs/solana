@@ -46,12 +46,8 @@ use {
         system_instruction::{self, MAX_PERMITTED_DATA_LENGTH},
         transaction_context::{IndexOfAccount, InstructionContext, TransactionContext},
     },
-    std::{
-        cell::RefCell,
-        mem,
-        rc::Rc,
-        sync::{atomic::Ordering, Arc},
-    },
+    solana_type_overrides::sync::{atomic::Ordering, Arc},
+    std::{cell::RefCell, mem, rc::Rc},
     syscalls::{create_program_runtime_environment_v1, morph_into_deployment_environment_v1},
 };
 
@@ -324,7 +320,7 @@ macro_rules! create_vm {
 #[macro_export]
 macro_rules! mock_create_vm {
     ($vm:ident, $additional_regions:expr, $accounts_metadata:expr, $invoke_context:expr $(,)?) => {
-        let loader = std::sync::Arc::new(BuiltinProgram::new_mock());
+        let loader = solana_type_overrides::sync::Arc::new(BuiltinProgram::new_mock());
         let function_registry = solana_rbpf::program::FunctionRegistry::default();
         let executable = solana_rbpf::elf::Executable::<InvokeContext>::from_text_bytes(
             &[0x95, 0, 0, 0, 0, 0, 0, 0],

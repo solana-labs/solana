@@ -53,16 +53,13 @@ use {
         transaction::{self, SanitizedTransaction, TransactionError},
         transaction_context::{ExecutionRecord, TransactionContext},
     },
+    solana_type_overrides::sync::{atomic::Ordering, Arc, RwLock},
     solana_vote::vote_account::VoteAccountsHashMap,
     std::{
         cell::RefCell,
         collections::{hash_map::Entry, HashMap, HashSet},
         fmt::{Debug, Formatter},
         rc::Rc,
-        sync::{
-            atomic::Ordering::{self, Relaxed},
-            Arc, RwLock,
-        },
     },
 };
 
@@ -649,12 +646,18 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                     self.slot,
                     false,
                 ) {
-                    recompiled
-                        .tx_usage_counter
-                        .fetch_add(program_to_recompile.tx_usage_counter.load(Relaxed), Relaxed);
-                    recompiled
-                        .ix_usage_counter
-                        .fetch_add(program_to_recompile.ix_usage_counter.load(Relaxed), Relaxed);
+                    recompiled.tx_usage_counter.fetch_add(
+                        program_to_recompile
+                            .tx_usage_counter
+                            .load(Ordering::Relaxed),
+                        Ordering::Relaxed,
+                    );
+                    recompiled.ix_usage_counter.fetch_add(
+                        program_to_recompile
+                            .ix_usage_counter
+                            .load(Ordering::Relaxed),
+                        Ordering::Relaxed,
+                    );
                     let mut program_cache = self.program_cache.write().unwrap();
                     program_cache.assign_program(key, recompiled);
                 }

@@ -657,7 +657,7 @@ mod tests {
         // copies the `random` implementation at:
         // https://docs.rs/libsecp256k1/latest/src/libsecp256k1/lib.rs.html#430
         let secret_key = {
-            use rand::RngCore;
+            use solana_type_overrides::rand::RngCore;
             let mut rng = rand::thread_rng();
             loop {
                 let mut ret = [0u8; libsecp256k1::util::SECRET_KEY_SIZE];

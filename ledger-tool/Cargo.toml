@@ -48,6 +48,7 @@ solana-stake-program = { workspace = true }
 solana-storage-bigtable = { workspace = true }
 solana-streamer = { workspace = true }
 solana-transaction-status = { workspace = true }
+solana-type-overrides = { workspace = true }
 solana-unified-scheduler-pool = { workspace = true }
 solana-version = { workspace = true }
 solana-vote-program = { workspace = true }
