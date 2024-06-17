@@ -27,7 +27,7 @@ use {
         hidden_unless_forced,
         input_parsers::{cluster_type_of, pubkey_of, pubkeys_of},
         input_validators::{
-            is_parsable, is_pow2, is_pubkey, is_pubkey_or_keypair, is_slot, is_valid_percentage,
+            is_parsable, is_pubkey, is_pubkey_or_keypair, is_slot, is_valid_percentage,
             is_within_range,
         },
     },
@@ -562,76 +562,12 @@ fn main() {
 
     solana_logger::setup_with_default_filter();
 
+    let accounts_db_config_args = accounts_db_args();
+
     let no_snapshot_arg = Arg::with_name("no_snapshot")
         .long("no-snapshot")
         .takes_value(false)
         .help("Do not start from a local snapshot if present");
-    let accounts_index_bins = Arg::with_name("accounts_index_bins")
-        .long("accounts-index-bins")
-        .value_name("BINS")
-        .validator(is_pow2)
-        .takes_value(true)
-        .help("Number of bins to divide the accounts index into");
-    let accounts_index_limit = Arg::with_name("accounts_index_memory_limit_mb")
-        .long("accounts-index-memory-limit-mb")
-        .value_name("MEGABYTES")
-        .validator(is_parsable::<usize>)
-        .takes_value(true)
-        .help(
-            "How much memory the accounts index can consume. If this is exceeded, some account \
-             index entries will be stored on disk.",
-        );
-    let disable_disk_index = Arg::with_name("disable_accounts_disk_index")
-        .long("disable-accounts-disk-index")
-        .help(
-            "Disable the disk-based accounts index. It is enabled by default. The entire accounts \
-             index will be kept in memory.",
-        )
-        .conflicts_with("accounts_index_memory_limit_mb");
-    let accountsdb_skip_shrink = Arg::with_name("accounts_db_skip_shrink")
-        .long("accounts-db-skip-shrink")
-        .help(
-            "Enables faster starting of ledger-tool by skipping shrink. This option is for use \
-             during testing.",
-        );
-    let accountsdb_verify_refcounts = Arg::with_name("accounts_db_verify_refcounts")
-        .long("accounts-db-verify-refcounts")
-        .help(
-            "Debug option to scan all AppendVecs and verify account index refcounts prior to clean",
-        )
-        .hidden(hidden_unless_forced());
-    let accounts_db_test_skip_rewrites_but_include_in_bank_hash =
-        Arg::with_name("accounts_db_test_skip_rewrites")
-            .long("accounts-db-test-skip-rewrites")
-            .help(
-                "Debug option to skip rewrites for rent-exempt accounts but still add them in \
-                 bank delta hash calculation",
-            )
-            .hidden(hidden_unless_forced());
-    let account_paths_arg = Arg::with_name("account_paths")
-        .long("accounts")
-        .value_name("PATHS")
-        .takes_value(true)
-        .help(
-            "Persistent accounts location. \
-            May be specified multiple times. \
-            [default: <LEDGER>/accounts]",
-        );
-    let accounts_hash_cache_path_arg = Arg::with_name("accounts_hash_cache_path")
-        .long("accounts-hash-cache-path")
-        .value_name("PATH")
-        .takes_value(true)
-        .help("Use PATH as accounts hash cache location [default: <LEDGER>/accounts_hash_cache]");
-    let accounts_index_path_arg = Arg::with_name("accounts_index_path")
-        .long("accounts-index-path")
-        .value_name("PATH")
-        .takes_value(true)
-        .multiple(true)
-        .help(
-            "Persistent accounts-index location. \
-            May be specified multiple times. \
-            [default: <LEDGER>/accounts_index]",
-        );
     let accounts_db_test_hash_calculation_arg = Arg::with_name("accounts_db_test_hash_calculation")
         .long("accounts-db-test-hash-calculation")
         .help("Enable hash calculation test");
@@ -644,20 +580,6 @@ fn main() {
     let os_memory_stats_reporting_arg = Arg::with_name("os_memory_stats_reporting")
         .long("os-memory-stats-reporting")
         .help("Enable reporting of OS memory statistics.");
-    let accounts_db_skip_initial_hash_calc_arg =
-        Arg::with_name("accounts_db_skip_initial_hash_calculation")
-            .long("accounts-db-skip-initial-hash-calculation")
-            .help("Do not verify accounts hash at startup.")
-            .hidden(hidden_unless_forced());
-    let ancient_append_vecs = Arg::with_name("accounts_db_ancient_append_vecs")
-        .long("accounts-db-ancient-append-vecs")
-        .value_name("SLOT-OFFSET")
-        .validator(is_parsable::<i64>)
-        .takes_value(true)
-        .help(
-            "AppendVecs that are older than (slots_per_epoch - SLOT-OFFSET) are squashed together.",
-        )
-        .hidden(hidden_unless_forced());
     let halt_at_slot_store_hash_raw_data = Arg::with_name("halt_at_slot_store_hash_raw_data")
         .long("halt-at-slot-store-hash-raw-data")
         .help(
@@ -923,47 +845,27 @@ fn main() {
         .subcommand(
             SubCommand::with_name("shred-version")
                 .about("Prints the ledger's shred hash")
+                .args(&accounts_db_config_args)
                 .arg(&hard_forks_arg)
                 .arg(&max_genesis_archive_unpacked_size_arg)
-                .arg(&accounts_index_bins)
-                .arg(&accounts_index_limit)
-                .arg(&disable_disk_index)
-                .arg(&accountsdb_verify_refcounts)
-                .arg(&accounts_db_skip_initial_hash_calc_arg)
-                .arg(&accounts_db_test_skip_rewrites_but_include_in_bank_hash)
                 .arg(&use_snapshot_archives_at_startup),
         )
         .subcommand(
             SubCommand::with_name("bank-hash")
                 .about("Prints the hash of the working bank after reading the ledger")
+                .args(&accounts_db_config_args)
                 .arg(&max_genesis_archive_unpacked_size_arg)
                 .arg(&halt_at_slot_arg)
-                .arg(&accounts_index_bins)
-                .arg(&accounts_index_limit)
-                .arg(&disable_disk_index)
-                .arg(&accountsdb_verify_refcounts)
-                .arg(&accounts_db_skip_initial_hash_calc_arg)
-                .arg(&accounts_db_test_skip_rewrites_but_include_in_bank_hash)
                 .arg(&use_snapshot_archives_at_startup),
         )
         .subcommand(
             SubCommand::with_name("verify")
                 .about("Verify the ledger")
+                .args(&accounts_db_config_args)
                 .arg(&no_snapshot_arg)
-                .arg(&account_paths_arg)
-                .arg(&accounts_hash_cache_path_arg)
-                .arg(&accounts_index_path_arg)
                 .arg(&halt_at_slot_arg)
                 .arg(&limit_load_slot_count_from_snapshot_arg)
-                .arg(&accounts_index_bins)
-                .arg(&accounts_index_limit)
-                .arg(&disable_disk_index)
-                .arg(&accountsdb_skip_shrink)
-                .arg(&accountsdb_verify_refcounts)
-                .arg(&accounts_db_test_skip_rewrites_but_include_in_bank_hash)
                 .arg(&verify_index_arg)
-                .arg(&accounts_db_skip_initial_hash_calc_arg)
-                .arg(&ancient_append_vecs)
                 .arg(&halt_at_slot_store_hash_raw_data)
                 .arg(&hard_forks_arg)
                 .arg(&accounts_db_test_hash_calculation_arg)
@@ -1096,15 +998,8 @@ fn main() {
         .subcommand(
             SubCommand::with_name("graph")
                 .about("Create a Graphviz rendering of the ledger")
+                .args(&accounts_db_config_args)
                 .arg(&no_snapshot_arg)
-                .arg(&account_paths_arg)
-                .arg(&accounts_hash_cache_path_arg)
-                .arg(&accounts_index_bins)
-                .arg(&accounts_index_limit)
-                .arg(&disable_disk_index)
-                .arg(&accountsdb_verify_refcounts)
-                .arg(&accounts_db_test_skip_rewrites_but_include_in_bank_hash)
-                .arg(&accounts_db_skip_initial_hash_calc_arg)
                 .arg(&halt_at_slot_arg)
                 .arg(&hard_forks_arg)
                 .arg(&max_genesis_archive_unpacked_size_arg)
@@ -1137,17 +1032,8 @@ fn main() {
         .subcommand(
             SubCommand::with_name("create-snapshot")
                 .about("Create a new ledger snapshot")
+                .args(&accounts_db_config_args)
                 .arg(&no_snapshot_arg)
-                .arg(&account_paths_arg)
-                .arg(&accounts_hash_cache_path_arg)
-                .arg(&accounts_index_bins)
-                .arg(&accounts_index_limit)
-                .arg(&disable_disk_index)
-                .arg(&accountsdb_verify_refcounts)
-                .arg(&accounts_db_test_skip_rewrites_but_include_in_bank_hash)
-                .arg(&accounts_db_skip_initial_hash_calc_arg)
-                .arg(&accountsdb_skip_shrink)
-                .arg(&ancient_append_vecs)
                 .arg(&hard_forks_arg)
                 .arg(&max_genesis_archive_unpacked_size_arg)
                 .arg(&snapshot_version_arg)
@@ -1353,15 +1239,8 @@ fn main() {
         .subcommand(
             SubCommand::with_name("accounts")
                 .about("Print account stats and contents after processing the ledger")
+                .args(&accounts_db_config_args)
                 .arg(&no_snapshot_arg)
-                .arg(&account_paths_arg)
-                .arg(&accounts_hash_cache_path_arg)
-                .arg(&accounts_index_bins)
-                .arg(&accounts_index_limit)
-                .arg(&disable_disk_index)
-                .arg(&accountsdb_verify_refcounts)
-                .arg(&accounts_db_test_skip_rewrites_but_include_in_bank_hash)
-                .arg(&accounts_db_skip_initial_hash_calc_arg)
                 .arg(&halt_at_slot_arg)
                 .arg(&hard_forks_arg)
                 .arg(&geyser_plugin_args)
@@ -1415,15 +1294,8 @@ fn main() {
         .subcommand(
             SubCommand::with_name("capitalization")
                 .about("Print capitalization (aka, total supply) while checksumming it")
+                .args(&accounts_db_config_args)
                 .arg(&no_snapshot_arg)
-                .arg(&account_paths_arg)
-                .arg(&accounts_hash_cache_path_arg)
-                .arg(&accounts_index_bins)
-                .arg(&accounts_index_limit)
-                .arg(&disable_disk_index)
-                .arg(&accountsdb_verify_refcounts)
-                .arg(&accounts_db_test_skip_rewrites_but_include_in_bank_hash)
-                .arg(&accounts_db_skip_initial_hash_calc_arg)
                 .arg(&halt_at_slot_arg)
                 .arg(&hard_forks_arg)
                 .arg(&max_genesis_archive_unpacked_size_arg)
