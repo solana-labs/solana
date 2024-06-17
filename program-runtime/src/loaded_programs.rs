@@ -663,6 +663,8 @@ pub struct ProgramCacheForTxBatch {
     /// Pubkey is the address of a program.
     /// ProgramCacheEntry is the corresponding program entry valid for the slot in which a transaction is being executed.
     entries: HashMap<Pubkey, Arc<ProgramCacheEntry>>,
+    /// Program entries modified during the transaction batch.
+    modified_entries: HashMap<Pubkey, Arc<ProgramCacheEntry>>,
     slot: Slot,
     pub environments: ProgramRuntimeEnvironments,
     /// Anticipated replacement for `environments` at the next epoch.
@@ -689,6 +691,7 @@ impl ProgramCacheForTxBatch {
     ) -> Self {
         Self {
             entries: HashMap::new(),
+            modified_entries: HashMap::new(),
             slot,
             environments,
             upcoming_environments,
@@ -706,6 +709,7 @@ impl ProgramCacheForTxBatch {
     ) -> Self {
         Self {
             entries: HashMap::new(),
+            modified_entries: HashMap::new(),
             slot,
             environments: cache.get_environments_for_epoch(epoch),
             upcoming_environments: cache.get_upcoming_environments_for_epoch(epoch),
@@ -714,14 +718,6 @@ impl ProgramCacheForTxBatch {
             loaded_missing: false,
             merged_modified: false,
         }
-    }
-
-    pub fn entries(&self) -> &HashMap<Pubkey, Arc<ProgramCacheEntry>> {
-        &self.entries
-    }
-
-    pub fn take_entries(&mut self) -> HashMap<Pubkey, Arc<ProgramCacheEntry>> {
-        std::mem::take(&mut self.entries)
     }
 
     /// Returns the current environments depending on the given epoch
@@ -747,21 +743,39 @@ impl ProgramCacheForTxBatch {
         (self.entries.insert(key, entry.clone()).is_some(), entry)
     }
 
+    /// Store an entry in `modified_entries` for a program modified during the
+    /// transaction batch.
+    pub fn store_modified_entry(&mut self, key: Pubkey, entry: Arc<ProgramCacheEntry>) {
+        self.modified_entries.insert(key, entry);
+    }
+
+    /// Drain the program cache's modified entries, returning the owned
+    /// collection.
+    pub fn drain_modified_entries(&mut self) -> HashMap<Pubkey, Arc<ProgramCacheEntry>> {
+        std::mem::take(&mut self.modified_entries)
+    }
+
     pub fn find(&self, key: &Pubkey) -> Option<Arc<ProgramCacheEntry>> {
-        self.entries.get(key).map(|entry| {
-            if entry.is_implicit_delay_visibility_tombstone(self.slot) {
-                // Found a program entry on the current fork, but it's not effective
-                // yet. It indicates that the program has delayed visibility. Return
-                // the tombstone to reflect that.
-                Arc::new(ProgramCacheEntry::new_tombstone(
-                    entry.deployment_slot,
-                    entry.account_owner,
-                    ProgramCacheEntryType::DelayVisibility,
-                ))
-            } else {
-                entry.clone()
-            }
-        })
+        // First lookup the cache of the programs modified by the current
+        // transaction. If not found, lookup the cache of the cache of the
+        // programs that are loaded for the transaction batch.
+        self.modified_entries
+            .get(key)
+            .or(self.entries.get(key))
+            .map(|entry| {
+                if entry.is_implicit_delay_visibility_tombstone(self.slot) {
+                    // Found a program entry on the current fork, but it's not effective
+                    // yet. It indicates that the program has delayed visibility. Return
+                    // the tombstone to reflect that.
+                    Arc::new(ProgramCacheEntry::new_tombstone(
+                        entry.deployment_slot,
+                        entry.account_owner,
+                        ProgramCacheEntryType::DelayVisibility,
+                    ))
+                } else {
+                    entry.clone()
+                }
+            })
     }
 
     pub fn slot(&self) -> Slot {

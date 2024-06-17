@@ -339,7 +339,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                         compute_budget,
                         &mut execute_timings,
                         &mut error_metrics,
-                        &program_cache_for_tx_batch.borrow(),
+                        &mut program_cache_for_tx_batch.borrow_mut(),
                         environment,
                         config,
                     );
@@ -722,7 +722,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         compute_budget: ComputeBudget,
         execute_timings: &mut ExecuteTimings,
         error_metrics: &mut TransactionErrorMetrics,
-        program_cache_for_tx_batch: &ProgramCacheForTxBatch,
+        program_cache_for_tx_batch: &mut ProgramCacheForTxBatch,
         environment: &TransactionProcessingEnvironment,
         config: &TransactionProcessingConfig,
     ) -> TransactionExecutionResult {
@@ -775,12 +775,6 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         let lamports_per_signature = environment.lamports_per_signature;
 
         let mut executed_units = 0u64;
-        let mut programs_modified_by_tx = ProgramCacheForTxBatch::new(
-            self.slot,
-            program_cache_for_tx_batch.environments.clone(),
-            program_cache_for_tx_batch.upcoming_environments.clone(),
-            program_cache_for_tx_batch.latest_root_epoch,
-        );
         let sysvar_cache = &self.sysvar_cache.read().unwrap();
 
         let mut invoke_context = InvokeContext::new(
@@ -796,7 +790,6 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
             ),
             log_collector.clone(),
             compute_budget,
-            &mut programs_modified_by_tx,
         );
 
         let mut process_message_time = Measure::start("process_message_time");
@@ -903,7 +896,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                 executed_units,
                 accounts_data_len_delta,
             },
-            programs_modified_by_tx: programs_modified_by_tx.take_entries(),
+            programs_modified_by_tx: program_cache_for_tx_batch.drain_modified_entries(),
         }
     }
 
@@ -1149,7 +1142,7 @@ mod tests {
         };
 
         let sanitized_message = new_unchecked_sanitized_message(message);
-        let program_cache_for_tx_batch = ProgramCacheForTxBatch::default();
+        let mut program_cache_for_tx_batch = ProgramCacheForTxBatch::default();
         let batch_processor = TransactionBatchProcessor::<TestForkGraph>::default();
 
         let sanitized_transaction = SanitizedTransaction::new_for_tests(
@@ -1179,7 +1172,7 @@ mod tests {
             ComputeBudget::default(),
             &mut ExecuteTimings::default(),
             &mut TransactionErrorMetrics::default(),
-            &program_cache_for_tx_batch,
+            &mut program_cache_for_tx_batch,
             &processing_environment,
             &processing_config,
         );
@@ -1201,7 +1194,7 @@ mod tests {
             ComputeBudget::default(),
             &mut ExecuteTimings::default(),
             &mut TransactionErrorMetrics::default(),
-            &program_cache_for_tx_batch,
+            &mut program_cache_for_tx_batch,
             &processing_environment,
             &processing_config,
         );
@@ -1231,7 +1224,7 @@ mod tests {
             ComputeBudget::default(),
             &mut ExecuteTimings::default(),
             &mut TransactionErrorMetrics::default(),
-            &program_cache_for_tx_batch,
+            &mut program_cache_for_tx_batch,
             &processing_environment,
             &processing_config,
         );
@@ -1271,7 +1264,7 @@ mod tests {
         };
 
         let sanitized_message = new_unchecked_sanitized_message(message);
-        let program_cache_for_tx_batch = ProgramCacheForTxBatch::default();
+        let mut program_cache_for_tx_batch = ProgramCacheForTxBatch::default();
         let batch_processor = TransactionBatchProcessor::<TestForkGraph>::default();
 
         let sanitized_transaction = SanitizedTransaction::new_for_tests(
@@ -1307,7 +1300,7 @@ mod tests {
             ComputeBudget::default(),
             &mut ExecuteTimings::default(),
             &mut error_metrics,
-            &program_cache_for_tx_batch,
+            &mut program_cache_for_tx_batch,
             &TransactionProcessingEnvironment::default(),
             &processing_config,
         );
