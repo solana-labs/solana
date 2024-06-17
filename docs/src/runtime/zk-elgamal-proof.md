@@ -1,25 +1,22 @@
 ---
-title: Solana ZK Token Proof Program
-pagination_label: Native ZK Token Proof Program
-sidebar_label: ZK Token Proof Program
+title: Solana ZK ElGamal Proof Program
+pagination_label: Native ZK ElGamal Proof Program
+sidebar_label: ZK ElGamal Proof Program
 ---
-
-The native Solana ZK Token proof program verifies a number of zero-knowledge
+The native Solana ZK ElGamal Proof program verifies a number of zero-knowledge
 proofs that are tailored to work with Pedersen commitments and ElGamal
 encryption over the elliptic curve
-[curve25519](https://www.rfc-editor.org/rfc/rfc7748#section-4.1). The program
-was originally designed to verify the zero-knowledge proofs that are required
-for the [SPL Token 2022](https://spl.solana.com/token-2022) program. However,
-the zero-knowledge proofs in the proof program can be used in more general
-contexts outside of SPL Token 2022 as well.
+[curve25519](https://www.rfc-editor.org/rfc/rfc7748#section-4.1). The proof
+verification instructions in the ZK ElGamal Proof program are flexibly designed
+so that they can be combined to enable a number different applications.
 
-- Program id: `ZkTokenProof1111111111111111111111111111111`
+- Program id: `ZkE1Gama1Proof11111111111111111111111111111`
 - Instructions:
-  [ProofInstruction](https://github.com/solana-labs/solana/blob/master/zk-token-sdk/src/zk_token_proof_instruction.rs)
+  [ProofInstruction](https://github.com/anza-xyz/agave/blob/master/zk-sdk/src/zk_elgamal_proof_program/instruction.rs)
 
 ### Pedersen commitments and ElGamal encryption
 
-The ZK Token proof program verifies zero-knowledge proofs for Pedersen
+The ZK ElGamal Proof program verifies zero-knowledge proofs for Pedersen
 commitments and ElGamal encryption, which are common cryptographic primitives
 that are incorporated in many existing cryptographic protocols.
 
@@ -48,24 +45,25 @@ treatment of Pedersen commitment and the (twisted) ElGamal encryption schemes.
   of the SPL Token 2022 confidential extension
 - Pretty Good Confidentiality [research paper](https://eprint.iacr.org/2019/319)
 
-The ZK Token proof program contains proof verification instructions on various
+The ZK ElGamal Proof program contains proof verification instructions on various
 zero-knowledge proofs for working with the Pedersen commitment and ElGamal
-encryption schemes. For example, the `VerifyRangeProofU64` instruction verifies
-a zero-knowledge proof certifying that a Pedersen commitment contains an
-unsigned 64-bit number as the message. The `VerifyPubkeyValidity` instruction
+encryption schemes. For example, the `VerifyBatchedRangeProofU64` instruction
+verifies a zero-knowledge proof certifying that a Pedersen commitment contains
+an unsigned 64-bit number as the message. The `VerifyPubkeyValidity` instruction
 verifies a zero-knowledge proof certifying that an ElGamal public key is a
 properly formed public key.
 
 ### Context Data
 
-The proof data associated with each of the ZK Token proof instructions are
+The proof data associated with each of the ZK ElGamal Proof instructions are
 logically divided into two parts:
 
 - The <em>context</em> component contains the data that a zero-knowledge proof
-  is certifying. For example, context component for a `VerifyRangeProofU64`
-  instruction data is the Pedersen commitment that holds an unsigned 64-bit
-  number. The context component for a `VerifyPubkeyValidity` instruction data is
-  the ElGamal public key that is properly formed.
+  is certifying. For example, context component for a
+  `VerifyBatchedRangeProofU64` instruction data is the Pedersen commitment that
+  holds an unsigned 64-bit number. The context component for a
+  `VerifyPubkeyValidity` instruction data is the ElGamal public key that is
+  properly formed.
 - The <em>proof</em> component contains the actual mathematical pieces that
   certify different properties of the context data.
 
@@ -90,7 +88,8 @@ to fit inside a single transaction.
 
 ## Proof Instructions
 
-The ZK Token proof program supports the following list of zero-knowledge proofs.
+The ZK ElGamal Proof program supports the following list of zero-knowledge
+proofs.
 
 #### Proofs on ElGamal encryption
 
@@ -101,9 +100,9 @@ The ZK Token proof program supports the following list of zero-knowledge proofs.
   - Mathematical description and proof of security:
     [[Notes]](https://github.com/solana-labs/solana/blob/master/docs/src/runtime/zk-docs/pubkey_proof.pdf)
 
-- `VerifyZeroBalance`:
+- `VerifyZeroCiphertext`:
 
-  - The zero-balance proof certifies that an ElGamal ciphertext encrypts the
+  - The zero-ciphertext proof certifies that an ElGamal ciphertext encrypts the
     number zero.
   - Mathematical description and proof of security:
     [[Notes]](https://github.com/solana-labs/solana/blob/master/docs/src/runtime/zk-docs/zero_proof.pdf)
