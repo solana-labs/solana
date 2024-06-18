@@ -1439,13 +1439,14 @@ fn main() {
                         arg_matches,
                         get_access_type(&process_options),
                     );
-                    let (bank_forks, _) = load_and_process_ledger_or_exit(
-                        arg_matches,
-                        &genesis_config,
-                        Arc::new(blockstore),
-                        process_options,
-                        None,
-                    );
+                    let LoadAndProcessLedgerOutput { bank_forks, .. } =
+                        load_and_process_ledger_or_exit(
+                            arg_matches,
+                            &genesis_config,
+                            Arc::new(blockstore),
+                            process_options,
+                            None,
+                        );
 
                     println!(
                         "{}",
@@ -1629,13 +1630,14 @@ fn main() {
                         arg_matches,
                         get_access_type(&process_options),
                     );
-                    let (bank_forks, _) = load_and_process_ledger_or_exit(
-                        arg_matches,
-                        &genesis_config,
-                        Arc::new(blockstore),
-                        process_options,
-                        transaction_status_sender,
-                    );
+                    let LoadAndProcessLedgerOutput { bank_forks, .. } =
+                        load_and_process_ledger_or_exit(
+                            arg_matches,
+                            &genesis_config,
+                            Arc::new(blockstore),
+                            process_options,
+                            transaction_status_sender,
+                        );
 
                     let working_bank = bank_forks.read().unwrap().working_bank();
                     if print_accounts_stats {
@@ -1695,13 +1697,14 @@ fn main() {
                         arg_matches,
                         get_access_type(&process_options),
                     );
-                    let (bank_forks, _) = load_and_process_ledger_or_exit(
-                        arg_matches,
-                        &genesis_config,
-                        Arc::new(blockstore),
-                        process_options,
-                        None,
-                    );
+                    let LoadAndProcessLedgerOutput { bank_forks, .. } =
+                        load_and_process_ledger_or_exit(
+                            arg_matches,
+                            &genesis_config,
+                            Arc::new(blockstore),
+                            process_options,
+                            None,
+                        );
 
                     let dot = graph_forks(&bank_forks.read().unwrap(), &graph_config);
                     let extension = Path::new(&output_file).extension();
@@ -1864,13 +1867,23 @@ fn main() {
                         output_directory.display()
                     );
 
-                    let (bank_forks, starting_snapshot_hashes) = load_and_process_ledger_or_exit(
+                    let LoadAndProcessLedgerOutput {
+                        bank_forks,
+                        starting_snapshot_hashes,
+                        accounts_background_service,
+                    } = load_and_process_ledger_or_exit(
                         arg_matches,
                         &genesis_config,
                         blockstore.clone(),
                         process_options,
                         None,
                     );
+                    // Snapshot creation will implicitly perform AccountsDb
+                    // flush and clean operations. These operations cannot be
+                    // run concurrently, so ensure ABS is stopped to avoid that
+                    // possibility.
+                    accounts_background_service.join().unwrap();
+
                     let mut bank = bank_forks
                         .read()
                         .unwrap()
@@ -2252,13 +2265,14 @@ fn main() {
                         arg_matches,
                         get_access_type(&process_options),
                     );
-                    let (bank_forks, _) = load_and_process_ledger_or_exit(
-                        arg_matches,
-                        &genesis_config,
-                        Arc::new(blockstore),
-                        process_options,
-                        None,
-                    );
+                    let LoadAndProcessLedgerOutput { bank_forks, .. } =
+                        load_and_process_ledger_or_exit(
+                            arg_matches,
+                            &genesis_config,
+                            Arc::new(blockstore),
+                            process_options,
+                            None,
+                        );
                     let bank = bank_forks.read().unwrap().working_bank();
 
                     let include_sysvars = arg_matches.is_present("include_sysvars");
@@ -2303,13 +2317,14 @@ fn main() {
                         arg_matches,
                         get_access_type(&process_options),
                     );
-                    let (bank_forks, _) = load_and_process_ledger_or_exit(
-                        arg_matches,
-                        &genesis_config,
-                        Arc::new(blockstore),
-                        process_options,
-                        None,
-                    );
+                    let LoadAndProcessLedgerOutput { bank_forks, .. } =
+                        load_and_process_ledger_or_exit(
+                            arg_matches,
+                            &genesis_config,
+                            Arc::new(blockstore),
+                            process_options,
+                            None,
+                        );
                     let bank_forks = bank_forks.read().unwrap();
                     let slot = bank_forks.working_bank().slot();
                     let bank = bank_forks.get(slot).unwrap_or_else(|| {

@@ -79,7 +79,7 @@ fn load_blockstore(ledger_path: &Path, arg_matches: &ArgMatches<'_>) -> Arc<Bank
     let genesis_config = open_genesis_config_by(ledger_path, arg_matches);
     info!("genesis hash: {}", genesis_config.hash());
     let blockstore = open_blockstore(ledger_path, arg_matches, AccessType::Secondary);
-    let (bank_forks, ..) = load_and_process_ledger_or_exit(
+    let LoadAndProcessLedgerOutput { bank_forks, .. } = load_and_process_ledger_or_exit(
         arg_matches,
         &genesis_config,
         Arc::new(blockstore),
