@@ -602,6 +602,7 @@ impl PartialEq for Bank {
             collector_fee_details: _,
             compute_budget: _,
             transaction_account_lock_limit: _,
+            fee_structure: _,
             // Ignore new fields explicitly if they do not impact PartialEq.
             // Adding ".." will remove compile-time checks that if a new field
             // is added to the struct, this PartialEq is accordingly updated.
@@ -887,6 +888,9 @@ pub struct Bank {
 
     /// The max number of accounts that a transaction may lock.
     transaction_account_lock_limit: Option<usize>,
+
+    /// Fee structure to use for assessing transaction fees.
+    fee_structure: FeeStructure,
 }
 
 struct VoteWithStakeDelegations {
@@ -1004,6 +1008,7 @@ impl Bank {
             collector_fee_details: RwLock::new(CollectorFeeDetails::default()),
             compute_budget: None,
             transaction_account_lock_limit: None,
+            fee_structure: FeeStructure::default(),
         };
 
         bank.transaction_processor =
@@ -1249,6 +1254,7 @@ impl Bank {
             collector_fee_details: RwLock::new(CollectorFeeDetails::default()),
             compute_budget: parent.compute_budget,
             transaction_account_lock_limit: parent.transaction_account_lock_limit,
+            fee_structure: parent.fee_structure.clone(),
         };
 
         let (_, ancestors_time_us) = measure_us!({
@@ -1640,6 +1646,7 @@ impl Bank {
             collector_fee_details: RwLock::new(CollectorFeeDetails::default()),
             compute_budget: runtime_config.compute_budget,
             transaction_account_lock_limit: runtime_config.transaction_account_lock_limit,
+            fee_structure: FeeStructure::default(),
         };
 
         bank.transaction_processor =
@@ -3716,6 +3723,7 @@ impl Bank {
             epoch_total_stake: self.epoch_total_stake(self.epoch()),
             epoch_vote_accounts: self.epoch_vote_accounts(self.epoch()),
             feature_set: Arc::clone(&self.feature_set),
+            fee_structure: Some(&self.fee_structure),
             lamports_per_signature,
             rent_collector: Some(&self.rent_collector),
         };
@@ -6827,7 +6835,7 @@ impl Bank {
     }
 
     pub fn fee_structure(&self) -> &FeeStructure {
-        &self.transaction_processor.fee_structure
+        &self.fee_structure
     }
 
     pub fn compute_budget(&self) -> Option<ComputeBudget> {
@@ -7149,7 +7157,7 @@ impl Bank {
     }
 
     pub fn set_fee_structure(&mut self, fee_structure: &FeeStructure) {
-        self.transaction_processor.fee_structure = fee_structure.clone();
+        self.fee_structure = fee_structure.clone();
     }
 
     pub fn load_program(
