@@ -19,10 +19,7 @@ use {
     log::*,
     serde_derive::Serialize,
     solana_account_decoder::UiAccountEncoding,
-    solana_accounts_db::{
-        accounts_db::CalcAccountsHashDataSource, accounts_index::ScanConfig,
-        hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
-    },
+    solana_accounts_db::{accounts_db::CalcAccountsHashDataSource, accounts_index::ScanConfig},
     solana_clap_utils::{
         hidden_unless_forced,
         input_parsers::{cluster_type_of, pubkey_of, pubkeys_of},
@@ -561,6 +558,7 @@ fn main() {
 
     solana_logger::setup_with_default_filter();
 
+    let load_genesis_config_arg = load_genesis_arg();
     let accounts_db_config_args = accounts_db_args();
     let snapshot_config_args = snapshot_args();
 
@@ -608,13 +606,6 @@ fn main() {
         .long("allow-dead-slots")
         .takes_value(false)
         .help("Output dead slots as well");
-    let default_genesis_archive_unpacked_size = MAX_GENESIS_ARCHIVE_UNPACKED_SIZE.to_string();
-    let max_genesis_archive_unpacked_size_arg = Arg::with_name("max_genesis_archive_unpacked_size")
-        .long("max-genesis-archive-unpacked-size")
-        .value_name("NUMBER")
-        .takes_value(true)
-        .default_value(&default_genesis_archive_unpacked_size)
-        .help("maximum total uncompressed size of unpacked genesis archive");
     let hashes_per_tick = Arg::with_name("hashes_per_tick")
         .long("hashes-per-tick")
         .value_name("NUM_HASHES|\"sleep\"")
@@ -771,7 +762,7 @@ fn main() {
         .subcommand(
             SubCommand::with_name("genesis")
                 .about("Prints the ledger's genesis config")
-                .arg(&max_genesis_archive_unpacked_size_arg)
+                .arg(&load_genesis_config_arg)
                 .arg(
                     Arg::with_name("accounts")
                         .long("accounts")
@@ -790,12 +781,12 @@ fn main() {
         .subcommand(
             SubCommand::with_name("genesis-hash")
                 .about("Prints the ledger's genesis hash")
-                .arg(&max_genesis_archive_unpacked_size_arg),
+                .arg(&load_genesis_config_arg)
         )
         .subcommand(
             SubCommand::with_name("modify-genesis")
                 .about("Modifies genesis parameters")
-                .arg(&max_genesis_archive_unpacked_size_arg)
+                .arg(&load_genesis_config_arg)
                 .arg(&hashes_per_tick)
                 .arg(
                     Arg::with_name("cluster_type")
@@ -815,22 +806,23 @@ fn main() {
         .subcommand(
             SubCommand::with_name("shred-version")
                 .about("Prints the ledger's shred hash")
+                .arg(&load_genesis_config_arg)
                 .args(&accounts_db_config_args)
                 .args(&snapshot_config_args)
                 .arg(&hard_forks_arg)
-                .arg(&max_genesis_archive_unpacked_size_arg)
         )
         .subcommand(
             SubCommand::with_name("bank-hash")
                 .about("Prints the hash of the working bank after reading the ledger")
+                .arg(&load_genesis_config_arg)
                 .args(&accounts_db_config_args)
                 .args(&snapshot_config_args)
-                .arg(&max_genesis_archive_unpacked_size_arg)
                 .arg(&halt_at_slot_arg)
         )
         .subcommand(
             SubCommand::with_name("verify")
                 .about("Verify the ledger")
+                .arg(&load_genesis_config_arg)
                 .args(&accounts_db_config_args)
                 .args(&snapshot_config_args)
                 .arg(&halt_at_slot_arg)
@@ -841,7 +833,6 @@ fn main() {
                 .arg(&accounts_db_test_hash_calculation_arg)
                 .arg(&os_memory_stats_reporting_arg)
                 .arg(&allow_dead_slots_arg)
-                .arg(&max_genesis_archive_unpacked_size_arg)
                 .arg(&debug_key_arg)
                 .arg(&geyser_plugin_args)
                 .arg(&log_messages_bytes_limit_arg)
@@ -967,11 +958,11 @@ fn main() {
         .subcommand(
             SubCommand::with_name("graph")
                 .about("Create a Graphviz rendering of the ledger")
+                .arg(&load_genesis_config_arg)
                 .args(&accounts_db_config_args)
                 .args(&snapshot_config_args)
                 .arg(&halt_at_slot_arg)
                 .arg(&hard_forks_arg)
-                .arg(&max_genesis_archive_unpacked_size_arg)
                 .arg(
                     Arg::with_name("include_all_votes")
                         .long("include-all-votes")
@@ -1000,10 +991,10 @@ fn main() {
         .subcommand(
             SubCommand::with_name("create-snapshot")
                 .about("Create a new ledger snapshot")
+                .arg(&load_genesis_config_arg)
                 .args(&accounts_db_config_args)
                 .args(&snapshot_config_args)
                 .arg(&hard_forks_arg)
-                .arg(&max_genesis_archive_unpacked_size_arg)
                 .arg(&snapshot_version_arg)
                 .arg(&geyser_plugin_args)
                 .arg(&log_messages_bytes_limit_arg)
@@ -1206,6 +1197,7 @@ fn main() {
         .subcommand(
             SubCommand::with_name("accounts")
                 .about("Print account stats and contents after processing the ledger")
+                .arg(&load_genesis_config_arg)
                 .args(&accounts_db_config_args)
                 .args(&snapshot_config_args)
                 .arg(&halt_at_slot_arg)
@@ -1213,7 +1205,6 @@ fn main() {
                 .arg(&geyser_plugin_args)
                 .arg(&log_messages_bytes_limit_arg)
                 .arg(&accounts_data_encoding_arg)
-                .arg(&max_genesis_archive_unpacked_size_arg)
                 .arg(
                     Arg::with_name("include_sysvars")
                         .long("include-sysvars")
@@ -1260,11 +1251,11 @@ fn main() {
         .subcommand(
             SubCommand::with_name("capitalization")
                 .about("Print capitalization (aka, total supply) while checksumming it")
+                .arg(&load_genesis_config_arg)
                 .args(&accounts_db_config_args)
                 .args(&snapshot_config_args)
                 .arg(&halt_at_slot_arg)
                 .arg(&hard_forks_arg)
-                .arg(&max_genesis_archive_unpacked_size_arg)
                 .arg(&geyser_plugin_args)
                 .arg(&log_messages_bytes_limit_arg)
                 .arg(

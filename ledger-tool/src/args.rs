@@ -112,6 +112,22 @@ pub fn accounts_db_args<'a, 'b>() -> Box<[Arg<'a, 'b>]> {
     .into_boxed_slice()
 }
 
+// For our current version of CLAP, the value passed to Arg::default_value()
+// must be a &str. But, we can't convert an integer to a &str at compile time.
+// So, declare this constant and enforce equality with the following unit test
+// test_max_genesis_archive_unpacked_size_constant
+const MAX_GENESIS_ARCHIVE_UNPACKED_SIZE_STR: &str = "10485760";
+
+/// Returns the arguments that configure loading genesis
+pub fn load_genesis_arg<'a, 'b>() -> Arg<'a, 'b> {
+    Arg::with_name("max_genesis_archive_unpacked_size")
+        .long("max-genesis-archive-unpacked-size")
+        .value_name("NUMBER")
+        .takes_value(true)
+        .default_value(MAX_GENESIS_ARCHIVE_UNPACKED_SIZE_STR)
+        .help("maximum total uncompressed size of unpacked genesis archive")
+}
+
 /// Returns the arguments that configure snapshot loading
 pub fn snapshot_args<'a, 'b>() -> Box<[Arg<'a, 'b>]> {
     vec![
@@ -276,5 +292,20 @@ pub fn hardforks_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<Slot>> {
         Some(values_t_or_exit!(matches, name, Slot))
     } else {
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use {super::*, solana_accounts_db::hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE};
+
+    #[test]
+    fn test_max_genesis_archive_unpacked_size_constant() {
+        assert_eq!(
+            MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
+            MAX_GENESIS_ARCHIVE_UNPACKED_SIZE_STR
+                .parse::<u64>()
+                .unwrap()
+        );
     }
 }
