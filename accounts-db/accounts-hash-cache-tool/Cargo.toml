@@ -1,6 +1,6 @@
 [package]
 name = "agave-accounts-hash-cache-tool"
-description = "Tool to inspect accounts hash cache files"
+description = "Tool for accounts hash cache files"
 publish = false
 version = { workspace = true }
 authors = { workspace = true }
