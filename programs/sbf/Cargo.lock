@@ -5738,6 +5738,8 @@ dependencies = [
  "solana-version",
  "solana-vote",
  "solana-vote-program",
+ "solana-zk-elgamal-proof-program",
+ "solana-zk-sdk",
  "solana-zk-token-proof-program",
  "solana-zk-token-sdk",
  "static_assertions",
@@ -6673,6 +6675,44 @@ dependencies = [
  "solana-runtime",
  "solana-sdk",
  "solana-vote-program",
+]
+
+[[package]]
+name = "solana-zk-elgamal-proof-program"
+version = "2.0.0"
+dependencies = [
+ "bytemuck",
+ "num-derive",
+ "num-traits",
+ "solana-program-runtime",
+ "solana-sdk",
+ "solana-zk-sdk",
+]
+
+[[package]]
+name = "solana-zk-sdk"
+version = "2.0.0"
+dependencies = [
+ "aes-gcm-siv",
+ "base64 0.22.1",
+ "bincode",
+ "bytemuck",
+ "curve25519-dalek",
+ "itertools 0.12.1",
+ "lazy_static",
+ "merlin",
+ "num-derive",
+ "num-traits",
+ "rand 0.7.3",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "sha3 0.9.1",
+ "solana-program",
+ "solana-sdk",
+ "subtle",
+ "thiserror",
+ "zeroize",
 ]
 
 [[package]]

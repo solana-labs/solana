@@ -7985,7 +7985,7 @@ fn test_reserved_account_keys() {
 
     assert_eq!(
         bank.get_reserved_account_keys().len(),
-        29,
+        30,
         "after activating the new feature, bank should have new active reserved keys"
     );
 }

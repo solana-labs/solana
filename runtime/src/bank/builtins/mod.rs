@@ -121,6 +121,13 @@ pub static BUILTINS: &[BuiltinPrototype] = &[
         program_id: solana_sdk::loader_v4::id(),
         entrypoint: solana_loader_v4_program::Entrypoint::vm,
     }),
+    testable_prototype!(BuiltinPrototype {
+        core_bpf_migration_config: None,
+        name: zk_elgamal_proof_program,
+        enable_feature_id: Some(feature_set::zk_elgamal_proof_program_enabled::id()),
+        program_id: solana_zk_sdk::zk_elgamal_proof_program::id(),
+        entrypoint: solana_zk_elgamal_proof_program::Entrypoint::vm,
+    }),
 ];
 
 pub static STATELESS_BUILTINS: &[StatelessBuiltinPrototype] = &[StatelessBuiltinPrototype {
@@ -328,6 +335,25 @@ mod test_only {
             datapoint_name: "migrate_builtin_to_core_bpf_loader_v4_program",
         };
     }
+
+    pub mod zk_elgamal_proof_program {
+        pub mod feature {
+            solana_sdk::declare_id!("EYtuxScWqGWmcPEDmeUsEt3iPkvWE26EWLfSxUvWP2WN");
+        }
+        pub mod source_buffer {
+            solana_sdk::declare_id!("AaVrLPurAUmjw6XRNGr6ezQfHaJWpBGHhcRSJmNjoVpQ");
+        }
+        pub mod upgrade_authority {
+            solana_sdk::declare_id!("EyGkQYHgynUdvdNPNiWbJQk9roFCexgdJQMNcWbuvp78");
+        }
+        pub const CONFIG: super::CoreBpfMigrationConfig = super::CoreBpfMigrationConfig {
+            source_buffer_address: source_buffer::id(),
+            upgrade_authority_address: Some(upgrade_authority::id()),
+            feature_id: feature::id(),
+            migration_target: super::CoreBpfMigrationTargetType::Builtin,
+            datapoint_name: "migrate_builtin_to_core_bpf_zk_elgamal_proof_program",
+        };
+    }
 }
 
 #[cfg(test)]
@@ -376,6 +402,10 @@ mod tests {
         assert_eq!(
             &super::BUILTINS[10].core_bpf_migration_config,
             &Some(super::test_only::loader_v4::CONFIG)
+        );
+        assert_eq!(
+            &super::BUILTINS[11].core_bpf_migration_config,
+            &Some(super::test_only::zk_elgamal_proof_program::CONFIG)
         );
         // Feature Gate has a live migration config, so it has no test-only
         // configs to test here.

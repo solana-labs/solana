@@ -22,6 +22,11 @@ mod zk_token_proof_program {
     solana_sdk::declare_id!("ZkTokenProof1111111111111111111111111111111");
 }
 
+// Inline zk-elgamal-proof program id since it isn't available in the sdk
+mod zk_elgamal_proof_program {
+    solana_sdk::declare_id!("ZkE1Gama1Proof11111111111111111111111111111");
+}
+
 // ReservedAccountKeys is not serialized into or deserialized from bank
 // snapshots but the bank requires this trait to be implemented anyways.
 #[cfg(all(RUSTC_WITH_SPECIALIZATION, feature = "frozen-abi"))]
@@ -162,6 +167,7 @@ lazy_static! {
         ReservedAccount::new_active(stake::program::id()),
         ReservedAccount::new_active(system_program::id()),
         ReservedAccount::new_active(vote::program::id()),
+        ReservedAccount::new_pending(zk_elgamal_proof_program::id(), feature_set::add_new_reserved_account_keys::id()),
         ReservedAccount::new_pending(zk_token_proof_program::id(), feature_set::add_new_reserved_account_keys::id()),
 
         // sysvars

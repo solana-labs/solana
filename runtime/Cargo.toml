@@ -71,6 +71,8 @@ solana-transaction-status = { workspace = true }
 solana-version = { workspace = true }
 solana-vote = { workspace = true }
 solana-vote-program = { workspace = true }
+solana-zk-elgamal-proof-program = { workspace = true }
+solana-zk-sdk = { workspace = true }
 solana-zk-token-proof-program = { workspace = true }
 solana-zk-token-sdk = { workspace = true }
 static_assertions = { workspace = true }

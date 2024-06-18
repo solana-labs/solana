@@ -824,6 +824,10 @@ pub mod migrate_address_lookup_table_program_to_core_bpf {
     solana_sdk::declare_id!("C97eKZygrkU4JxJsZdjgbUY7iQR7rKTr4NyDWo2E5pRm");
 }
 
+pub mod zk_elgamal_proof_program_enabled {
+    solana_sdk::declare_id!("zkhiy5oLowR7HY4zogXjCjeMXyruLqBwSWH21qcFtnv");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -1025,6 +1029,7 @@ lazy_static! {
         (migrate_config_program_to_core_bpf::id(), "Migrate Config program to Core BPF #1378"),
         (enable_get_epoch_stake_syscall::id(), "Enable syscall: sol_get_epoch_stake #884"),
         (migrate_address_lookup_table_program_to_core_bpf::id(), "Migrate Address Lookup Table program to Core BPF #1651"),
+        (zk_elgamal_proof_program_enabled::id(), "Enable ZkElGamalProof program SIMD-0153"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
