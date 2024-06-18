@@ -727,7 +727,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4114279215a005bc675e386011e594e1d9b800918cea18fcadadcce864a2046b"
 dependencies = [
  "borsh-derive 0.10.3",
- "hashbrown 0.13.2",
+ "hashbrown 0.12.3",
 ]
 
 [[package]]
@@ -4793,12 +4793,12 @@ dependencies = [
  "log",
  "scopeguard",
  "solana-compute-budget",
+ "solana-curve25519",
  "solana-measure",
  "solana-poseidon",
  "solana-program-runtime",
  "solana-sdk",
  "solana-type-overrides",
- "solana-zk-token-sdk",
  "solana_rbpf",
  "thiserror",
 ]
@@ -5045,6 +5045,16 @@ dependencies = [
  "solana-stake-program",
  "solana-system-program",
  "solana-vote-program",
+]
+
+[[package]]
+name = "solana-curve25519"
+version = "2.0.0"
+dependencies = [
+ "bytemuck",
+ "curve25519-dalek",
+ "solana-program",
+ "thiserror",
 ]
 
 [[package]]
@@ -5859,6 +5869,7 @@ dependencies = [
 name = "solana-sbf-rust-curve25519"
 version = "2.0.0"
 dependencies = [
+ "solana-curve25519",
  "solana-program",
  "solana-zk-token-sdk",
 ]
@@ -6737,7 +6748,6 @@ dependencies = [
  "bytemuck",
  "byteorder 1.5.0",
  "curve25519-dalek",
- "getrandom 0.1.14",
  "itertools 0.12.1",
  "lazy_static",
  "merlin",
@@ -6748,6 +6758,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "sha3 0.9.1",
+ "solana-curve25519",
  "solana-program",
  "solana-sdk",
  "subtle",

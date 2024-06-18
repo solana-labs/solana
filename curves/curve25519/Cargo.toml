@@ -1,0 +1,18 @@
+[package]
+name = "solana-curve25519"
+description = "Solana Curve25519 Syscalls"
+documentation = "https://docs.rs/solana-curve25519"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+bytemuck = { workspace = true, features = ["derive"] }
+solana-program = { workspace = true }
+thiserror = { workspace = true }
+
+[target.'cfg(not(target_os = "solana"))'.dependencies]
+curve25519-dalek = { workspace = true, features = ["serde"] }

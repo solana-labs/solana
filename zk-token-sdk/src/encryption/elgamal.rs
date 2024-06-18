@@ -21,7 +21,6 @@ use {
                 Pedersen, PedersenCommitment, PedersenOpening, G, H, PEDERSEN_COMMITMENT_LEN,
             },
         },
-        errors::ElGamalError,
         RISTRETTO_POINT_LEN, SCALAR_LEN,
     },
     base64::{prelude::BASE64_STANDARD, Engine},
@@ -32,6 +31,7 @@ use {
         traits::Identity,
     },
     serde::{Deserialize, Serialize},
+    solana_curve25519::errors::ElGamalError,
     solana_sdk::{
         derivation_path::DerivationPath,
         signature::Signature,

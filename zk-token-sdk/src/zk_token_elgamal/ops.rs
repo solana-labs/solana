@@ -1,9 +1,9 @@
-use crate::{
-    curve25519::{
+use {
+    crate::zk_token_elgamal::pod,
+    solana_curve25519::{
         ristretto::{add_ristretto, multiply_ristretto, subtract_ristretto, PodRistrettoPoint},
         scalar::PodScalar,
     },
-    zk_token_elgamal::pod,
 };
 
 const SHIFT_BITS: usize = 16;

@@ -9,6 +9,7 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
+solana-curve25519 = { workspace = true }
 solana-program = { workspace = true }
 solana-zk-token-sdk = { workspace = true }
 

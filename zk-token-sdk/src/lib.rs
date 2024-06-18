@@ -17,6 +17,8 @@
 //
 // `clippy::op_ref` is turned off to prevent clippy from warning that this is not idiomatic code.
 
+pub use solana_curve25519 as curve25519;
+
 #[cfg(not(target_os = "solana"))]
 #[macro_use]
 pub(crate) mod macros;
@@ -27,7 +29,6 @@ mod sigma_proofs;
 #[cfg(not(target_os = "solana"))]
 mod transcript;
 
-pub mod curve25519;
 pub mod errors;
 pub mod instruction;
 pub mod zk_token_elgamal;

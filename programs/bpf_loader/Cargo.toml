@@ -16,12 +16,12 @@ libsecp256k1 = { workspace = true }
 log = { workspace = true }
 scopeguard = { workspace = true }
 solana-compute-budget = { workspace = true }
+solana-curve25519 = { workspace = true }
 solana-measure = { workspace = true }
 solana-poseidon = { workspace = true }
 solana-program-runtime = { workspace = true }
 solana-sdk = { workspace = true }
 solana-type-overrides = { workspace = true }
-solana-zk-token-sdk = { workspace = true }
 solana_rbpf = { workspace = true }
 thiserror = { workspace = true }
 

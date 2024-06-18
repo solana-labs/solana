@@ -31,6 +31,7 @@ members = [
     "connection-cache",
     "core",
     "cost-model",
+    "curves/*",
     "dos",
     "download-utils",
     "entry",
@@ -340,6 +341,7 @@ solana-config-program = { path = "programs/config", version = "=2.0.0" }
 solana-connection-cache = { path = "connection-cache", version = "=2.0.0", default-features = false }
 solana-core = { path = "core", version = "=2.0.0" }
 solana-cost-model = { path = "cost-model", version = "=2.0.0" }
+solana-curve25519 = { path = "curves/curve25519", version = "=2.0.0" }
 solana-download-utils = { path = "download-utils", version = "=2.0.0" }
 solana-entry = { path = "entry", version = "=2.0.0" }
 solana-faucet = { path = "faucet", version = "=2.0.0" }
@@ -490,6 +492,7 @@ crossbeam-epoch = { git = "https://github.com/anza-xyz/crossbeam", rev = "fd279d
 #
 # There is a similar override in `programs/sbf/Cargo.toml`.  Please keep both
 # comments and the overrides in sync.
+solana-curve25519 = { path = "curves/curve25519" }
 solana-program = { path = "sdk/program" }
 solana-zk-sdk = { path = "zk-sdk" }
 solana-zk-token-sdk = { path = "zk-token-sdk" }
