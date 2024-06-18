@@ -491,7 +491,8 @@ impl BankWithScheduler {
         );
         assert!(
             maybe_result_with_timings.is_none(),
-            "Premature result was returned from scheduler after paused"
+            "Premature result was returned from scheduler after paused (slot: {})",
+            bank.slot(),
         );
     }
 
@@ -634,6 +635,11 @@ impl BankWithSchedulerInner {
                     scheduler.wait_for_termination(reason.is_dropped());
                 uninstalled_scheduler.return_to_pool();
                 (false, Some(result_with_timings))
+            }
+            SchedulerStatus::Stale(_pool, _result_with_timings) if reason.is_paused() => {
+                // Do nothing for pauses because the scheduler termination is guaranteed to be
+                // called later.
+                (true, None)
             }
             SchedulerStatus::Stale(_pool, _result_with_timings) => {
                 let result_with_timings = scheduler.transition_from_stale_to_unavailable();

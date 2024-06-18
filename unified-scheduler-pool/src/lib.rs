@@ -1785,6 +1785,51 @@ mod tests {
     }
 
     #[test]
+    fn test_scheduler_pause_after_stale() {
+        solana_logger::setup();
+
+        let _progress = sleepless_testing::setup(&[
+            &TestCheckPoint::BeforeTimeoutListenerTriggered,
+            &CheckPoint::TimeoutListenerTriggered(0),
+            &CheckPoint::TimeoutListenerTriggered(1),
+            &TestCheckPoint::AfterTimeoutListenerTriggered,
+        ]);
+
+        let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
+        let pool_raw = DefaultSchedulerPool::do_new(
+            None,
+            None,
+            None,
+            None,
+            ignored_prioritization_fee_cache,
+            SHORTENED_POOL_CLEANER_INTERVAL,
+            DEFAULT_MAX_POOLING_DURATION,
+            DEFAULT_MAX_USAGE_QUEUE_COUNT,
+            SHORTENED_TIMEOUT_DURATION,
+        );
+        let pool = pool_raw.clone();
+
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
+        let bank = Bank::new_for_tests(&genesis_config);
+        let bank = setup_dummy_fork_graph(bank);
+
+        let context = SchedulingContext::new(bank.clone());
+
+        let scheduler = pool.take_scheduler(context);
+        let bank = BankWithScheduler::new(bank, Some(scheduler));
+        pool.register_timeout_listener(bank.create_timeout_listener());
+
+        sleepless_testing::at(TestCheckPoint::BeforeTimeoutListenerTriggered);
+        sleepless_testing::at(TestCheckPoint::AfterTimeoutListenerTriggered);
+
+        // This calls register_recent_blockhash() internally, which in turn calls
+        // BankWithScheduler::wait_for_paused_scheduler().
+        bank.fill_bank_with_ticks_for_tests();
+        let (result, _timings) = bank.wait_for_completed_scheduler().unwrap();
+        assert_matches!(result, Ok(()));
+    }
+
+    #[test]
     fn test_scheduler_remain_stale_after_error() {
         solana_logger::setup();
 
