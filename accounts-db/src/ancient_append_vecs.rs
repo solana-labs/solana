@@ -576,9 +576,6 @@ impl AccountsDb {
         self.thread_pool_clean.install(|| {
             packer.par_iter().for_each(|(target_slot, pack)| {
                 let mut write_ancient_accounts_local = WriteAncientAccounts::default();
-                self.shrink_ancient_stats
-                    .bytes_ancient_created
-                    .fetch_add(pack.bytes, Ordering::Relaxed);
                 self.write_one_packed_storage(
                     pack,
                     **target_slot,
