@@ -29,6 +29,23 @@ fn parse_matches() -> ArgMatches<'static> {
         .default_value("0")
         .help("Filter gossip nodes by this shred version");
 
+    let gossip_port_arg = clap::Arg::with_name("gossip_port")
+        .long("gossip-port")
+        .value_name("PORT")
+        .takes_value(true)
+        .validator(is_port)
+        .help("Gossip port number for the node");
+
+    let gossip_host_arg = clap::Arg::with_name("gossip_host")
+        .long("gossip-host")
+        .value_name("HOST")
+        .takes_value(true)
+        .validator(solana_net_utils::is_host)
+        .help(
+            "Gossip DNS name or IP address for the node to advertise in gossip \
+                [default: ask --entrypoint, or 127.0.0.1 when --entrypoint is not provided]",
+        );
+
     App::new(crate_name!())
         .about(crate_description!())
         .version(solana_version::version!())
@@ -75,6 +92,8 @@ fn parse_matches() -> ArgMatches<'static> {
                         .help("Timeout in seconds"),
                 )
                 .arg(&shred_version_arg)
+                .arg(&gossip_port_arg)
+                .arg(&gossip_host_arg)
                 .setting(AppSettings::DisableVersion),
         )
         .subcommand(
@@ -89,23 +108,6 @@ fn parse_matches() -> ArgMatches<'static> {
                         .takes_value(true)
                         .validator(solana_net_utils::is_host_port)
                         .help("Rendezvous with the cluster at this entrypoint"),
-                )
-                .arg(
-                    clap::Arg::with_name("gossip_port")
-                        .long("gossip-port")
-                        .value_name("PORT")
-                        .takes_value(true)
-                        .validator(is_port)
-                        .help("Gossip port number for the node"),
-                )
-                .arg(
-                    clap::Arg::with_name("gossip_host")
-                        .long("gossip-host")
-                        .value_name("HOST")
-                        .takes_value(true)
-                        .validator(solana_net_utils::is_host)
-                        .help("Gossip DNS name or IP address for the node to advertise in gossip \
-                               [default: ask --entrypoint, or 127.0.0.1 when --entrypoint is not provided]"),
                 )
                 .arg(
                     Arg::with_name("identity")
@@ -144,6 +146,8 @@ fn parse_matches() -> ArgMatches<'static> {
                         .help("Public key of a specific node to wait for"),
                 )
                 .arg(&shred_version_arg)
+                .arg(&gossip_port_arg)
+                .arg(&gossip_host_arg)
                 .arg(
                     Arg::with_name("timeout")
                         .long("timeout")
@@ -226,21 +230,9 @@ fn process_spy(matches: &ArgMatches, socket_addr_space: SocketAddrSpace) -> std:
     let pubkeys = pubkeys_of(matches, "node_pubkey");
     let shred_version = value_t_or_exit!(matches, "shred_version", u16);
     let identity_keypair = keypair_of(matches, "identity");
-
     let entrypoint_addr = parse_entrypoint(matches);
+    let gossip_addr = get_gossip_address(matches, entrypoint_addr);
 
-    let gossip_host = parse_gossip_host(matches, entrypoint_addr);
-
-    let gossip_addr = SocketAddr::new(
-        gossip_host,
-        value_t!(matches, "gossip_port", u16).unwrap_or_else(|_| {
-            solana_net_utils::find_available_port_in_range(
-                IpAddr::V4(Ipv4Addr::UNSPECIFIED),
-                (0, 1),
-            )
-            .expect("unable to find an available gossip port")
-        }),
-    );
     let discover_timeout = Duration::from_secs(timeout.unwrap_or(u64::MAX));
     let (_all_peers, validators) = discover(
         identity_keypair,
@@ -280,9 +272,11 @@ fn process_rpc_url(
 ) -> std::io::Result<()> {
     let any = matches.is_present("any");
     let all = matches.is_present("all");
-    let entrypoint_addr = parse_entrypoint(matches);
     let timeout = value_t_or_exit!(matches, "timeout", u64);
     let shred_version = value_t_or_exit!(matches, "shred_version", u16);
+    let entrypoint_addr = parse_entrypoint(matches);
+    let gossip_addr = get_gossip_address(matches, entrypoint_addr);
+
     let (_all_peers, validators) = discover(
         None, // keypair
         entrypoint_addr.as_ref(),
@@ -290,7 +284,7 @@ fn process_rpc_url(
         Duration::from_secs(timeout),
         None,                     // find_nodes_by_pubkey
         entrypoint_addr.as_ref(), // find_node_by_gossip_addr
-        None,                     // my_gossip_addr
+        Some(&gossip_addr),       // my_gossip_addr
         shred_version,
         socket_addr_space,
     )?;
@@ -321,6 +315,20 @@ fn process_rpc_url(
     }
 
     Ok(())
+}
+
+fn get_gossip_address(matches: &ArgMatches, entrypoint_addr: Option<SocketAddr>) -> SocketAddr {
+    let gossip_host = parse_gossip_host(matches, entrypoint_addr);
+    SocketAddr::new(
+        gossip_host,
+        value_t!(matches, "gossip_port", u16).unwrap_or_else(|_| {
+            solana_net_utils::find_available_port_in_range(
+                IpAddr::V4(Ipv4Addr::UNSPECIFIED),
+                (0, 1),
+            )
+            .expect("unable to find an available gossip port")
+        }),
+    )
 }
 
 fn main() -> Result<(), Box<dyn error::Error>> {
