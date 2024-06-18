@@ -28,9 +28,7 @@ impl AddressLoader for &Bank {
     ) -> Result<LoadedAddresses, AddressLoaderError> {
         let slot_hashes = self
             .transaction_processor
-            .sysvar_cache
-            .read()
-            .unwrap()
+            .sysvar_cache()
             .get_slot_hashes()
             .map_err(|_| AddressLoaderError::SlotHashesSysvarNotFound)?;
 

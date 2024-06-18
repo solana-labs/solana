@@ -265,9 +265,7 @@ fn run_fixture(fixture: InstrFixture, filename: OsString, execute_as_instr: bool
 
     #[allow(deprecated)]
     let (blockhash, lamports_per_signature) = batch_processor
-        .sysvar_cache
-        .read()
-        .unwrap()
+        .sysvar_cache()
         .get_recent_blockhashes()
         .ok()
         .and_then(|x| (*x).last().cloned())
@@ -400,7 +398,7 @@ fn execute_fixture_as_instr(
     filename: OsString,
     cu_avail: u64,
 ) {
-    let rent = if let Ok(rent) = batch_processor.sysvar_cache.read().unwrap().get_rent() {
+    let rent = if let Ok(rent) = batch_processor.sysvar_cache().get_rent() {
         (*rent).clone()
     } else {
         Rent::default()
@@ -455,7 +453,7 @@ fn execute_fixture_as_instr(
 
     let log_collector = LogCollector::new_ref();
 
-    let sysvar_cache = &batch_processor.sysvar_cache.read().unwrap();
+    let sysvar_cache = &batch_processor.sysvar_cache();
     let env_config = EnvironmentConfig::new(
         Hash::default(),
         None,

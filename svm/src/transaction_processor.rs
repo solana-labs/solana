@@ -60,6 +60,7 @@ use {
         collections::{hash_map::Entry, HashMap, HashSet},
         fmt::{Debug, Formatter},
         rc::Rc,
+        sync::RwLockReadGuard,
     },
 };
 
@@ -147,7 +148,7 @@ pub struct TransactionBatchProcessor<FG: ForkGraph> {
     /// SysvarCache is a collection of system variables that are
     /// accessible from on chain programs. It is passed to SVM from
     /// client code (e.g. Bank) and forwarded to the MessageProcessor.
-    pub sysvar_cache: RwLock<SysvarCache>,
+    sysvar_cache: RwLock<SysvarCache>,
 
     /// Programs required for transaction batch processing
     pub program_cache: Arc<RwLock<ProgramCache<FG>>>,
@@ -211,6 +212,10 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
             .try_read()
             .ok()
             .map(|cache| cache.get_environments_for_epoch(epoch))
+    }
+
+    pub fn sysvar_cache(&self) -> RwLockReadGuard<SysvarCache> {
+        self.sysvar_cache.read().unwrap()
     }
 
     /// Main entrypoint to the SVM.

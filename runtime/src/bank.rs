@@ -6821,10 +6821,8 @@ impl Bank {
 
     pub fn is_in_slot_hashes_history(&self, slot: &Slot) -> bool {
         if slot < &self.slot {
-            if let Ok(sysvar_cache) = self.transaction_processor.sysvar_cache.read() {
-                if let Ok(slot_hashes) = sysvar_cache.get_slot_hashes() {
-                    return slot_hashes.get(slot).is_some();
-                }
+            if let Ok(slot_hashes) = self.transaction_processor.sysvar_cache().get_slot_hashes() {
+                return slot_hashes.get(slot).is_some();
             }
         }
         false
