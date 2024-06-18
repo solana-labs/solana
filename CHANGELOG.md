@@ -26,6 +26,7 @@ Release channels have their own copy of this changelog:
     when the `replaceRecentBlockhash` config param is `true` (#380)
   * SDK: `cargo test-sbf` accepts `--tools-version`, just like `build-sbf` (#1359)
   * CLI: Can specify `--full-snapshot-archive-path` (#1631)
+  * transaction-status: The SPL Token `amountToUiAmount` instruction parses the amount into a string instead of a number (#1737)
 
 ## [1.18.0]
 * Changes
