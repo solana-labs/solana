@@ -1350,6 +1350,49 @@ fn process_instruction<'a>(
             let byte_index = usize::from_le_bytes(instruction_data[2..10].try_into().unwrap());
             target_account.data.borrow_mut()[byte_index] = instruction_data[10];
         }
+        TEST_CALLEE_ACCOUNT_UPDATES => {
+            msg!("TEST_CALLEE_ACCOUNT_UPDATES");
+
+            if instruction_data.len() < 2 + 2 * std::mem::size_of::<usize>() {
+                return Ok(());
+            }
+
+            let writable = instruction_data[1] != 0;
+            let resize = usize::from_le_bytes(instruction_data[2..10].try_into().unwrap());
+            let write_offset = usize::from_le_bytes(instruction_data[10..18].try_into().unwrap());
+            let invoke_struction = &instruction_data[18..];
+
+            let account = &accounts[ARGUMENT_INDEX];
+
+            if resize != 0 {
+                account.realloc(resize, false).unwrap();
+            }
+
+            if !invoke_struction.is_empty() {
+                // Invoke another program. With direct mapping, before CPI the callee will update the accounts (incl resizing)
+                // so the pointer may change.
+                let invoked_program_id = accounts[INVOKED_PROGRAM_INDEX].key;
+
+                invoke(
+                    &create_instruction(
+                        *invoked_program_id,
+                        &[
+                            (accounts[MINT_INDEX].key, false, false),
+                            (accounts[ARGUMENT_INDEX].key, writable, false),
+                            (invoked_program_id, false, false),
+                        ],
+                        invoke_struction.to_vec(),
+                    ),
+                    accounts,
+                )
+                .unwrap();
+            }
+
+            if write_offset != 0 {
+                // Ensure we still have access to the correct account
+                account.data.borrow_mut()[write_offset] ^= 0xe5;
+            }
+        }
         _ => panic!("unexpected program data"),
     }
 

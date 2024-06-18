@@ -85,7 +85,7 @@ use {
         system_program,
         transaction::{SanitizedTransaction, Transaction, TransactionError},
     },
-    std::{cell::RefCell, str::FromStr, sync::Arc, time::Duration},
+    std::{assert_eq, cell::RefCell, str::FromStr, sync::Arc, time::Duration},
 };
 
 #[cfg(feature = "sbf_rust")]
@@ -4461,5 +4461,218 @@ fn test_deny_executable_write() {
             result.unwrap_err().unwrap(),
             TransactionError::InstructionError(0, InstructionError::ExecutableDataModified)
         );
+    }
+}
+
+#[test]
+fn test_update_callee_account() {
+    // Test that fn update_callee_account() works and we are updating the callee account on CPI.
+    solana_logger::setup();
+
+    let GenesisConfigInfo {
+        genesis_config,
+        mint_keypair,
+        ..
+    } = create_genesis_config(100_123_456_789);
+
+    for direct_mapping in [false, true] {
+        let mut bank = Bank::new_for_tests(&genesis_config);
+        let feature_set = Arc::make_mut(&mut bank.feature_set);
+        // by default test banks have all features enabled, so we only need to
+        // disable when needed
+        if !direct_mapping {
+            feature_set.deactivate(&feature_set::bpf_account_data_direct_mapping::id());
+        }
+        let (bank, bank_forks) = bank.wrap_with_bank_forks_for_tests();
+        let mut bank_client = BankClient::new_shared(bank.clone());
+        let authority_keypair = Keypair::new();
+
+        let (bank, invoke_program_id) = load_upgradeable_program_and_advance_slot(
+            &mut bank_client,
+            bank_forks.as_ref(),
+            &mint_keypair,
+            &authority_keypair,
+            "solana_sbf_rust_invoke",
+        );
+
+        let account_keypair = Keypair::new();
+
+        let mint_pubkey = mint_keypair.pubkey();
+
+        let account_metas = vec![
+            AccountMeta::new(mint_pubkey, true),
+            AccountMeta::new(account_keypair.pubkey(), false),
+            AccountMeta::new_readonly(invoke_program_id, false),
+        ];
+
+        // I. do CPI with account in read only (separate code path with direct mapping)
+        let mut account = AccountSharedData::new(42, 10240, &invoke_program_id);
+        let data: Vec<u8> = (0..10240).map(|n| n as u8).collect();
+        account.set_data(data);
+
+        bank.store_account(&account_keypair.pubkey(), &account);
+
+        let mut instruction_data = vec![TEST_CALLEE_ACCOUNT_UPDATES, 0];
+        instruction_data.extend_from_slice(20480usize.to_le_bytes().as_ref());
+        instruction_data.extend_from_slice(16384usize.to_le_bytes().as_ref());
+        // instruction data for inner CPI (2x)
+        instruction_data.extend_from_slice(&[TEST_CALLEE_ACCOUNT_UPDATES, 0]);
+        instruction_data.extend_from_slice(0usize.to_le_bytes().as_ref());
+        instruction_data.extend_from_slice(0usize.to_le_bytes().as_ref());
+
+        instruction_data.extend_from_slice(&[TEST_CALLEE_ACCOUNT_UPDATES, 0]);
+        instruction_data.extend_from_slice(0usize.to_le_bytes().as_ref());
+        instruction_data.extend_from_slice(0usize.to_le_bytes().as_ref());
+
+        let instruction = Instruction::new_with_bytes(
+            invoke_program_id,
+            &instruction_data,
+            account_metas.clone(),
+        );
+        let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
+        assert!(result.is_ok());
+
+        let data = bank_client
+            .get_account_data(&account_keypair.pubkey())
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(data.len(), 20480);
+
+        data.iter().enumerate().for_each(|(i, v)| {
+            let expected = match i {
+                ..=10240 => i as u8,
+                16384 => 0xe5,
+                _ => 0,
+            };
+
+            assert_eq!(*v, expected, "offset:{i} {v:#x} != {expected:#x}");
+        });
+
+        // II. do CPI with account with resize to smaller and write
+        let mut account = AccountSharedData::new(42, 10240, &invoke_program_id);
+        let data: Vec<u8> = (0..10240).map(|n| n as u8).collect();
+        account.set_data(data);
+        bank.store_account(&account_keypair.pubkey(), &account);
+
+        let mut instruction_data = vec![TEST_CALLEE_ACCOUNT_UPDATES, 1];
+        instruction_data.extend_from_slice(20480usize.to_le_bytes().as_ref());
+        instruction_data.extend_from_slice(16384usize.to_le_bytes().as_ref());
+        // instruction data for inner CPI
+        instruction_data.extend_from_slice(&[TEST_CALLEE_ACCOUNT_UPDATES, 0]);
+        instruction_data.extend_from_slice(19480usize.to_le_bytes().as_ref());
+        instruction_data.extend_from_slice(8129usize.to_le_bytes().as_ref());
+
+        let instruction = Instruction::new_with_bytes(
+            invoke_program_id,
+            &instruction_data,
+            account_metas.clone(),
+        );
+        let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
+        assert!(result.is_ok());
+
+        let data = bank_client
+            .get_account_data(&account_keypair.pubkey())
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(data.len(), 19480);
+
+        data.iter().enumerate().for_each(|(i, v)| {
+            let expected = match i {
+                8129 => (i as u8) ^ 0xe5,
+                ..=10240 => i as u8,
+                16384 => 0xe5,
+                _ => 0,
+            };
+
+            assert_eq!(*v, expected, "offset:{i} {v:#x} != {expected:#x}");
+        });
+
+        // III. do CPI with account with resize to larger and write
+        let mut account = AccountSharedData::new(42, 10240, &invoke_program_id);
+        let data: Vec<u8> = (0..10240).map(|n| n as u8).collect();
+        account.set_data(data);
+        bank.store_account(&account_keypair.pubkey(), &account);
+
+        let mut instruction_data = vec![TEST_CALLEE_ACCOUNT_UPDATES, 1];
+        instruction_data.extend_from_slice(16384usize.to_le_bytes().as_ref());
+        instruction_data.extend_from_slice(16384usize.to_le_bytes().as_ref());
+        // instruction data for inner CPI
+        instruction_data.extend_from_slice(&[TEST_CALLEE_ACCOUNT_UPDATES, 0]);
+        instruction_data.extend_from_slice(20480usize.to_le_bytes().as_ref());
+        instruction_data.extend_from_slice(16385usize.to_le_bytes().as_ref());
+
+        let instruction = Instruction::new_with_bytes(
+            invoke_program_id,
+            &instruction_data,
+            account_metas.clone(),
+        );
+        let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
+        assert!(result.is_ok());
+
+        let data = bank_client
+            .get_account_data(&account_keypair.pubkey())
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(data.len(), 20480);
+
+        data.iter().enumerate().for_each(|(i, v)| {
+            let expected = match i {
+                ..=10240 => i as u8,
+                16384 | 16385 => 0xe5,
+                _ => 0,
+            };
+
+            assert_eq!(*v, expected, "offset:{i} {v:#x} != {expected:#x}");
+        });
+
+        // IV. do CPI with account with resize to larger and write
+        let mut account = AccountSharedData::new(42, 10240, &invoke_program_id);
+        let data: Vec<u8> = (0..10240).map(|n| n as u8).collect();
+        account.set_data(data);
+        bank.store_account(&account_keypair.pubkey(), &account);
+
+        let mut instruction_data = vec![TEST_CALLEE_ACCOUNT_UPDATES, 1];
+        instruction_data.extend_from_slice(16384usize.to_le_bytes().as_ref());
+        instruction_data.extend_from_slice(16384usize.to_le_bytes().as_ref());
+        // instruction data for inner CPI (2x)
+        instruction_data.extend_from_slice(&[TEST_CALLEE_ACCOUNT_UPDATES, 1]);
+        instruction_data.extend_from_slice(0usize.to_le_bytes().as_ref());
+        instruction_data.extend_from_slice(0usize.to_le_bytes().as_ref());
+
+        instruction_data.extend_from_slice(&[TEST_CALLEE_ACCOUNT_UPDATES, 1]);
+        instruction_data.extend_from_slice(0usize.to_le_bytes().as_ref());
+        instruction_data.extend_from_slice(0usize.to_le_bytes().as_ref());
+        // instruction data for inner CPI
+        instruction_data.extend_from_slice(&[TEST_CALLEE_ACCOUNT_UPDATES, 0]);
+        instruction_data.extend_from_slice(20480usize.to_le_bytes().as_ref());
+        instruction_data.extend_from_slice(16385usize.to_le_bytes().as_ref());
+
+        let instruction = Instruction::new_with_bytes(
+            invoke_program_id,
+            &instruction_data,
+            account_metas.clone(),
+        );
+        let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
+        assert!(result.is_ok());
+
+        let data = bank_client
+            .get_account_data(&account_keypair.pubkey())
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(data.len(), 20480);
+
+        data.iter().enumerate().for_each(|(i, v)| {
+            let expected = match i {
+                ..=10240 => i as u8,
+                16384 | 16385 => 0xe5,
+                _ => 0,
+            };
+
+            assert_eq!(*v, expected, "offset:{i} {v:#x} != {expected:#x}");
+        });
     }
 }
