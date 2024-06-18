@@ -1,6 +1,6 @@
 use {
     crate::{args::*, canonicalize_ledger_path, ledger_utils::*},
-    clap::{value_t, App, AppSettings, Arg, ArgMatches, SubCommand},
+    clap::{App, AppSettings, Arg, ArgMatches, SubCommand},
     log::*,
     serde_derive::{Deserialize, Serialize},
     serde_json::Result,
@@ -9,7 +9,7 @@ use {
         syscalls::create_program_runtime_environment_v1,
     },
     solana_cli_output::{OutputFormat, QuietDisplay, VerboseDisplay},
-    solana_ledger::{blockstore_options::AccessType, use_snapshot_archives_at_startup},
+    solana_ledger::blockstore_options::AccessType,
     solana_program_runtime::{
         invoke_context::InvokeContext,
         loaded_programs::{
@@ -36,7 +36,7 @@ use {
         fmt::{self, Debug, Formatter},
         fs::File,
         io::{Read, Seek, Write},
-        path::{Path, PathBuf},
+        path::Path,
         process::exit,
         sync::Arc,
         time::{Duration, Instant},
@@ -75,13 +75,6 @@ fn load_accounts(path: &Path) -> Result<Input> {
 
 fn load_blockstore(ledger_path: &Path, arg_matches: &ArgMatches<'_>) -> Arc<Bank> {
     let process_options = parse_process_options(ledger_path, arg_matches);
-    let snapshot_archive_path = value_t!(arg_matches, "snapshots", String)
-        .ok()
-        .map(PathBuf::from);
-    let incremental_snapshot_archive_path =
-        value_t!(arg_matches, "incremental_snapshot_archive_path", String)
-            .ok()
-            .map(PathBuf::from);
 
     let genesis_config = open_genesis_config_by(ledger_path, arg_matches);
     info!("genesis hash: {}", genesis_config.hash());
@@ -91,8 +84,6 @@ fn load_blockstore(ledger_path: &Path, arg_matches: &ArgMatches<'_>) -> Arc<Bank
         &genesis_config,
         Arc::new(blockstore),
         process_options,
-        snapshot_archive_path,
-        incremental_snapshot_archive_path,
         None,
     );
     let bank = bank_forks.read().unwrap().working_bank();
@@ -118,16 +109,7 @@ impl ProgramSubCommand for App<'_, '_> {
             .takes_value(true)
             .default_value("10485760")
             .help("maximum total uncompressed size of unpacked genesis archive");
-        let use_snapshot_archives_at_startup =
-            Arg::with_name(use_snapshot_archives_at_startup::cli::NAME)
-                .long(use_snapshot_archives_at_startup::cli::LONG_ARG)
-                .takes_value(true)
-                .possible_values(use_snapshot_archives_at_startup::cli::POSSIBLE_VALUES)
-                .default_value(
-                    use_snapshot_archives_at_startup::cli::default_value_for_ledger_tool(),
-                )
-                .help(use_snapshot_archives_at_startup::cli::HELP)
-                .long_help(use_snapshot_archives_at_startup::cli::LONG_HELP);
+        let snapshot_config_args = snapshot_args();
 
         self.subcommand(
             SubCommand::with_name("program")
@@ -179,8 +161,8 @@ and the following fields are required
                         .takes_value(true)
                         .default_value("0"),
                 )
+                .args(&snapshot_config_args)
                 .arg(&max_genesis_arg)
-                .arg(&use_snapshot_archives_at_startup)
                 .arg(
                     Arg::with_name("memory")
                         .help("Heap memory for the program to run on")

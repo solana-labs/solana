@@ -112,6 +112,38 @@ pub fn accounts_db_args<'a, 'b>() -> Box<[Arg<'a, 'b>]> {
     .into_boxed_slice()
 }
 
+/// Returns the arguments that configure snapshot loading
+pub fn snapshot_args<'a, 'b>() -> Box<[Arg<'a, 'b>]> {
+    vec![
+        Arg::with_name("no_snapshot")
+            .long("no-snapshot")
+            .takes_value(false)
+            .help("Do not start from a local snapshot if present"),
+        Arg::with_name("snapshots")
+            .long("snapshots")
+            .alias("snapshot-archive-path")
+            .alias("full-snapshot-archive-path")
+            .value_name("DIR")
+            .takes_value(true)
+            .global(true)
+            .help("Use DIR for snapshot location [default: --ledger value]"),
+        Arg::with_name("incremental_snapshot_archive_path")
+            .long("incremental-snapshot-archive-path")
+            .value_name("DIR")
+            .takes_value(true)
+            .global(true)
+            .help("Use DIR for separate incremental snapshot location"),
+        Arg::with_name(use_snapshot_archives_at_startup::cli::NAME)
+            .long(use_snapshot_archives_at_startup::cli::LONG_ARG)
+            .takes_value(true)
+            .possible_values(use_snapshot_archives_at_startup::cli::POSSIBLE_VALUES)
+            .default_value(use_snapshot_archives_at_startup::cli::default_value_for_ledger_tool())
+            .help(use_snapshot_archives_at_startup::cli::HELP)
+            .long_help(use_snapshot_archives_at_startup::cli::LONG_HELP),
+    ]
+    .into_boxed_slice()
+}
+
 /// Parse a `ProcessOptions` from subcommand arguments. This function attempts
 /// to parse all flags related to `ProcessOptions`; however, subcommands that
 /// use this function may not support all flags.
