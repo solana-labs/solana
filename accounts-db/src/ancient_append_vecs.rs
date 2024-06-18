@@ -8,8 +8,8 @@ use {
         account_storage::ShrinkInProgress,
         accounts_db::{
             AccountFromStorage, AccountStorageEntry, AccountsDb, AliveAccounts,
-            GetUniqueAccountsResult, ShrinkCollect, ShrinkCollectAliveSeparatedByRefs,
-            ShrinkStatsSub,
+            GetUniqueAccountsResult, ShrinkAncientStats, ShrinkCollect,
+            ShrinkCollectAliveSeparatedByRefs, ShrinkStatsSub,
         },
         accounts_file::AccountsFile,
         accounts_index::AccountsIndexScanResult,
@@ -139,12 +139,16 @@ impl AncientSlotInfos {
 
     /// modify 'self' to contain only the slot infos for the slots that should be combined
     /// (and in this process effectively shrunk)
-    fn filter_ancient_slots(&mut self, tuning: &PackedAncientStorageTuning) {
+    fn filter_ancient_slots(
+        &mut self,
+        tuning: &PackedAncientStorageTuning,
+        stats: &ShrinkAncientStats,
+    ) {
         // figure out which slots to combine
         // 1. should_shrink: largest bytes saved above some cutoff of ratio
         self.choose_storages_to_shrink(tuning);
         // 2. smallest files so we get the largest number of files to remove
-        self.filter_by_smallest_capacity(tuning);
+        self.filter_by_smallest_capacity(tuning, stats);
     }
 
     // sort 'shrink_indexes' by most bytes saved, highest to lowest
@@ -194,12 +198,18 @@ impl AncientSlotInfos {
     /// 'all_infos' are combined, the total number of storages <= 'max_storages'
     /// The idea is that 'all_infos' is sorted from smallest capacity to largest,
     /// but that isn't required for this function to be 'correct'.
-    fn truncate_to_max_storages(&mut self, tuning: &PackedAncientStorageTuning) {
+    fn truncate_to_max_storages(
+        &mut self,
+        tuning: &PackedAncientStorageTuning,
+        stats: &ShrinkAncientStats,
+    ) {
         // these indexes into 'all_infos' are useless once we truncate 'all_infos', so make sure they're cleared out to avoid any issues
         self.shrink_indexes.clear();
         let total_storages = self.all_infos.len();
         let mut cumulative_bytes = Saturating(0u64);
         let low_threshold = tuning.max_ancient_slots * 50 / 100;
+        let mut bytes_from_must_shrink = 0;
+        let mut bytes_from_smallest_storages = 0;
         for (i, info) in self.all_infos.iter().enumerate() {
             cumulative_bytes += info.alive_bytes;
             let ancient_storages_required =
@@ -223,7 +233,18 @@ impl AncientSlotInfos {
                 self.all_infos.truncate(i);
                 break;
             }
+            if info.should_shrink {
+                bytes_from_must_shrink += info.alive_bytes;
+            } else {
+                bytes_from_smallest_storages += info.alive_bytes;
+            }
         }
+        stats
+            .bytes_from_must_shrink
+            .fetch_add(bytes_from_must_shrink, Ordering::Relaxed);
+        stats
+            .bytes_from_smallest_storages
+            .fetch_add(bytes_from_smallest_storages, Ordering::Relaxed);
     }
 
     /// remove entries from 'all_infos' such that combining
@@ -233,7 +254,11 @@ impl AncientSlotInfos {
     /// Combining too many storages costs i/o and cpu so the goal is to find the sweet spot so
     /// that we make progress in cleaning/shrinking/combining but that we don't cause unnecessary
     /// churn.
-    fn filter_by_smallest_capacity(&mut self, tuning: &PackedAncientStorageTuning) {
+    fn filter_by_smallest_capacity(
+        &mut self,
+        tuning: &PackedAncientStorageTuning,
+        stats: &ShrinkAncientStats,
+    ) {
         let total_storages = self.all_infos.len();
         if total_storages <= tuning.max_ancient_slots {
             // currently fewer storages than max, so nothing to shrink
@@ -256,7 +281,7 @@ impl AncientSlotInfos {
 
         // remove any storages we don't need to combine this pass to achieve
         // # resulting storages <= 'max_storages'
-        self.truncate_to_max_storages(tuning);
+        self.truncate_to_max_storages(tuning, stats);
     }
 }
 
@@ -470,7 +495,7 @@ impl AccountsDb {
             tuning.ideal_storage_size,
         );
 
-        ancient_slot_infos.filter_ancient_slots(tuning);
+        ancient_slot_infos.filter_ancient_slots(tuning, &self.shrink_ancient_stats);
         ancient_slot_infos
     }
 
@@ -2692,10 +2717,10 @@ pub mod tests {
                 match method {
                     TestSmallestCapacity::FilterAncientSlots => {
                         infos.shrink_indexes.clear();
-                        infos.filter_ancient_slots(&tuning);
+                        infos.filter_ancient_slots(&tuning, &ShrinkAncientStats::default());
                     }
                     TestSmallestCapacity::FilterBySmallestCapacity => {
-                        infos.filter_by_smallest_capacity(&tuning);
+                        infos.filter_by_smallest_capacity(&tuning, &ShrinkAncientStats::default());
                     }
                 }
                 assert!(infos.all_infos.is_empty());
@@ -2738,11 +2763,11 @@ pub mod tests {
                 };
                 match method {
                     TestSmallestCapacity::FilterBySmallestCapacity => {
-                        infos.filter_by_smallest_capacity(&tuning);
+                        infos.filter_by_smallest_capacity(&tuning, &ShrinkAncientStats::default());
                     }
                     TestSmallestCapacity::FilterAncientSlots => {
                         infos.shrink_indexes.clear();
-                        infos.filter_ancient_slots(&tuning);
+                        infos.filter_ancient_slots(&tuning, &ShrinkAncientStats::default());
                     }
                 }
                 assert_eq!(
@@ -2793,7 +2818,7 @@ pub mod tests {
 
         // shuffle the infos so they actually need to be sorted
         infos.all_infos.shuffle(&mut thread_rng());
-        infos.filter_by_smallest_capacity(&tuning);
+        infos.filter_by_smallest_capacity(&tuning, &ShrinkAncientStats::default());
 
         infos
             .all_infos
@@ -2838,7 +2863,7 @@ pub mod tests {
 
         // shuffle the infos so they actually need to be sorted
         infos.all_infos.shuffle(&mut thread_rng());
-        infos.filter_by_smallest_capacity(&tuning);
+        infos.filter_by_smallest_capacity(&tuning, &ShrinkAncientStats::default());
 
         infos
             .all_infos
@@ -2859,9 +2884,9 @@ pub mod tests {
 
     fn test(filter: bool, infos: &mut AncientSlotInfos, tuning: &PackedAncientStorageTuning) {
         if filter {
-            infos.filter_by_smallest_capacity(tuning);
+            infos.filter_by_smallest_capacity(tuning, &ShrinkAncientStats::default());
         } else {
-            infos.truncate_to_max_storages(tuning);
+            infos.truncate_to_max_storages(tuning, &ShrinkAncientStats::default());
         }
     }
 
@@ -3285,7 +3310,7 @@ pub mod tests {
                     };
                     match method {
                         TestShouldShrink::FilterAncientSlots => {
-                            infos.filter_ancient_slots(&tuning);
+                            infos.filter_ancient_slots(&tuning, &ShrinkAncientStats::default());
                         }
                         TestShouldShrink::ClearShouldShrink => {
                             infos.clear_should_shrink_after_cutoff(&tuning);
