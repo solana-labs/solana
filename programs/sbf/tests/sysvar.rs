@@ -1,31 +1,36 @@
-#![cfg(feature = "test-bpf")]
-
 use {
-    solana_program_test::*,
-    solana_sbf_rust_sysvar::process_instruction,
+    solana_runtime::{
+        bank::Bank,
+        bank_client::BankClient,
+        genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        loader_utils::load_upgradeable_program_and_advance_slot,
+    },
     solana_sdk::{
         feature_set::disable_fees_sysvar,
         instruction::{AccountMeta, Instruction},
+        message::Message,
         pubkey::Pubkey,
-        signature::Signer,
+        signature::{Keypair, Signer},
         sysvar::{
             clock, epoch_rewards, epoch_schedule, fees, instructions, recent_blockhashes, rent,
             slot_hashes, slot_history, stake_history,
         },
-        transaction::Transaction,
+        transaction::{SanitizedTransaction, Transaction},
     },
 };
 
-#[tokio::test]
-async fn test_sysvars() {
-    let program_id = Pubkey::new_unique();
+#[test]
+#[cfg(feature = "sbf_rust")]
+fn test_sysvar_syscalls() {
+    solana_logger::setup();
 
-    let mut program_test = ProgramTest::new(
-        "solana_sbf_rust_sysvar",
-        program_id,
-        processor!(process_instruction),
-    );
-
+    let GenesisConfigInfo {
+        mut genesis_config,
+        mint_keypair,
+        ..
+    } = create_genesis_config(50);
+    genesis_config.accounts.remove(&disable_fees_sysvar::id());
+    let bank = Bank::new_for_tests(&genesis_config);
     let epoch_rewards = epoch_rewards::EpochRewards {
         distribution_starting_block_height: 42,
         total_rewards: 100,
@@ -33,50 +38,25 @@ async fn test_sysvars() {
         active: true,
         ..epoch_rewards::EpochRewards::default()
     };
-    program_test.add_sysvar_account(epoch_rewards::id(), &epoch_rewards);
-    let (mut banks_client, payer, recent_blockhash) = program_test.start().await;
-
-    let mut transaction = Transaction::new_with_payer(
-        &[Instruction::new_with_bincode(
-            program_id,
-            &[0u8],
-            vec![
-                AccountMeta::new(payer.pubkey(), true),
-                AccountMeta::new(Pubkey::new_unique(), false),
-                AccountMeta::new_readonly(clock::id(), false),
-                AccountMeta::new_readonly(epoch_schedule::id(), false),
-                AccountMeta::new_readonly(instructions::id(), false),
-                #[allow(deprecated)]
-                AccountMeta::new_readonly(recent_blockhashes::id(), false),
-                AccountMeta::new_readonly(rent::id(), false),
-                AccountMeta::new_readonly(slot_hashes::id(), false),
-                AccountMeta::new_readonly(slot_history::id(), false),
-                AccountMeta::new_readonly(stake_history::id(), false),
-                #[allow(deprecated)]
-                AccountMeta::new_readonly(fees::id(), false),
-                AccountMeta::new_readonly(epoch_rewards::id(), false),
-            ],
-        )],
-        Some(&payer.pubkey()),
-    );
-    transaction.sign(&[&payer], recent_blockhash);
-    banks_client.process_transaction(transaction).await.unwrap();
-
-    let mut program_test = ProgramTest::new(
+    bank.set_sysvar_for_tests(&epoch_rewards);
+    let (bank, bank_forks) = bank.wrap_with_bank_forks_for_tests();
+    let mut bank_client = BankClient::new_shared(bank);
+    let authority_keypair = Keypair::new();
+    let (bank, program_id) = load_upgradeable_program_and_advance_slot(
+        &mut bank_client,
+        bank_forks.as_ref(),
+        &mint_keypair,
+        &authority_keypair,
         "solana_sbf_rust_sysvar",
-        program_id,
-        processor!(process_instruction),
     );
-    program_test.deactivate_feature(disable_fees_sysvar::id());
-    program_test.add_sysvar_account(epoch_rewards::id(), &epoch_rewards);
-    let (mut banks_client, payer, recent_blockhash) = program_test.start().await;
+    bank.freeze();
 
-    let mut transaction = Transaction::new_with_payer(
-        &[Instruction::new_with_bincode(
+    for instruction_data in &[0u8, 1u8] {
+        let instruction = Instruction::new_with_bincode(
             program_id,
-            &[1u8],
+            &[instruction_data],
             vec![
-                AccountMeta::new(payer.pubkey(), true),
+                AccountMeta::new(mint_keypair.pubkey(), true),
                 AccountMeta::new(Pubkey::new_unique(), false),
                 AccountMeta::new_readonly(clock::id(), false),
                 AccountMeta::new_readonly(epoch_schedule::id(), false),
@@ -91,9 +71,12 @@ async fn test_sysvars() {
                 AccountMeta::new_readonly(fees::id(), false),
                 AccountMeta::new_readonly(epoch_rewards::id(), false),
             ],
-        )],
-        Some(&payer.pubkey()),
-    );
-    transaction.sign(&[&payer], recent_blockhash);
-    banks_client.process_transaction(transaction).await.unwrap();
+        );
+        let blockhash = bank.last_blockhash();
+        let message = Message::new(&[instruction], Some(&mint_keypair.pubkey()));
+        let transaction = Transaction::new(&[&mint_keypair], message, blockhash);
+        let sanitized_tx = SanitizedTransaction::from_transaction_for_tests(transaction);
+        let result = bank.simulate_transaction(&sanitized_tx, false);
+        assert!(result.result.is_ok());
+    }
 }

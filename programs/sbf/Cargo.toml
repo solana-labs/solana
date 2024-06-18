@@ -38,21 +38,15 @@ solana-measure = { path = "../../measure", version = "=2.0.0" }
 solana-poseidon = { path = "../../poseidon/", version = "=2.0.0" }
 solana-program = { path = "../../sdk/program", version = "=2.0.0" }
 solana-program-runtime = { path = "../../program-runtime", version = "=2.0.0" }
-solana-program-test = { path = "../../program-test", version = "=2.0.0" }
 solana-runtime = { path = "../../runtime", version = "=2.0.0" }
 solana-sbf-rust-128bit-dep = { path = "rust/128bit_dep", version = "=2.0.0" }
 solana-sbf-rust-invoke-dep = { path = "rust/invoke_dep", version = "=2.0.0" }
 solana-sbf-rust-invoked-dep = { path = "rust/invoked_dep", version = "=2.0.0" }
 solana-sbf-rust-many-args-dep = { path = "rust/many_args_dep", version = "=2.0.0" }
-solana-sbf-rust-mem = { path = "rust/mem", version = "=2.0.0" }
 solana-sbf-rust-mem-dep = { path = "rust/mem_dep", version = "=2.0.0" }
 solana-sbf-rust-param-passing-dep = { path = "rust/param_passing_dep", version = "=2.0.0" }
 solana-sbf-rust-realloc-dep = { path = "rust/realloc_dep", version = "=2.0.0" }
 solana-sbf-rust-realloc-invoke-dep = { path = "rust/realloc_invoke_dep", version = "=2.0.0" }
-solana-sbf-rust-remaining-compute-units = { path = "rust/remaining_compute_units", version = "=2.0.0" }
-solana-sbf-rust-sanity = { path = "rust/sanity", version = "=2.0.0" }
-solana-sbf-rust-simulation = { path = "rust/simulation", version = "=2.0.0" }
-solana-sbf-rust-sysvar = { path = "rust/sysvar", version = "=2.0.0" }
 solana-sdk = { path = "../../sdk", version = "=2.0.0" }
 solana-svm = { path = "../../svm", version = "=2.0.0" }
 solana-transaction-status = { path = "../../transaction-status", version = "=2.0.0" }
@@ -102,16 +96,10 @@ solana-logger = { workspace = true }
 solana-measure = { workspace = true }
 solana-program = { workspace = true }
 solana-program-runtime = { workspace = true }
-solana-program-test = { workspace = true }
 solana-runtime = { workspace = true, features = ["dev-context-only-utils"] }
 solana-sbf-rust-invoke-dep = { workspace = true }
-solana-sbf-rust-mem = { workspace = true }
 solana-sbf-rust-realloc-dep = { workspace = true }
 solana-sbf-rust-realloc-invoke-dep = { workspace = true }
-solana-sbf-rust-remaining-compute-units = { workspace = true }
-solana-sbf-rust-sanity = { workspace = true }
-solana-sbf-rust-simulation = { workspace = true }
-solana-sbf-rust-sysvar = { workspace = true }
 solana-sdk = { workspace = true, features = ["dev-context-only-utils"] }
 solana-svm = { workspace = true }
 solana-transaction-status = { workspace = true }

@@ -68,6 +68,7 @@ test-stable-sbf)
   fi
 
   # SBF C program system tests
+  export SBF_OUT_DIR=target/sbf-solana-solana/release
   _ make -C programs/sbf/c tests
   _ cargo test \
     --manifest-path programs/sbf/Cargo.toml \

@@ -108,6 +108,7 @@ fn main() {
             "simulation",
             "spoof1",
             "spoof1_system",
+            "sysvar",
             "upgradeable",
             "upgraded",
         ];

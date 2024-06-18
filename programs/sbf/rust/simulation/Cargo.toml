@@ -12,4 +12,4 @@ edition = { workspace = true }
 solana-program = { workspace = true }
 
 [lib]
-crate-type = ["cdylib", "lib"]
+crate-type = ["cdylib"]

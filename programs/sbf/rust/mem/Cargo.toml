@@ -13,4 +13,4 @@ solana-program = { workspace = true }
 solana-sbf-rust-mem-dep = { workspace = true }
 
 [lib]
-crate-type = ["cdylib", "lib"]
+crate-type = ["cdylib"]
