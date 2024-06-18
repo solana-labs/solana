@@ -3,10 +3,12 @@
 //! [SHA-256]: https://en.wikipedia.org/wiki/SHA-2
 //! [`Hash`]: struct@Hash
 
+#[cfg(target_arch = "wasm32")]
+use crate::wasm_bindgen;
 #[cfg(feature = "borsh")]
 use borsh::{BorshDeserialize, BorshSchema, BorshSerialize};
 use {
-    crate::{sanitize::Sanitize, wasm_bindgen},
+    crate::sanitize::Sanitize,
     bytemuck::{Pod, Zeroable},
     sha2::{Digest, Sha256},
     std::{convert::TryFrom, fmt, mem, str::FromStr},
@@ -28,7 +30,7 @@ const MAX_BASE58_LEN: usize = 44;
 /// [blake3]: https://github.com/BLAKE3-team/BLAKE3
 /// [`blake3`]: crate::blake3
 /// [`Message::hash`]: crate::message::Message::hash
-#[wasm_bindgen]
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 #[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
 #[cfg_attr(
     feature = "borsh",

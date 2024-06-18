@@ -1,5 +1,7 @@
 #![cfg(feature = "full")]
 
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::prelude::*;
 use {
     crate::{
         derivation_path::DerivationPath,
@@ -16,11 +18,10 @@ use {
         io::{Read, Write},
         path::Path,
     },
-    wasm_bindgen::prelude::*,
 };
 
 /// A vanilla Ed25519 key pair
-#[wasm_bindgen]
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 #[derive(Debug)]
 pub struct Keypair(ed25519_dalek::Keypair);
 

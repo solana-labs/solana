@@ -11,6 +11,8 @@
 
 #![allow(clippy::arithmetic_side_effects)]
 
+#[cfg(target_arch = "wasm32")]
+use crate::wasm_bindgen;
 #[allow(deprecated)]
 pub use builtins::{BUILTIN_PROGRAMS_KEYS, MAYBE_BUILTIN_KEY_OR_SYSVAR};
 use {
@@ -21,7 +23,7 @@ use {
         message::{compiled_keys::CompiledKeys, MessageHeader},
         pubkey::Pubkey,
         sanitize::{Sanitize, SanitizeError},
-        short_vec, system_instruction, system_program, sysvar, wasm_bindgen,
+        short_vec, system_instruction, system_program, sysvar,
     },
     std::{collections::HashSet, convert::TryFrom, str::FromStr},
 };
@@ -117,7 +119,7 @@ fn compile_instructions(ixs: &[Instruction], keys: &[Pubkey]) -> Vec<CompiledIns
 /// redundantly specifying the fee-payer is not strictly required.
 // NOTE: Serialization-related changes must be paired with the custom serialization
 // for versioned messages in the `RemainingLegacyMessage` struct.
-#[wasm_bindgen]
+#[cfg(not(target_arch = "wasm32"))]
 #[cfg_attr(
     feature = "frozen-abi",
     frozen_abi(digest = "2KnLEqfLcTBQqitE22Pp8JYkaqVVbAkGbCfdeHoyxcAU"),
@@ -128,11 +130,9 @@ fn compile_instructions(ixs: &[Instruction], keys: &[Pubkey]) -> Vec<CompiledIns
 pub struct Message {
     /// The message header, identifying signed and read-only `account_keys`.
     // NOTE: Serialization-related changes must be paired with the direct read at sigverify.
-    #[wasm_bindgen(skip)]
     pub header: MessageHeader,
 
     /// All the account keys used by this transaction.
-    #[wasm_bindgen(skip)]
     #[serde(with = "short_vec")]
     pub account_keys: Vec<Pubkey>,
 
@@ -141,6 +141,33 @@ pub struct Message {
 
     /// Programs that will be executed in sequence and committed in one atomic transaction if all
     /// succeed.
+    #[serde(with = "short_vec")]
+    pub instructions: Vec<CompiledInstruction>,
+}
+
+/// wasm-bindgen version of the Message struct.
+/// This duplication is required until https://github.com/rustwasm/wasm-bindgen/issues/3671
+/// is fixed. This must not diverge from the regular non-wasm Message struct.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+#[cfg_attr(
+    feature = "frozen-abi",
+    frozen_abi(digest = "2KnLEqfLcTBQqitE22Pp8JYkaqVVbAkGbCfdeHoyxcAU"),
+    derive(AbiExample)
+)]
+#[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Message {
+    #[wasm_bindgen(skip)]
+    pub header: MessageHeader,
+
+    #[wasm_bindgen(skip)]
+    #[serde(with = "short_vec")]
+    pub account_keys: Vec<Pubkey>,
+
+    /// The id of a recent ledger entry.
+    pub recent_blockhash: Hash,
+
     #[wasm_bindgen(skip)]
     #[serde(with = "short_vec")]
     pub instructions: Vec<CompiledInstruction>,
