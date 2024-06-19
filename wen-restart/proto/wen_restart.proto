@@ -6,8 +6,7 @@ enum State {
     LAST_VOTED_FORK_SLOTS = 1;
     HEAVIEST_FORK = 2;
     GENERATE_SNAPSHOT = 3;
-    WAITING_FOR_SUPERMAJORITY = 4;
-    DONE = 5;
+    DONE = 4;
 }
 
 message LastVotedForkSlotsRecord {
