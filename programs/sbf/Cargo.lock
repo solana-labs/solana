@@ -5291,7 +5291,6 @@ dependencies = [
  "console_log",
  "curve25519-dalek",
  "getrandom 0.2.10",
- "itertools 0.12.1",
  "js-sys",
  "lazy_static",
  "libsecp256k1 0.6.0",

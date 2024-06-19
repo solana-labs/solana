@@ -19,7 +19,6 @@ borsh0-10 = { package = "borsh", version = "0.10.3", optional = true }
 bs58 = { workspace = true }
 bv = { workspace = true, features = ["serde"] }
 bytemuck = { workspace = true, features = ["derive"] }
-itertools =  { workspace = true }
 lazy_static = { workspace = true }
 log = { workspace = true }
 memoffset = { workspace = true }
@@ -53,7 +52,6 @@ ark-serialize = { workspace = true }
 base64 = { workspace = true, features = ["alloc", "std"] }
 bitflags = { workspace = true }
 curve25519-dalek = { workspace = true }
-itertools = { workspace = true }
 libsecp256k1 = { workspace = true }
 num-bigint = { workspace = true }
 rand = { workspace = true }
@@ -77,6 +75,7 @@ parking_lot = { workspace = true }
 anyhow = { workspace = true }
 array-bytes = { workspace = true }
 assert_matches = { workspace = true }
+itertools = { workspace = true }
 serde_json = { workspace = true }
 static_assertions = { workspace = true }
 

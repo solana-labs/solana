@@ -8,7 +8,6 @@ use {
         program_error::UNSUPPORTED_SYSVAR, pubkey::Pubkey,
     },
     base64::{prelude::BASE64_STANDARD, Engine},
-    itertools::Itertools,
     std::sync::{Arc, RwLock},
 };
 
@@ -114,7 +113,11 @@ pub trait SyscallStubs: Sync + Send {
     fn sol_log_data(&self, fields: &[&[u8]]) {
         println!(
             "data: {}",
-            fields.iter().map(|v| BASE64_STANDARD.encode(v)).join(" ")
+            fields
+                .iter()
+                .map(|v| BASE64_STANDARD.encode(v))
+                .collect::<Vec<_>>()
+                .join(" ")
         );
     }
     fn sol_get_processed_sibling_instruction(&self, _index: usize) -> Option<Instruction> {
