@@ -277,11 +277,10 @@ Steps of `load_and_execute_sanitized_transactions`
             - Validate the fee payer and the loaded accounts
             - Validate the programs accounts that have been loaded and checks if they are builtin programs.
             - Return `struct LoadedTransaction` containing the accounts (pubkey and data),
-              indices to the excutabe accounts in `TransactionContext` (or `InstructionContext`),
+              indices to the executable accounts in `TransactionContext` (or `InstructionContext`),
               the transaction rent, and the `struct RentDebit`.
-            - Generate a `NonceFull` struct (holds fee subtracted nonce info) when possible, `None` otherwise.
-    - Returns `TransactionLoadedResult`, a tuple containing the `LoadTransaction` we obtained from `loaded_transaction_accounts`,
-      and a `Option<NonceFull>`.
+            - Generate a `RollbackAccounts` struct which holds fee-subtracted fee payer account and pre-execution nonce state used for rolling back account state on execution failure.
+    - Returns `TransactionLoadedResult`, containing the `LoadTransaction` we obtained from `loaded_transaction_accounts`
 
 3. Execute each loaded transactions
    1. Compute the sum of transaction accounts' balances. This sum is

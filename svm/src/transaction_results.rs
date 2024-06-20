@@ -85,7 +85,6 @@ pub struct TransactionExecutionDetails {
     pub log_messages: Option<Vec<String>>,
     pub inner_instructions: Option<InnerInstructionsList>,
     pub fee_details: FeeDetails,
-    pub is_nonce: bool,
     pub return_data: Option<TransactionReturnData>,
     pub executed_units: u64,
     /// The change in accounts data len for this transaction.

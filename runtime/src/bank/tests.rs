@@ -104,7 +104,7 @@ use {
         transaction_context::TransactionAccount,
     },
     solana_stake_program::stake_state::{self, StakeStateV2},
-    solana_svm::nonce_info::NonceFull,
+    solana_svm::nonce_info::NoncePartial,
     solana_vote_program::{
         vote_instruction,
         vote_state::{
@@ -231,18 +231,13 @@ fn test_race_register_tick_freeze() {
     }
 }
 
-fn new_execution_result(
-    status: Result<()>,
-    nonce: Option<&NonceFull>,
-    fee_details: FeeDetails,
-) -> TransactionExecutionResult {
+fn new_execution_result(status: Result<()>, fee_details: FeeDetails) -> TransactionExecutionResult {
     TransactionExecutionResult::Executed {
         details: TransactionExecutionDetails {
             status,
             log_messages: None,
             inner_instructions: None,
             fee_details,
-            is_nonce: nonce.is_some(),
             return_data: None,
             executed_units: 0,
             accounts_data_len_delta: 0,
@@ -2867,45 +2862,27 @@ fn test_bank_blockhash_compute_unit_fee_structure() {
 #[test]
 fn test_filter_program_errors_and_collect_fee() {
     let leader = solana_sdk::pubkey::new_rand();
-    let GenesisConfigInfo {
-        genesis_config,
-        mint_keypair,
-        ..
-    } = create_genesis_config_with_leader(100_000, &leader, 3);
+    let GenesisConfigInfo { genesis_config, .. } =
+        create_genesis_config_with_leader(100_000, &leader, 3);
     let mut bank = Bank::new_for_tests(&genesis_config);
     // this test is only for when `feature_set::reward_full_priority_fee` inactivated
     bank.deactivate_feature(&feature_set::reward_full_priority_fee::id());
 
-    let key = solana_sdk::pubkey::new_rand();
-    let tx1 = SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
-        &mint_keypair,
-        &key,
-        2,
-        genesis_config.hash(),
-    ));
-    let tx2 = SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
-        &mint_keypair,
-        &key,
-        5,
-        genesis_config.hash(),
-    ));
-
     let tx_fee = 42;
     let fee_details = FeeDetails::new_for_tests(tx_fee, 0, false);
     let results = vec![
-        new_execution_result(Ok(()), None, fee_details),
+        new_execution_result(Ok(()), fee_details),
         new_execution_result(
             Err(TransactionError::InstructionError(
                 1,
                 SystemError::ResultWithNegativeLamports.into(),
             )),
-            None,
             fee_details,
         ),
     ];
     let initial_balance = bank.get_balance(&leader);
 
-    let results = bank.filter_program_errors_and_collect_fee(&[tx1, tx2], &results);
+    let results = bank.filter_program_errors_and_collect_fee(&results);
     bank.freeze();
     assert_eq!(
         bank.get_balance(&leader),
@@ -2918,45 +2895,27 @@ fn test_filter_program_errors_and_collect_fee() {
 #[test]
 fn test_filter_program_errors_and_collect_priority_fee() {
     let leader = solana_sdk::pubkey::new_rand();
-    let GenesisConfigInfo {
-        genesis_config,
-        mint_keypair,
-        ..
-    } = create_genesis_config_with_leader(1000000, &leader, 3);
+    let GenesisConfigInfo { genesis_config, .. } =
+        create_genesis_config_with_leader(1000000, &leader, 3);
     let mut bank = Bank::new_for_tests(&genesis_config);
     // this test is only for when `feature_set::reward_full_priority_fee` inactivated
     bank.deactivate_feature(&feature_set::reward_full_priority_fee::id());
 
-    let key = solana_sdk::pubkey::new_rand();
-    let tx1 = SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
-        &mint_keypair,
-        &key,
-        2,
-        genesis_config.hash(),
-    ));
-    let tx2 = SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
-        &mint_keypair,
-        &key,
-        5,
-        genesis_config.hash(),
-    ));
-
     let priority_fee = 42;
     let fee_details: FeeDetails = FeeDetails::new_for_tests(0, priority_fee, false);
     let results = vec![
-        new_execution_result(Ok(()), None, fee_details),
+        new_execution_result(Ok(()), fee_details),
         new_execution_result(
             Err(TransactionError::InstructionError(
                 1,
                 SystemError::ResultWithNegativeLamports.into(),
             )),
-            None,
             fee_details,
         ),
     ];
     let initial_balance = bank.get_balance(&leader);
 
-    let results = bank.filter_program_errors_and_collect_fee(&[tx1, tx2], &results);
+    let results = bank.filter_program_errors_and_collect_fee(&results);
     bank.freeze();
     assert_eq!(
         bank.get_balance(&leader),
@@ -12935,33 +12894,23 @@ fn test_failed_simulation_compute_units() {
 
 #[test]
 fn test_filter_program_errors_and_collect_fee_details() {
-    // TX  | EXECUTION RESULT            | is nonce | COLLECT            | ADDITIONAL          | COLLECT
-    //     |                             |          | (TX_FEE, PRIO_FEE) | WITHDRAW FROM PAYER | RESULT
-    // ------------------------------------------------------------------------------------------------------
-    // tx1 | not executed                | n/a      | (0    , 0)         | 0                   | Original Err
-    // tx2 | executed and no error       | n/a      | (5_000, 1_000)     | 0                   | Ok
-    // tx3 | executed has error          | true     | (5_000, 1_000)     | 0                   | Ok
-    // tx4 | executed has error          | false    | (5_000, 1_000)     | 6_000               | Ok
-    // tx5 | executed error,
-    //         payer insufficient fund   | false    | (0    , 0)         | 0                   | InsufficientFundsForFee
+    // TX  | EXECUTION RESULT            | COLLECT            | COLLECT
+    //     |                             | (TX_FEE, PRIO_FEE) | RESULT
+    // ---------------------------------------------------------------------------------
+    // tx1 | not executed                | (0    , 0)         | Original Err
+    // tx2 | executed and no error       | (5_000, 1_000)     | Ok
+    // tx3 | executed has error          | (5_000, 1_000)     | Ok
     //
     let initial_payer_balance = 7_000;
-    let additional_payer_withdraw = 6_000;
     let tx_fee = 5000;
     let priority_fee = 1000;
     let tx_fee_details = FeeDetails::new_for_tests(tx_fee, priority_fee, false);
     let expected_collected_fee_details = CollectorFeeDetails {
-        transaction_fee: 3 * tx_fee,
-        priority_fee: 3 * priority_fee,
+        transaction_fee: 2 * tx_fee,
+        priority_fee: 2 * priority_fee,
     };
 
-    let expected_collect_results = vec![
-        Err(TransactionError::AccountNotFound),
-        Ok(()),
-        Ok(()),
-        Ok(()),
-        Err(TransactionError::InsufficientFundsForFee),
-    ];
+    let expected_collect_results = vec![Err(TransactionError::AccountNotFound), Ok(()), Ok(())];
 
     let GenesisConfigInfo {
         genesis_config,
@@ -12970,106 +12919,31 @@ fn test_filter_program_errors_and_collect_fee_details() {
     } = create_genesis_config_with_leader(initial_payer_balance, &Pubkey::new_unique(), 3);
     let bank = Bank::new_for_tests(&genesis_config);
 
-    let tx = SanitizedTransaction::from_transaction_for_tests(Transaction::new_signed_with_payer(
-        &[system_instruction::transfer(
-            &mint_keypair.pubkey(),
-            &Pubkey::new_unique(),
-            2,
-        )],
-        Some(&mint_keypair.pubkey()),
-        &[&mint_keypair],
-        genesis_config.hash(),
-    ));
-    let txs = vec![tx.clone(), tx.clone(), tx.clone(), tx.clone(), tx];
-
     let results = vec![
         TransactionExecutionResult::NotExecuted(TransactionError::AccountNotFound),
-        new_execution_result(Ok(()), None, tx_fee_details),
+        new_execution_result(Ok(()), tx_fee_details),
         new_execution_result(
             Err(TransactionError::InstructionError(
                 0,
                 SystemError::ResultWithNegativeLamports.into(),
             )),
-            Some(&NonceFull::new(
-                Pubkey::new_unique(),
-                AccountSharedData::default(),
-                None,
-            )),
             tx_fee_details,
         ),
-        new_execution_result(
-            Err(TransactionError::InstructionError(
-                0,
-                SystemError::ResultWithNegativeLamports.into(),
-            )),
-            None,
-            tx_fee_details,
-        ),
-        new_execution_result(Err(TransactionError::AccountNotFound), None, tx_fee_details),
     ];
 
-    let results = bank.filter_program_errors_and_collect_fee_details(&txs, &results);
+    let results = bank.filter_program_errors_and_collect_fee_details(&results);
 
     assert_eq!(
         expected_collected_fee_details,
         *bank.collector_fee_details.read().unwrap()
     );
     assert_eq!(
-        initial_payer_balance - additional_payer_withdraw,
+        initial_payer_balance,
         bank.get_balance(&mint_keypair.pubkey())
     );
     assert_eq!(expected_collect_results, results);
 }
 
-#[test]
-fn test_check_execution_status_and_charge_fee() {
-    let fee = 5000;
-    let initial_balance = fee - 1000;
-    let tx_error =
-        TransactionError::InstructionError(0, InstructionError::MissingRequiredSignature);
-    let GenesisConfigInfo {
-        mut genesis_config,
-        mint_keypair,
-        ..
-    } = create_genesis_config_with_leader(initial_balance, &Pubkey::new_unique(), 3);
-    genesis_config.fee_rate_governor = FeeRateGovernor::new(5000, 0);
-    let bank = Bank::new_for_tests(&genesis_config);
-    let message = new_sanitized_message(Message::new(
-        &[system_instruction::transfer(
-            &mint_keypair.pubkey(),
-            &Pubkey::new_unique(),
-            1,
-        )],
-        Some(&mint_keypair.pubkey()),
-    ));
-
-    [Ok(()), Err(tx_error)]
-        .iter()
-        .flat_map(|result| [true, false].iter().map(move |is_nonce| (result, is_nonce)))
-        .for_each(|(result, is_nonce)| {
-            if result.is_err() && !is_nonce {
-                assert_eq!(
-                    Err(TransactionError::InsufficientFundsForFee),
-                    bank.check_execution_status_and_charge_fee(&message, result, *is_nonce, fee)
-                );
-                assert_eq!(initial_balance, bank.get_balance(&mint_keypair.pubkey()));
-
-                let small_fee = 1;
-                assert!(bank
-                    .check_execution_status_and_charge_fee(&message, result, *is_nonce, small_fee)
-                    .is_ok());
-                assert_eq!(
-                    initial_balance - small_fee,
-                    bank.get_balance(&mint_keypair.pubkey())
-                );
-            } else {
-                assert!(bank
-                    .check_execution_status_and_charge_fee(&message, result, *is_nonce, fee)
-                    .is_ok());
-                assert_eq!(initial_balance, bank.get_balance(&mint_keypair.pubkey()));
-            }
-        });
-}
 #[test]
 fn test_deploy_last_epoch_slot() {
     solana_logger::setup();

@@ -67,6 +67,7 @@ serde_bytes = { workspace = true }
 solana-accounts-db = { path = ".", features = ["dev-context-only-utils"] }
 solana-logger = { workspace = true }
 solana-sdk = { workspace = true, features = ["dev-context-only-utils"] }
+solana-svm = { workspace = true, features = ["dev-context-only-utils"] }
 static_assertions = { workspace = true }
 strum = { workspace = true, features = ["derive"] }
 strum_macros = { workspace = true }

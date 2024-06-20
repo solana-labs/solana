@@ -330,7 +330,6 @@ pub(crate) mod tests {
             log_messages: None,
             inner_instructions: None,
             fee_details: FeeDetails::default(),
-            is_nonce: true,
             return_data: None,
             executed_units: 0,
             accounts_data_len_delta: 0,

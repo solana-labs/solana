@@ -182,7 +182,6 @@ use {
             TransactionLoadedAccountsStats, TransactionResults,
         },
     },
-    solana_system_program::{get_system_account_kind, SystemAccountKind},
     solana_vote::vote_account::{VoteAccount, VoteAccountsHashMap},
     solana_vote_program::vote_state::VoteState,
     std::{
@@ -214,6 +213,7 @@ use {
     },
     solana_program_runtime::{loaded_programs::ProgramCacheForTxBatch, sysvar_cache::SysvarCache},
     solana_svm::program_loader::load_program_with_pubkey,
+    solana_system_program::{get_system_account_kind, SystemAccountKind},
 };
 
 /// params to `verify_accounts_hash`
@@ -3939,31 +3939,18 @@ impl Bank {
 
     fn filter_program_errors_and_collect_fee(
         &self,
-        txs: &[SanitizedTransaction],
         execution_results: &[TransactionExecutionResult],
     ) -> Vec<Result<()>> {
         let mut fees = 0;
 
-        let results = txs
+        let results = execution_results
             .iter()
-            .zip(execution_results)
-            .map(|(tx, execution_result)| {
-                let message = tx.message();
-                let details = match &execution_result {
-                    TransactionExecutionResult::Executed { details, .. } => details,
-                    TransactionExecutionResult::NotExecuted(err) => return Err(err.clone()),
-                };
-
-                let fee = details.fee_details.total_fee();
-                self.check_execution_status_and_charge_fee(
-                    message,
-                    &details.status,
-                    details.is_nonce,
-                    fee,
-                )?;
-
-                fees += fee;
-                Ok(())
+            .map(|execution_result| match execution_result {
+                TransactionExecutionResult::Executed { details, .. } => {
+                    fees += details.fee_details.total_fee();
+                    Ok(())
+                }
+                TransactionExecutionResult::NotExecuted(err) => Err(err.clone()),
             })
             .collect();
 
@@ -3974,31 +3961,18 @@ impl Bank {
     // Note: this function is not yet used; next PR will call it behind a feature gate
     fn filter_program_errors_and_collect_fee_details(
         &self,
-        txs: &[SanitizedTransaction],
         execution_results: &[TransactionExecutionResult],
     ) -> Vec<Result<()>> {
         let mut accumulated_fee_details = FeeDetails::default();
 
-        let results = txs
+        let results = execution_results
             .iter()
-            .zip(execution_results)
-            .map(|(tx, execution_result)| {
-                let message = tx.message();
-                let details = match &execution_result {
-                    TransactionExecutionResult::Executed { details, .. } => details,
-                    TransactionExecutionResult::NotExecuted(err) => return Err(err.clone()),
-                };
-
-                self.check_execution_status_and_charge_fee(
-                    message,
-                    &details.status,
-                    details.is_nonce,
-                    details.fee_details.total_fee(),
-                )?;
-
-                accumulated_fee_details.accumulate(&details.fee_details);
-
-                Ok(())
+            .map(|execution_result| match execution_result {
+                TransactionExecutionResult::Executed { details, .. } => {
+                    accumulated_fee_details.accumulate(&details.fee_details);
+                    Ok(())
+                }
+                TransactionExecutionResult::NotExecuted(err) => Err(err.clone()),
             })
             .collect();
 
@@ -4007,27 +3981,6 @@ impl Bank {
             .unwrap()
             .accumulate(&accumulated_fee_details);
         results
-    }
-
-    fn check_execution_status_and_charge_fee(
-        &self,
-        message: &SanitizedMessage,
-        execution_status: &transaction::Result<()>,
-        is_nonce: bool,
-        fee: u64,
-    ) -> Result<()> {
-        // In case of instruction error, even though no accounts
-        // were stored we still need to charge the payer the
-        // fee.
-        //
-        //...except nonce accounts, which already have their
-        // post-load, fee deducted, pre-execute account state
-        // stored
-        if execution_status.is_err() && !is_nonce {
-            self.withdraw(message.fee_payer(), fee)?;
-        }
-
-        Ok(())
     }
 
     /// `committed_transactions_count` is the number of transactions out of `sanitized_txs`
@@ -4148,9 +4101,9 @@ impl Bank {
         self.update_transaction_statuses(sanitized_txs, &execution_results);
         let fee_collection_results = if self.feature_set.is_active(&reward_full_priority_fee::id())
         {
-            self.filter_program_errors_and_collect_fee_details(sanitized_txs, &execution_results)
+            self.filter_program_errors_and_collect_fee_details(&execution_results)
         } else {
-            self.filter_program_errors_and_collect_fee(sanitized_txs, &execution_results)
+            self.filter_program_errors_and_collect_fee(&execution_results)
         };
         update_transaction_statuses_time.stop();
         timings.saturating_add_in_place(
@@ -5136,32 +5089,6 @@ impl Bank {
             old_account_data_size,
             new_account.data().len(),
         );
-    }
-
-    fn withdraw(&self, pubkey: &Pubkey, lamports: u64) -> Result<()> {
-        match self.get_account_with_fixed_root_no_cache(pubkey) {
-            Some(mut account) => {
-                let min_balance = match get_system_account_kind(&account) {
-                    Some(SystemAccountKind::Nonce) => self
-                        .rent_collector
-                        .rent
-                        .minimum_balance(nonce::State::size()),
-                    _ => 0,
-                };
-
-                lamports
-                    .checked_add(min_balance)
-                    .filter(|required_balance| *required_balance <= account.lamports())
-                    .ok_or(TransactionError::InsufficientFundsForFee)?;
-                account
-                    .checked_sub_lamports(lamports)
-                    .map_err(|_| TransactionError::InsufficientFundsForFee)?;
-                self.store_account(pubkey, &account);
-
-                Ok(())
-            }
-            None => Err(TransactionError::AccountNotFound),
-        }
     }
 
     pub fn accounts(&self) -> Arc<Accounts> {
@@ -7168,6 +7095,32 @@ impl Bank {
             .transaction_processor
             .get_environments_for_epoch(effective_epoch)?;
         load_program_with_pubkey(self, &environments, pubkey, self.slot(), reload)
+    }
+
+    pub fn withdraw(&self, pubkey: &Pubkey, lamports: u64) -> Result<()> {
+        match self.get_account_with_fixed_root(pubkey) {
+            Some(mut account) => {
+                let min_balance = match get_system_account_kind(&account) {
+                    Some(SystemAccountKind::Nonce) => self
+                        .rent_collector
+                        .rent
+                        .minimum_balance(nonce::State::size()),
+                    _ => 0,
+                };
+
+                lamports
+                    .checked_add(min_balance)
+                    .filter(|required_balance| *required_balance <= account.lamports())
+                    .ok_or(TransactionError::InsufficientFundsForFee)?;
+                account
+                    .checked_sub_lamports(lamports)
+                    .map_err(|_| TransactionError::InsufficientFundsForFee)?;
+                self.store_account(pubkey, &account);
+
+                Ok(())
+            }
+            None => Err(TransactionError::AccountNotFound),
+        }
     }
 }
 
