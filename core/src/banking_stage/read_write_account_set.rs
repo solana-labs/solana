@@ -1,15 +1,15 @@
 use {
+    ahash::AHashSet,
     solana_sdk::{message::SanitizedMessage, pubkey::Pubkey},
-    std::collections::HashSet,
 };
 
 /// Wrapper struct to accumulate locks for a batch of transactions.
 #[derive(Debug, Default)]
 pub struct ReadWriteAccountSet {
     /// Set of accounts that are locked for read
-    read_set: HashSet<Pubkey>,
+    read_set: AHashSet<Pubkey>,
     /// Set of accounts that are locked for write
-    write_set: HashSet<Pubkey>,
+    write_set: AHashSet<Pubkey>,
 }
 
 impl ReadWriteAccountSet {
