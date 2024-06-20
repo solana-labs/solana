@@ -88,7 +88,7 @@ impl core::fmt::Debug for Metrics {
 eager_macro_rules! { $eager_1
     #[macro_export]
     macro_rules! report_execute_timings {
-        ($self: expr) => {
+        ($self: expr, $is_unified_scheduler_enabled: expr) => {
             (
                 "validate_transactions_us",
                 *$self
@@ -149,19 +149,25 @@ eager_macro_rules! { $eager_1
             ),
             (
                 "total_batches_len",
-                *$self
-
-                    .metrics
-                    .index(ExecuteTimingType::TotalBatchesLen),
-                i64
+                (if $is_unified_scheduler_enabled {
+                    None
+                } else {
+                    Some(*$self
+                        .metrics
+                        .index(ExecuteTimingType::TotalBatchesLen))
+                }),
+                Option<i64>
             ),
             (
                 "num_execute_batches",
-                *$self
-
-                    .metrics
-                    .index(ExecuteTimingType::NumExecuteBatches),
-                i64
+                (if $is_unified_scheduler_enabled {
+                    None
+                } else {
+                    Some(*$self
+                        .metrics
+                        .index(ExecuteTimingType::NumExecuteBatches))
+                }),
+                Option<i64>
             ),
             (
                 "update_transaction_statuses",
