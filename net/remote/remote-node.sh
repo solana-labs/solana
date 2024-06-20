@@ -263,7 +263,7 @@ EOF
       agave-ledger-tool -l config/bootstrap-validator shred-version --max-genesis-archive-unpacked-size 1073741824 | tee config/shred-version
 
       if [[ -n "$maybeWaitForSupermajority" ]]; then
-        bankHash=$(agave-ledger-tool -l config/bootstrap-validator bank-hash --halt-at-slot 0)
+        bankHash=$(agave-ledger-tool -l config/bootstrap-validator verify --halt-at-slot 0 --print-bank-hash --output json | jq -r ".hash")
         shredVersion="$(cat "$SOLANA_CONFIG_DIR"/shred-version)"
         extraNodeArgs="$extraNodeArgs --expected-bank-hash $bankHash --expected-shred-version $shredVersion"
         echo "$bankHash" > config/bank-hash

@@ -805,6 +805,7 @@ $(
     install-certbot.sh \
     install-earlyoom.sh \
     install-iftop.sh \
+    install-jq.sh \
     install-libssl-compatability.sh \
     install-rsync.sh \
     install-perf.sh \
