@@ -155,7 +155,6 @@ fn consume_scan_should_process_packet(
     // Try to sanitize the packet
     let (maybe_sanitized_transaction, sanitization_time_us) = measure_us!(packet
         .build_sanitized_transaction(
-            &bank.feature_set,
             bank.vote_only_bank(),
             bank,
             bank.get_reserved_account_keys(),
@@ -775,7 +774,6 @@ impl ThreadLocalUnprocessedPackets {
                 .filter_map(|(packet_index, deserialized_packet)| {
                     deserialized_packet
                         .build_sanitized_transaction(
-                            &bank.feature_set,
                             bank.vote_only_bank(),
                             bank,
                             bank.get_reserved_account_keys(),

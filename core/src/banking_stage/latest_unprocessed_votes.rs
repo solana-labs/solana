@@ -292,7 +292,6 @@ impl LatestUnprocessedVotes {
                         let deserialized_vote_packet = vote.vote.as_ref().unwrap().clone();
                         if let Some(sanitized_vote_transaction) = deserialized_vote_packet
                             .build_sanitized_transaction(
-                                &bank.feature_set,
                                 bank.vote_only_bank(),
                                 bank.as_ref(),
                                 bank.get_reserved_account_keys(),

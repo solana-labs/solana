@@ -475,7 +475,6 @@ impl SchedulerController {
         let bank = self.bank_forks.read().unwrap().working_bank();
         let last_slot_in_epoch = bank.epoch_schedule().get_last_slot_in_epoch(bank.epoch());
         let transaction_account_lock_limit = bank.get_transaction_account_lock_limit();
-        let feature_set = &bank.feature_set;
         let vote_only = bank.vote_only_bank();
 
         const CHUNK_SIZE: usize = 128;
@@ -493,7 +492,6 @@ impl SchedulerController {
                 .filter_map(|packet| {
                     packet
                         .build_sanitized_transaction(
-                            feature_set,
                             vote_only,
                             bank.as_ref(),
                             bank.get_reserved_account_keys(),

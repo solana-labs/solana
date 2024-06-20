@@ -3,7 +3,6 @@ use {
     solana_perf::packet::Packet,
     solana_runtime::compute_budget_details::{ComputeBudgetDetails, GetComputeBudgetDetails},
     solana_sdk::{
-        feature_set,
         hash::Hash,
         message::Message,
         pubkey::Pubkey,
@@ -15,7 +14,7 @@ use {
             VersionedTransaction,
         },
     },
-    std::{cmp::Ordering, collections::HashSet, mem::size_of, sync::Arc},
+    std::{cmp::Ordering, collections::HashSet, mem::size_of},
     thiserror::Error,
 };
 
@@ -106,7 +105,6 @@ impl ImmutableDeserializedPacket {
     // messages.
     pub fn build_sanitized_transaction(
         &self,
-        _feature_set: &Arc<feature_set::FeatureSet>,
         votes_only: bool,
         address_loader: impl AddressLoader,
         reserved_account_keys: &HashSet<Pubkey>,

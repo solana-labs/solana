@@ -316,7 +316,6 @@ mod tests {
             transaction::{SimpleAddressLoader, Transaction},
         },
         solana_vote_program::vote_transaction,
-        std::sync::Arc,
     };
 
     fn simple_deserialized_packet() -> DeserializedPacket {
@@ -465,7 +464,6 @@ mod tests {
 
     #[test]
     fn test_transaction_from_deserialized_packet() {
-        use solana_sdk::feature_set::FeatureSet;
         let keypair = Keypair::new();
         let transfer_tx =
             system_transaction::transfer(&keypair, &keypair.pubkey(), 1, Hash::default());
@@ -488,7 +486,6 @@ mod tests {
             let mut votes_only = false;
             let txs = packet_vector.iter().filter_map(|tx| {
                 tx.immutable_section().build_sanitized_transaction(
-                    &Arc::new(FeatureSet::default()),
                     votes_only,
                     SimpleAddressLoader::Disabled,
                     &ReservedAccountKeys::empty_key_set(),
@@ -499,7 +496,6 @@ mod tests {
             votes_only = true;
             let txs = packet_vector.iter().filter_map(|tx| {
                 tx.immutable_section().build_sanitized_transaction(
-                    &Arc::new(FeatureSet::default()),
                     votes_only,
                     SimpleAddressLoader::Disabled,
                     &ReservedAccountKeys::empty_key_set(),
@@ -519,7 +515,6 @@ mod tests {
             let mut votes_only = false;
             let txs = packet_vector.iter().filter_map(|tx| {
                 tx.immutable_section().build_sanitized_transaction(
-                    &Arc::new(FeatureSet::default()),
                     votes_only,
                     SimpleAddressLoader::Disabled,
                     &ReservedAccountKeys::empty_key_set(),
@@ -530,7 +525,6 @@ mod tests {
             votes_only = true;
             let txs = packet_vector.iter().filter_map(|tx| {
                 tx.immutable_section().build_sanitized_transaction(
-                    &Arc::new(FeatureSet::default()),
                     votes_only,
                     SimpleAddressLoader::Disabled,
                     &ReservedAccountKeys::empty_key_set(),
@@ -550,7 +544,6 @@ mod tests {
             let mut votes_only = false;
             let txs = packet_vector.iter().filter_map(|tx| {
                 tx.immutable_section().build_sanitized_transaction(
-                    &Arc::new(FeatureSet::default()),
                     votes_only,
                     SimpleAddressLoader::Disabled,
                     &ReservedAccountKeys::empty_key_set(),
@@ -561,7 +554,6 @@ mod tests {
             votes_only = true;
             let txs = packet_vector.iter().filter_map(|tx| {
                 tx.immutable_section().build_sanitized_transaction(
-                    &Arc::new(FeatureSet::default()),
                     votes_only,
                     SimpleAddressLoader::Disabled,
                     &ReservedAccountKeys::empty_key_set(),
