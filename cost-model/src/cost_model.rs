@@ -15,7 +15,7 @@ use {
     solana_sdk::{
         borsh1::try_from_slice_unchecked,
         compute_budget::{self, ComputeBudgetInstruction},
-        feature_set::{self, include_loaded_accounts_data_size_in_fee_calculation, FeatureSet},
+        feature_set::{self, FeatureSet},
         fee::FeeStructure,
         instruction::CompiledInstruction,
         program_utils::limited_deserialize,
@@ -170,13 +170,9 @@ impl CostModel {
 
     pub fn calculate_loaded_accounts_data_size_cost(
         loaded_accounts_data_size: usize,
-        feature_set: &FeatureSet,
+        _feature_set: &FeatureSet,
     ) -> u64 {
-        if feature_set.is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()) {
-            FeeStructure::calculate_memory_usage_cost(loaded_accounts_data_size, DEFAULT_HEAP_COST)
-        } else {
-            0
-        }
+        FeeStructure::calculate_memory_usage_cost(loaded_accounts_data_size, DEFAULT_HEAP_COST)
     }
 
     fn calculate_account_data_size_on_deserialized_system_instruction(
@@ -571,8 +567,6 @@ mod tests {
         let expected_execution_cost = BUILT_IN_INSTRUCTION_COSTS
             .get(&system_program::id())
             .unwrap();
-        // feature `include_loaded_accounts_data_size_in_fee_calculation` enabled, using
-        // default loaded_accounts_data_size_limit
         const DEFAULT_PAGE_COST: u64 = 8;
         let expected_loaded_accounts_data_size_cost =
             solana_compute_budget::compute_budget_processor::MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES
@@ -581,35 +575,6 @@ mod tests {
                 * DEFAULT_PAGE_COST;
 
         let tx_cost = CostModel::calculate_cost(&tx, &FeatureSet::all_enabled());
-        assert_eq!(expected_account_cost, tx_cost.write_lock_cost());
-        assert_eq!(*expected_execution_cost, tx_cost.programs_execution_cost());
-        assert_eq!(2, tx_cost.writable_accounts().len());
-        assert_eq!(
-            expected_loaded_accounts_data_size_cost,
-            tx_cost.loaded_accounts_data_size_cost()
-        );
-    }
-
-    #[test]
-    fn test_cost_model_calculate_cost_disabled_feature() {
-        let (mint_keypair, start_hash) = test_setup();
-        let tx = SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
-            &mint_keypair,
-            &Keypair::new().pubkey(),
-            2,
-            start_hash,
-        ));
-
-        let feature_set = FeatureSet::default();
-        assert!(!feature_set.is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()));
-        let expected_account_cost = WRITE_LOCK_UNITS * 2;
-        let expected_execution_cost = BUILT_IN_INSTRUCTION_COSTS
-            .get(&system_program::id())
-            .unwrap();
-        // feature `include_loaded_accounts_data_size_in_fee_calculation` not enabled
-        let expected_loaded_accounts_data_size_cost = 0;
-
-        let tx_cost = CostModel::calculate_cost(&tx, &feature_set);
         assert_eq!(expected_account_cost, tx_cost.write_lock_cost());
         assert_eq!(*expected_execution_cost, tx_cost.programs_execution_cost());
         assert_eq!(2, tx_cost.writable_accounts().len());
@@ -636,7 +601,6 @@ mod tests {
             ));
 
         let feature_set = FeatureSet::all_enabled();
-        assert!(feature_set.is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()));
         let expected_account_cost = WRITE_LOCK_UNITS * 2;
         let expected_execution_cost = BUILT_IN_INSTRUCTION_COSTS
             .get(&system_program::id())
@@ -644,8 +608,6 @@ mod tests {
             + BUILT_IN_INSTRUCTION_COSTS
                 .get(&compute_budget::id())
                 .unwrap();
-        // feature `include_loaded_accounts_data_size_in_fee_calculation` is enabled, accounts data
-        // size limit is set.
         let expected_loaded_accounts_data_size_cost = (data_limit as u64) / (32 * 1024) * 8;
 
         let tx_cost = CostModel::calculate_cost(&tx, &feature_set);
