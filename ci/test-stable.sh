@@ -50,6 +50,9 @@ test-stable-sbf)
   cargo_build_sbf="$(realpath ./cargo-build-sbf)"
   cargo_test_sbf="$(realpath ./cargo-test-sbf)"
 
+  # platform-tools version
+  "$cargo_build_sbf" --version
+
   # SBF solana-sdk legacy compile test
   "$cargo_build_sbf" --manifest-path sdk/Cargo.toml
 
@@ -67,12 +70,9 @@ test-stable-sbf)
     exit 1
   fi
 
-  # SBF C program system tests
+  # SBF program tests
   export SBF_OUT_DIR=target/sbf-solana-solana/release
-  _ make -C programs/sbf/c tests
-  _ cargo test \
-    --manifest-path programs/sbf/Cargo.toml \
-    --no-default-features --features=sbf_c,sbf_rust -- --nocapture
+  _ make -C programs/sbf test
 
   # SBF Rust program unit tests
   for sbf_test in programs/sbf/rust/*; do
@@ -100,14 +100,11 @@ test-stable-sbf)
       exit 1
   fi
 
-  # platform-tools version
-  "$cargo_build_sbf" -V
-
   # SBF program instruction count assertion
   sbf_target_path=programs/sbf/target
   _ cargo test \
     --manifest-path programs/sbf/Cargo.toml \
-    --no-default-features --features=sbf_c,sbf_rust assert_instruction_count \
+    --features=sbf_c,sbf_rust assert_instruction_count \
     -- --nocapture &> "${sbf_target_path}"/deploy/instruction_counts.txt
 
   sbf_dump_archive="sbf-dumps.tar.bz2"

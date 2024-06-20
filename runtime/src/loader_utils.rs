@@ -28,9 +28,18 @@ const CHUNK_SIZE: usize = 512; // Size of chunk just needs to fit into tx
 pub fn load_program_from_file(name: &str) -> Vec<u8> {
     let mut pathbuf = {
         let current_exe = env::current_exe().unwrap();
-        PathBuf::from(current_exe.parent().unwrap().parent().unwrap())
+        PathBuf::from(
+            current_exe
+                .parent()
+                .unwrap()
+                .parent()
+                .unwrap()
+                .parent()
+                .unwrap(),
+        )
     };
-    pathbuf.push("sbf/");
+    pathbuf.push("sbf-solana-solana");
+    pathbuf.push("release");
     pathbuf.push(name);
     pathbuf.set_extension("so");
     let mut file = File::open(&pathbuf).unwrap_or_else(|err| {

@@ -69,13 +69,15 @@ homepage = { workspace = true }
 license = { workspace = true }
 edition = { workspace = true }
 
+[profile.release]
+# The test programs are build in release mode
+# Minimize their file size so that they fit into the account size limit
+strip = true
+
 [features]
 sbf_c = []
 sbf_rust = []
 dummy-for-ci-check = ["sbf_c", "sbf_rust"]
-
-[build-dependencies]
-walkdir = "2"
 
 [dev-dependencies]
 agave-validator = { workspace = true }

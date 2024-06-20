@@ -19,6 +19,8 @@ _ cargo +"$rust_nightly" bench --manifest-path runtime/Cargo.toml ${V:+--verbose
   _ cargo build --manifest-path=keygen/Cargo.toml
   export PATH="$PWD/target/debug":$PATH
 
+  _ make -C programs/sbf all
+
   # Run sbf benches
   _ cargo +"$rust_nightly" bench --manifest-path programs/sbf/Cargo.toml ${V:+--verbose} --features=sbf_c \
     -- -Z unstable-options --format=json --nocapture | tee -a "$BENCH_FILE"

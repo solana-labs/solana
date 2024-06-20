@@ -5667,7 +5667,6 @@ dependencies = [
  "solana-transaction-status",
  "solana-type-overrides",
  "solana_rbpf",
- "walkdir",
 ]
 
 [[package]]
