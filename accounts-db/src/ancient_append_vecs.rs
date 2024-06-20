@@ -250,7 +250,7 @@ impl AncientSlotInfos {
     /// remove entries from 'all_infos' such that combining
     /// the remaining entries into storages of 'ideal_storage_size'
     /// will get us below 'max_storages'
-    /// The entires that are removed will be reconsidered the next time around.
+    /// The entries that are removed will be reconsidered the next time around.
     /// Combining too many storages costs i/o and cpu so the goal is to find the sweet spot so
     /// that we make progress in cleaning/shrinking/combining but that we don't cause unnecessary
     /// churn.

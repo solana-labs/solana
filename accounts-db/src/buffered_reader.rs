@@ -5,7 +5,7 @@
 //! calling read(), advance_offset() and set_required_data_len(account_data_len) once the next account
 //! data length is known.
 //!
-//! Unlike BufRead/BufReader, this type guarnatees that on the next read() after calling
+//! Unlike BufRead/BufReader, this type guarantees that on the next read() after calling
 //! set_required_data_len(len), the whole account data is buffered _linearly_ in memory and available to
 //! be returned.
 use {

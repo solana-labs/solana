@@ -121,7 +121,7 @@ impl AccountsDb {
 
             // later entries in the same slot are more recent and override earlier accounts for the same pubkey
             // We can pass an incrementing number here for write_version in the future, if the storage does not have a write_version.
-            // As long as all accounts for this slot are in 1 append vec that can be itereated olest to newest.
+            // As long as all accounts for this slot are in 1 append vec that can be iterated oldest to newest.
             self.notify_filtered_accounts(
                 slot,
                 notified_accounts,
