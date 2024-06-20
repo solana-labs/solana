@@ -10,7 +10,7 @@ use arbitrary::Arbitrary;
 use borsh::{BorshDeserialize, BorshSchema, BorshSerialize};
 use {
     crate::{decode_error::DecodeError, hash::hashv},
-    bytemuck::{Pod, Zeroable},
+    bytemuck_derive::{Pod, Zeroable},
     num_derive::{FromPrimitive, ToPrimitive},
     std::{
         convert::{Infallible, TryFrom},

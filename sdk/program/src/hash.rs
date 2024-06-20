@@ -9,7 +9,7 @@ use crate::wasm_bindgen;
 use borsh::{BorshDeserialize, BorshSchema, BorshSerialize};
 use {
     crate::sanitize::Sanitize,
-    bytemuck::{Pod, Zeroable},
+    bytemuck_derive::{Pod, Zeroable},
     sha2::{Digest, Sha256},
     std::{convert::TryFrom, fmt, mem, str::FromStr},
     thiserror::Error,

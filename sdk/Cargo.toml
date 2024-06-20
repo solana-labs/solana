@@ -49,7 +49,8 @@ bincode = { workspace = true }
 bitflags = { workspace = true, features = ["serde"] }
 borsh = { workspace = true, optional = true }
 bs58 = { workspace = true }
-bytemuck = { workspace = true, features = ["derive"] }
+bytemuck = { workspace = true }
+bytemuck_derive = { workspace = true }
 byteorder = { workspace = true, optional = true }
 chrono = { workspace = true, features = ["alloc"], optional = true }
 curve25519-dalek = { workspace = true, optional = true }

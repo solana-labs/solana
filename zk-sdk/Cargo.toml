@@ -11,7 +11,7 @@ edition = { workspace = true }
 
 [dependencies]
 base64 = { workspace = true }
-bytemuck = { workspace = true }
+bytemuck = { workspace = true, features = ["derive"] }
 merlin = { workspace = true }
 num-derive = { workspace = true }
 num-traits = { workspace = true }

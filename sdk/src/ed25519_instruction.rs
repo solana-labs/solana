@@ -6,7 +6,8 @@
 
 use {
     crate::{feature_set::FeatureSet, instruction::Instruction, precompiles::PrecompileError},
-    bytemuck::{bytes_of, Pod, Zeroable},
+    bytemuck::bytes_of,
+    bytemuck_derive::{Pod, Zeroable},
     ed25519_dalek::{ed25519::signature::Signature, Signer, Verifier},
 };
 
