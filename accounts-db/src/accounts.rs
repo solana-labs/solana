@@ -822,6 +822,7 @@ mod tests {
     use {
         super::*,
         assert_matches::assert_matches,
+        solana_compute_budget::compute_budget_processor::ComputeBudgetLimits,
         solana_sdk::{
             account::{AccountSharedData, WritableAccount},
             address_lookup_table::state::LookupTableMeta,
@@ -1566,6 +1567,7 @@ mod tests {
             program_indices: vec![],
             fee_details: FeeDetails::default(),
             rollback_accounts: RollbackAccounts::default(),
+            compute_budget_limits: ComputeBudgetLimits::default(),
             rent: 0,
             rent_debits: RentDebits::default(),
             loaded_accounts_data_size: 0,
@@ -1576,6 +1578,7 @@ mod tests {
             program_indices: vec![],
             fee_details: FeeDetails::default(),
             rollback_accounts: RollbackAccounts::default(),
+            compute_budget_limits: ComputeBudgetLimits::default(),
             rent: 0,
             rent_debits: RentDebits::default(),
             loaded_accounts_data_size: 0,
@@ -1829,6 +1832,7 @@ mod tests {
                 nonce: nonce.clone(),
                 fee_payer_account: from_account_pre.clone(),
             },
+            compute_budget_limits: ComputeBudgetLimits::default(),
             rent: 0,
             rent_debits: RentDebits::default(),
             loaded_accounts_data_size: 0,
@@ -1928,6 +1932,7 @@ mod tests {
             rollback_accounts: RollbackAccounts::SameNonceAndFeePayer {
                 nonce: nonce.clone(),
             },
+            compute_budget_limits: ComputeBudgetLimits::default(),
             rent: 0,
             rent_debits: RentDebits::default(),
             loaded_accounts_data_size: 0,

@@ -23,7 +23,7 @@ pub const MIN_HEAP_FRAME_BYTES: u32 = HEAP_LENGTH as u32;
 /// anyone in Mainnet-beta today. It can be set by set_loaded_accounts_data_size_limit instruction
 pub const MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES: u32 = 64 * 1024 * 1024;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ComputeBudgetLimits {
     pub updated_heap_bytes: u32,
     pub compute_unit_limit: u32,

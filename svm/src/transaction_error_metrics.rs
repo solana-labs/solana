@@ -16,6 +16,7 @@ pub struct TransactionErrorMetrics {
     pub invalid_account_for_fee: usize,
     pub invalid_account_index: usize,
     pub invalid_program_for_execution: usize,
+    pub invalid_compute_budget: usize,
     pub not_allowed_during_cluster_maintenance: usize,
     pub invalid_writable_account: usize,
     pub invalid_rent_paying_account: usize,
@@ -50,6 +51,7 @@ impl TransactionErrorMetrics {
             self.invalid_program_for_execution,
             other.invalid_program_for_execution
         );
+        saturating_add_assign!(self.invalid_compute_budget, other.invalid_compute_budget);
         saturating_add_assign!(
             self.not_allowed_during_cluster_maintenance,
             other.not_allowed_during_cluster_maintenance
@@ -125,6 +127,11 @@ impl TransactionErrorMetrics {
             (
                 "invalid_program_for_execution",
                 self.invalid_program_for_execution as i64,
+                i64
+            ),
+            (
+                "invalid_compute_budget",
+                self.invalid_compute_budget as i64,
                 i64
             ),
             (

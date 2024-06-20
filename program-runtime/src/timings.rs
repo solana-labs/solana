@@ -242,13 +242,6 @@ eager_macro_rules! { $eager_1
                 i64
             ),
             (
-                "execute_accessories_compute_budget_process_transaction_us",
-                $self
-                    .execute_accessories
-                    .compute_budget_process_transaction_us,
-                i64
-            ),
-            (
                 "execute_accessories_get_executors_us",
                 $self.execute_accessories.get_executors_us,
                 i64
@@ -348,7 +341,6 @@ impl ExecuteProcessInstructionTimings {
 #[derive(Default, Debug)]
 pub struct ExecuteAccessoryTimings {
     pub feature_set_clone_us: u64,
-    pub compute_budget_process_transaction_us: u64,
     pub get_executors_us: u64,
     pub process_message_us: u64,
     pub update_executors_us: u64,
@@ -358,10 +350,6 @@ pub struct ExecuteAccessoryTimings {
 impl ExecuteAccessoryTimings {
     pub fn accumulate(&mut self, other: &ExecuteAccessoryTimings) {
         saturating_add_assign!(self.feature_set_clone_us, other.feature_set_clone_us);
-        saturating_add_assign!(
-            self.compute_budget_process_transaction_us,
-            other.compute_budget_process_transaction_us
-        );
         saturating_add_assign!(self.get_executors_us, other.get_executors_us);
         saturating_add_assign!(self.process_message_us, other.process_message_us);
         saturating_add_assign!(self.update_executors_us, other.update_executors_us);

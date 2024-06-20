@@ -318,6 +318,7 @@ impl ConsumeWorkerMetrics {
             invalid_account_for_fee,
             invalid_account_index,
             invalid_program_for_execution,
+            invalid_compute_budget,
             not_allowed_during_cluster_maintenance,
             invalid_writable_account,
             invalid_rent_paying_account,
@@ -371,6 +372,9 @@ impl ConsumeWorkerMetrics {
         self.error_metrics
             .invalid_program_for_execution
             .fetch_add(*invalid_program_for_execution, Ordering::Relaxed);
+        self.error_metrics
+            .invalid_compute_budget
+            .fetch_add(*invalid_compute_budget, Ordering::Relaxed);
         self.error_metrics
             .not_allowed_during_cluster_maintenance
             .fetch_add(*not_allowed_during_cluster_maintenance, Ordering::Relaxed);
@@ -561,6 +565,7 @@ struct ConsumeWorkerTransactionErrorMetrics {
     invalid_account_for_fee: AtomicUsize,
     invalid_account_index: AtomicUsize,
     invalid_program_for_execution: AtomicUsize,
+    invalid_compute_budget: AtomicUsize,
     not_allowed_during_cluster_maintenance: AtomicUsize,
     invalid_writable_account: AtomicUsize,
     invalid_rent_paying_account: AtomicUsize,
@@ -641,6 +646,12 @@ impl ConsumeWorkerTransactionErrorMetrics {
             (
                 "invalid_program_for_execution",
                 self.invalid_program_for_execution
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "invalid_compute_budget",
+                self.invalid_compute_budget
                     .swap(0, Ordering::Relaxed),
                 i64
             ),

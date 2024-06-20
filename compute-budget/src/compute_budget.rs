@@ -1,9 +1,4 @@
-use {
-    crate::compute_budget_processor::{
-        self, process_compute_budget_instructions, DEFAULT_HEAP_COST,
-    },
-    solana_sdk::{instruction::CompiledInstruction, pubkey::Pubkey, transaction::Result},
-};
+use crate::compute_budget_processor::{self, ComputeBudgetLimits, DEFAULT_HEAP_COST};
 
 #[cfg(all(RUSTC_WITH_SPECIALIZATION, feature = "frozen-abi"))]
 impl ::solana_frozen_abi::abi_example::AbiExample for ComputeBudget {
@@ -136,6 +131,16 @@ impl Default for ComputeBudget {
     }
 }
 
+impl From<ComputeBudgetLimits> for ComputeBudget {
+    fn from(compute_budget_limits: ComputeBudgetLimits) -> Self {
+        ComputeBudget {
+            compute_unit_limit: u64::from(compute_budget_limits.compute_unit_limit),
+            heap_size: compute_budget_limits.updated_heap_bytes,
+            ..ComputeBudget::default()
+        }
+    }
+}
+
 impl ComputeBudget {
     pub fn new(compute_unit_limit: u64) -> Self {
         ComputeBudget {
@@ -184,17 +189,6 @@ impl ComputeBudget {
             alt_bn128_g2_compress: 86,
             alt_bn128_g2_decompress: 13610,
         }
-    }
-
-    pub fn try_from_instructions<'a>(
-        instructions: impl Iterator<Item = (&'a Pubkey, &'a CompiledInstruction)>,
-    ) -> Result<Self> {
-        let compute_budget_limits = process_compute_budget_instructions(instructions)?;
-        Ok(ComputeBudget {
-            compute_unit_limit: u64::from(compute_budget_limits.compute_unit_limit),
-            heap_size: compute_budget_limits.updated_heap_bytes,
-            ..ComputeBudget::default()
-        })
     }
 
     /// Returns cost of the Poseidon hash function for the given number of
