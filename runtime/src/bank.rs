@@ -937,10 +937,10 @@ struct PrevEpochInflationRewards {
     foundation_rate: f64,
 }
 
-pub struct CommitTransactionCounts {
-    pub committed_transactions_count: u64,
-    pub committed_non_vote_transactions_count: u64,
-    pub committed_with_failure_result_count: u64,
+pub struct ExecutedTransactionCounts {
+    pub executed_transactions_count: u64,
+    pub executed_non_vote_transactions_count: u64,
+    pub executed_with_failure_result_count: u64,
     pub signature_count: u64,
 }
 
@@ -3983,10 +3983,6 @@ impl Bank {
         results
     }
 
-    /// `committed_transactions_count` is the number of transactions out of `sanitized_txs`
-    /// that was executed. Of those, `committed_transactions_count`,
-    /// `committed_with_failure_result_count` is the number of executed transactions that returned
-    /// a failure result.
     pub fn commit_transactions(
         &self,
         sanitized_txs: &[SanitizedTransaction],
@@ -3994,7 +3990,7 @@ impl Bank {
         execution_results: Vec<TransactionExecutionResult>,
         last_blockhash: Hash,
         lamports_per_signature: u64,
-        counts: CommitTransactionCounts,
+        counts: ExecutedTransactionCounts,
         timings: &mut ExecuteTimings,
     ) -> TransactionResults {
         assert!(
@@ -4002,30 +3998,30 @@ impl Bank {
             "commit_transactions() working on a bank that is already frozen or is undergoing freezing!"
         );
 
-        let CommitTransactionCounts {
-            committed_transactions_count,
-            committed_non_vote_transactions_count,
-            committed_with_failure_result_count,
+        let ExecutedTransactionCounts {
+            executed_transactions_count,
+            executed_non_vote_transactions_count,
+            executed_with_failure_result_count,
             signature_count,
         } = counts;
 
-        self.increment_transaction_count(committed_transactions_count);
+        self.increment_transaction_count(executed_transactions_count);
         self.increment_non_vote_transaction_count_since_restart(
-            committed_non_vote_transactions_count,
+            executed_non_vote_transactions_count,
         );
         self.increment_signature_count(signature_count);
 
-        if committed_with_failure_result_count > 0 {
+        if executed_with_failure_result_count > 0 {
             self.transaction_error_count
-                .fetch_add(committed_with_failure_result_count, Relaxed);
+                .fetch_add(executed_with_failure_result_count, Relaxed);
         }
 
-        // Should be equivalent to checking `committed_transactions_count > 0`
+        // Should be equivalent to checking `executed_transactions_count > 0`
         if execution_results.iter().any(|result| result.was_executed()) {
             self.is_delta.store(true, Relaxed);
             self.transaction_entries_count.fetch_add(1, Relaxed);
             self.transactions_per_entry_max
-                .fetch_max(committed_transactions_count, Relaxed);
+                .fetch_max(executed_transactions_count, Relaxed);
         }
 
         let mut write_time = Measure::start("write_time");
@@ -4860,10 +4856,10 @@ impl Bank {
             execution_results,
             last_blockhash,
             lamports_per_signature,
-            CommitTransactionCounts {
-                committed_transactions_count: executed_transactions_count as u64,
-                committed_non_vote_transactions_count: executed_non_vote_transactions_count as u64,
-                committed_with_failure_result_count: executed_transactions_count
+            ExecutedTransactionCounts {
+                executed_transactions_count: executed_transactions_count as u64,
+                executed_non_vote_transactions_count: executed_non_vote_transactions_count as u64,
+                executed_with_failure_result_count: executed_transactions_count
                     .saturating_sub(executed_with_successful_result_count)
                     as u64,
                 signature_count,

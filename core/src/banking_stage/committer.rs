@@ -6,7 +6,7 @@ use {
     },
     solana_measure::measure_us,
     solana_runtime::{
-        bank::{Bank, CommitTransactionCounts, TransactionBalancesSet},
+        bank::{Bank, ExecutedTransactionCounts, TransactionBalancesSet},
         bank_utils,
         prioritization_fee_cache::PrioritizationFeeCache,
         transaction_batch::TransactionBatch,
@@ -92,10 +92,10 @@ impl Committer {
             execution_results,
             last_blockhash,
             lamports_per_signature,
-            CommitTransactionCounts {
-                committed_transactions_count: executed_transactions_count as u64,
-                committed_non_vote_transactions_count: executed_non_vote_transactions_count as u64,
-                committed_with_failure_result_count: executed_transactions_count
+            ExecutedTransactionCounts {
+                executed_transactions_count: executed_transactions_count as u64,
+                executed_non_vote_transactions_count: executed_non_vote_transactions_count as u64,
+                executed_with_failure_result_count: executed_transactions_count
                     .saturating_sub(executed_with_successful_result_count)
                     as u64,
                 signature_count,
