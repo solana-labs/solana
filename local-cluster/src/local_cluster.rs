@@ -190,44 +190,43 @@ impl LocalCluster {
     pub fn new(config: &mut ClusterConfig, socket_addr_space: SocketAddrSpace) -> Self {
         assert_eq!(config.validator_configs.len(), config.node_stakes.len());
 
-        let connection_cache = match config.tpu_use_quic {
-            true => {
-                let client_keypair = Keypair::new();
-                let stake = DEFAULT_NODE_STAKE;
+        let connection_cache = if config.tpu_use_quic {
+            let client_keypair = Keypair::new();
+            let stake = DEFAULT_NODE_STAKE;
 
-                for validator_config in config.validator_configs.iter_mut() {
-                    let mut overrides = HashMap::new();
-                    overrides.insert(client_keypair.pubkey(), stake);
-                    validator_config.staked_nodes_overrides = Arc::new(RwLock::new(overrides));
-                }
-
-                assert!(
-                    config.tpu_use_quic,
-                    "no support for staked override forwarding without quic"
-                );
-
-                let total_stake = config.node_stakes.iter().sum::<u64>();
-                let stakes = HashMap::from([
-                    (client_keypair.pubkey(), stake),
-                    (Pubkey::new_unique(), total_stake.saturating_sub(stake)),
-                ]);
-                let staked_nodes = Arc::new(RwLock::new(StakedNodes::new(
-                    Arc::new(stakes),
-                    HashMap::<Pubkey, u64>::default(), // overrides
-                )));
-
-                Arc::new(ConnectionCache::new_with_client_options(
-                    "connection_cache_local_cluster_quic_staked",
-                    config.tpu_connection_pool_size,
-                    None,
-                    Some((&client_keypair, IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)))),
-                    Some((&staked_nodes, &client_keypair.pubkey())),
-                ))
+            for validator_config in config.validator_configs.iter_mut() {
+                let mut overrides = HashMap::new();
+                overrides.insert(client_keypair.pubkey(), stake);
+                validator_config.staked_nodes_overrides = Arc::new(RwLock::new(overrides));
             }
-            false => Arc::new(ConnectionCache::with_udp(
+
+            assert!(
+                config.tpu_use_quic,
+                "no support for staked override forwarding without quic"
+            );
+
+            let total_stake = config.node_stakes.iter().sum::<u64>();
+            let stakes = HashMap::from([
+                (client_keypair.pubkey(), stake),
+                (Pubkey::new_unique(), total_stake.saturating_sub(stake)),
+            ]);
+            let staked_nodes = Arc::new(RwLock::new(StakedNodes::new(
+                Arc::new(stakes),
+                HashMap::<Pubkey, u64>::default(), // overrides
+            )));
+
+            Arc::new(ConnectionCache::new_with_client_options(
+                "connection_cache_local_cluster_quic_staked",
+                config.tpu_connection_pool_size,
+                None,
+                Some((&client_keypair, IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)))),
+                Some((&staked_nodes, &client_keypair.pubkey())),
+            ))
+        } else {
+            Arc::new(ConnectionCache::with_udp(
                 "connection_cache_local_cluster_udp",
                 config.tpu_connection_pool_size,
-            )),
+            ))
         };
 
         let mut validator_keys = {
