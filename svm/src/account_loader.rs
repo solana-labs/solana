@@ -1733,7 +1733,7 @@ mod tests {
         let transaction_context = TransactionContext::new(
             loaded_txs[0].as_ref().unwrap().accounts.clone(),
             Rent::default(),
-            compute_budget.max_invoke_stack_height,
+            compute_budget.max_instruction_stack_depth,
             compute_budget.max_instruction_trace_length,
         );
 

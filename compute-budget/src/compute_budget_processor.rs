@@ -3,7 +3,7 @@ use {
     solana_sdk::{
         borsh1::try_from_slice_unchecked,
         compute_budget::{self, ComputeBudgetInstruction},
-        entrypoint::HEAP_LENGTH as MIN_HEAP_FRAME_BYTES,
+        entrypoint::HEAP_LENGTH,
         fee::FeeBudgetLimits,
         instruction::{CompiledInstruction, InstructionError},
         pubkey::Pubkey,
@@ -11,12 +11,13 @@ use {
     },
 };
 
-const MAX_HEAP_FRAME_BYTES: u32 = 256 * 1024;
 /// Roughly 0.5us/page, where page is 32K; given roughly 15CU/us, the
 /// default heap page cost = 0.5 * 15 ~= 8CU/page
 pub const DEFAULT_HEAP_COST: u64 = 8;
 pub const DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT: u32 = 200_000;
 pub const MAX_COMPUTE_UNIT_LIMIT: u32 = 1_400_000;
+pub const MAX_HEAP_FRAME_BYTES: u32 = 256 * 1024;
+pub const MIN_HEAP_FRAME_BYTES: u32 = HEAP_LENGTH as u32;
 
 /// The total accounts data a transaction can load is limited to 64MiB to not break
 /// anyone in Mainnet-beta today. It can be set by set_loaded_accounts_data_size_limit instruction
@@ -33,7 +34,7 @@ pub struct ComputeBudgetLimits {
 impl Default for ComputeBudgetLimits {
     fn default() -> Self {
         ComputeBudgetLimits {
-            updated_heap_bytes: u32::try_from(MIN_HEAP_FRAME_BYTES).unwrap(),
+            updated_heap_bytes: MIN_HEAP_FRAME_BYTES,
             compute_unit_limit: MAX_COMPUTE_UNIT_LIMIT,
             compute_unit_price: 0,
             loaded_accounts_bytes: MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES,
@@ -122,7 +123,7 @@ pub fn process_compute_budget_instructions<'a>(
 
     // sanitize limits
     let updated_heap_bytes = requested_heap_size
-        .unwrap_or(u32::try_from(MIN_HEAP_FRAME_BYTES).unwrap()) // loader's default heap_size
+        .unwrap_or(MIN_HEAP_FRAME_BYTES) // loader's default heap_size
         .min(MAX_HEAP_FRAME_BYTES);
 
     let compute_unit_limit = updated_compute_unit_limit
@@ -147,8 +148,7 @@ pub fn process_compute_budget_instructions<'a>(
 }
 
 fn sanitize_requested_heap_size(bytes: u32) -> bool {
-    (u32::try_from(MIN_HEAP_FRAME_BYTES).unwrap()..=MAX_HEAP_FRAME_BYTES).contains(&bytes)
-        && bytes % 1024 == 0
+    (MIN_HEAP_FRAME_BYTES..=MAX_HEAP_FRAME_BYTES).contains(&bytes) && bytes % 1024 == 0
 }
 
 #[cfg(test)]
@@ -377,7 +377,7 @@ mod tests {
         test!(
             &[
                 Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
-                ComputeBudgetInstruction::request_heap_frame(MIN_HEAP_FRAME_BYTES as u32),
+                ComputeBudgetInstruction::request_heap_frame(MIN_HEAP_FRAME_BYTES),
                 ComputeBudgetInstruction::request_heap_frame(MAX_HEAP_FRAME_BYTES),
             ],
             Err(TransactionError::DuplicateInstruction(2))

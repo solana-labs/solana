@@ -413,7 +413,7 @@ fn execute_fixture_as_instr(
     let mut transaction_context = TransactionContext::new(
         transaction_accounts,
         rent,
-        compute_budget.max_invoke_stack_height,
+        compute_budget.max_instruction_stack_depth,
         compute_budget.max_instruction_trace_length,
     );
 

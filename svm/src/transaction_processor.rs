@@ -745,7 +745,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         let mut transaction_context = TransactionContext::new(
             transaction_accounts,
             rent.clone(),
-            compute_budget.max_invoke_stack_height,
+            compute_budget.max_instruction_stack_depth,
             compute_budget.max_instruction_trace_length,
         );
         #[cfg(debug_assertions)]

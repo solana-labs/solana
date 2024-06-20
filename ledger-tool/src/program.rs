@@ -557,7 +557,7 @@ pub fn program(ledger_path: &Path, matches: &ArgMatches<'_>) {
         account_lengths,
         &mut invoke_context,
     );
-    let mut vm = vm.unwrap();
+    let (mut vm, _, _) = vm.unwrap();
     let start_time = Instant::now();
     if matches.value_of("mode").unwrap() == "debugger" {
         vm.debug_port = Some(matches.value_of("port").unwrap().parse::<u16>().unwrap());

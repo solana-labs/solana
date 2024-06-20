@@ -13,6 +13,16 @@ impl ::solana_frozen_abi::abi_example::AbiExample for ComputeBudget {
     }
 }
 
+/// Max instruction stack depth. This is the maximum nesting of instructions that can happen during
+/// a transaction.
+pub const MAX_INSTRUCTION_STACK_DEPTH: usize = 5;
+
+/// Max call depth. This is the maximum nesting of SBF to SBF call that can happen within a program.
+pub const MAX_CALL_DEPTH: usize = 64;
+
+/// The size of one SBF stack frame.
+pub const STACK_FRAME_SIZE: usize = 4096;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ComputeBudget {
     /// Number of compute units that a transaction or individual instruction is
@@ -26,11 +36,11 @@ pub struct ComputeBudget {
     /// Number of compute units consumed by an invoke call (not including the cost incurred by
     /// the called program)
     pub invoke_units: u64,
-    /// Maximum program instruction invocation stack height. Invocation stack
-    /// height starts at 1 for transaction instructions and the stack height is
+    /// Maximum program instruction invocation stack depth. Invocation stack
+    /// depth starts at 1 for transaction instructions and the stack depth is
     /// incremented each time a program invokes an instruction and decremented
     /// when a program returns.
-    pub max_invoke_stack_height: usize,
+    pub max_instruction_stack_depth: usize,
     /// Maximum cross-program invocation and instructions per transaction
     pub max_instruction_trace_length: usize,
     /// Base number of compute units consumed to call SHA256
@@ -133,13 +143,13 @@ impl ComputeBudget {
             log_64_units: 100,
             create_program_address_units: 1500,
             invoke_units: 1000,
-            max_invoke_stack_height: 5,
+            max_instruction_stack_depth: MAX_INSTRUCTION_STACK_DEPTH,
             max_instruction_trace_length: 64,
             sha256_base_cost: 85,
             sha256_byte_cost: 1,
             sha256_max_slices: 20_000,
-            max_call_depth: 64,
-            stack_frame_size: 4_096,
+            max_call_depth: MAX_CALL_DEPTH,
+            stack_frame_size: STACK_FRAME_SIZE,
             log_pubkey_units: 100,
             max_cpi_instruction_size: 1280, // IPv6 Min MTU size
             cpi_bytes_per_unit: 250,        // ~50MB at 200,000 units

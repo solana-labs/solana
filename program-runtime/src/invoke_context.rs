@@ -693,7 +693,7 @@ macro_rules! with_mock_invoke_context {
         let mut $transaction_context = TransactionContext::new(
             $transaction_accounts,
             Rent::default(),
-            compute_budget.max_invoke_stack_height,
+            compute_budget.max_instruction_stack_depth,
             compute_budget.max_instruction_trace_length,
         );
         let mut sysvar_cache = SysvarCache::default();
@@ -940,7 +940,7 @@ mod tests {
     #[test]
     fn test_instruction_stack_height() {
         let one_more_than_max_depth = ComputeBudget::default()
-            .max_invoke_stack_height
+            .max_instruction_stack_depth
             .saturating_add(1);
         let mut invoke_stack = vec![];
         let mut transaction_accounts = vec![];

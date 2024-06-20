@@ -18,10 +18,15 @@ use {
         compute_budget_processor::process_compute_budget_instructions,
     },
     solana_ledger::token_balances::collect_token_balances,
-    solana_program_runtime::timings::ExecuteTimings,
+    solana_program_runtime::{invoke_context::mock_process_instruction, timings::ExecuteTimings},
     solana_rbpf::vm::ContextObject,
     solana_runtime::{
-        bank::TransactionBalancesSet,
+        bank::{Bank, TransactionBalancesSet},
+        bank_client::BankClient,
+        genesis_utils::{
+            bootstrap_validator_stake_lamports, create_genesis_config,
+            create_genesis_config_with_leader_ex, GenesisConfigInfo,
+        },
         loader_utils::{
             create_program, load_program_from_file, load_upgradeable_buffer,
             load_upgradeable_program, load_upgradeable_program_and_advance_slot,
@@ -32,60 +37,44 @@ use {
     solana_sbf_rust_realloc_dep::*,
     solana_sbf_rust_realloc_invoke_dep::*,
     solana_sdk::{
-        account::{ReadableAccount, WritableAccount},
+        account::{AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::StateMut,
-        bpf_loader_upgradeable,
-        clock::MAX_PROCESSING_AGE,
+        bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
+        client::SyncClient,
+        clock::{UnixTimestamp, MAX_PROCESSING_AGE},
         compute_budget::ComputeBudgetInstruction,
         entrypoint::MAX_PERMITTED_DATA_INCREASE,
         feature_set::{self, FeatureSet},
         fee::FeeStructure,
-        message::{v0::LoadedAddresses, SanitizedMessage},
-        signature::keypair_from_seed,
+        fee_calculator::FeeRateGovernor,
+        genesis_config::ClusterType,
+        hash::Hash,
+        instruction::{AccountMeta, Instruction, InstructionError},
+        message::{v0::LoadedAddresses, Message, SanitizedMessage},
+        pubkey::Pubkey,
+        rent::Rent,
+        reserved_account_keys::ReservedAccountKeys,
+        signature::{keypair_from_seed, Keypair, Signer},
         stake,
         system_instruction::{self, MAX_PERMITTED_DATA_LENGTH},
+        system_program,
         sysvar::{self, clock},
-        transaction::VersionedTransaction,
+        transaction::{SanitizedTransaction, Transaction, TransactionError, VersionedTransaction},
     },
-    solana_svm::transaction_processor::ExecutionRecordingConfig,
-    solana_svm::transaction_results::{
-        InnerInstruction, TransactionExecutionDetails, TransactionExecutionResult,
-        TransactionResults,
+    solana_svm::{
+        transaction_processor::ExecutionRecordingConfig,
+        transaction_results::{
+            InnerInstruction, TransactionExecutionDetails, TransactionExecutionResult,
+            TransactionResults,
+        },
     },
     solana_transaction_status::{
         map_inner_instructions, ConfirmedTransactionWithStatusMeta, TransactionStatusMeta,
         TransactionWithStatusMeta, VersionedTransactionWithStatusMeta,
     },
-    std::collections::HashMap,
-};
-use {
-    solana_program_runtime::invoke_context::mock_process_instruction,
-    solana_runtime::{
-        bank::Bank,
-        bank_client::BankClient,
-        genesis_utils::{
-            bootstrap_validator_stake_lamports, create_genesis_config,
-            create_genesis_config_with_leader_ex, GenesisConfigInfo,
-        },
+    std::{
+        assert_eq, cell::RefCell, collections::HashMap, str::FromStr, sync::Arc, time::Duration,
     },
-    solana_sdk::{
-        account::AccountSharedData,
-        bpf_loader, bpf_loader_deprecated,
-        client::SyncClient,
-        clock::UnixTimestamp,
-        fee_calculator::FeeRateGovernor,
-        genesis_config::ClusterType,
-        hash::Hash,
-        instruction::{AccountMeta, Instruction, InstructionError},
-        message::Message,
-        pubkey::Pubkey,
-        rent::Rent,
-        reserved_account_keys::ReservedAccountKeys,
-        signature::{Keypair, Signer},
-        system_program,
-        transaction::{SanitizedTransaction, Transaction, TransactionError},
-    },
-    std::{assert_eq, cell::RefCell, str::FromStr, sync::Arc, time::Duration},
 };
 
 #[cfg(feature = "sbf_rust")]
@@ -4676,5 +4665,71 @@ fn test_update_callee_account() {
 
             assert_eq!(*v, expected, "offset:{i} {v:#x} != {expected:#x}");
         });
+    }
+}
+
+#[test]
+fn test_stack_heap_zeroed() {
+    solana_logger::setup();
+
+    let GenesisConfigInfo {
+        genesis_config,
+        mint_keypair,
+        ..
+    } = create_genesis_config(100_123_456_789);
+
+    let bank = Bank::new_for_tests(&genesis_config);
+
+    let (bank, bank_forks) = bank.wrap_with_bank_forks_for_tests();
+    let mut bank_client = BankClient::new_shared(bank);
+    let authority_keypair = Keypair::new();
+
+    let (bank, invoke_program_id) = load_upgradeable_program_and_advance_slot(
+        &mut bank_client,
+        bank_forks.as_ref(),
+        &mint_keypair,
+        &authority_keypair,
+        "solana_sbf_rust_invoke",
+    );
+
+    let account_keypair = Keypair::new();
+    let mint_pubkey = mint_keypair.pubkey();
+    let account_metas = vec![
+        AccountMeta::new(mint_pubkey, true),
+        AccountMeta::new(account_keypair.pubkey(), false),
+        AccountMeta::new_readonly(invoke_program_id, false),
+    ];
+
+    // Check multiple heap sizes. It's generally a good idea, and also it's needed to ensure that
+    // pooled heap and stack values are reused - and therefore zeroed - across executions.
+    for heap_len in [32usize * 1024, 64 * 1024, 128 * 1024, 256 * 1024] {
+        // TEST_STACK_HEAP_ZEROED will recursively check that stack and heap are zeroed until it
+        // reaches max CPI invoke depth. We make it fail at max depth so we're sure that there's no
+        // legit way to access non-zeroed stack and heap regions.
+        let mut instruction_data = vec![TEST_STACK_HEAP_ZEROED];
+        instruction_data.extend_from_slice(&heap_len.to_le_bytes());
+
+        let instruction = Instruction::new_with_bytes(
+            invoke_program_id,
+            &instruction_data,
+            account_metas.clone(),
+        );
+
+        let message = Message::new(
+            &[
+                ComputeBudgetInstruction::set_compute_unit_limit(1_400_000),
+                ComputeBudgetInstruction::request_heap_frame(heap_len as u32),
+                instruction,
+            ],
+            Some(&mint_pubkey),
+        );
+        let tx = Transaction::new(&[&mint_keypair], message.clone(), bank.last_blockhash());
+        let (result, _, logs) = process_transaction_and_record_inner(&bank, tx);
+        assert!(result.is_err(), "{result:?}");
+        assert!(
+            logs.iter()
+                .any(|log| log.contains("Cross-program invocation call depth too deep")),
+            "{logs:?}"
+        );
     }
 }
