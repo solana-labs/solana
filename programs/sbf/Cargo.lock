@@ -6445,7 +6445,6 @@ dependencies = [
 name = "solana-type-overrides"
 version = "2.0.0"
 dependencies = [
- "futures 0.3.30",
  "lazy_static",
  "rand 0.8.5",
 ]

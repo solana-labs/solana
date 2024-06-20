@@ -6,6 +6,8 @@
 ///
 /// Instead of importing from std, rand, and so on, import the following from solana-type-override,
 /// and include the 'shuttle-test' feature in your crate to use shuttle.
+
+#[cfg(feature = "executor")]
 pub mod executor {
     #[cfg(not(feature = "shuttle-test"))]
     pub use futures::executor::*;

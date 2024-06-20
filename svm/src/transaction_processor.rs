@@ -53,14 +53,13 @@ use {
         transaction::{self, SanitizedTransaction, TransactionError},
         transaction_context::{ExecutionRecord, TransactionContext},
     },
-    solana_type_overrides::sync::{atomic::Ordering, Arc, RwLock},
+    solana_type_overrides::sync::{atomic::Ordering, Arc, RwLock, RwLockReadGuard},
     solana_vote::vote_account::VoteAccountsHashMap,
     std::{
         cell::RefCell,
         collections::{hash_map::Entry, HashMap, HashSet},
         fmt::{Debug, Formatter},
         rc::Rc,
-        sync::RwLockReadGuard,
     },
 };
 

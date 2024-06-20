@@ -9,10 +9,11 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
-futures = { workspace = true }
+futures = { workspace = true, optional = true }
 lazy_static = { workspace = true }
 rand = { workspace = true }
 shuttle = { workspace = true, optional = true }
 
 [features]
 shuttle-test = ["dep:shuttle"]
+executor = ["dep:futures"]
