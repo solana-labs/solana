@@ -80,7 +80,7 @@ declare_builtin_function!(
 );
 
 declare_builtin_function!(
-    /// Log 5 64-bit values
+    /// Log a [`Pubkey`] as a base58 string
     SyscallLogPubkey,
     fn rust(
         invoke_context: &mut InvokeContext,
