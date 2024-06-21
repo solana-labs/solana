@@ -8,12 +8,14 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 and follows a [Backwards Compatibility Policy](https://docs.solanalabs.com/backwards-compatibility)
 
 Release channels have their own copy of this changelog:
-* [edge - v2.0](#edge-channel)
-* [beta - v1.18](https://github.com/solana-labs/solana/blob/v1.18/CHANGELOG.md)
-* [stable - v1.17](https://github.com/solana-labs/solana/blob/v1.17/CHANGELOG.md)
+* [edge - v2.1](#edge-channel)
+* [beta - v2.0](https://github.com/solana-labs/solana/blob/v2.0/CHANGELOG.md)
+* [stable - v1.18](https://github.com/solana-labs/solana/blob/v1.18/CHANGELOG.md)
 
 <a name="edge-channel"></a>
-## [2.0.0] - Unreleased
+## [2.1.0] - Unreleased
+
+## [2.0.0]
 * Breaking
   * SDK: Support for Borsh v0.9 removed, please use v1 or v0.10 (#1440)
   * SDK: `Copy` is no longer derived on `Rent` and `EpochSchedule`, please switch to using `clone()` (solana-labs#32767)
