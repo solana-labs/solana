@@ -1,3 +1,7 @@
+use crate::{
+    instruction::{ProofType, ZkProofData},
+    zk_token_elgamal::pod,
+};
 #[cfg(not(target_os = "solana"))]
 use {
     crate::{
@@ -28,13 +32,6 @@ use {
     merlin::Transcript,
     std::convert::TryInto,
     subtle::{ConditionallySelectable, ConstantTimeGreater},
-};
-use {
-    crate::{
-        instruction::{ProofType, ZkProofData},
-        zk_token_elgamal::pod,
-    },
-    bytemuck::{Pod, Zeroable},
 };
 
 #[cfg(not(target_os = "solana"))]
@@ -71,7 +68,7 @@ lazy_static::lazy_static! {
 ///
 /// It includes the cryptographic proof as well as the context data information needed to verify
 /// the proof.
-#[derive(Clone, Copy, Pod, Zeroable)]
+#[derive(Clone, Copy, bytemuck_derive::Pod, bytemuck_derive::Zeroable)]
 #[repr(C)]
 pub struct TransferWithFeeData {
     /// The context data for the transfer with fee proof
@@ -82,7 +79,7 @@ pub struct TransferWithFeeData {
 }
 
 /// The context data needed to verify a transfer-with-fee proof.
-#[derive(Clone, Copy, Pod, Zeroable)]
+#[derive(Clone, Copy, bytemuck_derive::Pod, bytemuck_derive::Zeroable)]
 #[repr(C)]
 pub struct TransferWithFeeProofContext {
     /// Group encryption of the low 16 bites of the transfer amount
@@ -108,7 +105,7 @@ pub struct TransferWithFeeProofContext {
 }
 
 /// The ElGamal public keys needed for a transfer with fee
-#[derive(Clone, Copy, Pod, Zeroable)]
+#[derive(Clone, Copy, bytemuck_derive::Pod, bytemuck_derive::Zeroable)]
 #[repr(C)]
 pub struct TransferWithFeePubkeys {
     pub source: pod::ElGamalPubkey,
@@ -453,7 +450,7 @@ impl TransferWithFeeProofContext {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
+#[derive(Clone, Copy, bytemuck_derive::Pod, bytemuck_derive::Zeroable)]
 pub struct TransferWithFeeProof {
     pub new_source_commitment: pod::PedersenCommitment,
     pub claimed_commitment: pod::PedersenCommitment,
@@ -820,7 +817,7 @@ fn compute_delta_commitment(
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    use {super::*, bytemuck::Zeroable};
 
     #[test]
     fn test_fee_correctness() {

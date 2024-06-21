@@ -192,7 +192,7 @@ impl TryFrom<PodZeroCiphertextProof> for ZeroCiphertextProof {
 }
 
 /// The `PercentageWithCapProof` type as a `Pod`.
-#[derive(Clone, Copy, Pod, Zeroable)]
+#[derive(Clone, Copy, bytemuck_derive::Pod, bytemuck_derive::Zeroable)]
 #[repr(transparent)]
 pub struct PodPercentageWithCapProof(pub(crate) [u8; PERCENTAGE_WITH_CAP_PROOF_LEN]);
 
@@ -213,7 +213,7 @@ impl TryFrom<PodPercentageWithCapProof> for PercentageWithCapProof {
 }
 
 /// The `PubkeyValidityProof` type as a `Pod`.
-#[derive(Clone, Copy, Pod, Zeroable)]
+#[derive(Clone, Copy, bytemuck_derive::Pod, bytemuck_derive::Zeroable)]
 #[repr(transparent)]
 pub struct PodPubkeyValidityProof(pub(crate) [u8; PUBKEY_VALIDITY_PROOF_LEN]);
 

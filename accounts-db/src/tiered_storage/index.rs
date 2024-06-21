@@ -24,7 +24,7 @@ pub trait AccountOffset: Clone + Copy + Pod + Zeroable {}
 /// This can be used to obtain the AccountOffset and address by looking through
 /// the accounts index block.
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Pod, Zeroable)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, bytemuck_derive::Pod, bytemuck_derive::Zeroable)]
 pub struct IndexOffset(pub u32);
 
 // Ensure there are no implicit padding bytes

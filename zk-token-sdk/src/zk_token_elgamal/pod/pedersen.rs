@@ -1,23 +1,17 @@
 //! Plain Old Data type for the Pedersen commitment scheme.
 
+use {crate::RISTRETTO_POINT_LEN, std::fmt};
 #[cfg(not(target_os = "solana"))]
 use {
     crate::{encryption::pedersen as decoded, errors::ElGamalError},
     curve25519_dalek::ristretto::CompressedRistretto,
-};
-use {
-    crate::{
-        zk_token_elgamal::pod::{Pod, Zeroable},
-        RISTRETTO_POINT_LEN,
-    },
-    std::fmt,
 };
 
 /// Byte length of a Pedersen commitment
 pub(crate) const PEDERSEN_COMMITMENT_LEN: usize = RISTRETTO_POINT_LEN;
 
 /// The `PedersenCommitment` type as a `Pod`.
-#[derive(Clone, Copy, Default, Pod, Zeroable, PartialEq, Eq)]
+#[derive(Clone, Copy, Default, bytemuck_derive::Pod, bytemuck_derive::Zeroable, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct PedersenCommitment(pub [u8; PEDERSEN_COMMITMENT_LEN]);
 

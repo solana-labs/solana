@@ -15,7 +15,7 @@ use {
         instruction::{batched_range_proof::BatchedRangeProofContext, ProofType, ZkProofData},
         zk_token_elgamal::pod,
     },
-    bytemuck::{Pod, Zeroable},
+    bytemuck_derive::{Pod, Zeroable},
 };
 
 /// The instruction data that is needed for the

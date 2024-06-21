@@ -1,11 +1,10 @@
 use crate::zk_token_elgamal::pod::{
-    GroupedElGamalCiphertext2Handles, GroupedElGamalCiphertext3Handles, Pod, PodU16, PodU64,
-    Zeroable,
+    GroupedElGamalCiphertext2Handles, GroupedElGamalCiphertext3Handles, PodU16, PodU64,
 };
 #[cfg(not(target_os = "solana"))]
 use crate::{errors::ElGamalError, instruction::transfer as decoded};
 
-#[derive(Clone, Copy, Pod, Zeroable)]
+#[derive(Clone, Copy, bytemuck_derive::Pod, bytemuck_derive::Zeroable)]
 #[repr(C)]
 pub struct TransferAmountCiphertext(pub GroupedElGamalCiphertext3Handles);
 
@@ -25,7 +24,7 @@ impl TryFrom<TransferAmountCiphertext> for decoded::TransferAmountCiphertext {
     }
 }
 
-#[derive(Clone, Copy, Pod, Zeroable)]
+#[derive(Clone, Copy, bytemuck_derive::Pod, bytemuck_derive::Zeroable)]
 #[repr(C)]
 pub struct FeeEncryption(pub GroupedElGamalCiphertext2Handles);
 
@@ -45,7 +44,7 @@ impl TryFrom<FeeEncryption> for decoded::FeeEncryption {
     }
 }
 
-#[derive(Clone, Copy, Pod, Zeroable)]
+#[derive(Clone, Copy, bytemuck_derive::Pod, bytemuck_derive::Zeroable)]
 #[repr(C)]
 pub struct FeeParameters {
     /// Fee rate expressed as basis points of the transfer amount, i.e. increments of 0.01%

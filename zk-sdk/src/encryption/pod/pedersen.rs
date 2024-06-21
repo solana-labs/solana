@@ -2,7 +2,7 @@
 
 use {
     crate::encryption::PEDERSEN_COMMITMENT_LEN,
-    bytemuck::{Pod, Zeroable},
+    bytemuck_derive::{Pod, Zeroable},
     std::fmt,
 };
 #[cfg(not(target_os = "solana"))]

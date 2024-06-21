@@ -8,7 +8,7 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [dev-dependencies]
-bytemuck = { workspace = true, features = ["derive"] }
+bytemuck = { workspace = true }
 curve25519-dalek = { workspace = true }
 solana-compute-budget = { workspace = true }
 solana-program-test = { workspace = true }

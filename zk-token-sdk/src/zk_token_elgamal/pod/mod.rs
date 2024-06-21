@@ -36,7 +36,9 @@ pub enum ParseError {
     Invalid,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Pod, Zeroable)]
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, bytemuck_derive::Pod, bytemuck_derive::Zeroable,
+)]
 #[repr(transparent)]
 pub struct PodU16([u8; 2]);
 impl From<u16> for PodU16 {
@@ -50,7 +52,9 @@ impl From<PodU16> for u16 {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Pod, Zeroable)]
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, bytemuck_derive::Pod, bytemuck_derive::Zeroable,
+)]
 #[repr(transparent)]
 pub struct PodU64([u8; 8]);
 impl From<u64> for PodU64 {
@@ -64,7 +68,9 @@ impl From<PodU64> for u64 {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Pod, Zeroable)]
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, bytemuck_derive::Pod, bytemuck_derive::Zeroable,
+)]
 #[repr(transparent)]
 pub struct PodProofType(u8);
 impl From<ProofType> for PodProofType {
@@ -80,7 +86,7 @@ impl TryFrom<PodProofType> for ProofType {
     }
 }
 
-#[derive(Clone, Copy, Pod, Zeroable, PartialEq, Eq)]
+#[derive(Clone, Copy, bytemuck_derive::Pod, bytemuck_derive::Zeroable, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct CompressedRistretto(pub [u8; 32]);
 

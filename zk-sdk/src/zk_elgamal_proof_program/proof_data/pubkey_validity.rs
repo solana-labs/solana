@@ -22,7 +22,7 @@ use {
         sigma_proofs::pod::PodPubkeyValidityProof,
         zk_elgamal_proof_program::proof_data::{ProofType, ZkProofData},
     },
-    bytemuck::{Pod, Zeroable},
+    bytemuck_derive::{Pod, Zeroable},
 };
 
 /// The instruction data that is needed for the `ProofInstruction::VerifyPubkeyValidity`

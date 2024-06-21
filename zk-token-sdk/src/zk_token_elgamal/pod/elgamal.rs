@@ -10,10 +10,11 @@ use {
 };
 use {
     crate::{
-        zk_token_elgamal::pod::{impl_from_str, pedersen::PEDERSEN_COMMITMENT_LEN, Pod, Zeroable},
+        zk_token_elgamal::pod::{impl_from_str, pedersen::PEDERSEN_COMMITMENT_LEN},
         RISTRETTO_POINT_LEN,
     },
     base64::{prelude::BASE64_STANDARD, Engine},
+    bytemuck::Zeroable,
     std::fmt,
 };
 
@@ -33,7 +34,7 @@ pub(crate) const ELGAMAL_CIPHERTEXT_LEN: usize = PEDERSEN_COMMITMENT_LEN + DECRY
 const ELGAMAL_CIPHERTEXT_MAX_BASE64_LEN: usize = 88;
 
 /// The `ElGamalCiphertext` type as a `Pod`.
-#[derive(Clone, Copy, Pod, Zeroable, PartialEq, Eq)]
+#[derive(Clone, Copy, bytemuck_derive::Pod, bytemuck_derive::Zeroable, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct ElGamalCiphertext(pub [u8; ELGAMAL_CIPHERTEXT_LEN]);
 
@@ -78,7 +79,7 @@ impl TryFrom<ElGamalCiphertext> for decoded::ElGamalCiphertext {
 }
 
 /// The `ElGamalPubkey` type as a `Pod`.
-#[derive(Clone, Copy, Default, Pod, Zeroable, PartialEq, Eq)]
+#[derive(Clone, Copy, Default, bytemuck_derive::Pod, bytemuck_derive::Zeroable, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct ElGamalPubkey(pub [u8; ELGAMAL_PUBKEY_LEN]);
 
@@ -117,7 +118,7 @@ impl TryFrom<ElGamalPubkey> for decoded::ElGamalPubkey {
 }
 
 /// The `DecryptHandle` type as a `Pod`.
-#[derive(Clone, Copy, Default, Pod, Zeroable, PartialEq, Eq)]
+#[derive(Clone, Copy, Default, bytemuck_derive::Pod, bytemuck_derive::Zeroable, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct DecryptHandle(pub [u8; DECRYPT_HANDLE_LEN]);
 

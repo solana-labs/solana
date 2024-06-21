@@ -12,7 +12,7 @@ use crate::sigma_proofs::{
     pubkey_proof::PubkeyValidityProof as DecodedPubkeyValidityProof,
     zero_balance_proof::ZeroBalanceProof as DecodedZeroBalanceProof,
 };
-use crate::zk_token_elgamal::pod::{Pod, Zeroable};
+use bytemuck::{Pod, Zeroable};
 
 /// Byte length of a ciphertext-commitment equality proof
 const CIPHERTEXT_COMMITMENT_EQUALITY_PROOF_LEN: usize = 192;
@@ -217,7 +217,7 @@ impl TryFrom<ZeroBalanceProof> for DecodedZeroBalanceProof {
 }
 
 /// The `FeeSigmaProof` type as a `Pod`.
-#[derive(Clone, Copy, Pod, Zeroable)]
+#[derive(Clone, Copy, bytemuck_derive::Pod, bytemuck_derive::Zeroable)]
 #[repr(transparent)]
 pub struct FeeSigmaProof(pub [u8; FEE_SIGMA_PROOF_LEN]);
 
@@ -238,7 +238,7 @@ impl TryFrom<FeeSigmaProof> for DecodedFeeSigmaProof {
 }
 
 /// The `PubkeyValidityProof` type as a `Pod`.
-#[derive(Clone, Copy, Pod, Zeroable)]
+#[derive(Clone, Copy, bytemuck_derive::Pod, bytemuck_derive::Zeroable)]
 #[repr(transparent)]
 pub struct PubkeyValidityProof(pub [u8; PUBKEY_VALIDITY_PROOF_LEN]);
 

@@ -10,7 +10,8 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
-bytemuck = { workspace = true, features = ["derive"] }
+bytemuck = { workspace = true }
+bytemuck_derive = { workspace = true }
 solana-program = { workspace = true }
 thiserror = { workspace = true }
 

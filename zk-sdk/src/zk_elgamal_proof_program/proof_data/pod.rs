@@ -1,6 +1,6 @@
 use {
     crate::zk_elgamal_proof_program::proof_data::{errors::ProofDataError, ProofType},
-    bytemuck::{Pod, Zeroable},
+    bytemuck_derive::{Pod, Zeroable},
     num_traits::{FromPrimitive, ToPrimitive},
 };
 

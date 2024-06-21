@@ -5,9 +5,9 @@ use crate::{
     range_proof::{self as decoded, errors::RangeProofVerificationError},
     UNIT_LEN,
 };
-use crate::{
-    zk_token_elgamal::pod::{Pod, Zeroable},
-    RISTRETTO_POINT_LEN, SCALAR_LEN,
+use {
+    crate::{RISTRETTO_POINT_LEN, SCALAR_LEN},
+    bytemuck::{Pod, Zeroable},
 };
 
 /// Byte length of a range proof excluding the inner-product proof component

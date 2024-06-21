@@ -1,7 +1,7 @@
 //! Persistent info of disk index files to allow files to be reused on restart.
 use {
     crate::bucket_map::{BucketMapConfig, MAX_SEARCH_DEFAULT},
-    bytemuck::{Pod, Zeroable},
+    bytemuck_derive::{Pod, Zeroable},
     memmap2::MmapMut,
     std::{
         collections::HashMap,

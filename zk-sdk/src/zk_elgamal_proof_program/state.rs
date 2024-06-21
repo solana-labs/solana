@@ -53,7 +53,7 @@ impl<T: Pod> ProofContextState<T> {
 
 /// The `ProofContextState` without the proof context itself. This struct exists to facilitate the
 /// decoding of generic-independent fields in `ProofContextState`.
-#[derive(Clone, Copy, Debug, PartialEq, Pod, Zeroable)]
+#[derive(Clone, Copy, Debug, PartialEq, bytemuck_derive::Pod, bytemuck_derive::Zeroable)]
 #[repr(C)]
 pub struct ProofContextStateMeta {
     /// The proof context authority that can close the account

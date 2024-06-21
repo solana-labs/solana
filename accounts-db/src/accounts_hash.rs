@@ -5,7 +5,7 @@ use {
         ancestors::Ancestors,
         pubkey_bins::PubkeyBinCalculator24,
     },
-    bytemuck::{Pod, Zeroable},
+    bytemuck_derive::{Pod, Zeroable},
     log::*,
     memmap2::MmapMut,
     rayon::prelude::*,

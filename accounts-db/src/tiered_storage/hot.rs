@@ -19,7 +19,7 @@ use {
             StorableAccounts, TieredStorageError, TieredStorageFormat, TieredStorageResult,
         },
     },
-    bytemuck::{Pod, Zeroable},
+    bytemuck_derive::{Pod, Zeroable},
     memmap2::{Mmap, MmapOptions},
     modular_bitfield::prelude::*,
     solana_sdk::{

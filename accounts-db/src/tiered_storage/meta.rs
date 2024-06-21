@@ -2,7 +2,7 @@
 
 use {
     crate::tiered_storage::owners::OwnerOffset,
-    bytemuck::{Pod, Zeroable},
+    bytemuck_derive::{Pod, Zeroable},
     modular_bitfield::prelude::*,
     solana_sdk::{pubkey::Pubkey, stake_history::Epoch},
 };

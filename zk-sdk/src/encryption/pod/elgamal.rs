@@ -5,7 +5,7 @@ use {
         pod::impl_from_str, DECRYPT_HANDLE_LEN, ELGAMAL_CIPHERTEXT_LEN, ELGAMAL_PUBKEY_LEN,
     },
     base64::{prelude::BASE64_STANDARD, Engine},
-    bytemuck::{Pod, Zeroable},
+    bytemuck::Zeroable,
     std::fmt,
 };
 #[cfg(not(target_os = "solana"))]
@@ -24,7 +24,7 @@ const ELGAMAL_PUBKEY_MAX_BASE64_LEN: usize = 44;
 const ELGAMAL_CIPHERTEXT_MAX_BASE64_LEN: usize = 88;
 
 /// The `ElGamalCiphertext` type as a `Pod`.
-#[derive(Clone, Copy, Pod, Zeroable, PartialEq, Eq)]
+#[derive(Clone, Copy, bytemuck_derive::Pod, bytemuck_derive::Zeroable, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct PodElGamalCiphertext(pub(crate) [u8; ELGAMAL_CIPHERTEXT_LEN]);
 
@@ -69,7 +69,7 @@ impl TryFrom<PodElGamalCiphertext> for ElGamalCiphertext {
 }
 
 /// The `ElGamalPubkey` type as a `Pod`.
-#[derive(Clone, Copy, Default, Pod, Zeroable, PartialEq, Eq)]
+#[derive(Clone, Copy, Default, bytemuck_derive::Pod, bytemuck_derive::Zeroable, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct PodElGamalPubkey(pub(crate) [u8; ELGAMAL_PUBKEY_LEN]);
 
@@ -108,7 +108,7 @@ impl TryFrom<PodElGamalPubkey> for ElGamalPubkey {
 }
 
 /// The `DecryptHandle` type as a `Pod`.
-#[derive(Clone, Copy, Default, Pod, Zeroable, PartialEq, Eq)]
+#[derive(Clone, Copy, Default, bytemuck_derive::Pod, bytemuck_derive::Zeroable, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct PodDecryptHandle(pub(crate) [u8; DECRYPT_HANDLE_LEN]);
 

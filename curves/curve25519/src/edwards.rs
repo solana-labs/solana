@@ -1,4 +1,4 @@
-use bytemuck::{Pod, Zeroable};
+use bytemuck_derive::{Pod, Zeroable};
 pub use target_arch::*;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Pod, Zeroable)]
@@ -138,6 +138,7 @@ mod target_arch {
             curve_syscall_traits::{ADD, CURVE25519_EDWARDS, MUL, SUB},
             scalar::PodScalar,
         },
+        bytemuck::Zeroable,
     };
 
     pub fn validate_edwards(point: &PodEdwardsPoint) -> bool {

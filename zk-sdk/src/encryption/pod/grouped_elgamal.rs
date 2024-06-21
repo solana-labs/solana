@@ -10,7 +10,7 @@ use {
         },
         errors::ElGamalError,
     },
-    bytemuck::{Pod, Zeroable},
+    bytemuck::Zeroable,
     std::fmt,
 };
 
@@ -61,7 +61,7 @@ const GROUPED_ELGAMAL_CIPHERTEXT_3_HANDLES: usize =
     PEDERSEN_COMMITMENT_LEN + DECRYPT_HANDLE_LEN + DECRYPT_HANDLE_LEN + DECRYPT_HANDLE_LEN;
 
 /// The `GroupedElGamalCiphertext` type with two decryption handles as a `Pod`
-#[derive(Clone, Copy, Pod, Zeroable, PartialEq, Eq)]
+#[derive(Clone, Copy, bytemuck_derive::Pod, bytemuck_derive::Zeroable, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct PodGroupedElGamalCiphertext2Handles(
     pub(crate) [u8; GROUPED_ELGAMAL_CIPHERTEXT_2_HANDLES],
@@ -97,7 +97,7 @@ impl TryFrom<PodGroupedElGamalCiphertext2Handles> for GroupedElGamalCiphertext<2
 impl_extract!(TYPE = PodGroupedElGamalCiphertext2Handles);
 
 /// The `GroupedElGamalCiphertext` type with three decryption handles as a `Pod`
-#[derive(Clone, Copy, Pod, Zeroable, PartialEq, Eq)]
+#[derive(Clone, Copy, bytemuck_derive::Pod, bytemuck_derive::Zeroable, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct PodGroupedElGamalCiphertext3Handles(
     pub(crate) [u8; GROUPED_ELGAMAL_CIPHERTEXT_3_HANDLES],

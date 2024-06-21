@@ -5482,6 +5482,7 @@ dependencies = [
  "blake3",
  "bv",
  "bytemuck",
+ "bytemuck_derive",
  "bzip2",
  "criterion",
  "crossbeam-channel",
@@ -5745,6 +5746,7 @@ version = "2.0.0"
 dependencies = [
  "bv",
  "bytemuck",
+ "bytemuck_derive",
  "fs_extra",
  "log",
  "memmap2",
@@ -6172,6 +6174,7 @@ name = "solana-curve25519"
 version = "2.0.0"
 dependencies = [
  "bytemuck",
+ "bytemuck_derive",
  "curve25519-dalek",
  "solana-program",
  "thiserror",
@@ -7899,6 +7902,7 @@ dependencies = [
  "base64 0.22.1",
  "bincode",
  "bytemuck",
+ "bytemuck_derive",
  "curve25519-dalek",
  "itertools 0.12.1",
  "lazy_static",
@@ -7952,6 +7956,7 @@ dependencies = [
  "base64 0.22.1",
  "bincode",
  "bytemuck",
+ "bytemuck_derive",
  "byteorder",
  "curve25519-dalek",
  "itertools 0.12.1",

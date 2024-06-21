@@ -3,8 +3,9 @@
 #[cfg(not(target_os = "solana"))]
 use crate::{encryption::auth_encryption as decoded, errors::AuthenticatedEncryptionError};
 use {
-    crate::zk_token_elgamal::pod::{impl_from_str, Pod, Zeroable},
+    crate::zk_token_elgamal::pod::impl_from_str,
     base64::{prelude::BASE64_STANDARD, Engine},
+    bytemuck::{Pod, Zeroable},
     std::fmt,
 };
 

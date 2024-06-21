@@ -19,7 +19,7 @@ use {
             batched_range_proof::BatchedRangeProofContext, ProofType, ZkProofData,
         },
     },
-    bytemuck::{Pod, Zeroable},
+    bytemuck_derive::{Pod, Zeroable},
 };
 
 #[cfg(not(target_os = "solana"))]

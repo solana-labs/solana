@@ -13,7 +13,7 @@ use {
         sigma_proofs::pod::PodBatchedGroupedCiphertext3HandlesValidityProof,
         zk_elgamal_proof_program::proof_data::{ProofType, ZkProofData},
     },
-    bytemuck::{Pod, Zeroable},
+    bytemuck_derive::{Pod, Zeroable},
 };
 #[cfg(not(target_os = "solana"))]
 use {

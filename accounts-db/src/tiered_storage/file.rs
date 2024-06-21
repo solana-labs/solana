@@ -1,6 +1,6 @@
 use {
     super::{error::TieredStorageError, TieredStorageResult},
-    bytemuck::{AnyBitPattern, NoUninit, Pod, Zeroable},
+    bytemuck::{AnyBitPattern, NoUninit, Zeroable},
     std::{
         fs::{File, OpenOptions},
         io::{BufWriter, Read, Result as IoResult, Seek, SeekFrom, Write},
@@ -13,7 +13,7 @@ use {
 /// The ending 8 bytes of a valid tiered account storage file.
 pub const FILE_MAGIC_NUMBER: u64 = u64::from_le_bytes(*b"AnzaTech");
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Pod, Zeroable)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, bytemuck_derive::Pod, bytemuck_derive::Zeroable)]
 #[repr(C)]
 pub struct TieredStorageMagicNumber(pub u64);
 

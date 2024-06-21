@@ -3,7 +3,7 @@
 use crate::pubkey_bins::PubkeyBinCalculator24;
 use {
     crate::{accounts_hash::CalculateHashIntermediate, cache_hash_data_stats::CacheHashDataStats},
-    bytemuck::{Pod, Zeroable},
+    bytemuck_derive::{Pod, Zeroable},
     memmap2::MmapMut,
     solana_measure::measure::Measure,
     solana_sdk::clock::Slot,
