@@ -292,6 +292,8 @@ impl WaitReason {
 pub enum SchedulerStatus {
     /// Unified scheduler is disabled or installed scheduler is consumed by wait_for_termination().
     /// Note that transition to Unavailable from {Active, Stale} is one-way (i.e. one-time).
+    /// Also, this variant is transiently used as a placeholder internally when transitioning
+    /// scheduler statuses, which isn't observable unless panic is happening.
     Unavailable,
     /// Scheduler is installed into a bank; could be running or just be idling.
     /// This will be transitioned to Stale after certain time has passed if its bank hasn't been
@@ -329,7 +331,7 @@ impl SchedulerStatus {
             return;
         }
         let Self::Active(scheduler) = mem::replace(self, Self::Unavailable) else {
-            unreachable!("not active: {:?}", self);
+            unreachable!("not active: {self:?}");
         };
         let (pool, result_with_timings) = f(scheduler);
         *self = Self::Stale(pool, result_with_timings);
@@ -549,7 +551,8 @@ impl BankWithSchedulerInner {
                 let scheduler = self.scheduler.read().unwrap();
                 // Re-register a new timeout listener only after acquiring the read lock;
                 // Otherwise, the listener would again put scheduler into Stale before the read
-                // lock under an extremely-rare race condition, causing panic below.
+                // lock under an extremely-rare race condition, causing panic below in
+                // active_scheduler().
                 pool.register_timeout_listener(self.do_create_timeout_listener());
                 f(scheduler.active_scheduler())
             }

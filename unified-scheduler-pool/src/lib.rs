@@ -340,6 +340,8 @@ where
         context: SchedulingContext,
         result_with_timings: ResultWithTimings,
     ) -> S {
+        assert_matches!(result_with_timings, (Ok(_), _));
+
         // pop is intentional for filo, expecting relatively warmed-up scheduler due to having been
         // returned recently
         if let Some((inner, _pooled_at)) = self.scheduler_inners.lock().expect("not poisoned").pop()
@@ -1711,6 +1713,10 @@ mod tests {
             &CheckPoint::TimeoutListenerTriggered(0),
             &CheckPoint::TimeoutListenerTriggered(1),
             &TestCheckPoint::AfterTimeoutListenerTriggered,
+            &TestCheckPoint::BeforeTimeoutListenerTriggered,
+            &CheckPoint::TimeoutListenerTriggered(0),
+            &CheckPoint::TimeoutListenerTriggered(1),
+            &TestCheckPoint::AfterTimeoutListenerTriggered,
         ]);
 
         let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
@@ -1777,6 +1783,11 @@ mod tests {
             ));
         bank.schedule_transaction_executions([(tx_after_stale, &1)].into_iter())
             .unwrap();
+
+        // Observe second occurrence of TimeoutListenerTriggered(1), which indicates a new timeout
+        // lister is registered correctly again for reactivated scheduler.
+        sleepless_testing::at(TestCheckPoint::BeforeTimeoutListenerTriggered);
+        sleepless_testing::at(TestCheckPoint::AfterTimeoutListenerTriggered);
 
         let (result, timings) = bank.wait_for_completed_scheduler().unwrap();
         assert_matches!(result, Ok(()));

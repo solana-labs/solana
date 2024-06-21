@@ -26,20 +26,21 @@ pub(crate) trait BuilderTracked: Sized {
 }
 
 #[cfg(not(test))]
-pub(crate) use sleepless_testing_dummy::*;
+pub(crate) use dummy::*;
 #[cfg(test)]
-pub(crate) use sleepless_testing_real::*;
+pub(crate) use real::*;
 
 #[cfg(test)]
-mod sleepless_testing_real {
+mod real {
     use {
         lazy_static::lazy_static,
+        log::trace,
         std::{
             cmp::Ordering::{Equal, Greater, Less},
-            collections::{HashMap, HashSet},
+            collections::HashMap,
             fmt::Debug,
             sync::{Arc, Condvar, Mutex},
-            thread::{current, JoinHandle, ThreadId},
+            thread::{current, panicking, JoinHandle, ThreadId},
         },
     };
 
@@ -47,7 +48,7 @@ mod sleepless_testing_real {
     struct Progress {
         _name: String,
         check_points: Vec<String>,
-        current_check_point: Mutex<String>,
+        current_index: Mutex<usize>,
         condvar: Condvar,
     }
 
@@ -61,60 +62,87 @@ mod sleepless_testing_real {
                 .into_iter()
                 .chain(check_points)
                 .collect::<Vec<_>>();
-            let check_points_set = check_points.iter().collect::<HashSet<_>>();
-            assert_eq!(check_points.len(), check_points_set.len());
-
             Self {
                 _name: name,
                 check_points,
-                current_check_point: Mutex::new(initial_check_point),
+                current_index: Mutex::new(0),
                 condvar: Condvar::new(),
             }
         }
 
         fn change_current_check_point(&self, anchored_check_point: String) {
-            let Some(anchored_index) = self
-                .check_points
-                .iter()
-                .position(|check_point| check_point == &anchored_check_point)
+            let mut current_index = self.current_index.lock().unwrap();
+
+            let Some(anchored_index) = self.anchored_index(*current_index, &anchored_check_point)
             else {
-                // Ignore unrecognizable checkpoints...
+                trace!("Ignore {} at {:?}", anchored_check_point, current());
                 return;
             };
 
-            let mut current_check_point = self.current_check_point.lock().unwrap();
+            let next_index = self.expected_next_index(*current_index);
+            let should_change = match anchored_index.cmp(&next_index) {
+                Equal => true,
+                Greater => {
+                    trace!("Blocked on {} at {:?}", anchored_check_point, current());
+                    // anchor is one of future check points; block the current thread until
+                    // that happens
+                    current_index = self
+                        .condvar
+                        .wait_while(current_index, |&mut current_index| {
+                            let Some(anchored_index) =
+                                self.anchored_index(current_index, &anchored_check_point)
+                            else {
+                                // don't wait. seems the progress is made by other threads
+                                // anchored to the same checkpoint.
+                                return false;
+                            };
+                            let next_index = self.expected_next_index(current_index);
 
-            let should_change =
-                match anchored_index.cmp(&self.expected_next_index(&current_check_point)) {
-                    Equal => true,
-                    Greater => {
-                        // anchor is one of future check points; block the current thread until
-                        // that happens
-                        current_check_point = self
-                            .condvar
-                            .wait_while(current_check_point, |current_check_point| {
-                                anchored_index != self.expected_next_index(current_check_point)
-                            })
-                            .unwrap();
-                        true
-                    }
-                    // anchor is already observed.
-                    Less => false,
-                };
+                            // determine we should wait further or not
+                            match anchored_index.cmp(&next_index) {
+                                Equal => false,
+                                Greater => {
+                                    trace!(
+                                        "Re-blocked on {} ({} != {}) at {:?}",
+                                        anchored_check_point,
+                                        anchored_index,
+                                        next_index,
+                                        current()
+                                    );
+                                    true
+                                }
+                                Less => unreachable!(),
+                            }
+                        })
+                        .unwrap();
+                    true
+                }
+                Less => unreachable!(),
+            };
 
             if should_change {
-                *current_check_point = anchored_check_point;
+                if *current_index != anchored_index {
+                    trace!("Progressed to: {} at {:?}", anchored_check_point, current());
+                    *current_index = anchored_index;
+                }
+
                 self.condvar.notify_all();
             }
         }
 
-        fn expected_next_index(&self, current_check_point: &String) -> usize {
-            let current_index = self
-                .check_points
-                .iter()
-                .position(|check_point| check_point == current_check_point)
-                .unwrap();
+        fn expected_next_index(&self, current_index: usize) -> usize {
             current_index.checked_add(1).unwrap()
+        }
+
+        fn anchored_index(
+            &self,
+            current_index: usize,
+            anchored_check_point: &String,
+        ) -> Option<usize> {
+            self.check_points[current_index..]
+                .iter()
+                .position(|check_point| check_point == anchored_check_point)
+                .map(|subslice_index| subslice_index.checked_add(current_index).unwrap())
         }
     }
 
@@ -142,11 +170,13 @@ mod sleepless_testing_real {
         }
 
         fn deactivate(&self) {
-            assert_eq!(
-                *self.0.check_points.last().unwrap(),
-                *self.0.current_check_point.lock().unwrap(),
-                "unfinished progress"
-            );
+            if !panicking() {
+                assert_eq!(
+                    self.0.check_points.len().checked_sub(1).unwrap(),
+                    *self.0.current_index.lock().unwrap(),
+                    "unfinished progress"
+                );
+            }
             THREAD_REGISTRY.lock().unwrap().remove(&self.1).unwrap();
         }
     }
@@ -299,7 +329,7 @@ mod sleepless_testing_real {
 }
 
 #[cfg(not(test))]
-mod sleepless_testing_dummy {
+mod dummy {
     use std::fmt::Debug;
 
     #[inline]
