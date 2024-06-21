@@ -260,7 +260,7 @@ mod tests {
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
 
         let SpawnServerResult {
-            endpoint: response_recv_endpoint,
+            endpoints: mut response_recv_endpoints,
             thread: response_recv_thread,
             key_updater: _,
         } = solana_streamer::quic::spawn_server(
@@ -281,6 +281,9 @@ mod tests {
         )
         .unwrap();
 
+        let response_recv_endpoint = response_recv_endpoints
+            .pop()
+            .expect("at least one endpoint");
         let connection_cache = ConnectionCache::new_with_client_options(
             "connection_cache_test",
             1,                            // connection_pool_size

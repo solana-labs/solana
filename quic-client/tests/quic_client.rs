@@ -73,7 +73,7 @@ mod tests {
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let (s, exit, keypair) = server_args();
         let SpawnServerResult {
-            endpoint: _,
+            endpoints: _,
             thread: t,
             key_updater: _,
         } = solana_streamer::quic::spawn_server(
@@ -159,7 +159,7 @@ mod tests {
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let (s, exit, keypair) = server_args();
         let solana_streamer::nonblocking::quic::SpawnNonBlockingServerResult {
-            endpoint: _,
+            endpoints: _,
             stats: _,
             thread: t,
             max_concurrent_connections: _,
@@ -223,7 +223,7 @@ mod tests {
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let (request_recv_socket, request_recv_exit, keypair) = server_args();
         let SpawnServerResult {
-            endpoint: request_recv_endpoint,
+            endpoints: request_recv_endpoints,
             thread: request_recv_thread,
             key_updater: _,
         } = solana_streamer::quic::spawn_server(
@@ -244,7 +244,7 @@ mod tests {
         )
         .unwrap();
 
-        drop(request_recv_endpoint);
+        drop(request_recv_endpoints);
         // Response Receiver:
         let (response_recv_socket, response_recv_exit, keypair2) = server_args();
         let (sender2, receiver2) = unbounded();
@@ -253,7 +253,7 @@ mod tests {
         let port = response_recv_socket.local_addr().unwrap().port();
         let server_addr = SocketAddr::new(addr, port);
         let SpawnServerResult {
-            endpoint: response_recv_endpoint,
+            endpoints: mut response_recv_endpoints,
             thread: response_recv_thread,
             key_updater: _,
         } = solana_streamer::quic::spawn_server(
@@ -286,6 +286,10 @@ mod tests {
             key: priv_key,
         });
 
+        let response_recv_endpoint = response_recv_endpoints
+            .pop()
+            .expect("at least one endpoint");
+        drop(response_recv_endpoints);
         let endpoint =
             QuicLazyInitializedEndpoint::new(client_certificate, Some(response_recv_endpoint));
         let request_sender =

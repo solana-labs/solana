@@ -85,11 +85,11 @@ fn verify_reachable_ports(
     }
     if verify_address(&node.info.tpu(Protocol::UDP).ok()) {
         udp_sockets.extend(node.sockets.tpu.iter());
-        udp_sockets.push(&node.sockets.tpu_quic);
+        udp_sockets.extend(&node.sockets.tpu_quic);
     }
     if verify_address(&node.info.tpu_forwards(Protocol::UDP).ok()) {
         udp_sockets.extend(node.sockets.tpu_forwards.iter());
-        udp_sockets.push(&node.sockets.tpu_forwards_quic);
+        udp_sockets.extend(&node.sockets.tpu_forwards_quic);
     }
     if verify_address(&node.info.tpu_vote().ok()) {
         udp_sockets.extend(node.sockets.tpu_vote.iter());
