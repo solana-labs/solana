@@ -124,6 +124,7 @@ pub enum ProgramCliCommand {
         compute_unit_price: Option<u64>,
         max_sign_attempts: usize,
         use_rpc: bool,
+        skip_feature_verification: bool,
     },
     SetBufferAuthority {
         buffer_pubkey: Pubkey,
@@ -395,7 +396,15 @@ impl ProgramSubCommands for App<'_, '_> {
                         .arg(Arg::with_name("use_rpc").long("use-rpc").help(
                             "Send transactions to the configured RPC instead of validator TPUs",
                         ))
-                        .arg(compute_unit_price_arg()),
+                        .arg(compute_unit_price_arg())
+                        .arg(
+                            Arg::with_name("skip_feature_verify")
+                                .long("skip-feature-verify")
+                                .takes_value(false)
+                                .help("Don't verify program against the activated feature set. \
+                                This setting means a program containing a syscall not yet active on \
+                                mainnet will succeed local verification, but fail during the last step of deployment.")
+                        ),
                 )
                 .subcommand(
                     SubCommand::with_name("set-buffer-authority")
@@ -790,6 +799,7 @@ pub fn parse_program_subcommand(
 
             let compute_unit_price = value_of(matches, "compute_unit_price");
             let max_sign_attempts = value_of(matches, "max_sign_attempts").unwrap();
+            let skip_feature_verify = matches.is_present("skip_feature_verify");
 
             CliCommandInfo {
                 command: CliCommand::Program(ProgramCliCommand::WriteBuffer {
@@ -805,6 +815,7 @@ pub fn parse_program_subcommand(
                     compute_unit_price,
                     max_sign_attempts,
                     use_rpc: matches.is_present("use_rpc"),
+                    skip_feature_verification: skip_feature_verify,
                 }),
                 signers: signer_info.signers,
             }
@@ -1057,6 +1068,7 @@ pub fn process_program_subcommand(
             compute_unit_price,
             max_sign_attempts,
             use_rpc,
+            skip_feature_verification,
         } => process_write_buffer(
             rpc_client,
             config,
@@ -1070,6 +1082,7 @@ pub fn process_program_subcommand(
             *compute_unit_price,
             *max_sign_attempts,
             *use_rpc,
+            *skip_feature_verification,
         ),
         ProgramCliCommand::SetBufferAuthority {
             buffer_pubkey,
@@ -1586,11 +1599,18 @@ fn process_write_buffer(
     compute_unit_price: Option<u64>,
     max_sign_attempts: usize,
     use_rpc: bool,
+    skip_feature_verification: bool,
 ) -> ProcessResult {
     let fee_payer_signer = config.signers[fee_payer_signer_index];
     let buffer_authority = config.signers[buffer_authority_signer_index];
 
-    let program_data = read_and_verify_elf(program_location, FeatureSet::all_enabled())?;
+    let feature_set = if skip_feature_verification {
+        FeatureSet::all_enabled()
+    } else {
+        fetch_feature_set(&rpc_client)?
+    };
+
+    let program_data = read_and_verify_elf(program_location, feature_set)?;
     let program_len = program_data.len();
 
     // Create ephemeral keypair to use for Buffer account, if not provided
@@ -3494,6 +3514,7 @@ mod tests {
                     compute_unit_price: None,
                     max_sign_attempts: 5,
                     use_rpc: false,
+                    skip_feature_verification: false,
                 }),
                 signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
@@ -3522,6 +3543,7 @@ mod tests {
                     compute_unit_price: None,
                     max_sign_attempts: 5,
                     use_rpc: false,
+                    skip_feature_verification: false,
                 }),
                 signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }
@@ -3553,6 +3575,7 @@ mod tests {
                     compute_unit_price: None,
                     max_sign_attempts: 5,
                     use_rpc: false,
+                    skip_feature_verification: false,
                 }),
                 signers: vec![
                     Box::new(read_keypair_file(&keypair_file).unwrap()),
@@ -3587,6 +3610,7 @@ mod tests {
                     compute_unit_price: None,
                     max_sign_attempts: 5,
                     use_rpc: false,
+                    skip_feature_verification: false,
                 }),
                 signers: vec![
                     Box::new(read_keypair_file(&keypair_file).unwrap()),
@@ -3626,6 +3650,7 @@ mod tests {
                     compute_unit_price: None,
                     max_sign_attempts: 5,
                     use_rpc: false,
+                    skip_feature_verification: false,
                 }),
                 signers: vec![
                     Box::new(read_keypair_file(&keypair_file).unwrap()),
@@ -3658,6 +3683,35 @@ mod tests {
                     compute_unit_price: None,
                     max_sign_attempts: 10,
                     use_rpc: false,
+                    skip_feature_verification: false
+                }),
+                signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
+            }
+        );
+
+        // skip feature verification
+        let test_command = test_commands.clone().get_matches_from(vec![
+            "test",
+            "program",
+            "write-buffer",
+            "/Users/test/program.so",
+            "--skip-feature-verify",
+        ]);
+        assert_eq!(
+            parse_command(&test_command, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::Program(ProgramCliCommand::WriteBuffer {
+                    program_location: "/Users/test/program.so".to_string(),
+                    fee_payer_signer_index: 0,
+                    buffer_signer_index: None,
+                    buffer_pubkey: None,
+                    buffer_authority_signer_index: 0,
+                    max_len: None,
+                    skip_fee_check: false,
+                    compute_unit_price: None,
+                    max_sign_attempts: 5,
+                    use_rpc: false,
+                    skip_feature_verification: true,
                 }),
                 signers: vec![Box::new(read_keypair_file(&keypair_file).unwrap())],
             }

@@ -1567,6 +1567,7 @@ fn test_cli_program_write_buffer() {
         compute_unit_price: None,
         max_sign_attempts: 5,
         use_rpc: false,
+        skip_feature_verification: true,
     });
     config.output_format = OutputFormat::JsonCompact;
     let response = process_command(&config);
@@ -1606,6 +1607,7 @@ fn test_cli_program_write_buffer() {
         compute_unit_price: None,
         max_sign_attempts: 5,
         use_rpc: false,
+        skip_feature_verification: true,
     });
     let response = process_command(&config);
     let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
@@ -1672,6 +1674,7 @@ fn test_cli_program_write_buffer() {
         compute_unit_price: None,
         max_sign_attempts: 5,
         use_rpc: false,
+        skip_feature_verification: true,
     });
     let response = process_command(&config);
     let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
@@ -1714,6 +1717,7 @@ fn test_cli_program_write_buffer() {
         compute_unit_price: None,
         max_sign_attempts: 5,
         use_rpc: false,
+        skip_feature_verification: true,
     });
     let response = process_command(&config);
     let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
@@ -1796,6 +1800,7 @@ fn test_cli_program_write_buffer() {
         compute_unit_price: None,
         max_sign_attempts: 5,
         use_rpc: false,
+        skip_feature_verification: true,
     });
     config.output_format = OutputFormat::JsonCompact;
     let response = process_command(&config);
@@ -1845,6 +1850,7 @@ fn test_cli_program_write_buffer() {
         compute_unit_price: None,
         max_sign_attempts: 5,
         use_rpc: false,
+        skip_feature_verification: true,
     });
     process_command(&config).unwrap();
     config.signers = vec![&keypair, &buffer_keypair];
@@ -1884,6 +1890,111 @@ fn test_cli_program_write_buffer() {
             buffer_account_len, min_buffer_account_len
         ),
     );
+}
+
+#[test_case(true; "Feature enabled")]
+#[test_case(false; "Feature disabled")]
+fn test_cli_program_write_buffer_feature(enable_feature: bool) {
+    solana_logger::setup();
+
+    let mut program_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    program_path.push("tests");
+    program_path.push("fixtures");
+    program_path.push("alt_bn128");
+    program_path.set_extension("so");
+
+    let mint_keypair = Keypair::new();
+    let mint_pubkey = mint_keypair.pubkey();
+    let faucet_addr = run_local_faucet(mint_keypair, None);
+    let mut genesis = TestValidatorGenesis::default();
+    let mut test_validator_builder = genesis
+        .fee_rate_governor(FeeRateGovernor::new(0, 0))
+        .rent(Rent {
+            lamports_per_byte_year: 1,
+            exemption_threshold: 1.0,
+            ..Rent::default()
+        })
+        .faucet_addr(Some(faucet_addr));
+
+    // Deactivate the enable alt bn128 syscall and try to submit a program with that syscall
+    if !enable_feature {
+        test_validator_builder =
+            test_validator_builder.deactivate_features(&[enable_alt_bn128_syscall::id()]);
+    }
+
+    let test_validator = test_validator_builder
+        .start_with_mint_address(mint_pubkey, SocketAddrSpace::Unspecified)
+        .expect("validator start failed");
+
+    let rpc_client =
+        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
+
+    let mut file = File::open(program_path.to_str().unwrap()).unwrap();
+    let mut program_data = Vec::new();
+    file.read_to_end(&mut program_data).unwrap();
+    let max_len = program_data.len();
+    let minimum_balance_for_buffer = rpc_client
+        .get_minimum_balance_for_rent_exemption(UpgradeableLoaderState::size_of_programdata(
+            max_len,
+        ))
+        .unwrap();
+
+    let mut config = CliConfig::recent_for_tests();
+    let keypair = Keypair::new();
+    config.json_rpc_url = test_validator.rpc_url();
+    config.signers = vec![&keypair];
+    config.command = CliCommand::Airdrop {
+        pubkey: None,
+        lamports: 100 * minimum_balance_for_buffer,
+    };
+    process_command(&config).unwrap();
+
+    // Write a buffer with default params
+    config.signers = vec![&keypair];
+    config.command = CliCommand::Program(ProgramCliCommand::WriteBuffer {
+        program_location: program_path.to_str().unwrap().to_string(),
+        fee_payer_signer_index: 0,
+        buffer_signer_index: None,
+        buffer_pubkey: None,
+        buffer_authority_signer_index: 0,
+        max_len: None,
+        skip_fee_check: false,
+        compute_unit_price: None,
+        max_sign_attempts: 5,
+        use_rpc: false,
+        skip_feature_verification: false,
+    });
+    config.output_format = OutputFormat::JsonCompact;
+
+    if enable_feature {
+        let response = process_command(&config);
+        assert!(response.is_ok());
+    } else {
+        expect_command_failure(
+            &config,
+            "Program contains a syscall from a deactivated feature",
+            "ELF error: ELF error: Unresolved symbol (sol_alt_bn128_group_op) at instruction #49 (ELF file offset 0x188)"
+        );
+
+        // If we bypass the verification, there should be no error
+        config.command = CliCommand::Program(ProgramCliCommand::WriteBuffer {
+            program_location: program_path.to_str().unwrap().to_string(),
+            fee_payer_signer_index: 0,
+            buffer_signer_index: None,
+            buffer_pubkey: None,
+            buffer_authority_signer_index: 0,
+            max_len: None,
+            skip_fee_check: false,
+            compute_unit_price: None,
+            max_sign_attempts: 5,
+            use_rpc: false,
+            skip_feature_verification: true,
+        });
+
+        // When we skip verification, we won't fail
+        let response = process_command(&config);
+        assert!(response.is_ok());
+    }
 }
 
 #[test]
@@ -1939,6 +2050,7 @@ fn test_cli_program_set_buffer_authority() {
         compute_unit_price: None,
         max_sign_attempts: 5,
         use_rpc: false,
+        skip_feature_verification: true,
     });
     process_command(&config).unwrap();
     let buffer_account = rpc_client.get_account(&buffer_keypair.pubkey()).unwrap();
@@ -2111,6 +2223,7 @@ fn test_cli_program_mismatch_buffer_authority() {
         compute_unit_price: None,
         max_sign_attempts: 5,
         use_rpc: false,
+        skip_feature_verification: true,
     });
     process_command(&config).unwrap();
     let buffer_account = rpc_client.get_account(&buffer_keypair.pubkey()).unwrap();
@@ -2432,6 +2545,7 @@ fn test_cli_program_show() {
         compute_unit_price: None,
         max_sign_attempts: 5,
         use_rpc: false,
+        skip_feature_verification: true,
     });
     process_command(&config).unwrap();
 
@@ -2628,6 +2742,7 @@ fn test_cli_program_dump() {
         compute_unit_price: None,
         max_sign_attempts: 5,
         use_rpc: false,
+        skip_feature_verification: true,
     });
     process_command(&config).unwrap();
 
@@ -2674,6 +2789,7 @@ fn create_buffer_with_offline_authority<'a>(
         compute_unit_price: None,
         max_sign_attempts: 5,
         use_rpc: false,
+        skip_feature_verification: true,
     });
     process_command(config).unwrap();
     let buffer_account = rpc_client.get_account(&buffer_signer.pubkey()).unwrap();
