@@ -606,6 +606,7 @@ impl Consumer {
                 &mut execute_and_commit_timings.execute_timings,
                 TransactionProcessingConfig {
                     account_overrides: None,
+                    check_program_modification_slot: bank.check_program_modification_slot(),
                     compute_budget: bank.compute_budget(),
                     log_messages_bytes_limit: self.log_messages_bytes_limit,
                     limit_to_load_programs: true,

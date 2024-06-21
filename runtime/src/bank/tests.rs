@@ -73,7 +73,6 @@ use {
         incinerator,
         instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
         loader_upgradeable_instruction::UpgradeableLoaderInstruction,
-        loader_v4::{LoaderV4State, LoaderV4Status},
         message::{Message, MessageHeader, SanitizedMessage},
         native_loader,
         native_token::{sol_to_lamports, LAMPORTS_PER_SOL},
@@ -13055,91 +13054,6 @@ fn test_deploy_last_epoch_slot() {
     let transaction = Transaction::new(&signers, message, bank.last_blockhash());
     let result_with_feature_enabled = bank.process_transaction(&transaction);
     assert_eq!(result_with_feature_enabled, Ok(()));
-}
-
-#[test]
-fn test_program_modification_slot_account_not_found() {
-    let genesis_config = GenesisConfig::default();
-    let bank = Bank::new_for_tests(&genesis_config);
-    let key = Pubkey::new_unique();
-
-    let result = bank.program_modification_slot(&key);
-    assert_eq!(result.err(), Some(TransactionError::ProgramAccountNotFound));
-
-    let mut account_data = AccountSharedData::new(100, 100, &bpf_loader_upgradeable::id());
-    bank.store_account(&key, &account_data);
-
-    let result = bank.program_modification_slot(&key);
-    assert_eq!(result.err(), Some(TransactionError::ProgramAccountNotFound));
-
-    let state = UpgradeableLoaderState::Program {
-        programdata_address: Pubkey::new_unique(),
-    };
-    account_data.set_data(bincode::serialize(&state).unwrap());
-    bank.store_account(&key, &account_data);
-
-    let result = bank.program_modification_slot(&key);
-    assert_eq!(result.err(), Some(TransactionError::ProgramAccountNotFound));
-
-    account_data.set_owner(loader_v4::id());
-    bank.store_account(&key, &account_data);
-
-    let result = bank.program_modification_slot(&key);
-    assert_eq!(result.err(), Some(TransactionError::ProgramAccountNotFound));
-}
-
-#[test]
-fn test_program_modification_slot_success() {
-    let genesis_config = GenesisConfig::default();
-    let bank = Bank::new_for_tests(&genesis_config);
-
-    let key1 = Pubkey::new_unique();
-    let key2 = Pubkey::new_unique();
-
-    let account_data = AccountSharedData::new_data(
-        100,
-        &UpgradeableLoaderState::Program {
-            programdata_address: key2,
-        },
-        &bpf_loader_upgradeable::id(),
-    )
-    .unwrap();
-    bank.store_account(&key1, &account_data);
-
-    let account_data = AccountSharedData::new_data(
-        100,
-        &UpgradeableLoaderState::ProgramData {
-            slot: 77,
-            upgrade_authority_address: None,
-        },
-        &bpf_loader_upgradeable::id(),
-    )
-    .unwrap();
-    bank.store_account(&key2, &account_data);
-
-    let result = bank.program_modification_slot(&key1);
-    assert_eq!(result.unwrap(), 77);
-
-    let state = LoaderV4State {
-        slot: 58,
-        authority_address: Pubkey::new_unique(),
-        status: LoaderV4Status::Deployed,
-    };
-    let encoded = unsafe {
-        std::mem::transmute::<&LoaderV4State, &[u8; LoaderV4State::program_data_offset()]>(&state)
-    };
-    let mut account_data = AccountSharedData::new(100, encoded.len(), &loader_v4::id());
-    account_data.set_data(encoded.to_vec());
-    bank.store_account(&key1, &account_data);
-
-    let result = bank.program_modification_slot(&key1);
-    assert_eq!(result.unwrap(), 58);
-
-    account_data.set_owner(Pubkey::new_unique());
-    bank.store_account(&key2, &account_data);
-
-    let result = bank.program_modification_slot(&key2);
-    assert_eq!(result.unwrap(), 0);
 }
 
 #[test]

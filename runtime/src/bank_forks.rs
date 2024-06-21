@@ -225,7 +225,7 @@ impl BankForks {
 
     pub fn insert(&mut self, mut bank: Bank) -> BankWithScheduler {
         if self.root.load(Ordering::Relaxed) < self.highest_slot_at_startup {
-            bank.check_program_modification_slot();
+            bank.set_check_program_modification_slot(true);
         }
 
         let bank = Arc::new(bank);
