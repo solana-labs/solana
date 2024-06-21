@@ -98,14 +98,14 @@ proofs.
   - The ElGamal public-key validity proof instruction certifies that an ElGamal
     public-key is a properly formed public key.
   - Mathematical description and proof of security:
-    [[Notes]](https://github.com/solana-labs/solana/blob/master/docs/src/runtime/zk-docs/pubkey_proof.pdf)
+    [[Notes]](https://github.com/anza-xyz/agave/blob/master/docs/src/runtime/zk-docs/pubkey_proof.pdf)
 
 - `VerifyZeroCiphertext`:
 
   - The zero-ciphertext proof certifies that an ElGamal ciphertext encrypts the
     number zero.
   - Mathematical description and proof of security:
-    [[Notes]](https://github.com/solana-labs/solana/blob/master/docs/src/runtime/zk-docs/zero_proof.pdf)
+    [[Notes]](https://github.com/anza-xyz/agave/blob/master/docs/src/runtime/zk-docs/zero_proof.pdf)
 
 #### Equality proofs
 
@@ -114,11 +114,20 @@ proofs.
   - The ciphertext-commitment equality proof certifies that an ElGamal
     ciphertext and a Pedersen commitment encode the same message.
   - Mathematical description and proof of security:
-    [[Notes]](https://github.com/solana-labs/solana/blob/master/docs/src/runtime/zk-docs/ciphertext_commitment_equality.pdf)
+    [[Notes]](https://github.com/anza-xyz/agave/blob/master/docs/src/runtime/zk-docs/ciphertext_commitment_equality.pdf)
 
 - `VerifyCiphertextCiphertextEquality`:
 
   - The ciphertext-ciphertext equality proof certifies that two ElGamal
     ciphertexts encrypt the same message.
   - Mathematical description and proof of security:
-    [[Notes]](https://github.com/solana-labs/solana/blob/master/docs/src/runtime/zk-docs/ciphertext_ciphertext_equality.pdf)
+    [[Notes]](https://github.com/anza-xyz/agave/blob/master/docs/src/runtime/zk-docs/ciphertext_ciphertext_equality.pdf)
+
+#### Ciphertext Validity proofs
+
+- `VerifyGroupedCiphertextValidity`:
+
+  - The grouped ciphertext validity proof certifies that a grouped ElGamal
+    cipehrtext is well-formed
+    - Mathematical description and proof of security:
+      [[Notes]](https://github.com/anza-xyz/agave/blob/master/docs/src/runtime/zk-docs/ciphertext_validity.pdf)
