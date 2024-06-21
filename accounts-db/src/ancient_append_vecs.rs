@@ -210,6 +210,7 @@ impl AncientSlotInfos {
         let low_threshold = tuning.max_ancient_slots * 50 / 100;
         let mut bytes_from_must_shrink = 0;
         let mut bytes_from_smallest_storages = 0;
+        let mut bytes_from_newest_storages = 0;
         for (i, info) in self.all_infos.iter().enumerate() {
             cumulative_bytes += info.alive_bytes;
             let ancient_storages_required =
@@ -235,6 +236,8 @@ impl AncientSlotInfos {
             }
             if info.should_shrink {
                 bytes_from_must_shrink += info.alive_bytes;
+            } else if info.is_high_slot {
+                bytes_from_newest_storages += info.alive_bytes;
             } else {
                 bytes_from_smallest_storages += info.alive_bytes;
             }
@@ -245,6 +248,9 @@ impl AncientSlotInfos {
         stats
             .bytes_from_smallest_storages
             .fetch_add(bytes_from_smallest_storages, Ordering::Relaxed);
+        stats
+            .bytes_from_newest_storages
+            .fetch_add(bytes_from_newest_storages, Ordering::Relaxed);
     }
 
     /// remove entries from 'all_infos' such that combining
