@@ -81,8 +81,7 @@ Validator and in third-party applications.
 The interface to SVM is represented by the
 `transaction_processor::TransactionBatchProcessor` struct.  To create
 a `TransactionBatchProcessor` object the client need to specify the
-`slot`, `epoch`, `epoch_schedule`, `fee_structure`, `runtime_config`,
-and `program_cache`.
+`slot`, `epoch`, and `program_cache`.
 
 - `slot: Slot` is a u64 value representing the ordinal number of a
     particular blockchain state in context of which the transactions
@@ -92,18 +91,6 @@ and `program_cache`.
     a Solana epoch, in which the slot was created. This is another
     index used to locate the onchain programs used in the execution of
     transactions in the batch.
-- `epoch_schedule: EpochSchedule` is a struct that contains
-    information about epoch configuration, such as number of slots per
-    epoch, etc. TransactionBatchProcessor needs an instance of
-    EpochSchedule to obtain the first slot in the epoch in which the
-    transactions batch is being executed. This slot is sometimes
-    required for updating the information about the slot when a program
-    account has been accessed most recently. This is needed for
-    program cache bookkeeping.
-- `fee_structure: FeeStructure` an instance of `FeeStructure` is
-    needed to check the validity of every transaction in a batch when
-    the transaction accounts are being loaded and checked for
-    compliance with required fees for transaction execution.
 - `program_cache: Arc<RwLock<ProgramCache<FG>>>` is a reference to
     a ProgramCache instance. All on chain programs used in transaction
     batch execution are loaded from the program cache.
@@ -144,10 +131,6 @@ pub trait TransactionProcessingCallback {
     fn account_matches_owners(&self, account: &Pubkey, owners: &[Pubkey]) -> Option<usize>;
 
     fn get_account_shared_data(&self, pubkey: &Pubkey) -> Option<AccountSharedData>;
-
-    fn get_program_match_criteria(&self, _program: &Pubkey) -> ProgramCacheMatchCriteria {
-        ProgramCacheMatchCriteria::NoCriteria
-    }
 
     fn add_builtin_account(&self, _name: &str, _program_id: &Pubkey) {}
 }
@@ -194,6 +177,7 @@ the runtime environment to use for processing transactions.
 - `epoch_total_stake`: The total stake for the current epoch.
 - `epoch_vote_accounts`: The vote accounts for the current epoch.
 - `feature_set`: Runtime feature set to use for the transaction batch.
+- `fee_structure`: Fee structure to use for assessing transaction fees.
 - `lamports_per_signature`: Lamports per signature to charge per transaction.
 - `rent_collector`: Rent collector to use for the transaction batch.
 
@@ -205,6 +189,8 @@ the transaction processor.
 - `account_overrides`: Encapsulates overridden accounts, typically used for
   transaction simulation.
 - `compute_budget`: The compute budget to use for transaction execution.
+- `check_program_modification_slot`: Whether or not to check a program's
+  modification slot when replenishing a program cache instance.
 - `log_messages_bytes_limit`: The maximum number of bytes that log messages can
   consume.
 - `limit_to_load_programs`: Whether to limit the number of programs loaded for
