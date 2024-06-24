@@ -1,7 +1,7 @@
 use {
     crate::{
         cli::{CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult},
-        compute_budget::WithComputeUnitPrice,
+        compute_budget::{ComputeUnitConfig, WithComputeUnitConfig},
         spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
     },
     bincode::{deserialize, serialized_size},
@@ -12,7 +12,7 @@ use {
         self, ValidatorInfo, MAX_LONG_FIELD_LENGTH, MAX_SHORT_FIELD_LENGTH,
     },
     solana_clap_utils::{
-        compute_unit_price::{compute_unit_price_arg, COMPUTE_UNIT_PRICE_ARG},
+        compute_budget::{compute_unit_price_arg, ComputeUnitLimit, COMPUTE_UNIT_PRICE_ARG},
         hidden_unless_forced,
         input_parsers::{pubkey_of, value_of},
         input_validators::{is_pubkey, is_url},
@@ -275,7 +275,7 @@ pub fn process_set_validator_info(
     validator_info: &Value,
     force_keybase: bool,
     info_pubkey: Option<Pubkey>,
-    compute_unit_price: Option<&u64>,
+    compute_unit_price: Option<u64>,
 ) -> ProcessResult {
     // Validate keybase username
     if let Some(string) = validator_info.get("keybaseUsername") {
@@ -362,7 +362,10 @@ pub fn process_set_validator_info(
                 lamports,
                 keys.clone(),
             )
-            .with_compute_unit_price(compute_unit_price);
+            .with_compute_unit_config(&ComputeUnitConfig {
+                compute_unit_price,
+                compute_unit_limit: ComputeUnitLimit::Default,
+            });
             instructions.extend_from_slice(&[config_instruction::store(
                 &info_pubkey,
                 true,
@@ -382,7 +385,10 @@ pub fn process_set_validator_info(
                 keys,
                 &validator_info,
             )]
-            .with_compute_unit_price(compute_unit_price);
+            .with_compute_unit_config(&ComputeUnitConfig {
+                compute_unit_price,
+                compute_unit_limit: ComputeUnitLimit::Default,
+            });
             Message::new(&instructions, Some(&config.signers[0].pubkey()))
         }
     };

@@ -18,7 +18,7 @@ use {
     solana_bpf_loader_program::syscalls::create_program_runtime_environment_v1,
     solana_clap_utils::{
         self,
-        compute_unit_price::compute_unit_price_arg,
+        compute_budget::{compute_unit_price_arg, ComputeUnitLimit},
         fee_payer::{fee_payer_arg, FEE_PAYER_ARG},
         hidden_unless_forced,
         input_parsers::*,
@@ -2440,8 +2440,10 @@ fn do_process_program_deploy(
 
     let initial_message = if !initial_instructions.is_empty() {
         Some(Message::new_with_blockhash(
-            &initial_instructions
-                .with_compute_unit_config(&ComputeUnitConfig { compute_unit_price }),
+            &initial_instructions.with_compute_unit_config(&ComputeUnitConfig {
+                compute_unit_price,
+                compute_unit_limit: ComputeUnitLimit::Simulated,
+            }),
             Some(&fee_payer_signer.pubkey()),
             &blockhash,
         ))
@@ -2458,8 +2460,10 @@ fn do_process_program_deploy(
             bytes,
         );
 
-        let instructions =
-            vec![instruction].with_compute_unit_config(&ComputeUnitConfig { compute_unit_price });
+        let instructions = vec![instruction].with_compute_unit_config(&ComputeUnitConfig {
+            compute_unit_price,
+            compute_unit_limit: ComputeUnitLimit::Simulated,
+        });
         Message::new_with_blockhash(&instructions, Some(&fee_payer_signer.pubkey()), &blockhash)
     };
 
@@ -2483,7 +2487,10 @@ fn do_process_program_deploy(
                 .get_minimum_balance_for_rent_exemption(UpgradeableLoaderState::size_of_program())?,
             program_data_max_len,
         )?
-        .with_compute_unit_config(&ComputeUnitConfig { compute_unit_price });
+        .with_compute_unit_config(&ComputeUnitConfig {
+            compute_unit_price,
+            compute_unit_limit: ComputeUnitLimit::Simulated,
+        });
 
         Some(Message::new_with_blockhash(
             &instructions,
@@ -2563,8 +2570,10 @@ fn do_process_write_buffer(
 
     let initial_message = if !initial_instructions.is_empty() {
         Some(Message::new_with_blockhash(
-            &initial_instructions
-                .with_compute_unit_config(&ComputeUnitConfig { compute_unit_price }),
+            &initial_instructions.with_compute_unit_config(&ComputeUnitConfig {
+                compute_unit_price,
+                compute_unit_limit: ComputeUnitLimit::Simulated,
+            }),
             Some(&fee_payer_signer.pubkey()),
             &blockhash,
         ))
@@ -2581,8 +2590,10 @@ fn do_process_write_buffer(
             bytes,
         );
 
-        let instructions =
-            vec![instruction].with_compute_unit_config(&ComputeUnitConfig { compute_unit_price });
+        let instructions = vec![instruction].with_compute_unit_config(&ComputeUnitConfig {
+            compute_unit_price,
+            compute_unit_limit: ComputeUnitLimit::Simulated,
+        });
         Message::new_with_blockhash(&instructions, Some(&fee_payer_signer.pubkey()), &blockhash)
     };
 
@@ -2681,8 +2692,10 @@ fn do_process_program_upgrade(
 
         let initial_message = if !initial_instructions.is_empty() {
             Some(Message::new_with_blockhash(
-                &initial_instructions
-                    .with_compute_unit_config(&ComputeUnitConfig { compute_unit_price }),
+                &initial_instructions.with_compute_unit_config(&ComputeUnitConfig {
+                    compute_unit_price,
+                    compute_unit_limit: ComputeUnitLimit::Simulated,
+                }),
                 Some(&fee_payer_signer.pubkey()),
                 &blockhash,
             ))
@@ -2699,7 +2712,10 @@ fn do_process_program_upgrade(
                 offset,
                 bytes,
             )]
-            .with_compute_unit_config(&ComputeUnitConfig { compute_unit_price });
+            .with_compute_unit_config(&ComputeUnitConfig {
+                compute_unit_price,
+                compute_unit_limit: ComputeUnitLimit::Simulated,
+            });
             Message::new_with_blockhash(&instructions, Some(&fee_payer_signer.pubkey()), &blockhash)
         };
 
@@ -2725,7 +2741,10 @@ fn do_process_program_upgrade(
         &upgrade_authority.pubkey(),
         &fee_payer_signer.pubkey(),
     )]
-    .with_compute_unit_config(&ComputeUnitConfig { compute_unit_price });
+    .with_compute_unit_config(&ComputeUnitConfig {
+        compute_unit_price,
+        compute_unit_limit: ComputeUnitLimit::Simulated,
+    });
     let final_message = Message::new_with_blockhash(
         &final_instructions,
         Some(&fee_payer_signer.pubkey()),

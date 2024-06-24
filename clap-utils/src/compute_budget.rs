@@ -32,3 +32,14 @@ pub fn compute_unit_limit_arg<'a, 'b>() -> Arg<'a, 'b> {
         .validator(is_parsable::<u32>)
         .help(COMPUTE_UNIT_LIMIT_ARG.help)
 }
+
+pub enum ComputeUnitLimit {
+    /// Do not include a compute unit limit instruction, which will give the
+    /// transaction a compute unit limit of:
+    /// `min(1_400_000, 200_000 * (num_top_level_instructions - num_compute_budget_instructions))`
+    Default,
+    /// Use a static predefined limit
+    Static(u32),
+    /// Simulate the transaction to find out the compute unit usage
+    Simulated,
+}

@@ -4,7 +4,7 @@ use {
             log_instruction_custom_error, request_and_confirm_airdrop, CliCommand, CliCommandInfo,
             CliConfig, CliError, ProcessResult,
         },
-        compute_budget::WithComputeUnitPrice,
+        compute_budget::{ComputeUnitConfig, WithComputeUnitConfig},
         memo::WithMemo,
         nonce::check_nonce_account,
         spend_utils::{resolve_spend_tx_and_check_account_balances, SpendAmount},
@@ -12,7 +12,7 @@ use {
     clap::{value_t_or_exit, App, Arg, ArgMatches, SubCommand},
     hex::FromHex,
     solana_clap_utils::{
-        compute_unit_price::{compute_unit_price_arg, COMPUTE_UNIT_PRICE_ARG},
+        compute_budget::{compute_unit_price_arg, ComputeUnitLimit, COMPUTE_UNIT_PRICE_ARG},
         fee_payer::*,
         hidden_unless_forced,
         input_parsers::*,
@@ -879,7 +879,7 @@ pub fn process_transfer(
     fee_payer: SignerIndex,
     derived_address_seed: Option<String>,
     derived_address_program_id: Option<&Pubkey>,
-    compute_unit_price: Option<&u64>,
+    compute_unit_price: Option<u64>,
 ) -> ProcessResult {
     let from = config.signers[from];
     let mut from_pubkey = from.pubkey();
@@ -922,11 +922,17 @@ pub fn process_transfer(
                 lamports,
             )]
             .with_memo(memo)
-            .with_compute_unit_price(compute_unit_price)
+            .with_compute_unit_config(&ComputeUnitConfig {
+                compute_unit_price,
+                compute_unit_limit: ComputeUnitLimit::Default,
+            })
         } else {
             vec![system_instruction::transfer(&from_pubkey, to, lamports)]
                 .with_memo(memo)
-                .with_compute_unit_price(compute_unit_price)
+                .with_compute_unit_config(&ComputeUnitConfig {
+                    compute_unit_price,
+                    compute_unit_limit: ComputeUnitLimit::Default,
+                })
         };
 
         if let Some(nonce_account) = &nonce_account {
