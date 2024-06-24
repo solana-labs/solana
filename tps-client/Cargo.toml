@@ -1,6 +1,6 @@
 [package]
 name = "solana-tps-client"
-publish = false
+description = "Blockchain, Rebuilt for Scale"
 version = { workspace = true }
 authors = { workspace = true }
 repository = { workspace = true }
