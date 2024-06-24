@@ -6555,6 +6555,7 @@ dependencies = [
  "solana-entry",
  "solana-gossip",
  "solana-ledger",
+ "solana-local-cluster",
  "solana-logger",
  "solana-pubsub-client",
  "solana-quic-client",

@@ -8,10 +8,7 @@ use {
     rand::{thread_rng, Rng},
     rayon::{prelude::*, ThreadPool},
     solana_client::connection_cache::{ConnectionCache, Protocol},
-    solana_core::consensus::{
-        tower_storage::{FileTowerStorage, SavedTower, SavedTowerVersions, TowerStorage},
-        VOTE_THRESHOLD_DEPTH,
-    },
+    solana_core::consensus::VOTE_THRESHOLD_DEPTH,
     solana_entry::entry::{self, Entry, EntrySlice},
     solana_gossip::{
         cluster_info::{self, ClusterInfo},
@@ -44,7 +41,7 @@ use {
     std::{
         collections::{HashMap, HashSet, VecDeque},
         net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener},
-        path::{Path, PathBuf},
+        path::Path,
         sync::{
             atomic::{AtomicBool, Ordering},
             Arc, RwLock,
@@ -52,6 +49,13 @@ use {
         thread::{sleep, JoinHandle},
         time::{Duration, Instant},
     },
+};
+#[cfg(feature = "dev-context-only-utils")]
+use {
+    solana_core::consensus::tower_storage::{
+        FileTowerStorage, SavedTower, SavedTowerVersions, TowerStorage,
+    },
+    std::path::PathBuf,
 };
 
 pub fn get_client_facing_addr(
@@ -348,6 +352,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
     }
 }
 
+#[cfg(feature = "dev-context-only-utils")]
 pub fn apply_votes_to_tower(node_keypair: &Keypair, votes: Vec<(Slot, Hash)>, tower_path: PathBuf) {
     let tower_storage = FileTowerStorage::new(tower_path);
     let mut tower = tower_storage.load(&node_keypair.pubkey()).unwrap();

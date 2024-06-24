@@ -48,6 +48,7 @@ serial_test = { workspace = true }
 solana-core = { workspace = true, features = ["dev-context-only-utils"] }
 solana-download-utils = { workspace = true }
 solana-ledger = { workspace = true, features = ["dev-context-only-utils"] }
+solana-local-cluster = { path = ".", features = ["dev-context-only-utils"] }
 solana-runtime = { workspace = true, features = ["dev-context-only-utils"] }
 
 [package.metadata.docs.rs]
