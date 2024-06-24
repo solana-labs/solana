@@ -333,14 +333,6 @@ impl AccountsHashVerifier {
             let calculate_accounts_hash_config = CalcAccountsHashConfig {
                 // since we're going to assert, use the fg thread pool to go faster
                 use_bg_thread_pool: false,
-                ..calculate_accounts_hash_config
-            };
-            let result_with_index = accounts_package
-                .accounts
-                .accounts_db
-                .calculate_accounts_hash_from_index(slot, &calculate_accounts_hash_config);
-            info!("hash calc with index: {slot}, {result_with_index:?}",);
-            let calculate_accounts_hash_config = CalcAccountsHashConfig {
                 // now that we've failed, store off the failing contents that produced a bad capitalization
                 store_detailed_debug_info_on_failure: true,
                 ..calculate_accounts_hash_config
