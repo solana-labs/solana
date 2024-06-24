@@ -757,11 +757,8 @@ pub mod layout {
             .map(Hash::new)
     }
 
-    pub(crate) fn set_retransmitter_signature(
-        shred: &mut [u8],
-        signature: &Signature,
-    ) -> Result<(), Error> {
-        let offset = match get_shred_variant(shred)? {
+    fn get_retransmitter_signature_offset(shred: &[u8]) -> Result<usize, Error> {
+        match get_shred_variant(shred)? {
             ShredVariant::LegacyCode | ShredVariant::LegacyData => Err(Error::InvalidShredVariant),
             ShredVariant::MerkleCode {
                 proof_size,
@@ -777,7 +774,23 @@ pub mod layout {
             } => {
                 merkle::ShredData::get_retransmitter_signature_offset(proof_size, chained, resigned)
             }
-        }?;
+        }
+    }
+
+    pub fn get_retransmitter_signature(shred: &[u8]) -> Result<Signature, Error> {
+        let offset = get_retransmitter_signature_offset(shred)?;
+        shred
+            .get(offset..offset + SIZE_OF_SIGNATURE)
+            .map(|bytes| <[u8; SIZE_OF_SIGNATURE]>::try_from(bytes).unwrap())
+            .map(Signature::from)
+            .ok_or(Error::InvalidPayloadSize(shred.len()))
+    }
+
+    pub(crate) fn set_retransmitter_signature(
+        shred: &mut [u8],
+        signature: &Signature,
+    ) -> Result<(), Error> {
+        let offset = get_retransmitter_signature_offset(shred)?;
         let Some(buffer) = shred.get_mut(offset..offset + SIZE_OF_SIGNATURE) else {
             return Err(Error::InvalidPayloadSize(shred.len()));
         };

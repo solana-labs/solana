@@ -242,8 +242,7 @@ impl ClusterNodes<RetransmitStage> {
 
     // Returns the parent node in the turbine broadcast tree.
     // Returns None if the node is the root of the tree or if it is not staked.
-    #[allow(unused)]
-    fn get_retransmit_parent(
+    pub(crate) fn get_retransmit_parent(
         &self,
         leader: &Pubkey,
         shred: &ShredId,
