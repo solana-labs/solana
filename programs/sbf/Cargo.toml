@@ -1,5 +1,5 @@
 [workspace.package]
-version = "2.0.0"
+version = "2.1.0"
 description = "Solana SBF test program written in Rust"
 authors = ["Anza Maintainers <maintainers@anza.xyz>"]
 repository = "https://github.com/anza-xyz/agave"
@@ -26,33 +26,33 @@ rustversion = "1.0.14"
 serde = "1.0.112" # must match the serde_derive version, see https://github.com/serde-rs/serde/issues/2584#issuecomment-1685252251
 serde_derive = "1.0.112" # must match the serde version, see https://github.com/serde-rs/serde/issues/2584#issuecomment-1685252251
 serde_json = "1.0.56"
-solana-account-decoder = { path = "../../account-decoder", version = "=2.0.0" }
-solana-accounts-db = { path = "../../accounts-db", version = "=2.0.0" }
-solana-bpf-loader-program = { path = "../bpf_loader", version = "=2.0.0" }
-solana-cli-output = { path = "../../cli-output", version = "=2.0.0" }
-solana-compute-budget = { path = "../../compute-budget", version = "=2.0.0" }
-solana-curve25519 = { path = "../../curves/curve25519", version = "=2.0.0" }
-solana-ledger = { path = "../../ledger", version = "=2.0.0" }
-solana-logger = { path = "../../logger", version = "=2.0.0" }
-solana-measure = { path = "../../measure", version = "=2.0.0" }
-solana-poseidon = { path = "../../poseidon/", version = "=2.0.0" }
-solana-program = { path = "../../sdk/program", version = "=2.0.0" }
-solana-program-runtime = { path = "../../program-runtime", version = "=2.0.0" }
-solana-runtime = { path = "../../runtime", version = "=2.0.0" }
-solana-sbf-rust-128bit-dep = { path = "rust/128bit_dep", version = "=2.0.0" }
-solana-sbf-rust-invoke-dep = { path = "rust/invoke_dep", version = "=2.0.0" }
-solana-sbf-rust-invoked-dep = { path = "rust/invoked_dep", version = "=2.0.0" }
-solana-sbf-rust-many-args-dep = { path = "rust/many_args_dep", version = "=2.0.0" }
-solana-sbf-rust-mem-dep = { path = "rust/mem_dep", version = "=2.0.0" }
-solana-sbf-rust-param-passing-dep = { path = "rust/param_passing_dep", version = "=2.0.0" }
-solana-sbf-rust-realloc-dep = { path = "rust/realloc_dep", version = "=2.0.0" }
-solana-sbf-rust-realloc-invoke-dep = { path = "rust/realloc_invoke_dep", version = "=2.0.0" }
-solana-sdk = { path = "../../sdk", version = "=2.0.0" }
-solana-svm = { path = "../../svm", version = "=2.0.0" }
-solana-transaction-status = { path = "../../transaction-status", version = "=2.0.0" }
-solana-type-overrides = { path = "../../type-overrides", version = "=2.0.0" }
-agave-validator = { path = "../../validator", version = "=2.0.0" }
-solana-zk-token-sdk = { path = "../../zk-token-sdk", version = "=2.0.0" }
+solana-account-decoder = { path = "../../account-decoder", version = "=2.1.0" }
+solana-accounts-db = { path = "../../accounts-db", version = "=2.1.0" }
+solana-bpf-loader-program = { path = "../bpf_loader", version = "=2.1.0" }
+solana-cli-output = { path = "../../cli-output", version = "=2.1.0" }
+solana-compute-budget = { path = "../../compute-budget", version = "=2.1.0" }
+solana-curve25519 = { path = "../../curves/curve25519", version = "=2.1.0" }
+solana-ledger = { path = "../../ledger", version = "=2.1.0" }
+solana-logger = { path = "../../logger", version = "=2.1.0" }
+solana-measure = { path = "../../measure", version = "=2.1.0" }
+solana-poseidon = { path = "../../poseidon/", version = "=2.1.0" }
+solana-program = { path = "../../sdk/program", version = "=2.1.0" }
+solana-program-runtime = { path = "../../program-runtime", version = "=2.1.0" }
+solana-runtime = { path = "../../runtime", version = "=2.1.0" }
+solana-sbf-rust-128bit-dep = { path = "rust/128bit_dep", version = "=2.1.0" }
+solana-sbf-rust-invoke-dep = { path = "rust/invoke_dep", version = "=2.1.0" }
+solana-sbf-rust-invoked-dep = { path = "rust/invoked_dep", version = "=2.1.0" }
+solana-sbf-rust-many-args-dep = { path = "rust/many_args_dep", version = "=2.1.0" }
+solana-sbf-rust-mem-dep = { path = "rust/mem_dep", version = "=2.1.0" }
+solana-sbf-rust-param-passing-dep = { path = "rust/param_passing_dep", version = "=2.1.0" }
+solana-sbf-rust-realloc-dep = { path = "rust/realloc_dep", version = "=2.1.0" }
+solana-sbf-rust-realloc-invoke-dep = { path = "rust/realloc_invoke_dep", version = "=2.1.0" }
+solana-sdk = { path = "../../sdk", version = "=2.1.0" }
+solana-svm = { path = "../../svm", version = "=2.1.0" }
+solana-transaction-status = { path = "../../transaction-status", version = "=2.1.0" }
+solana-type-overrides = { path = "../../type-overrides", version = "=2.1.0" }
+agave-validator = { path = "../../validator", version = "=2.1.0" }
+solana-zk-token-sdk = { path = "../../zk-token-sdk", version = "=2.1.0" }
 solana_rbpf = "=0.8.1"
 thiserror = "1.0"
 
