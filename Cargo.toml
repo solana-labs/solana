@@ -304,7 +304,7 @@ scopeguard = "1.2.0"
 semver = "1.0.23"
 seqlock = "0.2.0"
 serde = "1.0.203" # must match the serde_derive version, see https://github.com/serde-rs/serde/issues/2584#issuecomment-1685252251
-serde_bytes = "0.11.14"
+serde_bytes = "0.11.15"
 serde_derive = "1.0.203" # must match the serde version, see https://github.com/serde-rs/serde/issues/2584#issuecomment-1685252251
 serde_json = "1.0.118"
 serde_with = { version = "2.3.3", default-features = false }
