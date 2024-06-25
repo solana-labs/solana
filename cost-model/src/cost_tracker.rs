@@ -67,7 +67,7 @@ pub struct CostTracker {
     block_cost: u64,
     vote_cost: u64,
     transaction_count: u64,
-    account_data_size: u64,
+    allocated_accounts_data_size: u64,
     transaction_signature_count: u64,
     secp256k1_instruction_signature_count: u64,
     ed25519_instruction_signature_count: u64,
@@ -96,7 +96,7 @@ impl Default for CostTracker {
             block_cost: 0,
             vote_cost: 0,
             transaction_count: 0,
-            account_data_size: 0,
+            allocated_accounts_data_size: 0,
             transaction_signature_count: 0,
             secp256k1_instruction_signature_count: 0,
             ed25519_instruction_signature_count: 0,
@@ -111,7 +111,7 @@ impl CostTracker {
         self.block_cost = 0;
         self.vote_cost = 0;
         self.transaction_count = 0;
-        self.account_data_size = 0;
+        self.allocated_accounts_data_size = 0;
         self.transaction_signature_count = 0;
         self.secp256k1_instruction_signature_count = 0;
         self.ed25519_instruction_signature_count = 0;
@@ -213,7 +213,11 @@ impl CostTracker {
             ("number_of_accounts", self.number_of_accounts() as i64, i64),
             ("costliest_account", costliest_account.to_string(), String),
             ("costliest_account_cost", costliest_account_cost as i64, i64),
-            ("account_data_size", self.account_data_size, i64),
+            (
+                "allocated_accounts_data_size",
+                self.allocated_accounts_data_size,
+                i64
+            ),
             (
                 "transaction_signature_count",
                 self.transaction_signature_count,
@@ -265,11 +269,11 @@ impl CostTracker {
             return Err(CostTrackerError::WouldExceedAccountMaxLimit);
         }
 
-        let account_data_size = self
-            .account_data_size
-            .saturating_add(tx_cost.account_data_size());
+        let allocated_accounts_data_size = self
+            .allocated_accounts_data_size
+            .saturating_add(tx_cost.allocated_accounts_data_size());
 
-        if account_data_size > MAX_BLOCK_ACCOUNTS_DATA_SIZE_DELTA {
+        if allocated_accounts_data_size > MAX_BLOCK_ACCOUNTS_DATA_SIZE_DELTA {
             return Err(CostTrackerError::WouldExceedAccountDataBlockLimit);
         }
 
@@ -292,7 +296,10 @@ impl CostTracker {
 
     // Returns the highest account cost for all write-lock accounts `TransactionCost` updated
     fn add_transaction_cost(&mut self, tx_cost: &TransactionCost) -> u64 {
-        saturating_add_assign!(self.account_data_size, tx_cost.account_data_size());
+        saturating_add_assign!(
+            self.allocated_accounts_data_size,
+            tx_cost.allocated_accounts_data_size()
+        );
         saturating_add_assign!(self.transaction_count, 1);
         saturating_add_assign!(
             self.transaction_signature_count,
@@ -312,9 +319,9 @@ impl CostTracker {
     fn remove_transaction_cost(&mut self, tx_cost: &TransactionCost) {
         let cost = tx_cost.sum();
         self.sub_transaction_execution_cost(tx_cost, cost);
-        self.account_data_size = self
-            .account_data_size
-            .saturating_sub(tx_cost.account_data_size());
+        self.allocated_accounts_data_size = self
+            .allocated_accounts_data_size
+            .saturating_sub(tx_cost.allocated_accounts_data_size());
         self.transaction_count = self.transaction_count.saturating_sub(1);
         self.transaction_signature_count = self
             .transaction_signature_count
@@ -503,7 +510,7 @@ mod tests {
         let (mint_keypair, start_hash) = test_setup();
         let (_tx, mut tx_cost) = build_simple_transaction(&mint_keypair, &start_hash);
         if let TransactionCost::Transaction(ref mut usage_cost) = tx_cost {
-            usage_cost.account_data_size = 1;
+            usage_cost.allocated_accounts_data_size = 1;
         } else {
             unreachable!();
         }
@@ -512,9 +519,9 @@ mod tests {
         // build testee to have capacity for one simple transaction
         let mut testee = CostTracker::new(cost, cost, cost);
         assert!(testee.would_fit(&tx_cost).is_ok());
-        let old = testee.account_data_size;
+        let old = testee.allocated_accounts_data_size;
         testee.add_transaction_cost(&tx_cost);
-        assert_eq!(old + 1, testee.account_data_size);
+        assert_eq!(old + 1, testee.allocated_accounts_data_size);
     }
 
     #[test]
@@ -651,12 +658,12 @@ mod tests {
         let (_tx1, mut tx_cost1) = build_simple_transaction(&mint_keypair, &start_hash);
         let (_tx2, mut tx_cost2) = build_simple_transaction(&second_account, &start_hash);
         if let TransactionCost::Transaction(ref mut usage_cost) = tx_cost1 {
-            usage_cost.account_data_size = MAX_BLOCK_ACCOUNTS_DATA_SIZE_DELTA;
+            usage_cost.allocated_accounts_data_size = MAX_BLOCK_ACCOUNTS_DATA_SIZE_DELTA;
         } else {
             unreachable!();
         }
         if let TransactionCost::Transaction(ref mut usage_cost) = tx_cost2 {
-            usage_cost.account_data_size = MAX_BLOCK_ACCOUNTS_DATA_SIZE_DELTA + 1;
+            usage_cost.allocated_accounts_data_size = MAX_BLOCK_ACCOUNTS_DATA_SIZE_DELTA + 1;
         } else {
             unreachable!();
         }
@@ -944,7 +951,7 @@ mod tests {
         assert_eq!(1, cost_tracker.number_of_accounts());
         assert_eq!(cost, cost_tracker.block_cost);
         assert_eq!(0, cost_tracker.vote_cost);
-        assert_eq!(0, cost_tracker.account_data_size);
+        assert_eq!(0, cost_tracker.allocated_accounts_data_size);
 
         cost_tracker.remove_transaction_cost(&tx_cost);
         // assert cost_tracker is reverted to default
@@ -952,6 +959,6 @@ mod tests {
         assert_eq!(0, cost_tracker.number_of_accounts());
         assert_eq!(0, cost_tracker.block_cost);
         assert_eq!(0, cost_tracker.vote_cost);
-        assert_eq!(0, cost_tracker.account_data_size);
+        assert_eq!(0, cost_tracker.allocated_accounts_data_size);
     }
 }

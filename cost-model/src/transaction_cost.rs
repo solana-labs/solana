@@ -56,10 +56,10 @@ impl TransactionCost {
         }
     }
 
-    pub fn account_data_size(&self) -> u64 {
+    pub fn allocated_accounts_data_size(&self) -> u64 {
         match self {
             Self::SimpleVote { .. } => 0,
-            Self::Transaction(usage_cost) => usage_cost.account_data_size,
+            Self::Transaction(usage_cost) => usage_cost.allocated_accounts_data_size,
         }
     }
 
@@ -125,7 +125,7 @@ pub struct UsageCostDetails {
     pub data_bytes_cost: u64,
     pub programs_execution_cost: u64,
     pub loaded_accounts_data_size_cost: u64,
-    pub account_data_size: u64,
+    pub allocated_accounts_data_size: u64,
     pub num_transaction_signatures: u64,
     pub num_secp256k1_instruction_signatures: u64,
     pub num_ed25519_instruction_signatures: u64,
@@ -140,7 +140,7 @@ impl Default for UsageCostDetails {
             data_bytes_cost: 0u64,
             programs_execution_cost: 0u64,
             loaded_accounts_data_size_cost: 0u64,
-            account_data_size: 0u64,
+            allocated_accounts_data_size: 0u64,
             num_transaction_signatures: 0u64,
             num_secp256k1_instruction_signatures: 0u64,
             num_ed25519_instruction_signatures: 0u64,
@@ -160,7 +160,7 @@ impl PartialEq for UsageCostDetails {
             && self.data_bytes_cost == other.data_bytes_cost
             && self.programs_execution_cost == other.programs_execution_cost
             && self.loaded_accounts_data_size_cost == other.loaded_accounts_data_size_cost
-            && self.account_data_size == other.account_data_size
+            && self.allocated_accounts_data_size == other.allocated_accounts_data_size
             && self.num_transaction_signatures == other.num_transaction_signatures
             && self.num_secp256k1_instruction_signatures
                 == other.num_secp256k1_instruction_signatures

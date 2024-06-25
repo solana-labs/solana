@@ -43,7 +43,8 @@ impl CostModel {
             Self::get_signature_cost(&mut tx_cost, transaction);
             Self::get_write_lock_cost(&mut tx_cost, transaction, feature_set);
             Self::get_transaction_cost(&mut tx_cost, transaction, feature_set);
-            tx_cost.account_data_size = Self::calculate_account_data_size(transaction);
+            tx_cost.allocated_accounts_data_size =
+                Self::calculate_allocated_accounts_data_size(transaction);
 
             debug!("transaction {:?} has cost {:?}", transaction, tx_cost);
             TransactionCost::Transaction(tx_cost)
@@ -218,7 +219,7 @@ impl CostModel {
 
     /// eventually, potentially determine account data size of all writable accounts
     /// at the moment, calculate account data size of account creation
-    fn calculate_account_data_size(transaction: &SanitizedTransaction) -> u64 {
+    fn calculate_allocated_accounts_data_size(transaction: &SanitizedTransaction) -> u64 {
         transaction
             .message()
             .program_instructions_iter()
