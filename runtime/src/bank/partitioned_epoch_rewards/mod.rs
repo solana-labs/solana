@@ -379,6 +379,7 @@ mod tests {
             None,
             Some(Pubkey::new_unique()),
             Arc::default(),
+            None,
         );
 
         // Fill bank_forks with banks with votes landing in the next slot
@@ -486,6 +487,7 @@ mod tests {
             None,
             Some(Pubkey::new_unique()),
             Arc::default(),
+            None,
         );
 
         let stake_account_stores_per_block =
