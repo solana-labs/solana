@@ -29,6 +29,12 @@ Release channels have their own copy of this changelog:
   * SDK: `cargo test-sbf` accepts `--tools-version`, just like `build-sbf` (#1359)
   * CLI: Can specify `--full-snapshot-archive-path` (#1631)
   * transaction-status: The SPL Token `amountToUiAmount` instruction parses the amount into a string instead of a number (#1737)
+  * Implemented partitioned epoch rewards as per [SIMD-0118](https://github.com/solana-foundation/solana-improvement-documents/blob/fae25d5a950f43bd787f1f5d75897ef1fdd425a7/proposals/0118-partitioned-epoch-reward-distribution.md). Feature gate: #426. Specific changes include:
+    * EpochRewards sysvar expanded and made persistent (#428, #572)
+    * Stake Program credits now allowed during distribution (#631)
+    * Updated type in Bank::epoch_rewards_status (#1277)
+    * Partitions are recalculated on boot from snapshot (#1159)
+    * `epoch_rewards_status` removed from snapshot (#1274)
 
 ## [1.18.0]
 * Changes
