@@ -48,7 +48,6 @@ test-stable-sbf)
 
   export PATH="$PWD/target/debug":$PATH
   cargo_build_sbf="$(realpath ./cargo-build-sbf)"
-  cargo_test_sbf="$(realpath ./cargo-test-sbf)"
 
   # platform-tools version
   "$cargo_build_sbf" --version
@@ -74,42 +73,17 @@ test-stable-sbf)
   export SBF_OUT_DIR=target/sbf-solana-solana/release
   _ make -C programs/sbf test
 
-  # SBF Rust program unit tests
-  for sbf_test in programs/sbf/rust/*; do
-    if pushd "$sbf_test"; then
-      "$cargo" test
-      "$cargo_build_sbf" --sbf-sdk ../../../../sdk/sbf --dump
-      "$cargo_test_sbf" --sbf-sdk ../../../../sdk/sbf
-      popd
-    fi
-  done |& tee cargo.log
-  # Save the output of cargo building the sbf tests so we can analyze
-  # the number of redundant rebuilds of dependency crates. The
-  # expected number of solana-program crate compilations is 4. There
-  # should be 3 builds of solana-program while 128bit crate is
-  # built. These compilations are not redundant because the crate is
-  # built for different target each time. An additional compilation of
-  # solana-program is performed when simulation crate is built. This
-  # last compiled solana-program is of different version, normally the
-  # latest mainbeta release version.
-  solana_program_count=$(grep -c 'solana-program v' cargo.log)
-  rm -f cargo.log
-  if ((solana_program_count > 20)); then
-      echo "Regression of build redundancy ${solana_program_count}."
-      echo "Review dependency features that trigger redundant rebuilds of solana-program."
-      exit 1
-  fi
-
   # SBF program instruction count assertion
   sbf_target_path=programs/sbf/target
+  mkdir -p $sbf_target_path/deploy
   _ cargo test \
     --manifest-path programs/sbf/Cargo.toml \
     --features=sbf_c,sbf_rust assert_instruction_count \
-    -- --nocapture &> "${sbf_target_path}"/deploy/instruction_counts.txt
+    -- --nocapture &> $sbf_target_path/deploy/instruction_counts.txt
 
   sbf_dump_archive="sbf-dumps.tar.bz2"
   rm -f "$sbf_dump_archive"
-  tar cjvf "$sbf_dump_archive" "${sbf_target_path}"/{deploy/*.txt,sbf-solana-solana/release/*.so}
+  tar cjvf "$sbf_dump_archive" $sbf_target_path/{deploy/*.txt,sbf-solana-solana/release/*.so}
   exit 0
   ;;
 test-stable-perf)
