@@ -98,7 +98,7 @@ use {
     solana_perf::perf_libs,
     solana_program_runtime::{
         invoke_context::BuiltinFunctionWithContext,
-        loaded_programs::{ProgramCacheEntry, ProgramCacheEntryOwner, ProgramCacheEntryType},
+        loaded_programs::ProgramCacheEntry,
         timings::{ExecuteTimingType, ExecuteTimings},
     },
     solana_sdk::{
@@ -6252,24 +6252,6 @@ impl Bank {
             "mockup",
             ProgramCacheEntry::new_builtin(self.slot, 0, builtin_function),
         );
-    }
-
-    /// Remove a built-in instruction processor
-    pub fn remove_builtin(&mut self, program_id: Pubkey, name: &str) {
-        debug!("Removing program {}", program_id);
-        // Don't remove the account since the bank expects the account state to
-        // be idempotent
-        self.transaction_processor.add_builtin(
-            self,
-            program_id,
-            name,
-            ProgramCacheEntry::new_tombstone(
-                self.slot,
-                ProgramCacheEntryOwner::NativeLoader,
-                ProgramCacheEntryType::Closed,
-            ),
-        );
-        debug!("Removed program {}", program_id);
     }
 
     pub fn add_precompile(&mut self, program_id: &Pubkey) {
