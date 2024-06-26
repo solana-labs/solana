@@ -39,13 +39,12 @@ use {
     solana_rpc_client_api::{
         config::*,
         custom_error::RpcCustomError,
-        deprecated_config::*,
         filter::{Memcmp, MemcmpEncodedBytes, RpcFilterType},
         request::{
             TokenAccountsFilter, DELINQUENT_VALIDATOR_SLOT_DISTANCE,
             MAX_GET_CONFIRMED_BLOCKS_RANGE, MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS2_LIMIT,
-            MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE, MAX_GET_PROGRAM_ACCOUNT_FILTERS,
-            MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS, MAX_GET_SLOT_LEADERS, MAX_MULTIPLE_ACCOUNTS,
+            MAX_GET_PROGRAM_ACCOUNT_FILTERS, MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
+            MAX_GET_SLOT_LEADERS, MAX_MULTIPLE_ACCOUNTS,
             MAX_RPC_VOTE_ACCOUNT_INFO_EPOCH_CREDITS_HISTORY, NUM_LARGEST_ACCOUNTS,
         },
         response::{Response as RpcResponse, *},
@@ -70,7 +69,6 @@ use {
         epoch_schedule::EpochSchedule,
         exit::Exit,
         feature_set,
-        fee_calculator::FeeCalculator,
         hash::Hash,
         message::SanitizedMessage,
         pubkey::{Pubkey, PUBKEY_BYTES},
@@ -158,7 +156,6 @@ pub struct JsonRpcConfig {
     pub rpc_threads: usize,
     pub rpc_niceness_adj: i8,
     pub full_api: bool,
-    pub obsolete_v1_7_api: bool,
     pub rpc_scan_and_fix_roots: bool,
     pub max_request_body_size: Option<usize>,
     /// Disable the health check, used for tests and TestValidator
@@ -802,75 +799,6 @@ impl JsonRpcRequestProcessor {
         Ok(new_response(&bank, bank.get_balance(pubkey)))
     }
 
-    fn get_recent_blockhash(
-        &self,
-        commitment: Option<CommitmentConfig>,
-    ) -> Result<RpcResponse<RpcBlockhashFeeCalculator>> {
-        let bank = self.bank(commitment);
-        let blockhash = bank.confirmed_last_blockhash();
-        let lamports_per_signature = bank
-            .get_lamports_per_signature_for_blockhash(&blockhash)
-            .unwrap();
-        Ok(new_response(
-            &bank,
-            RpcBlockhashFeeCalculator {
-                blockhash: blockhash.to_string(),
-                fee_calculator: FeeCalculator::new(lamports_per_signature),
-            },
-        ))
-    }
-
-    fn get_fees(&self, commitment: Option<CommitmentConfig>) -> Result<RpcResponse<RpcFees>> {
-        let bank = self.bank(commitment);
-        let blockhash = bank.confirmed_last_blockhash();
-        let lamports_per_signature = bank
-            .get_lamports_per_signature_for_blockhash(&blockhash)
-            .unwrap();
-        #[allow(deprecated)]
-        let last_valid_slot = bank
-            .get_blockhash_last_valid_slot(&blockhash)
-            .expect("bank blockhash queue should contain blockhash");
-        let last_valid_block_height = bank
-            .get_blockhash_last_valid_block_height(&blockhash)
-            .expect("bank blockhash queue should contain blockhash");
-        Ok(new_response(
-            &bank,
-            RpcFees {
-                blockhash: blockhash.to_string(),
-                fee_calculator: FeeCalculator::new(lamports_per_signature),
-                last_valid_slot,
-                last_valid_block_height,
-            },
-        ))
-    }
-
-    fn get_fee_calculator_for_blockhash(
-        &self,
-        blockhash: &Hash,
-        commitment: Option<CommitmentConfig>,
-    ) -> Result<RpcResponse<Option<RpcFeeCalculator>>> {
-        let bank = self.bank(commitment);
-        let lamports_per_signature = bank.get_lamports_per_signature_for_blockhash(blockhash);
-        Ok(new_response(
-            &bank,
-            lamports_per_signature.map(|lamports_per_signature| RpcFeeCalculator {
-                fee_calculator: FeeCalculator::new(lamports_per_signature),
-            }),
-        ))
-    }
-
-    fn get_fee_rate_governor(&self) -> RpcResponse<RpcFeeRateGovernor> {
-        let bank = self.bank(None);
-        #[allow(deprecated)]
-        let fee_rate_governor = bank.get_fee_rate_governor();
-        new_response(
-            &bank,
-            RpcFeeRateGovernor {
-                fee_rate_governor: fee_rate_governor.clone(),
-            },
-        )
-    }
-
     pub fn confirm_transaction(
         &self,
         signature: &Signature,
@@ -969,11 +897,6 @@ impl JsonRpcRequestProcessor {
     fn get_transaction_count(&self, config: RpcContextConfig) -> Result<u64> {
         let bank = self.get_bank_with_config(config)?;
         Ok(bank.transaction_count())
-    }
-
-    fn get_total_supply(&self, commitment: Option<CommitmentConfig>) -> Result<u64> {
-        let bank = self.bank(commitment);
-        Ok(bank.capitalization())
     }
 
     fn get_cached_largest_accounts(
@@ -4353,416 +4276,6 @@ pub mod rpc_deprecated_v1_18 {
     }
 }
 
-// RPC methods deprecated in v1.9
-pub mod rpc_deprecated_v1_9 {
-    #![allow(deprecated)]
-    use super::*;
-    #[rpc]
-    pub trait DeprecatedV1_9 {
-        type Metadata;
-
-        #[rpc(meta, name = "getRecentBlockhash")]
-        fn get_recent_blockhash(
-            &self,
-            meta: Self::Metadata,
-            commitment: Option<CommitmentConfig>,
-        ) -> Result<RpcResponse<RpcBlockhashFeeCalculator>>;
-
-        #[rpc(meta, name = "getFees")]
-        fn get_fees(
-            &self,
-            meta: Self::Metadata,
-            commitment: Option<CommitmentConfig>,
-        ) -> Result<RpcResponse<RpcFees>>;
-
-        #[rpc(meta, name = "getFeeCalculatorForBlockhash")]
-        fn get_fee_calculator_for_blockhash(
-            &self,
-            meta: Self::Metadata,
-            blockhash: String,
-            commitment: Option<CommitmentConfig>,
-        ) -> Result<RpcResponse<Option<RpcFeeCalculator>>>;
-
-        #[rpc(meta, name = "getFeeRateGovernor")]
-        fn get_fee_rate_governor(
-            &self,
-            meta: Self::Metadata,
-        ) -> Result<RpcResponse<RpcFeeRateGovernor>>;
-
-        #[rpc(meta, name = "getSnapshotSlot")]
-        fn get_snapshot_slot(&self, meta: Self::Metadata) -> Result<Slot>;
-    }
-
-    pub struct DeprecatedV1_9Impl;
-    impl DeprecatedV1_9 for DeprecatedV1_9Impl {
-        type Metadata = JsonRpcRequestProcessor;
-
-        fn get_recent_blockhash(
-            &self,
-            meta: Self::Metadata,
-            commitment: Option<CommitmentConfig>,
-        ) -> Result<RpcResponse<RpcBlockhashFeeCalculator>> {
-            debug!("get_recent_blockhash rpc request received");
-            meta.get_recent_blockhash(commitment)
-        }
-
-        fn get_fees(
-            &self,
-            meta: Self::Metadata,
-            commitment: Option<CommitmentConfig>,
-        ) -> Result<RpcResponse<RpcFees>> {
-            debug!("get_fees rpc request received");
-            meta.get_fees(commitment)
-        }
-
-        fn get_fee_calculator_for_blockhash(
-            &self,
-            meta: Self::Metadata,
-            blockhash: String,
-            commitment: Option<CommitmentConfig>,
-        ) -> Result<RpcResponse<Option<RpcFeeCalculator>>> {
-            debug!("get_fee_calculator_for_blockhash rpc request received");
-            let blockhash =
-                Hash::from_str(&blockhash).map_err(|e| Error::invalid_params(format!("{e:?}")))?;
-            meta.get_fee_calculator_for_blockhash(&blockhash, commitment)
-        }
-
-        fn get_fee_rate_governor(
-            &self,
-            meta: Self::Metadata,
-        ) -> Result<RpcResponse<RpcFeeRateGovernor>> {
-            debug!("get_fee_rate_governor rpc request received");
-            Ok(meta.get_fee_rate_governor())
-        }
-
-        fn get_snapshot_slot(&self, meta: Self::Metadata) -> Result<Slot> {
-            debug!("get_snapshot_slot rpc request received");
-
-            meta.snapshot_config
-                .and_then(|snapshot_config| {
-                    snapshot_utils::get_highest_full_snapshot_archive_slot(
-                        snapshot_config.full_snapshot_archives_dir,
-                    )
-                })
-                .ok_or_else(|| RpcCustomError::NoSnapshot.into())
-        }
-    }
-}
-
-// RPC methods deprecated in v1.7
-pub mod rpc_deprecated_v1_7 {
-    #![allow(deprecated)]
-    use super::*;
-    #[rpc]
-    pub trait DeprecatedV1_7 {
-        type Metadata;
-
-        // DEPRECATED
-        #[rpc(meta, name = "getConfirmedBlock")]
-        fn get_confirmed_block(
-            &self,
-            meta: Self::Metadata,
-            slot: Slot,
-            config: Option<RpcEncodingConfigWrapper<RpcConfirmedBlockConfig>>,
-        ) -> BoxFuture<Result<Option<UiConfirmedBlock>>>;
-
-        // DEPRECATED
-        #[rpc(meta, name = "getConfirmedBlocks")]
-        fn get_confirmed_blocks(
-            &self,
-            meta: Self::Metadata,
-            start_slot: Slot,
-            config: Option<RpcConfirmedBlocksConfigWrapper>,
-            commitment: Option<CommitmentConfig>,
-        ) -> BoxFuture<Result<Vec<Slot>>>;
-
-        // DEPRECATED
-        #[rpc(meta, name = "getConfirmedBlocksWithLimit")]
-        fn get_confirmed_blocks_with_limit(
-            &self,
-            meta: Self::Metadata,
-            start_slot: Slot,
-            limit: usize,
-            commitment: Option<CommitmentConfig>,
-        ) -> BoxFuture<Result<Vec<Slot>>>;
-
-        // DEPRECATED
-        #[rpc(meta, name = "getConfirmedTransaction")]
-        fn get_confirmed_transaction(
-            &self,
-            meta: Self::Metadata,
-            signature_str: String,
-            config: Option<RpcEncodingConfigWrapper<RpcConfirmedTransactionConfig>>,
-        ) -> BoxFuture<Result<Option<EncodedConfirmedTransactionWithStatusMeta>>>;
-
-        // DEPRECATED
-        #[rpc(meta, name = "getConfirmedSignaturesForAddress2")]
-        fn get_confirmed_signatures_for_address2(
-            &self,
-            meta: Self::Metadata,
-            address: String,
-            config: Option<RpcGetConfirmedSignaturesForAddress2Config>,
-        ) -> BoxFuture<Result<Vec<RpcConfirmedTransactionStatusWithSignature>>>;
-    }
-
-    pub struct DeprecatedV1_7Impl;
-    impl DeprecatedV1_7 for DeprecatedV1_7Impl {
-        type Metadata = JsonRpcRequestProcessor;
-
-        fn get_confirmed_block(
-            &self,
-            meta: Self::Metadata,
-            slot: Slot,
-            config: Option<RpcEncodingConfigWrapper<RpcConfirmedBlockConfig>>,
-        ) -> BoxFuture<Result<Option<UiConfirmedBlock>>> {
-            debug!("get_confirmed_block rpc request received: {:?}", slot);
-            Box::pin(async move {
-                meta.get_block(slot, config.map(|config| config.convert()))
-                    .await
-            })
-        }
-
-        fn get_confirmed_blocks(
-            &self,
-            meta: Self::Metadata,
-            start_slot: Slot,
-            config: Option<RpcConfirmedBlocksConfigWrapper>,
-            commitment: Option<CommitmentConfig>,
-        ) -> BoxFuture<Result<Vec<Slot>>> {
-            let (end_slot, maybe_commitment) =
-                config.map(|config| config.unzip()).unwrap_or_default();
-            debug!(
-                "get_confirmed_blocks rpc request received: {}-{:?}",
-                start_slot, end_slot
-            );
-            Box::pin(async move {
-                meta.get_blocks(
-                    start_slot,
-                    end_slot,
-                    Some(RpcContextConfig {
-                        commitment: commitment.or(maybe_commitment),
-                        min_context_slot: None,
-                    }),
-                )
-                .await
-            })
-        }
-
-        fn get_confirmed_blocks_with_limit(
-            &self,
-            meta: Self::Metadata,
-            start_slot: Slot,
-            limit: usize,
-            commitment: Option<CommitmentConfig>,
-        ) -> BoxFuture<Result<Vec<Slot>>> {
-            debug!(
-                "get_confirmed_blocks_with_limit rpc request received: {}-{}",
-                start_slot, limit,
-            );
-            Box::pin(async move {
-                meta.get_blocks_with_limit(
-                    start_slot,
-                    limit,
-                    Some(RpcContextConfig {
-                        commitment,
-                        min_context_slot: None,
-                    }),
-                )
-                .await
-            })
-        }
-
-        fn get_confirmed_transaction(
-            &self,
-            meta: Self::Metadata,
-            signature_str: String,
-            config: Option<RpcEncodingConfigWrapper<RpcConfirmedTransactionConfig>>,
-        ) -> BoxFuture<Result<Option<EncodedConfirmedTransactionWithStatusMeta>>> {
-            debug!(
-                "get_confirmed_transaction rpc request received: {:?}",
-                signature_str
-            );
-            let signature = verify_signature(&signature_str);
-            if let Err(err) = signature {
-                return Box::pin(future::err(err));
-            }
-            Box::pin(async move {
-                meta.get_transaction(signature.unwrap(), config.map(|config| config.convert()))
-                    .await
-            })
-        }
-
-        fn get_confirmed_signatures_for_address2(
-            &self,
-            meta: Self::Metadata,
-            address: String,
-            config: Option<RpcGetConfirmedSignaturesForAddress2Config>,
-        ) -> BoxFuture<Result<Vec<RpcConfirmedTransactionStatusWithSignature>>> {
-            let config = config.unwrap_or_default();
-            let commitment = config.commitment;
-            let verification = verify_and_parse_signatures_for_address_params(
-                address,
-                config.before,
-                config.until,
-                config.limit,
-            );
-
-            match verification {
-                Err(err) => Box::pin(future::err(err)),
-                Ok((address, before, until, limit)) => Box::pin(async move {
-                    meta.get_signatures_for_address(
-                        address,
-                        before,
-                        until,
-                        limit,
-                        RpcContextConfig {
-                            commitment,
-                            min_context_slot: None,
-                        },
-                    )
-                    .await
-                }),
-            }
-        }
-    }
-}
-
-// Obsolete RPC methods, collected for easy deactivation and removal
-pub mod rpc_obsolete_v1_7 {
-    use super::*;
-    #[rpc]
-    pub trait ObsoleteV1_7 {
-        type Metadata;
-
-        // DEPRECATED
-        #[rpc(meta, name = "confirmTransaction")]
-        fn confirm_transaction(
-            &self,
-            meta: Self::Metadata,
-            signature_str: String,
-            commitment: Option<CommitmentConfig>,
-        ) -> Result<RpcResponse<bool>>;
-
-        // DEPRECATED
-        #[rpc(meta, name = "getSignatureStatus")]
-        fn get_signature_status(
-            &self,
-            meta: Self::Metadata,
-            signature_str: String,
-            commitment: Option<CommitmentConfig>,
-        ) -> Result<Option<transaction::Result<()>>>;
-
-        // DEPRECATED (used by Trust Wallet)
-        #[rpc(meta, name = "getSignatureConfirmation")]
-        fn get_signature_confirmation(
-            &self,
-            meta: Self::Metadata,
-            signature_str: String,
-            commitment: Option<CommitmentConfig>,
-        ) -> Result<Option<RpcSignatureConfirmation>>;
-
-        // DEPRECATED
-        #[rpc(meta, name = "getTotalSupply")]
-        fn get_total_supply(
-            &self,
-            meta: Self::Metadata,
-            commitment: Option<CommitmentConfig>,
-        ) -> Result<u64>;
-
-        // DEPRECATED
-        #[rpc(meta, name = "getConfirmedSignaturesForAddress")]
-        fn get_confirmed_signatures_for_address(
-            &self,
-            meta: Self::Metadata,
-            pubkey_str: String,
-            start_slot: Slot,
-            end_slot: Slot,
-        ) -> Result<Vec<String>>;
-    }
-
-    pub struct ObsoleteV1_7Impl;
-    impl ObsoleteV1_7 for ObsoleteV1_7Impl {
-        type Metadata = JsonRpcRequestProcessor;
-
-        fn confirm_transaction(
-            &self,
-            meta: Self::Metadata,
-            id: String,
-            commitment: Option<CommitmentConfig>,
-        ) -> Result<RpcResponse<bool>> {
-            debug!("confirm_transaction rpc request received: {:?}", id);
-            let signature = verify_signature(&id)?;
-            meta.confirm_transaction(&signature, commitment)
-        }
-
-        fn get_signature_status(
-            &self,
-            meta: Self::Metadata,
-            signature_str: String,
-            commitment: Option<CommitmentConfig>,
-        ) -> Result<Option<transaction::Result<()>>> {
-            debug!(
-                "get_signature_status rpc request received: {:?}",
-                signature_str
-            );
-            let signature = verify_signature(&signature_str)?;
-            meta.get_signature_status(signature, commitment)
-        }
-
-        fn get_signature_confirmation(
-            &self,
-            meta: Self::Metadata,
-            signature_str: String,
-            commitment: Option<CommitmentConfig>,
-        ) -> Result<Option<RpcSignatureConfirmation>> {
-            debug!(
-                "get_signature_confirmation rpc request received: {:?}",
-                signature_str
-            );
-            let signature = verify_signature(&signature_str)?;
-            meta.get_signature_confirmation_status(signature, commitment)
-        }
-
-        fn get_total_supply(
-            &self,
-            meta: Self::Metadata,
-            commitment: Option<CommitmentConfig>,
-        ) -> Result<u64> {
-            debug!("get_total_supply rpc request received");
-            meta.get_total_supply(commitment)
-        }
-
-        fn get_confirmed_signatures_for_address(
-            &self,
-            meta: Self::Metadata,
-            pubkey_str: String,
-            start_slot: Slot,
-            end_slot: Slot,
-        ) -> Result<Vec<String>> {
-            debug!(
-                "get_confirmed_signatures_for_address rpc request received: {:?} {:?}-{:?}",
-                pubkey_str, start_slot, end_slot
-            );
-            let pubkey = verify_pubkey(&pubkey_str)?;
-            if end_slot < start_slot {
-                return Err(Error::invalid_params(format!(
-                    "start_slot {start_slot} must be less than or equal to end_slot {end_slot}"
-                )));
-            }
-            if end_slot - start_slot > MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE {
-                return Err(Error::invalid_params(format!(
-                    "Slot range too large; max {MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE}"
-                )));
-            }
-            Ok(meta
-                .get_confirmed_signatures_for_address(pubkey, start_slot, end_slot)
-                .iter()
-                .map(|signature| signature.to_string())
-                .collect())
-        }
-    }
-}
-
 const MAX_BASE58_SIZE: usize = 1683; // Golden, bump if PACKET_DATA_SIZE changes
 const MAX_BASE64_SIZE: usize = 1644; // Golden, bump if PACKET_DATA_SIZE changes
 fn decode_and_deserialize<T>(
@@ -4937,8 +4450,7 @@ pub fn populate_blockstore_for_tests(
 pub mod tests {
     use {
         super::{
-            rpc_accounts::*, rpc_accounts_scan::*, rpc_bank::*, rpc_deprecated_v1_9::*,
-            rpc_full::*, rpc_minimal::*, *,
+            rpc_accounts::*, rpc_accounts_scan::*, rpc_bank::*, rpc_full::*, rpc_minimal::*, *,
         },
         crate::{
             optimistically_confirmed_bank_tracker::{
@@ -4975,9 +4487,8 @@ pub mod tests {
                 self,
                 state::{AddressLookupTable, LookupTableMeta},
             },
-            clock::MAX_PROCESSING_AGE,
             compute_budget::ComputeBudgetInstruction,
-            fee_calculator::{FeeRateGovernor, DEFAULT_BURN_PERCENT},
+            fee_calculator::FeeRateGovernor,
             hash::{hash, Hash},
             instruction::InstructionError,
             message::{
@@ -5139,7 +4650,6 @@ pub mod tests {
             io.extend_with(rpc_accounts::AccountsDataImpl.to_delegate());
             io.extend_with(rpc_accounts_scan::AccountsScanImpl.to_delegate());
             io.extend_with(rpc_full::FullImpl.to_delegate());
-            io.extend_with(rpc_deprecated_v1_9::DeprecatedV1_9Impl.to_delegate());
             Self {
                 io,
                 meta,
@@ -7005,146 +6515,6 @@ pub mod tests {
                 r#"{"jsonrpc":"2.0","error":{"code":-32011,"message":"Transaction history is not available from this node"},"id":1}"#.to_string(),
             )
         );
-    }
-
-    #[test]
-    fn test_rpc_get_recent_blockhash() {
-        let rpc = RpcHandler::start();
-        let bank = rpc.working_bank();
-        let recent_blockhash = bank.confirmed_last_blockhash();
-        let RpcHandler { meta, io, .. } = rpc;
-
-        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getRecentBlockhash"}"#;
-        let res = io.handle_request_sync(req, meta);
-        let expected = json!({
-            "jsonrpc": "2.0",
-            "result": {
-                "context": {"slot": 0, "apiVersion": RpcApiVersion::default()},
-                "value":{
-                    "blockhash": recent_blockhash.to_string(),
-                    "feeCalculator": {
-                        "lamportsPerSignature": TEST_SIGNATURE_FEE,
-                    }
-                },
-            },
-            "id": 1
-        });
-        let expected: Response =
-            serde_json::from_value(expected).expect("expected response deserialization");
-        let result: Response = serde_json::from_str(&res.expect("actual response"))
-            .expect("actual response deserialization");
-        assert_eq!(result, expected);
-    }
-
-    #[test]
-    fn test_rpc_get_fees() {
-        let rpc = RpcHandler::start();
-        let bank = rpc.working_bank();
-        let recent_blockhash = bank.confirmed_last_blockhash();
-        let RpcHandler { meta, io, .. } = rpc;
-
-        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getFees"}"#;
-        let res = io.handle_request_sync(req, meta);
-        let expected = json!({
-            "jsonrpc": "2.0",
-            "result": {
-                "context": {"slot": 0, "apiVersion": RpcApiVersion::default()},
-                "value": {
-                    "blockhash": recent_blockhash.to_string(),
-                    "feeCalculator": {
-                        "lamportsPerSignature": TEST_SIGNATURE_FEE,
-                    },
-                    "lastValidSlot": MAX_PROCESSING_AGE,
-                    "lastValidBlockHeight": MAX_PROCESSING_AGE,
-                },
-            },
-            "id": 1
-        });
-        let expected: Response =
-            serde_json::from_value(expected).expect("expected response deserialization");
-        let result: Response = serde_json::from_str(&res.expect("actual response"))
-            .expect("actual response deserialization");
-        assert_eq!(result, expected);
-    }
-
-    #[test]
-    fn test_rpc_get_fee_calculator_for_blockhash() {
-        let rpc = RpcHandler::start();
-        let bank = rpc.working_bank();
-        let recent_blockhash = bank.confirmed_last_blockhash();
-        let RpcHandler { meta, io, .. } = rpc;
-
-        let lamports_per_signature = bank.get_lamports_per_signature();
-        let fee_calculator = RpcFeeCalculator {
-            fee_calculator: FeeCalculator::new(lamports_per_signature),
-        };
-
-        let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getFeeCalculatorForBlockhash","params":["{recent_blockhash:?}"]}}"#
-        );
-        let res = io.handle_request_sync(&req, meta.clone());
-        let expected = json!({
-            "jsonrpc": "2.0",
-            "result": {
-                "context": {"slot": 0, "apiVersion": RpcApiVersion::default()},
-                "value":fee_calculator,
-            },
-            "id": 1
-        });
-        let expected: Response =
-            serde_json::from_value(expected).expect("expected response deserialization");
-        let result: Response = serde_json::from_str(&res.expect("actual response"))
-            .expect("actual response deserialization");
-        assert_eq!(result, expected);
-
-        // Expired (non-existent) blockhash
-        let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getFeeCalculatorForBlockhash","params":["{:?}"]}}"#,
-            Hash::default()
-        );
-        let res = io.handle_request_sync(&req, meta);
-        let expected = json!({
-            "jsonrpc": "2.0",
-            "result": {
-                "context": {"slot": 0, "apiVersion": RpcApiVersion::default()},
-                "value":Value::Null,
-            },
-            "id": 1
-        });
-        let expected: Response =
-            serde_json::from_value(expected).expect("expected response deserialization");
-        let result: Response = serde_json::from_str(&res.expect("actual response"))
-            .expect("actual response deserialization");
-        assert_eq!(result, expected);
-    }
-
-    #[test]
-    fn test_rpc_get_fee_rate_governor() {
-        let RpcHandler { meta, io, .. } = RpcHandler::start();
-
-        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getFeeRateGovernor"}"#;
-        let res = io.handle_request_sync(req, meta);
-        let expected = json!({
-            "jsonrpc": "2.0",
-            "result": {
-                "context": {"slot": 0, "apiVersion": RpcApiVersion::default()},
-                "value":{
-                    "feeRateGovernor": {
-                        "burnPercent": DEFAULT_BURN_PERCENT,
-                        "maxLamportsPerSignature": TEST_SIGNATURE_FEE,
-                        "minLamportsPerSignature": TEST_SIGNATURE_FEE,
-                        "targetLamportsPerSignature": TEST_SIGNATURE_FEE,
-                        "targetSignaturesPerSlot": 0
-                    }
-                },
-            },
-            "id": 1
-        });
-        let expected: Response =
-            serde_json::from_value(expected).expect("expected response deserialization");
-        let result: Response = serde_json::from_str(&res.expect("actual response"))
-            .expect("actual response deserialization");
-        assert_eq!(result, expected);
     }
 
     #[test]

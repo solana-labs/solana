@@ -14,7 +14,6 @@ Release channels have their own copy of this changelog:
 
 <a name="edge-channel"></a>
 ## [2.1.0] - Unreleased
-
 * Changes
   * SDK: removed the `respan` macro. This was marked as "internal use only" and was no longer used internally.
 
@@ -22,6 +21,12 @@ Release channels have their own copy of this changelog:
 * Breaking
   * SDK: Support for Borsh v0.9 removed, please use v1 or v0.10 (#1440)
   * SDK: `Copy` is no longer derived on `Rent` and `EpochSchedule`, please switch to using `clone()` (solana-labs#32767)
+  * RPC: obsolete and deprecated v1 endpoints are removed. These endpoints are:
+    confirmTransaction, getSignatureStatus, getSignatureConfirmation, getTotalSupply,
+    getConfirmedSignaturesForAddress, getConfirmedBlock, getConfirmedBlocks, getConfirmedBlocksWithLimit,
+    getConfirmedTransaction, getConfirmedSignaturesForAddress2, getRecentBlockhash, getFees,
+    getFeeCalculatorForBlockhash, getFeeRateGovernor, getSnapshotSlot
+  * `--enable-rpc-obsolete_v1_7` flag removed
 * Changes
   * `central-scheduler` as default option for `--block-production-method` (#34891)
   * `solana-rpc-client-api`: `RpcFilterError` depends on `base64` version 0.22, so users may need to upgrade to `base64` version 0.22

@@ -1402,7 +1402,6 @@ pub fn main() {
                 solana_net_utils::parse_host_port(address).expect("failed to parse faucet address")
             }),
             full_api,
-            obsolete_v1_7_api: matches.is_present("obsolete_v1_7_rpc_api"),
             max_multiple_accounts: Some(value_t_or_exit!(
                 matches,
                 "rpc_max_multiple_accounts",

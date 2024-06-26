@@ -7,8 +7,7 @@ use {
         optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
         rpc::{
             rpc_accounts::*, rpc_accounts_scan::*, rpc_bank::*, rpc_deprecated_v1_18::*,
-            rpc_deprecated_v1_7::*, rpc_deprecated_v1_9::*, rpc_full::*, rpc_minimal::*,
-            rpc_obsolete_v1_7::*, *,
+            rpc_full::*, rpc_minimal::*, *,
         },
         rpc_cache::LargestAccountsCache,
         rpc_health::*,
@@ -453,7 +452,6 @@ impl JsonRpcService {
             };
 
         let full_api = config.full_api;
-        let obsolete_v1_7_api = config.obsolete_v1_7_api;
         let max_request_body_size = config
             .max_request_body_size
             .unwrap_or(MAX_REQUEST_BODY_SIZE);
@@ -508,12 +506,7 @@ impl JsonRpcService {
                     io.extend_with(rpc_accounts::AccountsDataImpl.to_delegate());
                     io.extend_with(rpc_accounts_scan::AccountsScanImpl.to_delegate());
                     io.extend_with(rpc_full::FullImpl.to_delegate());
-                    io.extend_with(rpc_deprecated_v1_7::DeprecatedV1_7Impl.to_delegate());
-                    io.extend_with(rpc_deprecated_v1_9::DeprecatedV1_9Impl.to_delegate());
                     io.extend_with(rpc_deprecated_v1_18::DeprecatedV1_18Impl.to_delegate());
-                }
-                if obsolete_v1_7_api {
-                    io.extend_with(rpc_obsolete_v1_7::ObsoleteV1_7Impl.to_delegate());
                 }
 
                 let request_middleware = RpcRequestMiddleware::new(

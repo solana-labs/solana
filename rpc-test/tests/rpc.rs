@@ -77,7 +77,7 @@ fn test_rpc_send_tx() {
 
     let bob_pubkey = solana_sdk::pubkey::new_rand();
 
-    let req = json_req!("getRecentBlockhash", json!([]));
+    let req = json_req!("getLatestBlockhash", json!([]));
     let json = post_rpc(req, &rpc_url);
 
     let blockhash: Hash = json["result"]["value"]["blockhash"]

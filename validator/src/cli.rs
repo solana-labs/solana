@@ -212,12 +212,6 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .help("Expose RPC methods for querying chain state and transaction history"),
         )
         .arg(
-            Arg::with_name("obsolete_v1_7_rpc_api")
-                .long("enable-rpc-obsolete_v1_7")
-                .takes_value(false)
-                .help("Enable the obsolete RPC methods removed in v1.7"),
-        )
-        .arg(
             Arg::with_name("private_rpc")
                 .long("private-rpc")
                 .takes_value(false)
