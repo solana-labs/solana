@@ -24,6 +24,7 @@ pub const JSON_RPC_SERVER_ERROR_TRANSACTION_SIGNATURE_LEN_MISMATCH: i64 = -32013
 pub const JSON_RPC_SERVER_ERROR_BLOCK_STATUS_NOT_AVAILABLE_YET: i64 = -32014;
 pub const JSON_RPC_SERVER_ERROR_UNSUPPORTED_TRANSACTION_VERSION: i64 = -32015;
 pub const JSON_RPC_SERVER_ERROR_MIN_CONTEXT_SLOT_NOT_REACHED: i64 = -32016;
+pub const JSON_RPC_SERVER_ERROR_EPOCH_REWARDS_PERIOD_ACTIVE: i64 = -32017;
 
 #[derive(Error, Debug)]
 pub enum RpcCustomError {
@@ -65,6 +66,12 @@ pub enum RpcCustomError {
     UnsupportedTransactionVersion(u8),
     #[error("MinContextSlotNotReached")]
     MinContextSlotNotReached { context_slot: Slot },
+    #[error("EpochRewardsPeriodActive")]
+    EpochRewardsPeriodActive {
+        slot: Slot,
+        current_block_height: u64,
+        rewards_complete_block_height: u64,
+    },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -77,6 +84,13 @@ pub struct NodeUnhealthyErrorData {
 #[serde(rename_all = "camelCase")]
 pub struct MinContextSlotNotReachedErrorData {
     pub context_slot: Slot,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EpochRewardsPeriodActiveErrorData {
+    pub current_block_height: u64,
+    pub rewards_complete_block_height: u64,
 }
 
 impl From<EncodeError> for RpcCustomError {
@@ -204,6 +218,14 @@ impl From<RpcCustomError> for Error {
                 message: "Minimum context slot has not been reached".to_string(),
                 data: Some(serde_json::json!(MinContextSlotNotReachedErrorData {
                     context_slot,
+                })),
+            },
+            RpcCustomError::EpochRewardsPeriodActive { slot, current_block_height, rewards_complete_block_height } => Self {
+                code: ErrorCode::ServerError(JSON_RPC_SERVER_ERROR_EPOCH_REWARDS_PERIOD_ACTIVE),
+                message: format!("Epoch rewards period still active at slot {slot}"),
+                data: Some(serde_json::json!(EpochRewardsPeriodActiveErrorData {
+                    current_block_height,
+                    rewards_complete_block_height,
                 })),
             },
         }
