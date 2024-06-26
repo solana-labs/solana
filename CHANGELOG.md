@@ -38,6 +38,7 @@ Release channels have their own copy of this changelog:
     * Updated type in Bank::epoch_rewards_status (#1277)
     * Partitions are recalculated on boot from snapshot (#1159)
     * `epoch_rewards_status` removed from snapshot (#1274)
+  * Added `unified-scheduler` option for `--block-verification-method` (#1668)
 
 ## [1.18.0]
 * Changes
