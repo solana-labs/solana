@@ -15,6 +15,7 @@ codecov = { repository = "solana-labs/solana", branch = "master", service = "git
 
 [dependencies]
 ahash = { workspace = true }
+arrayvec = { workspace = true }
 base64 = { workspace = true }
 bincode = { workspace = true }
 bs58 = { workspace = true }

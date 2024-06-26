@@ -21,6 +21,7 @@ use {
         packet_deserializer::PacketDeserializer,
         ForwardOption, TOTAL_BUFFERED_PACKETS,
     },
+    arrayvec::ArrayVec,
     crossbeam_channel::RecvTimeoutError,
     solana_compute_budget::compute_budget_processor::process_compute_budget_instructions,
     solana_cost_model::cost_model::CostModel,
@@ -479,14 +480,14 @@ impl SchedulerController {
 
         const CHUNK_SIZE: usize = 128;
         let lock_results: [_; CHUNK_SIZE] = core::array::from_fn(|_| Ok(()));
+
+        let mut arc_packets = ArrayVec::<_, CHUNK_SIZE>::new();
+        let mut transactions = ArrayVec::<_, CHUNK_SIZE>::new();
+        let mut fee_budget_limits_vec = ArrayVec::<_, CHUNK_SIZE>::new();
+
         let mut error_counts = TransactionErrorMetrics::default();
         for chunk in packets.chunks(CHUNK_SIZE) {
             let mut post_sanitization_count: usize = 0;
-
-            let mut arc_packets = Vec::with_capacity(chunk.len());
-            let mut transactions = Vec::with_capacity(chunk.len());
-            let mut fee_budget_limits_vec = Vec::with_capacity(chunk.len());
-
             chunk
                 .iter()
                 .filter_map(|packet| {
@@ -528,10 +529,10 @@ impl SchedulerController {
             let mut post_transaction_check_count: usize = 0;
             let mut num_dropped_on_capacity: usize = 0;
             let mut num_buffered: usize = 0;
-            for (((packet, transaction), fee_budget_limits), _) in arc_packets
-                .into_iter()
-                .zip(transactions)
-                .zip(fee_budget_limits_vec)
+            for (((packet, transaction), fee_budget_limits), _check_result) in arc_packets
+                .drain(..)
+                .zip(transactions.drain(..))
+                .zip(fee_budget_limits_vec.drain(..))
                 .zip(check_results)
                 .filter(|(_, check_result)| check_result.is_ok())
             {

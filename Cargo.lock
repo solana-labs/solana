@@ -6060,6 +6060,7 @@ name = "solana-core"
 version = "2.1.0"
 dependencies = [
  "ahash 0.8.10",
+ "arrayvec",
  "assert_matches",
  "base64 0.22.1",
  "bincode",
