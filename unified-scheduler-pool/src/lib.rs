@@ -1,8 +1,3 @@
-//! NOTE: While the unified scheduler is fully functional and moderately performant even with
-//! mainnet-beta, it has known resource-exhaustion related security issues for replaying
-//! specially-crafted blocks produced by malicious leaders. Thus, this experimental and
-//! nondefault functionality is exempt from the bug bounty program for now.
-//!
 //! Transaction scheduling code.
 //!
 //! This crate implements 3 solana-runtime traits (`InstalledScheduler`, `UninstalledScheduler` and

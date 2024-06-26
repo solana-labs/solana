@@ -1522,7 +1522,6 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
         .arg(
             Arg::with_name("block_verification_method")
                 .long("block-verification-method")
-                .hidden(hidden_unless_forced())
                 .value_name("METHOD")
                 .takes_value(true)
                 .possible_values(BlockVerificationMethod::cli_names())
@@ -1539,7 +1538,6 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
         .arg(
             Arg::with_name("unified_scheduler_handler_threads")
                 .long("unified-scheduler-handler-threads")
-                .hidden(hidden_unless_forced())
                 .value_name("COUNT")
                 .takes_value(true)
                 .validator(|s| is_within_range(s, 1..))
