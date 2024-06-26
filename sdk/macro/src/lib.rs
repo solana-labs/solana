@@ -6,7 +6,7 @@ extern crate proc_macro;
 
 use {
     proc_macro::TokenStream,
-    proc_macro2::{Delimiter, Span, TokenTree},
+    proc_macro2::Span,
     quote::{quote, ToTokens},
     syn::{
         bracketed,
@@ -14,7 +14,7 @@ use {
         parse_macro_input,
         punctuated::Punctuated,
         token::Bracket,
-        Expr, Ident, LitByte, LitStr, Path, Token,
+        Expr, Ident, LitByte, LitStr, Token,
     },
 };
 
@@ -178,75 +178,6 @@ impl ToTokens for ProgramSdkIdDeprecated {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         deprecated_id_to_tokens(&self.0, quote! { ::solana_program::pubkey::Pubkey }, tokens)
     }
-}
-
-struct RespanInput {
-    to_respan: Path,
-    respan_using: Span,
-}
-
-impl Parse for RespanInput {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let to_respan: Path = input.parse()?;
-        let _comma: Token![,] = input.parse()?;
-        let respan_tree: TokenTree = input.parse()?;
-        match respan_tree {
-            TokenTree::Group(g) if g.delimiter() == Delimiter::None => {
-                let ident: Ident = syn::parse2(g.stream())?;
-                Ok(RespanInput {
-                    to_respan,
-                    respan_using: ident.span(),
-                })
-            }
-            TokenTree::Ident(i) => Ok(RespanInput {
-                to_respan,
-                respan_using: i.span(),
-            }),
-            val => Err(syn::Error::new_spanned(
-                val,
-                "expected None-delimited group",
-            )),
-        }
-    }
-}
-
-/// A proc-macro which respans the tokens in its first argument (a `Path`)
-/// to be resolved at the tokens of its second argument.
-/// For internal use only.
-///
-/// There must be exactly one comma in the input,
-/// which is used to separate the two arguments.
-/// The second argument should be exactly one token.
-///
-/// For example, `respan!($crate::foo, with_span)`
-/// produces the tokens `$crate::foo`, but resolved
-/// at the span of `with_span`.
-///
-/// The input to this function should be very short -
-/// its only purpose is to override the span of a token
-/// sequence containing `$crate`. For all other purposes,
-/// a more general proc-macro should be used.
-#[rustversion::since(1.46.0)] // `Span::resolved_at` is stable in 1.46.0 and above
-#[proc_macro]
-pub fn respan(input: TokenStream) -> TokenStream {
-    // Obtain the `Path` we are going to respan, and the ident
-    // whose span we will be using.
-    let RespanInput {
-        to_respan,
-        respan_using,
-    } = parse_macro_input!(input as RespanInput);
-    // Respan all of the tokens in the `Path`
-    let to_respan: proc_macro2::TokenStream = to_respan
-        .into_token_stream()
-        .into_iter()
-        .map(|mut t| {
-            // Combine the location of the token with the resolution behavior of `respan_using`
-            let new_span: Span = t.span().resolved_at(respan_using);
-            t.set_span(new_span);
-            t
-        })
-        .collect();
-    TokenStream::from(to_respan)
 }
 
 #[proc_macro]

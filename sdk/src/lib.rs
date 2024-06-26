@@ -154,8 +154,6 @@ pub use solana_sdk_macro::declare_id;
 pub use solana_sdk_macro::pubkey;
 /// Convenience macro to define multiple static public keys.
 pub use solana_sdk_macro::pubkeys;
-#[rustversion::since(1.46.0)]
-pub use solana_sdk_macro::respan;
 
 // Unused `solana_sdk::program_stubs!()` macro retained for source backwards compatibility with older programs
 #[macro_export]

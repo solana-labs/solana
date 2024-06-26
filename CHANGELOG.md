@@ -15,6 +15,9 @@ Release channels have their own copy of this changelog:
 <a name="edge-channel"></a>
 ## [2.1.0] - Unreleased
 
+* Changes
+  * SDK: removed the `respan` macro. This was marked as "internal use only" and was no longer used internally.
+
 ## [2.0.0]
 * Breaking
   * SDK: Support for Borsh v0.9 removed, please use v1 or v0.10 (#1440)
