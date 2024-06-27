@@ -53,6 +53,7 @@ pub enum ExecuteTimingType {
     TotalBatchesLen,
     UpdateTransactionStatuses,
     ProgramCacheUs,
+    CheckBlockLimitsUs,
 }
 
 pub struct Metrics([u64; ExecuteTimingType::CARDINALITY]);
@@ -178,6 +179,11 @@ eager_macro_rules! { $eager_1
                 i64
             ),
             (
+                "check_block_limits_us",
+                *$self.metrics.index(ExecuteTimingType::CheckBlockLimitsUs),
+                i64
+            ),
+            (
                 "execute_details_serialize_us",
                 $self.details.serialize_us,
                 i64
@@ -200,16 +206,6 @@ eager_macro_rules! { $eager_1
             (
                 "execute_details_get_or_create_executor_us",
                 $self.details.get_or_create_executor_us,
-                i64
-            ),
-            (
-                "execute_details_changed_account_count",
-                $self.details.changed_account_count,
-                i64
-            ),
-            (
-                "execute_details_total_account_count",
-                $self.details.total_account_count,
                 i64
             ),
             (
@@ -288,6 +284,36 @@ eager_macro_rules! { $eager_1
                     .verify_callee_us,
                 i64
             ),
+            (
+                "execute_accounts_details_loaded_accounts_data_size_90pct",
+                $self.execute_accounts_details.loaded_accounts_data_size_hist.percentile(90.0).unwrap_or(0),
+                i64
+            ),
+            (
+                "execute_accounts_details_loaded_accounts_data_size_min",
+                $self.execute_accounts_details.loaded_accounts_data_size_hist.minimum().unwrap_or(0),
+                i64
+            ),
+            (
+                "execute_accounts_details_loaded_accounts_data_size_max",
+                $self.execute_accounts_details.loaded_accounts_data_size_hist.maximum().unwrap_or(0),
+                i64
+            ),
+            (
+                "execute_accounts_details_loaded_accounts_data_size_mean",
+                $self.execute_accounts_details.loaded_accounts_data_size_hist.mean().unwrap_or(0),
+                i64
+            ),
+            (
+                "execute_accounts_details_changed_account_count",
+                $self.execute_accounts_details.changed_account_count,
+                i64
+            ),
+            (
+                "execute_accounts_details_total_account_count",
+                $self.execute_accounts_details.total_account_count,
+                i64
+            ),
         }
     }
 }
@@ -297,6 +323,7 @@ pub struct ExecuteTimings {
     pub metrics: Metrics,
     pub details: ExecuteDetailsTimings,
     pub execute_accessories: ExecuteAccessoryTimings,
+    pub execute_accounts_details: ExecuteAccountsDetails,
 }
 
 impl ExecuteTimings {
@@ -307,6 +334,8 @@ impl ExecuteTimings {
         self.details.accumulate(&other.details);
         self.execute_accessories
             .accumulate(&other.execute_accessories);
+        self.execute_accounts_details
+            .accumulate(&other.execute_accounts_details);
     }
 
     pub fn saturating_add_in_place(&mut self, timing_type: ExecuteTimingType, value_to_add: u64) {
@@ -365,8 +394,6 @@ pub struct ExecuteDetailsTimings {
     pub execute_us: u64,
     pub deserialize_us: u64,
     pub get_or_create_executor_us: u64,
-    pub changed_account_count: u64,
-    pub total_account_count: u64,
     pub create_executor_register_syscalls_us: u64,
     pub create_executor_load_elf_us: u64,
     pub create_executor_verify_code_us: u64,
@@ -384,8 +411,6 @@ impl ExecuteDetailsTimings {
             self.get_or_create_executor_us,
             other.get_or_create_executor_us
         );
-        saturating_add_assign!(self.changed_account_count, other.changed_account_count);
-        saturating_add_assign!(self.total_account_count, other.total_account_count);
         saturating_add_assign!(
             self.create_executor_register_syscalls_us,
             other.create_executor_register_syscalls_us
@@ -430,6 +455,28 @@ impl ExecuteDetailsTimings {
                 .saturating_add(compute_units_consumed);
             program_timing.count = program_timing.count.saturating_add(1);
         };
+    }
+}
+
+#[derive(Default, Debug)]
+pub struct ExecuteAccountsDetails {
+    pub loaded_accounts_data_size_hist: histogram::Histogram,
+    pub changed_account_count: u64,
+    pub total_account_count: u64,
+}
+
+impl ExecuteAccountsDetails {
+    pub fn accumulate(&mut self, other: &ExecuteAccountsDetails) {
+        self.loaded_accounts_data_size_hist
+            .merge(&other.loaded_accounts_data_size_hist);
+        saturating_add_assign!(self.changed_account_count, other.changed_account_count);
+        saturating_add_assign!(self.total_account_count, other.total_account_count);
+    }
+
+    pub fn increment_loaded_accounts_data_size(&mut self, account_size: u64) {
+        self.loaded_accounts_data_size_hist
+            .increment(account_size)
+            .unwrap();
     }
 }
 
@@ -500,13 +547,10 @@ mod tests {
         // Construct another separate instance of ExecuteDetailsTimings with non default fields
         let mut other_execute_details_timings =
             construct_execute_timings_with_program(&program_id, us, compute_units_consumed);
-        let account_count = 1;
         other_execute_details_timings.serialize_us = us;
         other_execute_details_timings.create_vm_us = us;
         other_execute_details_timings.execute_us = us;
         other_execute_details_timings.deserialize_us = us;
-        other_execute_details_timings.changed_account_count = account_count;
-        other_execute_details_timings.total_account_count = account_count;
 
         // Accumulate the other instance into the current instance
         execute_details_timings.accumulate(&other_execute_details_timings);

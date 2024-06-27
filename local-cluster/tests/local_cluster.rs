@@ -386,7 +386,7 @@ fn test_restart_node() {
     );
     cluster.exit_restart_node(&nodes[0], validator_config, SocketAddrSpace::Unspecified);
     cluster_tests::sleep_n_epochs(
-        0.5,
+        0.6,
         &cluster.genesis_config.poh_config,
         clock::DEFAULT_TICKS_PER_SLOT,
         slots_per_epoch,
