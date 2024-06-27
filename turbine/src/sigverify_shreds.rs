@@ -1,6 +1,6 @@
 use {
     crate::{
-        cluster_nodes::{self, ClusterNodesCache},
+        cluster_nodes::{self, check_feature_activation, ClusterNodesCache},
         retransmit_stage::RetransmitStage,
     },
     crossbeam_channel::{Receiver, RecvTimeoutError, SendError, Sender},
@@ -19,6 +19,7 @@ use {
     },
     solana_sdk::{
         clock::Slot,
+        feature_set,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
     },
@@ -201,6 +202,19 @@ fn run_shred_sigverify<const K: usize>(
                     stats
                         .num_invalid_retransmitter
                         .fetch_add(1, Ordering::Relaxed);
+                    if shred::layout::get_slot(shred)
+                        .map(|slot| {
+                            check_feature_activation(
+                                &feature_set::verify_retransmitter_signature::id(),
+                                slot,
+                                &root_bank,
+                            )
+                        })
+                        .unwrap_or_default()
+                    {
+                        packet.meta_mut().set_discard(true);
+                        return;
+                    }
                 }
                 // We can ignore Error::InvalidShredVariant because that
                 // basically means that the shred is of a variant which
