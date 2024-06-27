@@ -300,7 +300,6 @@ rolling-file = "0.2.0"
 rpassword = "7.3"
 rustc_version = "0.4"
 rustls = { version = "0.21.12", default-features = false, features = ["quic"] }
-rustversion = "1.0.17"
 scopeguard = "1.2.0"
 semver = "1.0.23"
 seqlock = "0.2.0"

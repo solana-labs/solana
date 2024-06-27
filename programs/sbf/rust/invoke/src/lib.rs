@@ -1127,7 +1127,7 @@ fn process_instruction<'a>(
             let account = &accounts[ARGUMENT_INDEX];
             let key = *account.key;
             let key = &key as *const _ as usize;
-            #[rustversion::attr(since(1.72), allow(invalid_reference_casting))]
+            #[allow(invalid_reference_casting)]
             fn overwrite_account_key(account: &AccountInfo, key: *const Pubkey) {
                 unsafe {
                     let ptr = mem::transmute::<_, *mut *const Pubkey>(&account.key);
@@ -1178,7 +1178,7 @@ fn process_instruction<'a>(
             const CALLEE_PROGRAM_INDEX: usize = 2;
             let account = &accounts[ARGUMENT_INDEX];
             let owner = account.owner as *const _ as usize + 1;
-            #[rustversion::attr(since(1.72), allow(invalid_reference_casting))]
+            #[allow(invalid_reference_casting)]
             fn overwrite_account_owner(account: &AccountInfo, owner: *const Pubkey) {
                 unsafe {
                     let ptr = mem::transmute::<_, *mut *const Pubkey>(&account.owner);
@@ -1457,7 +1457,7 @@ struct RcBox<T> {
     value: T,
 }
 
-#[rustversion::attr(since(1.72), allow(invalid_reference_casting))]
+#[allow(invalid_reference_casting)]
 unsafe fn overwrite_account_data(account: &AccountInfo, data: Rc<RefCell<&mut [u8]>>) {
     std::ptr::write_volatile(
         &account.data as *const _ as usize as *mut Rc<RefCell<&mut [u8]>>,

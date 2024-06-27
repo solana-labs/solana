@@ -950,7 +950,6 @@ impl<T> From<Option<T>> for COption<T> {
     }
 }
 
-#[rustversion::since(1.49.0)]
 impl<T> From<COption<T>> for Option<T> {
     fn from(coption: COption<T>) -> Self {
         match coption {

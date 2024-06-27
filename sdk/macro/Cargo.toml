@@ -16,7 +16,6 @@ proc-macro = true
 bs58 = { workspace = true }
 proc-macro2 = { workspace = true }
 quote = { workspace = true }
-rustversion = { workspace = true }
 syn = { workspace = true, features = ["full"] }
 
 [package.metadata.docs.rs]

@@ -2076,7 +2076,7 @@ impl ClusterInfo {
     //
     // allow lint false positive trait bound requirement (`CryptoRng` only
     // implemented on `&'a mut T`
-    #[rustversion::attr(since(1.73), allow(clippy::needless_pass_by_ref_mut))]
+    #[allow(clippy::needless_pass_by_ref_mut)]
     fn check_pull_request<'a, R>(
         &'a self,
         now: Instant,

@@ -6392,7 +6392,6 @@ dependencies = [
  "rand_chacha 0.3.1",
  "rayon",
  "rustc_version 0.4.0",
- "rustversion",
  "serde",
  "serde_bytes",
  "serde_derive",
@@ -6822,7 +6821,6 @@ dependencies = [
  "parking_lot 0.12.3",
  "rand 0.8.5",
  "rustc_version 0.4.0",
- "rustversion",
  "serde",
  "serde_bytes",
  "serde_derive",
@@ -7275,7 +7273,6 @@ dependencies = [
  "rand 0.7.3",
  "rand 0.8.5",
  "rustc_version 0.4.0",
- "rustversion",
  "serde",
  "serde_bytes",
  "serde_derive",
@@ -7304,7 +7301,6 @@ dependencies = [
  "bs58",
  "proc-macro2",
  "quote",
- "rustversion",
  "syn 2.0.68",
 ]
 

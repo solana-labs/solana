@@ -71,7 +71,6 @@ qstring = { workspace = true }
 qualifier_attr = { workspace = true, optional = true }
 rand = { workspace = true, optional = true }
 rand0-7 = { package = "rand", version = "0.7", optional = true }
-rustversion = { workspace = true }
 serde = { workspace = true }
 serde_bytes = { workspace = true }
 serde_derive = { workspace = true }
