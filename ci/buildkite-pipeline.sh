@@ -14,8 +14,12 @@ if [[ -n $CI_PULL_REQUEST ]]; then
   pr_number=${BASH_REMATCH[1]}
   echo "get affected files from PR: $pr_number"
 
+  # Fetch the number of commits in the PR
+  commits_no=$(gh pr view "$pr_number" --json commits --jq '.commits | length')
+  echo "number of commits in this PR: $commits_no"
+
   # get affected files
-  readarray -t affected_files < <(gh pr diff --name-only "$pr_number")
+  readarray -t affected_files < <(git diff HEAD~"$commits_no"..HEAD --name-status | cut -f2)
   if [[ ${#affected_files[*]} -eq 0 ]]; then
     echo "Unable to determine the files affected by this PR"
     exit 1
