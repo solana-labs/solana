@@ -67,8 +67,10 @@ dependencies = [
 name = "agave-accounts-hash-cache-tool"
 version = "2.1.0"
 dependencies = [
+ "ahash 0.8.10",
  "bytemuck",
  "clap 2.33.3",
+ "memmap2",
  "solana-accounts-db",
  "solana-version",
 ]

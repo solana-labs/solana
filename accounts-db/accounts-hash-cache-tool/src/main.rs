@@ -4,16 +4,27 @@ use {
         crate_description, crate_name, value_t_or_exit, App, AppSettings, Arg, ArgMatches,
         SubCommand,
     },
-    solana_accounts_db::{CacheHashDataFileEntry, CacheHashDataFileHeader},
+    memmap2::Mmap,
+    solana_accounts_db::{
+        parse_cache_hash_data_filename, CacheHashDataFileEntry, CacheHashDataFileHeader,
+    },
     std::{
+        cmp::Ordering,
         collections::HashMap,
-        fs::File,
+        fs::{self, File},
         io::{self, BufReader, Read as _},
+        iter,
         mem::size_of,
         num::Saturating,
-        path::Path,
+        path::{Path, PathBuf},
+        time::Instant,
     },
 };
+
+const CMD_INSPECT: &str = "inspect";
+const CMD_DIFF: &str = "diff";
+const CMD_DIFF_FILES: &str = "files";
+const CMD_DIFF_DIRS: &str = "directories";
 
 fn main() {
     let matches = App::new(crate_name!())
@@ -25,7 +36,7 @@ fn main() {
         .global_setting(AppSettings::UnifiedHelpMessage)
         .global_setting(AppSettings::VersionlessSubcommands)
         .subcommand(
-            SubCommand::with_name("inspect")
+            SubCommand::with_name(CMD_INSPECT)
                 .about(
                     "Inspect an accounts hash cache file and display \
                      each account's address, hash, and balance",
@@ -45,47 +56,104 @@ fn main() {
                 ),
         )
         .subcommand(
-            SubCommand::with_name("diff")
-                .about("Diff two accounts hash cache files")
-                .arg(
-                    Arg::with_name("path1")
-                        .index(1)
-                        .takes_value(true)
-                        .value_name("PATH1")
-                        .help("Accounts hash cache file 1 to diff"),
+            SubCommand::with_name(CMD_DIFF)
+                .subcommand(
+                    SubCommand::with_name(CMD_DIFF_FILES)
+                        .about("Diff two accounts hash cache files")
+                        .arg(
+                            Arg::with_name("path1")
+                                .index(1)
+                                .takes_value(true)
+                                .value_name("PATH1")
+                                .help("Accounts hash cache file 1 to diff"),
+                        )
+                        .arg(
+                            Arg::with_name("path2")
+                                .index(2)
+                                .takes_value(true)
+                                .value_name("PATH2")
+                                .help("Accounts hash cache file 2 to diff"),
+                        ),
                 )
-                .arg(
-                    Arg::with_name("path2")
-                        .index(2)
-                        .takes_value(true)
-                        .value_name("PATH2")
-                        .help("Accounts hash cache file 2 to diff"),
+                .subcommand(
+                    SubCommand::with_name(CMD_DIFF_DIRS)
+                        .about("Diff two accounts hash cache directories")
+                        .arg(
+                            Arg::with_name("path1")
+                                .index(1)
+                                .takes_value(true)
+                                .value_name("PATH1")
+                                .help("Accounts hash cache directory 1 to diff"),
+                        )
+                        .arg(
+                            Arg::with_name("path2")
+                                .index(2)
+                                .takes_value(true)
+                                .value_name("PATH2")
+                                .help("Accounts hash cache directory 2 to diff"),
+                        ),
                 ),
         )
         .get_matches();
 
-    match matches.subcommand() {
-        ("inspect", Some(subcommand_matches)) => do_inspect(&matches, subcommand_matches)
-            .map_err(|err| format!("inspection failed: {err}")),
-        ("diff", Some(subcommand_matches)) => {
-            do_diff(&matches, subcommand_matches).map_err(|err| format!("diff failed: {err}"))
+    let subcommand = matches.subcommand();
+    let subcommand_str = subcommand.0;
+    match subcommand {
+        (CMD_INSPECT, Some(subcommand_matches)) => cmd_inspect(&matches, subcommand_matches),
+        (CMD_DIFF, Some(subcommand_matches)) => {
+            let diff_subcommand = subcommand_matches.subcommand();
+            match diff_subcommand {
+                (CMD_DIFF_FILES, Some(diff_subcommand_matches)) => {
+                    cmd_diff_files(&matches, diff_subcommand_matches)
+                }
+                (CMD_DIFF_DIRS, Some(diff_subcommand_matches)) => {
+                    cmd_diff_dirs(&matches, diff_subcommand_matches)
+                }
+                _ => unreachable!(),
+            }
         }
         _ => unreachable!(),
     }
     .unwrap_or_else(|err| {
-        eprintln!("Error: {err}");
+        eprintln!("Error: '{subcommand_str}' failed: {err}");
         std::process::exit(1);
     });
 }
 
-fn do_inspect(
+fn cmd_inspect(
     _app_matches: &ArgMatches<'_>,
     subcommand_matches: &ArgMatches<'_>,
 ) -> Result<(), String> {
     let force = subcommand_matches.is_present("force");
     let path = value_t_or_exit!(subcommand_matches, "path", String);
-    let (mut reader, header) = open_file(&path, force)
-        .map_err(|err| format!("failed to open accounts hash cache file '{path}': {err}"))?;
+    do_inspect(path, force)
+}
+
+fn cmd_diff_files(
+    _app_matches: &ArgMatches<'_>,
+    subcommand_matches: &ArgMatches<'_>,
+) -> Result<(), String> {
+    let path1 = value_t_or_exit!(subcommand_matches, "path1", String);
+    let path2 = value_t_or_exit!(subcommand_matches, "path2", String);
+    do_diff_files(path1, path2)
+}
+
+fn cmd_diff_dirs(
+    _app_matches: &ArgMatches<'_>,
+    subcommand_matches: &ArgMatches<'_>,
+) -> Result<(), String> {
+    let path1 = value_t_or_exit!(subcommand_matches, "path1", String);
+    let path2 = value_t_or_exit!(subcommand_matches, "path2", String);
+    do_diff_dirs(path1, path2)
+}
+
+fn do_inspect(file: impl AsRef<Path>, force: bool) -> Result<(), String> {
+    let (mut reader, header) = open_file(&file, force).map_err(|err| {
+        format!(
+            "failed to open accounts hash cache file '{}': {err}",
+            file.as_ref().display(),
+        )
+    })?;
     let count_width = (header.count as f64).log10().ceil() as usize;
     let mut count = Saturating(0usize);
     loop {
@@ -118,23 +186,26 @@ fn do_inspect(
     Ok(())
 }
 
-fn do_diff(
-    _app_matches: &ArgMatches<'_>,
-    subcommand_matches: &ArgMatches<'_>,
-) -> Result<(), String> {
+fn do_diff_files(file1: impl AsRef<Path>, file2: impl AsRef<Path>) -> Result<(), String> {
     let force = false; // skipping sanity checks is not supported when diffing
-    let path1 = value_t_or_exit!(subcommand_matches, "path1", String);
-    let path2 = value_t_or_exit!(subcommand_matches, "path2", String);
-    let (mut reader1, header1) = open_file(&path1, force)
-        .map_err(|err| format!("failed to open accounts hash cache file 1 '{path1}': {err}"))?;
-    let (mut reader2, header2) = open_file(&path2, force)
-        .map_err(|err| format!("failed to open accounts hash cache file 2 '{path2}': {err}"))?;
+    let (mut reader1, header1) = open_file(&file1, force).map_err(|err| {
+        format!(
+            "failed to open accounts hash cache file 1 '{}': {err}",
+            file1.as_ref().display(),
+        )
+    })?;
+    let (mut reader2, header2) = open_file(&file2, force).map_err(|err| {
+        format!(
+            "failed to open accounts hash cache file 2 '{}': {err}",
+            file2.as_ref().display(),
+        )
+    })?;
     // Note: Purposely open both files before reading either one.  This way, if there's an error
     // opening file 2, we can bail early without having to wait for file 1 to be read completely.
 
     // extract the entries from both files
     let do_extract = |num, reader: &mut BufReader<_>, header: &CacheHashDataFileHeader| {
-        let mut entries = HashMap::<_, _>::default();
+        let mut entries = Vec::new();
         loop {
             let mut entry = CacheHashDataFileEntry::zeroed();
             let result = reader.read_exact(bytemuck::bytes_of_mut(&mut entry));
@@ -146,28 +217,33 @@ fn do_diff(
                         break;
                     } else {
                         return Err(format!(
-                            "failed to read entry {}, expected {}: {err}",
+                            "failed to read file {num} entry {}, expected {} entries: {err}",
                             entries.len(),
                             header.count,
                         ));
                     }
                 }
             };
-            let CacheHashDataFileEntry {
-                hash,
-                lamports,
-                pubkey,
-            } = entry;
-            let old_value = entries.insert(pubkey, (hash, lamports));
-            if let Some(old_value) = old_value {
-                let new_value = entries.get(&pubkey);
-                return Err(format!("found duplicate pubkey in file {num}: {pubkey}, old value: {old_value:?}, new value: {new_value:?}"));
-            }
+            entries.push(entry);
         }
         Ok(entries)
     };
-    let entries1 = do_extract(1, &mut reader1, &header1)?;
-    let entries2 = do_extract(2, &mut reader2, &header2)?;
+    let mut entries1 = do_extract(1, &mut reader1, &header1)?;
+    let mut entries2 = do_extract(2, &mut reader2, &header2)?;
+
+    // entries are sorted by pubkey, then *reverse* slot,
+    // so we want to keep the *first* duplicate entry
+    entries1.dedup_by_key(|entry| entry.pubkey);
+    entries2.dedup_by_key(|entry| entry.pubkey);
+
+    let entries1: HashMap<_, _> = entries1
+        .into_iter()
+        .map(|entry| (entry.pubkey, (entry.hash, entry.lamports)))
+        .collect();
+    let entries2: HashMap<_, _> = entries2
+        .into_iter()
+        .map(|entry| (entry.pubkey, (entry.hash, entry.lamports)))
+        .collect();
 
     // compute the differences between the files
     let do_compute = |lhs: &HashMap<_, (_, _)>, rhs: &HashMap<_, (_, _)>| {
@@ -210,7 +286,9 @@ fn do_diff(
         if entries.is_empty() {
             println!("(none)");
         } else {
+            let mut total_lamports = Saturating(0);
             for (i, entry) in entries.iter().enumerate() {
+                total_lamports += entry.lamports;
                 println!(
                     "{i:count_width$}: pubkey: {:44}, hash: {:44}, lamports: {}",
                     entry.pubkey.to_string(),
@@ -218,6 +296,7 @@ fn do_diff(
                     entry.lamports,
                 );
             }
+            println!("total lamports: {}", total_lamports.0);
         }
     };
     println!("Unique entries in file 1:");
@@ -247,6 +326,178 @@ fn do_diff(
     }
 
     Ok(())
+}
+
+fn do_diff_dirs(dir1: impl AsRef<Path>, dir2: impl AsRef<Path>) -> Result<(), String> {
+    let get_files_in = |dir: &Path| {
+        let mut files = Vec::new();
+        let entries = fs::read_dir(dir)?;
+        for entry in entries {
+            let path = entry?.path();
+            let meta = fs::metadata(&path)?;
+            if meta.is_file() {
+                let path = fs::canonicalize(path)?;
+                files.push((path, meta));
+            }
+        }
+        Ok::<_, io::Error>(files)
+    };
+    let parse_files = |files: &[(PathBuf, _)]| {
+        files
+            .iter()
+            .map(|(file, _)| {
+                Path::file_name(file)
+                    .and_then(parse_cache_hash_data_filename)
+                    .ok_or_else(|| format!("failed to parse '{}'", file.display()))
+            })
+            .collect::<Result<Vec<_>, String>>()
+    };
+    let parse_and_sort_files_in = |dir: &Path| {
+        let files = get_files_in(dir)
+            .map_err(|err| format!("failed to get files in '{}': {err}", dir.display()))?;
+        let parsed_files = parse_files(&files)?;
+        let mut combined: Vec<_> = iter::zip(files, parsed_files).collect();
+        combined.sort_unstable_by(|a, b| {
+            a.1.slot_range_start
+                .cmp(&b.1.slot_range_start)
+                .then_with(|| a.1.slot_range_end.cmp(&b.1.slot_range_end))
+        });
+        Ok::<_, String>(combined)
+    };
+
+    let _timer = ElapsedOnDrop {
+        message: "diffing directories took ".to_string(),
+        start: Instant::now(),
+    };
+
+    let files1 = parse_and_sort_files_in(dir1.as_ref())?;
+    let files2 = parse_and_sort_files_in(dir2.as_ref())?;
+
+    let mut uniques1 = Vec::new();
+    let mut uniques2 = Vec::new();
+    let mut mismatches = Vec::new();
+    let mut idx1 = Saturating(0);
+    let mut idx2 = Saturating(0);
+    while idx1.0 < files1.len() && idx2.0 < files2.len() {
+        let file1 = &files1[idx1.0];
+        let file2 = &files2[idx2.0];
+        match file1.1.slot_range_start.cmp(&file2.1.slot_range_start) {
+            Ordering::Less => {
+                // file1 is an older slot range than file2, so note it and advance idx1
+                uniques1.push(file1);
+                idx1 += 1;
+            }
+            Ordering::Greater => {
+                // file1 is an newer slot range than file2, so note it and advance idx2
+                uniques2.push(file2);
+                idx2 += 1;
+            }
+            Ordering::Equal => {
+                match file1.1.slot_range_end.cmp(&file2.1.slot_range_end) {
+                    Ordering::Less => {
+                        // file1 is a smaller slot range than file2, so note it and advance idx1
+                        uniques1.push(file1);
+                        idx1 += 1;
+                    }
+                    Ordering::Greater => {
+                        // file1 is a larger slot range than file2, so note it and advance idx2
+                        uniques2.push(file2);
+                        idx2 += 1;
+                    }
+                    Ordering::Equal => {
+                        // slot ranges match, so compare the files and advance both idx1 and idx2
+                        let is_equal = || {
+                            // if the files have different sizes, they are not equal
+                            if file1.0 .1.len() != file2.0 .1.len() {
+                                return false;
+                            }
+
+                            // if the parsed file names have different hashes, they are not equal
+                            if file1.1.hash != file2.1.hash {
+                                return false;
+                            }
+
+                            // if the file headers have different entry counts, they are not equal
+                            let Ok((mmap1, header1)) = map_file(&file1.0 .0, false) else {
+                                return false;
+                            };
+                            let Ok((mmap2, header2)) = map_file(&file2.0 .0, false) else {
+                                return false;
+                            };
+                            if header1.count != header2.count {
+                                return false;
+                            }
+
+                            // if the binary data of the files are different, they are not equal
+                            let ahash_random_state = ahash::RandomState::new();
+                            let hash1 = ahash_random_state.hash_one(mmap1.as_ref());
+                            let hash2 = ahash_random_state.hash_one(mmap2.as_ref());
+                            if hash1 != hash2 {
+                                return false;
+                            }
+
+                            // ...otherwise they are equal
+                            true
+                        };
+                        if !is_equal() {
+                            mismatches.push((file1, file2));
+                        }
+                        idx1 += 1;
+                        idx2 += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    for file in files1.iter().skip(idx1.0) {
+        uniques1.push(file);
+    }
+    for file in files2.iter().skip(idx2.0) {
+        uniques2.push(file);
+    }
+
+    let do_print = |entries: &[&((PathBuf, _), _)]| {
+        let count_width = (entries.len() as f64).log10().ceil() as usize;
+        if entries.is_empty() {
+            println!("(none)");
+        } else {
+            for (i, entry) in entries.iter().enumerate() {
+                println!("{i:count_width$}: '{}'", entry.0 .0.display());
+            }
+        }
+    };
+    println!("Unique files in directory 1:");
+    do_print(&uniques1);
+    println!("Unique files in directory 2:");
+    do_print(&uniques2);
+
+    println!("Mismatch files:");
+    let count_width = (mismatches.len() as f64).log10().ceil() as usize;
+    if mismatches.is_empty() {
+        println!("(none)");
+    } else {
+        for (i, (file1, file2)) in mismatches.iter().enumerate() {
+            println!(
+                "{i:count_width$}: '{}', '{}'",
+                file1.0 .0.display(),
+                file2.0 .0.display(),
+            );
+        }
+    }
+
+    Ok(())
+}
+
+fn map_file(
+    path: impl AsRef<Path>,
+    force: bool,
+) -> Result<(Mmap, CacheHashDataFileHeader), String> {
+    let (reader, header) = open_file(&path, force)?;
+    let file = reader.into_inner();
+    let mmap = unsafe { Mmap::map(&file) }
+        .map_err(|err| format!("failed to mmap '{}': {err}", path.as_ref().display()))?;
+    Ok((mmap, header))
 }
 
 fn open_file(
@@ -284,4 +535,16 @@ fn open_file(
     }
 
     Ok((reader, header))
+}
+
+struct ElapsedOnDrop {
+    message: String,
+    start: Instant,
+}
+
+impl Drop for ElapsedOnDrop {
+    fn drop(&mut self) {
+        let elapsed = self.start.elapsed();
+        println!("{}{elapsed:?}", self.message);
+    }
 }

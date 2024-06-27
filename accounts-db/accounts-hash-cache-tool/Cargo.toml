@@ -10,8 +10,10 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
+ahash = { workspace = true }
 bytemuck = { workspace = true }
 clap = { workspace = true }
+memmap2 = { workspace = true }
 solana-accounts-db = { workspace = true }
 solana-version = { workspace = true }
 

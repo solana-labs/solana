@@ -46,7 +46,10 @@ pub mod waitable_condvar;
 // the accounts-hash-cache-tool needs access to these types
 pub use {
     accounts_hash::CalculateHashIntermediate as CacheHashDataFileEntry,
-    cache_hash_data::Header as CacheHashDataFileHeader,
+    cache_hash_data::{
+        parse_filename as parse_cache_hash_data_filename, Header as CacheHashDataFileHeader,
+        ParsedFilename as ParsedCacheHashDataFilename,
+    },
 };
 
 #[macro_use]
