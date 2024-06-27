@@ -56,7 +56,7 @@ use {
         },
         append_vec::{
             aligned_stored_size, APPEND_VEC_MMAPPED_FILES_DIRTY, APPEND_VEC_MMAPPED_FILES_OPEN,
-            STORE_META_OVERHEAD,
+            APPEND_VEC_REOPEN_AS_FILE_IO, STORE_META_OVERHEAD,
         },
         cache_hash_data::{
             CacheHashData, CacheHashDataFileReference, DeletionPolicy as CacheHashDeletionPolicy,
@@ -1121,6 +1121,7 @@ impl AccountStorageEntry {
             return None;
         }
 
+        APPEND_VEC_REOPEN_AS_FILE_IO.fetch_add(1, Ordering::Relaxed);
         let count_and_status = self.count_and_status.lock_write();
         self.accounts.reopen_as_readonly().map(|accounts| Self {
             id: self.id,
@@ -1916,6 +1917,11 @@ impl LatestAccountsIndexRootsStats {
             (
                 "append_vecs_dirty",
                 APPEND_VEC_MMAPPED_FILES_DIRTY.load(Ordering::Relaxed),
+                i64
+            ),
+            (
+                "append_vecs_open_as_file_io",
+                APPEND_VEC_REOPEN_AS_FILE_IO.load(Ordering::Relaxed),
                 i64
             )
         );

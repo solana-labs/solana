@@ -285,6 +285,7 @@ const fn page_align(size: u64) -> u64 {
 lazy_static! {
     pub static ref APPEND_VEC_MMAPPED_FILES_OPEN: AtomicU64 = AtomicU64::default();
     pub static ref APPEND_VEC_MMAPPED_FILES_DIRTY: AtomicU64 = AtomicU64::default();
+    pub static ref APPEND_VEC_REOPEN_AS_FILE_IO: AtomicU64 = AtomicU64::default();
 }
 
 impl Drop for AppendVec {
@@ -296,7 +297,9 @@ impl Drop for AppendVec {
                     APPEND_VEC_MMAPPED_FILES_DIRTY.fetch_sub(1, Ordering::Relaxed);
                 }
             }
-            AppendVecFileBacking::File(_) => {}
+            AppendVecFileBacking::File(_) => {
+                APPEND_VEC_REOPEN_AS_FILE_IO.fetch_sub(1, Ordering::Relaxed);
+            }
         }
         if self.remove_file_on_drop.load(Ordering::Acquire) {
             // If we're reopening in readonly mode, we don't delete the file. See
