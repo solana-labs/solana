@@ -69,10 +69,13 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 
 [dev-dependencies]
+assert_cmd = { workspace = true }
+predicates = { workspace = true }
 solana-account-decoder = { workspace = true }
 solana-inline-spl = { workspace = true }
 solana-runtime = { workspace = true, features = ["dev-context-only-utils"] }
 spl-token-2022 = { workspace = true, features = ["no-entrypoint"] }
+tempfile = { workspace = true }
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemallocator = { workspace = true }

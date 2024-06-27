@@ -1593,6 +1593,23 @@ pub fn main() {
     } else {
         &ledger_path
     };
+    let snapshots_dir = fs::canonicalize(snapshots_dir).unwrap_or_else(|err| {
+        eprintln!(
+            "Failed to canonicalize snapshots path '{}': {err}",
+            snapshots_dir.display(),
+        );
+        exit(1);
+    });
+    if account_paths
+        .iter()
+        .any(|account_path| account_path == &snapshots_dir)
+    {
+        eprintln!(
+            "Failed: The --accounts and --snapshots paths must be unique since they \
+             both create 'snapshots' subdirectories, otherwise there may be collisions",
+        );
+        exit(1);
+    }
 
     let bank_snapshots_dir = snapshots_dir.join("snapshots");
     fs::create_dir_all(&bank_snapshots_dir).unwrap_or_else(|err| {
@@ -1603,13 +1620,12 @@ pub fn main() {
         exit(1);
     });
 
-    let full_snapshot_archives_dir = PathBuf::from(
+    let full_snapshot_archives_dir =
         if let Some(full_snapshot_archive_path) = matches.value_of("full_snapshot_archive_path") {
-            Path::new(full_snapshot_archive_path)
+            PathBuf::from(full_snapshot_archive_path)
         } else {
-            snapshots_dir
-        },
-    );
+            snapshots_dir.clone()
+        };
     fs::create_dir_all(&full_snapshot_archives_dir).unwrap_or_else(|err| {
         eprintln!(
             "Failed to create full snapshot archives directory '{}': {err}",
@@ -1618,15 +1634,13 @@ pub fn main() {
         exit(1);
     });
 
-    let incremental_snapshot_archives_dir = PathBuf::from(
-        if let Some(incremental_snapshot_archive_path) =
-            matches.value_of("incremental_snapshot_archive_path")
-        {
-            Path::new(incremental_snapshot_archive_path)
-        } else {
-            snapshots_dir
-        },
-    );
+    let incremental_snapshot_archives_dir = if let Some(incremental_snapshot_archive_path) =
+        matches.value_of("incremental_snapshot_archive_path")
+    {
+        PathBuf::from(incremental_snapshot_archive_path)
+    } else {
+        snapshots_dir.clone()
+    };
     fs::create_dir_all(&incremental_snapshot_archives_dir).unwrap_or_else(|err| {
         eprintln!(
             "Failed to create incremental snapshot archives directory '{}': {err}",
