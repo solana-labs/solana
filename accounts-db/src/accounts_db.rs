@@ -583,6 +583,7 @@ impl AccountFromStorage {
 pub struct GetUniqueAccountsResult {
     pub stored_accounts: Vec<AccountFromStorage>,
     pub capacity: u64,
+    pub num_duplicated_accounts: usize,
 }
 
 pub struct AccountsAddRootTiming {
@@ -1992,6 +1993,7 @@ pub struct ShrinkStats {
     last_report: AtomicInterval,
     pub(crate) num_slots_shrunk: AtomicUsize,
     storage_read_elapsed: AtomicU64,
+    num_duplicated_accounts: AtomicU64,
     index_read_elapsed: AtomicU64,
     create_and_insert_store_elapsed: AtomicU64,
     store_accounts_elapsed: AtomicU64,
@@ -2024,6 +2026,11 @@ impl ShrinkStats {
                 (
                     "storage_read_elapsed",
                     self.storage_read_elapsed.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "num_duplicated_accounts",
+                    self.num_duplicated_accounts.swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
@@ -2123,6 +2130,13 @@ impl ShrinkAncientStats {
                 self.shrink_stats
                     .storage_read_elapsed
                     .swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "num_duplicated_accounts",
+                self.shrink_stats
+                    .num_duplicated_accounts
+                    .swap(0, Ordering::Relaxed),
                 i64
             ),
             (
@@ -3906,19 +3920,21 @@ impl AccountsDb {
         });
 
         // sort by pubkey to keep account index lookups close
-        Self::sort_and_remove_dups(&mut stored_accounts);
+        let num_duplicated_accounts = Self::sort_and_remove_dups(&mut stored_accounts);
 
         GetUniqueAccountsResult {
             stored_accounts,
             capacity,
+            num_duplicated_accounts,
         }
     }
 
     /// sort `accounts` by pubkey.
     /// Remove earlier entries with the same pubkey as later entries.
-    fn sort_and_remove_dups(accounts: &mut Vec<AccountFromStorage>) {
+    fn sort_and_remove_dups(accounts: &mut Vec<AccountFromStorage>) -> usize {
         // stable sort because we want the most recent only
         accounts.sort_by(|a, b| a.pubkey().cmp(b.pubkey()));
+        let len0 = accounts.len();
         if accounts.len() > 1 {
             let mut i = 0;
             // iterate 0..1 less than end
@@ -3934,6 +3950,7 @@ impl AccountsDb {
                 i += 1;
             }
         }
+        len0 - accounts.len()
     }
 
     pub(crate) fn get_unique_accounts_from_storage_for_shrink(
@@ -3946,6 +3963,9 @@ impl AccountsDb {
         stats
             .storage_read_elapsed
             .fetch_add(storage_read_elapsed_us, Ordering::Relaxed);
+        stats
+            .num_duplicated_accounts
+            .fetch_add(result.num_duplicated_accounts as u64, Ordering::Relaxed);
         result
     }
 
@@ -3962,6 +3982,7 @@ impl AccountsDb {
         let GetUniqueAccountsResult {
             stored_accounts,
             capacity,
+            num_duplicated_accounts,
         } = unique_accounts;
 
         let mut index_read_elapsed = Measure::start("index_read_elapsed");
@@ -3972,6 +3993,9 @@ impl AccountsDb {
         stats
             .accounts_loaded
             .fetch_add(len as u64, Ordering::Relaxed);
+        stats
+            .num_duplicated_accounts
+            .fetch_add(*num_duplicated_accounts as u64, Ordering::Relaxed);
         let all_are_zero_lamports_collect = Mutex::new(true);
         let index_entries_being_shrunk_outer = Mutex::new(Vec::default());
         self.thread_pool_clean.install(|| {
@@ -17145,6 +17169,7 @@ pub mod tests {
         let GetUniqueAccountsResult {
             stored_accounts: after_stored_accounts,
             capacity: after_capacity,
+            ..
         } = db.get_unique_accounts_from_storage(&after_store);
         assert!(created_accounts.capacity <= after_capacity);
         assert_eq!(created_accounts.stored_accounts.len(), 1);
@@ -17159,6 +17184,7 @@ pub mod tests {
         let GetUniqueAccountsResult {
             stored_accounts: after_stored_accounts,
             capacity: after_capacity,
+            ..
         } = db.get_unique_accounts_from_storage(&after_store);
         assert!(created_accounts.capacity <= after_capacity);
         assert_eq!(created_accounts.stored_accounts.len(), 1);
@@ -17635,6 +17661,7 @@ pub mod tests {
         let GetUniqueAccountsResult {
             stored_accounts: after_stored_accounts,
             capacity: after_capacity,
+            ..
         } = db.get_unique_accounts_from_storage(&after_store);
         if alive {
             assert!(created_accounts.capacity <= after_capacity);
