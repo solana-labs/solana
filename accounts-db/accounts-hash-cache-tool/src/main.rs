@@ -12,7 +12,7 @@ use {
         cmp::Ordering,
         collections::HashMap,
         fs::{self, File},
-        io::{self, BufReader, Read as _},
+        io::{self, BufReader, Read},
         iter,
         mem::size_of,
         num::Saturating,
@@ -148,31 +148,16 @@ fn cmd_diff_dirs(
 }
 
 fn do_inspect(file: impl AsRef<Path>, force: bool) -> Result<(), String> {
-    let (mut reader, header) = open_file(&file, force).map_err(|err| {
+    let (reader, header) = open_file(&file, force).map_err(|err| {
         format!(
             "failed to open accounts hash cache file '{}': {err}",
             file.as_ref().display(),
         )
     })?;
     let count_width = (header.count as f64).log10().ceil() as usize;
-    let mut count = Saturating(0usize);
-    loop {
-        let mut entry = CacheHashDataFileEntry::zeroed();
-        let result = reader.read_exact(bytemuck::bytes_of_mut(&mut entry));
-        match result {
-            Ok(()) => {}
-            Err(err) => {
-                if err.kind() == io::ErrorKind::UnexpectedEof && count.0 == header.count {
-                    // we've hit the expected end of the file
-                    break;
-                } else {
-                    return Err(format!(
-                        "failed to read entry {count}, expected {}: {err}",
-                        header.count,
-                    ));
-                }
-            }
-        };
+
+    let mut count = Saturating(0);
+    scan_file(reader, header.count, |entry| {
         println!(
             "{count:count_width$}: pubkey: {:44}, hash: {:44}, lamports: {}",
             entry.pubkey.to_string(),
@@ -180,7 +165,7 @@ fn do_inspect(file: impl AsRef<Path>, force: bool) -> Result<(), String> {
             entry.lamports,
         );
         count += 1;
-    }
+    })?;
 
     println!("actual entries: {count}, expected: {}", header.count);
     Ok(())
@@ -204,28 +189,11 @@ fn do_diff_files(file1: impl AsRef<Path>, file2: impl AsRef<Path>) -> Result<(),
     // opening file 2, we can bail early without having to wait for file 1 to be read completely.
 
     // extract the entries from both files
-    let do_extract = |num, reader: &mut BufReader<_>, header: &CacheHashDataFileHeader| {
+    let do_extract = |reader: &mut BufReader<_>, header: &CacheHashDataFileHeader| {
         let mut entries = Vec::new();
-        loop {
-            let mut entry = CacheHashDataFileEntry::zeroed();
-            let result = reader.read_exact(bytemuck::bytes_of_mut(&mut entry));
-            match result {
-                Ok(()) => {}
-                Err(err) => {
-                    if err.kind() == io::ErrorKind::UnexpectedEof && entries.len() == header.count {
-                        // we've hit the expected end of the file
-                        break;
-                    } else {
-                        return Err(format!(
-                            "failed to read file {num} entry {}, expected {} entries: {err}",
-                            entries.len(),
-                            header.count,
-                        ));
-                    }
-                }
-            };
+        scan_file(reader, header.count, |entry| {
             entries.push(entry);
-        }
+        })?;
 
         // entries in the file are sorted by pubkey then slot,
         // so we want to keep the *last* entry (if there are duplicates)
@@ -233,10 +201,12 @@ fn do_diff_files(file1: impl AsRef<Path>, file2: impl AsRef<Path>) -> Result<(),
             .into_iter()
             .map(|entry| (entry.pubkey, (entry.hash, entry.lamports)))
             .collect();
-        Ok(entries)
+        Ok::<_, String>(entries)
     };
-    let entries1 = do_extract(1, &mut reader1, &header1)?;
-    let entries2 = do_extract(2, &mut reader2, &header2)?;
+    let entries1 = do_extract(&mut reader1, &header1)
+        .map_err(|err| format!("failed to extract entries from file 1: {err}"))?;
+    let entries2 = do_extract(&mut reader2, &header2)
+        .map_err(|err| format!("failed to extract entries from file 2: {err}"))?;
 
     // compute the differences between the files
     let do_compute = |lhs: &HashMap<_, (_, _)>, rhs: &HashMap<_, (_, _)>| {
@@ -479,6 +449,40 @@ fn do_diff_dirs(dir1: impl AsRef<Path>, dir2: impl AsRef<Path>) -> Result<(), St
         }
     }
 
+    Ok(())
+}
+
+/// Scan file with `reader` and apply `user_fn` to each entry
+///
+/// NOTE: `reader`'s cursor must already be at the first entry; i.e. *past* the header.
+fn scan_file(
+    mut reader: impl Read,
+    num_entries_expected: usize,
+    mut user_fn: impl FnMut(CacheHashDataFileEntry),
+) -> Result<(), String> {
+    let mut num_entries_actual = Saturating(0);
+    let mut entry = CacheHashDataFileEntry::zeroed();
+    loop {
+        let result = reader.read_exact(bytemuck::bytes_of_mut(&mut entry));
+        match result {
+            Ok(()) => {}
+            Err(err) => {
+                if err.kind() == io::ErrorKind::UnexpectedEof
+                    && num_entries_actual.0 == num_entries_expected
+                {
+                    // we've hit the expected end of the file
+                    break;
+                } else {
+                    return Err(format!(
+                        "failed to read file entry {num_entries_actual}, \
+                         expected {num_entries_expected} entries: {err}",
+                    ));
+                }
+            }
+        };
+        user_fn(entry);
+        num_entries_actual += 1;
+    }
     Ok(())
 }
 
