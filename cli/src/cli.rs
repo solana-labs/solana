@@ -65,9 +65,6 @@ pub enum CliCommand {
     ClusterVersion,
     Feature(FeatureCliCommand),
     Inflation(InflationCliCommand),
-    Fees {
-        blockhash: Option<Hash>,
-    },
     FindProgramDerivedAddress {
         seeds: Vec<Vec<u8>>,
         program_id: Pubkey,
@@ -640,12 +637,6 @@ pub fn parse_command(
         ("feature", Some(matches)) => {
             parse_feature_subcommand(matches, default_signer, wallet_manager)
         }
-        ("fees", Some(matches)) => {
-            let blockhash = value_of::<Hash>(matches, "blockhash");
-            Ok(CliCommandInfo::without_signers(CliCommand::Fees {
-                blockhash,
-            }))
-        }
         ("first-available-block", Some(_matches)) => Ok(CliCommandInfo::without_signers(
             CliCommand::FirstAvailableBlock,
         )),
@@ -911,7 +902,6 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             seed,
             program_id,
         } => process_create_address_with_seed(config, from_pubkey.as_ref(), seed, program_id),
-        CliCommand::Fees { ref blockhash } => process_fees(&rpc_client, config, blockhash.as_ref()),
         CliCommand::Feature(feature_subcommand) => {
             process_feature_subcommand(&rpc_client, config, feature_subcommand)
         }

@@ -44,8 +44,7 @@ use {
         epoch_schedule::EpochSchedule,
         exit::Exit,
         feature_set::FEATURE_NAMES,
-        fee_calculator::{FeeCalculator, FeeRateGovernor},
-        hash::Hash,
+        fee_calculator::FeeRateGovernor,
         instruction::{AccountMeta, Instruction},
         message::Message,
         native_token::sol_to_lamports,
@@ -1161,20 +1160,6 @@ impl TestValidator {
     /// Return the validator's vote account address
     pub fn vote_account_address(&self) -> Pubkey {
         self.vote_account_address
-    }
-
-    /// Return an RpcClient for the validator.  As a convenience, also return a recent blockhash and
-    /// associated fee calculator
-    #[deprecated(since = "1.9.0", note = "Please use `get_rpc_client` instead")]
-    pub fn rpc_client(&self) -> (RpcClient, Hash, FeeCalculator) {
-        let rpc_client =
-            RpcClient::new_with_commitment(self.rpc_url.clone(), CommitmentConfig::processed());
-        #[allow(deprecated)]
-        let (recent_blockhash, fee_calculator) = rpc_client
-            .get_recent_blockhash()
-            .expect("get_recent_blockhash");
-
-        (rpc_client, recent_blockhash, fee_calculator)
     }
 
     /// Return an RpcClient for the validator.

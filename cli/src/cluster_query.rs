@@ -171,19 +171,6 @@ impl ClusterQuerySubCommands for App<'_, '_> {
             SubCommand::with_name("cluster-version")
                 .about("Get the version of the cluster entrypoint"),
         )
-        // Deprecated in v1.8.0
-        .subcommand(
-            SubCommand::with_name("fees")
-                .about("Display current cluster fees (Deprecated in v1.8.0)")
-                .arg(
-                    Arg::with_name("blockhash")
-                        .long("blockhash")
-                        .takes_value(true)
-                        .value_name("BLOCKHASH")
-                        .validator(is_hash)
-                        .help("Query fees for BLOCKHASH instead of the most recent blockhash"),
-                ),
-        )
         .subcommand(
             SubCommand::with_name("first-available-block")
                 .about("Get the first available block in the storage"),
@@ -980,42 +967,6 @@ pub fn process_cluster_version(rpc_client: &RpcClient, config: &CliConfig) -> Pr
     } else {
         Ok(remote_version.to_string())
     }
-}
-
-pub fn process_fees(
-    rpc_client: &RpcClient,
-    config: &CliConfig,
-    blockhash: Option<&Hash>,
-) -> ProcessResult {
-    let fees = if let Some(recent_blockhash) = blockhash {
-        #[allow(deprecated)]
-        let result = rpc_client.get_fee_calculator_for_blockhash_with_commitment(
-            recent_blockhash,
-            config.commitment,
-        )?;
-        if let Some(fee_calculator) = result.value {
-            CliFees::some(
-                result.context.slot,
-                *recent_blockhash,
-                fee_calculator.lamports_per_signature,
-                None,
-                None,
-            )
-        } else {
-            CliFees::none()
-        }
-    } else {
-        #[allow(deprecated)]
-        let result = rpc_client.get_fees_with_commitment(config.commitment)?;
-        CliFees::some(
-            result.context.slot,
-            result.value.blockhash,
-            result.value.fee_calculator.lamports_per_signature,
-            None,
-            Some(result.value.last_valid_block_height),
-        )
-    };
-    Ok(config.output_format.formatted_string(&fees))
 }
 
 pub fn process_first_available_block(rpc_client: &RpcClient) -> ProcessResult {
@@ -2374,26 +2325,6 @@ mod tests {
         assert_eq!(
             parse_command(&test_cluster_version, &default_signer, &mut None).unwrap(),
             CliCommandInfo::without_signers(CliCommand::ClusterVersion)
-        );
-
-        let test_fees = test_commands.clone().get_matches_from(vec!["test", "fees"]);
-        assert_eq!(
-            parse_command(&test_fees, &default_signer, &mut None).unwrap(),
-            CliCommandInfo::without_signers(CliCommand::Fees { blockhash: None })
-        );
-
-        let blockhash = Hash::new_unique();
-        let test_fees = test_commands.clone().get_matches_from(vec![
-            "test",
-            "fees",
-            "--blockhash",
-            &blockhash.to_string(),
-        ]);
-        assert_eq!(
-            parse_command(&test_fees, &default_signer, &mut None).unwrap(),
-            CliCommandInfo::without_signers(CliCommand::Fees {
-                blockhash: Some(blockhash)
-            })
         );
 
         let slot = 100;

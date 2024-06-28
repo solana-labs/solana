@@ -7,11 +7,6 @@
 //! [JSON-RPC]: https://www.jsonrpc.org/specification
 
 pub use crate::mock_sender::Mocks;
-#[allow(deprecated)]
-use solana_rpc_client_api::deprecated_config::{
-    RpcConfirmedBlockConfig, RpcConfirmedTransactionConfig,
-    RpcGetConfirmedSignaturesForAddress2Config,
-};
 #[cfg(feature = "spinner")]
 use {crate::spinner, solana_sdk::clock::MAX_HASH_AGE_IN_SECONDS, std::cmp::min};
 use {
@@ -47,7 +42,6 @@ use {
         commitment_config::{CommitmentConfig, CommitmentLevel},
         epoch_info::EpochInfo,
         epoch_schedule::EpochSchedule,
-        fee_calculator::{FeeCalculator, FeeRateGovernor},
         hash::Hash,
         pubkey::Pubkey,
         signature::Signature,
@@ -574,23 +568,6 @@ impl RpcClient {
             ));
         }
         Ok(requested_commitment)
-    }
-
-    #[allow(deprecated)]
-    async fn maybe_map_request(&self, mut request: RpcRequest) -> Result<RpcRequest, RpcError> {
-        if self.get_node_version().await? < semver::Version::new(1, 7, 0) {
-            request = match request {
-                RpcRequest::GetBlock => RpcRequest::GetConfirmedBlock,
-                RpcRequest::GetBlocks => RpcRequest::GetConfirmedBlocks,
-                RpcRequest::GetBlocksWithLimit => RpcRequest::GetConfirmedBlocksWithLimit,
-                RpcRequest::GetSignaturesForAddress => {
-                    RpcRequest::GetConfirmedSignaturesForAddress2
-                }
-                RpcRequest::GetTransaction => RpcRequest::GetConfirmedTransaction,
-                _ => request,
-            };
-        }
-        Ok(request)
     }
 
     #[allow(deprecated)]
@@ -1436,27 +1413,8 @@ impl RpcClient {
     /// # Ok::<(), Error>(())
     /// ```
     pub async fn get_highest_snapshot_slot(&self) -> ClientResult<RpcSnapshotSlotInfo> {
-        if self.get_node_version().await? < semver::Version::new(1, 9, 0) {
-            #[allow(deprecated)]
-            self.get_snapshot_slot()
-                .await
-                .map(|full| RpcSnapshotSlotInfo {
-                    full,
-                    incremental: None,
-                })
-        } else {
-            self.send(RpcRequest::GetHighestSnapshotSlot, Value::Null)
-                .await
-        }
-    }
-
-    #[deprecated(
-        since = "1.8.0",
-        note = "Please use RpcClient::get_highest_snapshot_slot() instead"
-    )]
-    #[allow(deprecated)]
-    pub async fn get_snapshot_slot(&self) -> ClientResult<Slot> {
-        self.send(RpcRequest::GetSnapshotSlot, Value::Null).await
+        self.send(RpcRequest::GetHighestSnapshotSlot, Value::Null)
+            .await
     }
 
     /// Check if a transaction has been processed with the default [commitment level][cl].
@@ -2519,11 +2477,8 @@ impl RpcClient {
         slot: Slot,
         encoding: UiTransactionEncoding,
     ) -> ClientResult<EncodedConfirmedBlock> {
-        self.send(
-            self.maybe_map_request(RpcRequest::GetBlock).await?,
-            json!([slot, encoding]),
-        )
-        .await
+        self.send(RpcRequest::GetBlock, json!([slot, encoding]))
+            .await
     }
 
     /// Returns identity and transaction information about a confirmed block in the ledger.
@@ -2569,46 +2524,7 @@ impl RpcClient {
         slot: Slot,
         config: RpcBlockConfig,
     ) -> ClientResult<UiConfirmedBlock> {
-        self.send(
-            self.maybe_map_request(RpcRequest::GetBlock).await?,
-            json!([slot, config]),
-        )
-        .await
-    }
-
-    #[deprecated(since = "1.7.0", note = "Please use RpcClient::get_block() instead")]
-    #[allow(deprecated)]
-    pub async fn get_confirmed_block(&self, slot: Slot) -> ClientResult<EncodedConfirmedBlock> {
-        self.get_confirmed_block_with_encoding(slot, UiTransactionEncoding::Json)
-            .await
-    }
-
-    #[deprecated(
-        since = "1.7.0",
-        note = "Please use RpcClient::get_block_with_encoding() instead"
-    )]
-    #[allow(deprecated)]
-    pub async fn get_confirmed_block_with_encoding(
-        &self,
-        slot: Slot,
-        encoding: UiTransactionEncoding,
-    ) -> ClientResult<EncodedConfirmedBlock> {
-        self.send(RpcRequest::GetConfirmedBlock, json!([slot, encoding]))
-            .await
-    }
-
-    #[deprecated(
-        since = "1.7.0",
-        note = "Please use RpcClient::get_block_with_config() instead"
-    )]
-    #[allow(deprecated)]
-    pub async fn get_confirmed_block_with_config(
-        &self,
-        slot: Slot,
-        config: RpcConfirmedBlockConfig,
-    ) -> ClientResult<UiConfirmedBlock> {
-        self.send(RpcRequest::GetConfirmedBlock, json!([slot, config]))
-            .await
+        self.send(RpcRequest::GetBlock, json!([slot, config])).await
     }
 
     /// Returns a list of finalized blocks between two slots.
@@ -2635,12 +2551,9 @@ impl RpcClient {
     ///
     /// # RPC Reference
     ///
-    /// This method corresponds directly to the [`getBlocks`] RPC method, unless
-    /// the remote node version is less than 1.7, in which case it maps to the
-    /// [`getConfirmedBlocks`] RPC method.
+    /// This method corresponds directly to the [`getBlocks`] RPC method.
     ///
     /// [`getBlocks`]: https://solana.com/docs/rpc/http/getblocks
-    /// [`getConfirmedBlocks`]: https://solana.com/docs/rpc/deprecated/getconfirmedblocks
     ///
     /// # Examples
     ///
@@ -2662,11 +2575,8 @@ impl RpcClient {
         start_slot: Slot,
         end_slot: Option<Slot>,
     ) -> ClientResult<Vec<Slot>> {
-        self.send(
-            self.maybe_map_request(RpcRequest::GetBlocks).await?,
-            json!([start_slot, end_slot]),
-        )
-        .await
+        self.send(RpcRequest::GetBlocks, json!([start_slot, end_slot]))
+            .await
     }
 
     /// Returns a list of confirmed blocks between two slots.
@@ -2697,12 +2607,9 @@ impl RpcClient {
     ///
     /// # RPC Reference
     ///
-    /// This method corresponds directly to the [`getBlocks`] RPC method, unless
-    /// the remote node version is less than 1.7, in which case it maps to the
-    /// [`getConfirmedBlocks`] RPC method.
+    /// This method corresponds directly to the [`getBlocks`] RPC method.
     ///
     /// [`getBlocks`]: https://solana.com/docs/rpc/http/getblocks
-    /// [`getConfirmedBlocks`]: https://solana.com/docs/rpc/deprecated/getconfirmedblocks
     ///
     /// # Examples
     ///
@@ -2744,8 +2651,7 @@ impl RpcClient {
                 self.maybe_map_commitment(commitment_config).await?
             ])
         };
-        self.send(self.maybe_map_request(RpcRequest::GetBlocks).await?, json)
-            .await
+        self.send(RpcRequest::GetBlocks, json).await
     }
 
     /// Returns a list of finalized blocks starting at the given slot.
@@ -2762,11 +2668,9 @@ impl RpcClient {
     /// # RPC Reference
     ///
     /// This method corresponds directly to the [`getBlocksWithLimit`] RPC
-    /// method, unless the remote node version is less than 1.7, in which case
-    /// it maps to the [`getConfirmedBlocksWithLimit`] RPC method.
+    /// method.
     ///
     /// [`getBlocksWithLimit`]: https://solana.com/docs/rpc/http/getblockswithlimit
-    /// [`getConfirmedBlocksWithLimit`]: https://solana.com/docs/rpc/deprecated/getconfirmedblockswithlimit
     ///
     /// # Examples
     ///
@@ -2788,12 +2692,8 @@ impl RpcClient {
         start_slot: Slot,
         limit: usize,
     ) -> ClientResult<Vec<Slot>> {
-        self.send(
-            self.maybe_map_request(RpcRequest::GetBlocksWithLimit)
-                .await?,
-            json!([start_slot, limit]),
-        )
-        .await
+        self.send(RpcRequest::GetBlocksWithLimit, json!([start_slot, limit]))
+            .await
     }
 
     /// Returns a list of confirmed blocks starting at the given slot.
@@ -2811,11 +2711,9 @@ impl RpcClient {
     /// # RPC Reference
     ///
     /// This method corresponds directly to the [`getBlocksWithLimit`] RPC
-    /// method, unless the remote node version is less than 1.7, in which case
-    /// it maps to the `getConfirmedBlocksWithLimit` RPC method.
+    /// method.
     ///
     /// [`getBlocksWithLimit`]: https://solana.com/docs/rpc/http/getblockswithlimit
-    /// [`getConfirmedBlocksWithLimit`]: https://solana.com/docs/rpc/deprecated/getconfirmedblockswithlimit
     ///
     /// # Examples
     ///
@@ -2845,87 +2743,7 @@ impl RpcClient {
         commitment_config: CommitmentConfig,
     ) -> ClientResult<Vec<Slot>> {
         self.send(
-            self.maybe_map_request(RpcRequest::GetBlocksWithLimit)
-                .await?,
-            json!([
-                start_slot,
-                limit,
-                self.maybe_map_commitment(commitment_config).await?
-            ]),
-        )
-        .await
-    }
-
-    #[deprecated(since = "1.7.0", note = "Please use RpcClient::get_blocks() instead")]
-    #[allow(deprecated)]
-    pub async fn get_confirmed_blocks(
-        &self,
-        start_slot: Slot,
-        end_slot: Option<Slot>,
-    ) -> ClientResult<Vec<Slot>> {
-        self.send(
-            RpcRequest::GetConfirmedBlocks,
-            json!([start_slot, end_slot]),
-        )
-        .await
-    }
-
-    #[deprecated(
-        since = "1.7.0",
-        note = "Please use RpcClient::get_blocks_with_commitment() instead"
-    )]
-    #[allow(deprecated)]
-    pub async fn get_confirmed_blocks_with_commitment(
-        &self,
-        start_slot: Slot,
-        end_slot: Option<Slot>,
-        commitment_config: CommitmentConfig,
-    ) -> ClientResult<Vec<Slot>> {
-        let json = if end_slot.is_some() {
-            json!([
-                start_slot,
-                end_slot,
-                self.maybe_map_commitment(commitment_config).await?
-            ])
-        } else {
-            json!([
-                start_slot,
-                self.maybe_map_commitment(commitment_config).await?
-            ])
-        };
-        self.send(RpcRequest::GetConfirmedBlocks, json).await
-    }
-
-    #[deprecated(
-        since = "1.7.0",
-        note = "Please use RpcClient::get_blocks_with_limit() instead"
-    )]
-    #[allow(deprecated)]
-    pub async fn get_confirmed_blocks_with_limit(
-        &self,
-        start_slot: Slot,
-        limit: usize,
-    ) -> ClientResult<Vec<Slot>> {
-        self.send(
-            RpcRequest::GetConfirmedBlocksWithLimit,
-            json!([start_slot, limit]),
-        )
-        .await
-    }
-
-    #[deprecated(
-        since = "1.7.0",
-        note = "Please use RpcClient::get_blocks_with_limit_and_commitment() instead"
-    )]
-    #[allow(deprecated)]
-    pub async fn get_confirmed_blocks_with_limit_and_commitment(
-        &self,
-        start_slot: Slot,
-        limit: usize,
-        commitment_config: CommitmentConfig,
-    ) -> ClientResult<Vec<Slot>> {
-        self.send(
-            RpcRequest::GetConfirmedBlocksWithLimit,
+            RpcRequest::GetBlocksWithLimit,
             json!([
                 start_slot,
                 limit,
@@ -3050,51 +2868,7 @@ impl RpcClient {
 
         let result: Vec<RpcConfirmedTransactionStatusWithSignature> = self
             .send(
-                self.maybe_map_request(RpcRequest::GetSignaturesForAddress)
-                    .await?,
-                json!([address.to_string(), config]),
-            )
-            .await?;
-
-        Ok(result)
-    }
-
-    #[deprecated(
-        since = "1.7.0",
-        note = "Please use RpcClient::get_signatures_for_address() instead"
-    )]
-    #[allow(deprecated)]
-    pub async fn get_confirmed_signatures_for_address2(
-        &self,
-        address: &Pubkey,
-    ) -> ClientResult<Vec<RpcConfirmedTransactionStatusWithSignature>> {
-        self.get_confirmed_signatures_for_address2_with_config(
-            address,
-            GetConfirmedSignaturesForAddress2Config::default(),
-        )
-        .await
-    }
-
-    #[deprecated(
-        since = "1.7.0",
-        note = "Please use RpcClient::get_signatures_for_address_with_config() instead"
-    )]
-    #[allow(deprecated)]
-    pub async fn get_confirmed_signatures_for_address2_with_config(
-        &self,
-        address: &Pubkey,
-        config: GetConfirmedSignaturesForAddress2Config,
-    ) -> ClientResult<Vec<RpcConfirmedTransactionStatusWithSignature>> {
-        let config = RpcGetConfirmedSignaturesForAddress2Config {
-            before: config.before.map(|signature| signature.to_string()),
-            until: config.until.map(|signature| signature.to_string()),
-            limit: config.limit,
-            commitment: config.commitment,
-        };
-
-        let result: Vec<RpcConfirmedTransactionStatusWithSignature> = self
-            .send(
-                RpcRequest::GetConfirmedSignaturesForAddress2,
+                RpcRequest::GetSignaturesForAddress,
                 json!([address.to_string(), config]),
             )
             .await?;
@@ -3111,12 +2885,9 @@ impl RpcClient {
     ///
     /// # RPC Reference
     ///
-    /// This method corresponds directly to the [`getTransaction`] RPC method,
-    /// unless the remote node version is less than 1.7, in which case it maps
-    /// to the [`getConfirmedTransaction`] RPC method.
+    /// This method corresponds directly to the [`getTransaction`] RPC method.
     ///
     /// [`getTransaction`]: https://solana.com/docs/rpc/http/gettransaction
-    /// [`getConfirmedTransaction`]: https://solana.com/docs/rpc/deprecated/getConfirmedTransaction
     ///
     /// # Examples
     ///
@@ -3152,7 +2923,7 @@ impl RpcClient {
         encoding: UiTransactionEncoding,
     ) -> ClientResult<EncodedConfirmedTransactionWithStatusMeta> {
         self.send(
-            self.maybe_map_request(RpcRequest::GetTransaction).await?,
+            RpcRequest::GetTransaction,
             json!([signature.to_string(), encoding]),
         )
         .await
@@ -3170,12 +2941,9 @@ impl RpcClient {
     ///
     /// # RPC Reference
     ///
-    /// This method corresponds directly to the [`getTransaction`] RPC method,
-    /// unless the remote node version is less than 1.7, in which case it maps
-    /// to the [`getConfirmedTransaction`] RPC method.
+    /// This method corresponds directly to the [`getTransaction`] RPC method.
     ///
     /// [`getTransaction`]: https://solana.com/docs/rpc/http/gettransaction
-    /// [`getConfirmedTransaction`]: https://solana.com/docs/rpc/deprecated/getConfirmedTransaction
     ///
     /// # Examples
     ///
@@ -3220,41 +2988,7 @@ impl RpcClient {
         config: RpcTransactionConfig,
     ) -> ClientResult<EncodedConfirmedTransactionWithStatusMeta> {
         self.send(
-            self.maybe_map_request(RpcRequest::GetTransaction).await?,
-            json!([signature.to_string(), config]),
-        )
-        .await
-    }
-
-    #[deprecated(
-        since = "1.7.0",
-        note = "Please use RpcClient::get_transaction() instead"
-    )]
-    #[allow(deprecated)]
-    pub async fn get_confirmed_transaction(
-        &self,
-        signature: &Signature,
-        encoding: UiTransactionEncoding,
-    ) -> ClientResult<EncodedConfirmedTransactionWithStatusMeta> {
-        self.send(
-            RpcRequest::GetConfirmedTransaction,
-            json!([signature.to_string(), encoding]),
-        )
-        .await
-    }
-
-    #[deprecated(
-        since = "1.7.0",
-        note = "Please use RpcClient::get_transaction_with_config() instead"
-    )]
-    #[allow(deprecated)]
-    pub async fn get_confirmed_transaction_with_config(
-        &self,
-        signature: &Signature,
-        config: RpcConfirmedTransactionConfig,
-    ) -> ClientResult<EncodedConfirmedTransactionWithStatusMeta> {
-        self.send(
-            RpcRequest::GetConfirmedTransaction,
+            RpcRequest::GetTransaction,
             json!([signature.to_string(), config]),
         )
         .await
@@ -4549,228 +4283,6 @@ impl RpcClient {
         .await
     }
 
-    #[deprecated(
-        since = "1.9.0",
-        note = "Please use `get_latest_blockhash` and `get_fee_for_message` instead"
-    )]
-    #[allow(deprecated)]
-    pub async fn get_fees(&self) -> ClientResult<Fees> {
-        #[allow(deprecated)]
-        Ok(self
-            .get_fees_with_commitment(self.commitment())
-            .await?
-            .value)
-    }
-
-    #[deprecated(
-        since = "1.9.0",
-        note = "Please use `get_latest_blockhash_with_commitment` and `get_fee_for_message` instead"
-    )]
-    #[allow(deprecated)]
-    pub async fn get_fees_with_commitment(
-        &self,
-        commitment_config: CommitmentConfig,
-    ) -> RpcResult<Fees> {
-        let Response {
-            context,
-            value: fees,
-        } = self
-            .send::<Response<RpcFees>>(
-                RpcRequest::GetFees,
-                json!([self.maybe_map_commitment(commitment_config).await?]),
-            )
-            .await?;
-        let blockhash = fees.blockhash.parse().map_err(|_| {
-            ClientError::new_with_request(
-                RpcError::ParseError("Hash".to_string()).into(),
-                RpcRequest::GetFees,
-            )
-        })?;
-        Ok(Response {
-            context,
-            value: Fees {
-                blockhash,
-                fee_calculator: fees.fee_calculator,
-                last_valid_block_height: fees.last_valid_block_height,
-            },
-        })
-    }
-
-    #[deprecated(since = "1.9.0", note = "Please use `get_latest_blockhash` instead")]
-    #[allow(deprecated)]
-    pub async fn get_recent_blockhash(&self) -> ClientResult<(Hash, FeeCalculator)> {
-        #[allow(deprecated)]
-        let (blockhash, fee_calculator, _last_valid_slot) = self
-            .get_recent_blockhash_with_commitment(self.commitment())
-            .await?
-            .value;
-        Ok((blockhash, fee_calculator))
-    }
-
-    #[deprecated(
-        since = "1.9.0",
-        note = "Please use `get_latest_blockhash_with_commitment` instead"
-    )]
-    #[allow(deprecated)]
-    pub async fn get_recent_blockhash_with_commitment(
-        &self,
-        commitment_config: CommitmentConfig,
-    ) -> RpcResult<(Hash, FeeCalculator, Slot)> {
-        let (context, blockhash, fee_calculator, last_valid_slot) = if let Ok(Response {
-            context,
-            value:
-                RpcFees {
-                    blockhash,
-                    fee_calculator,
-                    last_valid_slot,
-                    ..
-                },
-        }) = self
-            .send::<Response<RpcFees>>(
-                RpcRequest::GetFees,
-                json!([self.maybe_map_commitment(commitment_config).await?]),
-            )
-            .await
-        {
-            (context, blockhash, fee_calculator, last_valid_slot)
-        } else if let Ok(Response {
-            context,
-            value:
-                DeprecatedRpcFees {
-                    blockhash,
-                    fee_calculator,
-                    last_valid_slot,
-                },
-        }) = self
-            .send::<Response<DeprecatedRpcFees>>(
-                RpcRequest::GetFees,
-                json!([self.maybe_map_commitment(commitment_config).await?]),
-            )
-            .await
-        {
-            (context, blockhash, fee_calculator, last_valid_slot)
-        } else if let Ok(Response {
-            context,
-            value:
-                RpcBlockhashFeeCalculator {
-                    blockhash,
-                    fee_calculator,
-                },
-        }) = self
-            .send::<Response<RpcBlockhashFeeCalculator>>(
-                RpcRequest::GetRecentBlockhash,
-                json!([self.maybe_map_commitment(commitment_config).await?]),
-            )
-            .await
-        {
-            (context, blockhash, fee_calculator, 0)
-        } else {
-            return Err(ClientError::new_with_request(
-                RpcError::ParseError("RpcBlockhashFeeCalculator or RpcFees".to_string()).into(),
-                RpcRequest::GetRecentBlockhash,
-            ));
-        };
-
-        let blockhash = blockhash.parse().map_err(|_| {
-            ClientError::new_with_request(
-                RpcError::ParseError("Hash".to_string()).into(),
-                RpcRequest::GetRecentBlockhash,
-            )
-        })?;
-        Ok(Response {
-            context,
-            value: (blockhash, fee_calculator, last_valid_slot),
-        })
-    }
-
-    #[deprecated(since = "1.9.0", note = "Please `get_fee_for_message` instead")]
-    #[allow(deprecated)]
-    pub async fn get_fee_calculator_for_blockhash(
-        &self,
-        blockhash: &Hash,
-    ) -> ClientResult<Option<FeeCalculator>> {
-        #[allow(deprecated)]
-        Ok(self
-            .get_fee_calculator_for_blockhash_with_commitment(blockhash, self.commitment())
-            .await?
-            .value)
-    }
-
-    #[deprecated(
-        since = "1.9.0",
-        note = "Please `get_latest_blockhash_with_commitment` and `get_fee_for_message` instead"
-    )]
-    #[allow(deprecated)]
-    pub async fn get_fee_calculator_for_blockhash_with_commitment(
-        &self,
-        blockhash: &Hash,
-        commitment_config: CommitmentConfig,
-    ) -> RpcResult<Option<FeeCalculator>> {
-        let Response { context, value } = self
-            .send::<Response<Option<RpcFeeCalculator>>>(
-                RpcRequest::GetFeeCalculatorForBlockhash,
-                json!([
-                    blockhash.to_string(),
-                    self.maybe_map_commitment(commitment_config).await?
-                ]),
-            )
-            .await?;
-
-        Ok(Response {
-            context,
-            value: value.map(|rf| rf.fee_calculator),
-        })
-    }
-
-    #[deprecated(
-        since = "1.9.0",
-        note = "Please do not use, will no longer be available in the future"
-    )]
-    #[allow(deprecated)]
-    pub async fn get_fee_rate_governor(&self) -> RpcResult<FeeRateGovernor> {
-        let Response {
-            context,
-            value: RpcFeeRateGovernor { fee_rate_governor },
-        } = self
-            .send::<Response<RpcFeeRateGovernor>>(RpcRequest::GetFeeRateGovernor, Value::Null)
-            .await?;
-
-        Ok(Response {
-            context,
-            value: fee_rate_governor,
-        })
-    }
-
-    #[deprecated(
-        since = "1.9.0",
-        note = "Please do not use, will no longer be available in the future"
-    )]
-    #[allow(deprecated)]
-    pub async fn get_new_blockhash(&self, blockhash: &Hash) -> ClientResult<(Hash, FeeCalculator)> {
-        let mut num_retries = 0;
-        let start = Instant::now();
-        while start.elapsed().as_secs() < 5 {
-            #[allow(deprecated)]
-            if let Ok((new_blockhash, fee_calculator)) = self.get_recent_blockhash().await {
-                if new_blockhash != *blockhash {
-                    return Ok((new_blockhash, fee_calculator));
-                }
-            }
-            debug!("Got same blockhash ({:?}), will retry...", blockhash);
-
-            // Retry ~twice during a slot
-            sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT / 2)).await;
-            num_retries += 1;
-        }
-        Err(RpcError::ForUser(format!(
-            "Unable to get new blockhash after {}ms (retried {} times), stuck at {}",
-            start.elapsed().as_millis(),
-            num_retries,
-            blockhash
-        ))
-        .into())
-    }
-
     pub async fn get_first_available_block(&self) -> ClientResult<Slot> {
         self.send(RpcRequest::GetFirstAvailableBlock, Value::Null)
             .await
@@ -5260,64 +4772,43 @@ impl RpcClient {
         Ok(blockhash)
     }
 
-    #[allow(deprecated)]
     pub async fn get_latest_blockhash_with_commitment(
         &self,
         commitment: CommitmentConfig,
     ) -> ClientResult<(Hash, u64)> {
-        let (blockhash, last_valid_block_height) =
-            if self.get_node_version().await? < semver::Version::new(1, 9, 0) {
-                let Fees {
-                    blockhash,
-                    last_valid_block_height,
-                    ..
-                } = self.get_fees_with_commitment(commitment).await?.value;
-                (blockhash, last_valid_block_height)
-            } else {
-                let RpcBlockhash {
-                    blockhash,
-                    last_valid_block_height,
-                } = self
-                    .send::<Response<RpcBlockhash>>(
-                        RpcRequest::GetLatestBlockhash,
-                        json!([self.maybe_map_commitment(commitment).await?]),
-                    )
-                    .await?
-                    .value;
-                let blockhash = blockhash.parse().map_err(|_| {
-                    ClientError::new_with_request(
-                        RpcError::ParseError("Hash".to_string()).into(),
-                        RpcRequest::GetLatestBlockhash,
-                    )
-                })?;
-                (blockhash, last_valid_block_height)
-            };
+        let RpcBlockhash {
+            blockhash,
+            last_valid_block_height,
+        } = self
+            .send::<Response<RpcBlockhash>>(
+                RpcRequest::GetLatestBlockhash,
+                json!([self.maybe_map_commitment(commitment).await?]),
+            )
+            .await?
+            .value;
+        let blockhash = blockhash.parse().map_err(|_| {
+            ClientError::new_with_request(
+                RpcError::ParseError("Hash".to_string()).into(),
+                RpcRequest::GetLatestBlockhash,
+            )
+        })?;
         Ok((blockhash, last_valid_block_height))
     }
 
-    #[allow(deprecated)]
     pub async fn is_blockhash_valid(
         &self,
         blockhash: &Hash,
         commitment: CommitmentConfig,
     ) -> ClientResult<bool> {
-        let result = if self.get_node_version().await? < semver::Version::new(1, 9, 0) {
-            self.get_fee_calculator_for_blockhash_with_commitment(blockhash, commitment)
-                .await?
-                .value
-                .is_some()
-        } else {
-            self.send::<Response<bool>>(
+        Ok(self
+            .send::<Response<bool>>(
                 RpcRequest::IsBlockhashValid,
                 json!([blockhash.to_string(), commitment,]),
             )
             .await?
-            .value
-        };
-        Ok(result)
+            .value)
     }
 
-    #[allow(deprecated)]
     pub async fn get_fee_for_message(
         &self,
         message: &impl SerializableMessage,
