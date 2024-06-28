@@ -1785,16 +1785,26 @@ pub fn main() {
             None => ShredStorageType::default(),
             Some(shred_compaction_string) => match shred_compaction_string {
                 "level" => ShredStorageType::RocksLevel,
-                "fifo" => match matches.value_of("rocksdb_fifo_shred_storage_size") {
-                    None => ShredStorageType::rocks_fifo(default_fifo_shred_storage_size(
-                        &validator_config,
-                    )),
-                    Some(_) => ShredStorageType::rocks_fifo(Some(value_t_or_exit!(
-                        matches,
-                        "rocksdb_fifo_shred_storage_size",
-                        u64
-                    ))),
-                },
+                "fifo" => {
+                    warn!(
+                        "The value \"fifo\" for --rocksdb-shred-compaction has been deprecated. \
+                         Use of \"fifo\" will still work for now, but is planned for full removal \
+                         in v2.1. To update, use \"level\" for --rocksdb-shred-compaction, or \
+                         remove the --rocksdb-shred-compaction argument altogether. Note that the \
+                         entire \"rocksdb_fifo\" subdirectory within the ledger directory will \
+                         need to be manually removed once the validator is running with \"level\"."
+                    );
+                    match matches.value_of("rocksdb_fifo_shred_storage_size") {
+                        None => ShredStorageType::rocks_fifo(default_fifo_shred_storage_size(
+                            &validator_config,
+                        )),
+                        Some(_) => ShredStorageType::rocks_fifo(Some(value_t_or_exit!(
+                            matches,
+                            "rocksdb_fifo_shred_storage_size",
+                            u64
+                        ))),
+                    }
+                }
                 _ => panic!("Unrecognized rocksdb-shred-compaction: {shred_compaction_string}"),
             },
         },

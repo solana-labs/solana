@@ -44,6 +44,8 @@ Release channels have their own copy of this changelog:
     * Partitions are recalculated on boot from snapshot (#1159)
     * `epoch_rewards_status` removed from snapshot (#1274)
   * Added `unified-scheduler` option for `--block-verification-method` (#1668)
+  * Deprecate the `fifo` option for `--rocksdb-shred-compaction` (#1882)
+    * `fifo` will remain supported in v2.0 with plans to fully remove in v2.1
 
 ## [1.18.0]
 * Changes
