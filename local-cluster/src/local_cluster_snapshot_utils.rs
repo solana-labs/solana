@@ -122,7 +122,7 @@ impl LocalCluster {
                     "Waiting for next {next_snapshot_type:?} snapshot exceeded the {max_wait_duration:?} maximum wait duration!",
                 );
             }
-            sleep(Duration::from_secs(5));
+            sleep(Duration::from_secs(1));
         };
         trace!(
             "Waited {:?} for next snapshot archive: {:?}",
