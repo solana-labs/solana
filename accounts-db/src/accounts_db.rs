@@ -3929,26 +3929,29 @@ impl AccountsDb {
         }
     }
 
-    /// sort `accounts` by pubkey.
-    /// Remove earlier entries with the same pubkey as later entries.
+    /// Sort `accounts` by pubkey and removes all but the *last* of consecutive
+    /// accounts in the vector with the same pubkey.
+    ///
+    /// Return the number of duplicated elements in the vector.
+    #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
     fn sort_and_remove_dups(accounts: &mut Vec<AccountFromStorage>) -> usize {
         // stable sort because we want the most recent only
         accounts.sort_by(|a, b| a.pubkey().cmp(b.pubkey()));
         let len0 = accounts.len();
         if accounts.len() > 1 {
-            let mut i = 0;
-            // iterate 0..1 less than end
-            while i < accounts.len() - 1 {
-                let current = accounts[i];
-                let next = accounts[i + 1];
-                if current.pubkey() == next.pubkey() {
-                    // remove the first duplicate
-                    accounts.remove(i);
-                    // do not advance i, we just removed an element at i
-                    continue;
+            let mut last = 0;
+            let mut curr = 1;
+
+            while curr < accounts.len() {
+                if accounts[curr].pubkey() == accounts[last].pubkey() {
+                    accounts[last] = accounts[curr];
+                } else {
+                    last += 1;
+                    accounts[last] = accounts[curr];
                 }
-                i += 1;
+                curr += 1;
             }
+            accounts.truncate(last + 1);
         }
         len0 - accounts.len()
     }
@@ -10047,6 +10050,31 @@ pub mod tests {
         AccountsDb::sort_and_remove_dups(&mut test1);
         assert_eq!(test1, expected);
         assert_eq!(test1, expected);
+    }
+
+    #[test]
+    fn test_sort_and_remove_dups_random() {
+        use rand::prelude::*;
+        let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(1234);
+        let accounts: Vec<_> =
+            std::iter::repeat_with(|| generate_sample_account_from_storage(rng.gen::<u8>()))
+                .take(1000)
+                .collect();
+
+        let mut accounts1 = accounts.clone();
+        let num_dups1 = AccountsDb::sort_and_remove_dups(&mut accounts1);
+
+        // Use BTreeMap to calculate sort and remove dups alternatively.
+        let mut map = std::collections::BTreeMap::default();
+        let mut num_dups2 = 0;
+        for account in accounts.iter() {
+            if map.insert(*account.pubkey(), *account).is_some() {
+                num_dups2 += 1;
+            }
+        }
+        let accounts2: Vec<_> = map.into_values().collect();
+        assert_eq!(accounts1, accounts2);
+        assert_eq!(num_dups1, num_dups2);
     }
 
     /// Reserve ancient storage size is not supported for TiredStorage
