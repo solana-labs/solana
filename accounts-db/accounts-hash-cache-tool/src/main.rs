@@ -226,24 +226,17 @@ fn do_diff_files(file1: impl AsRef<Path>, file2: impl AsRef<Path>) -> Result<(),
             };
             entries.push(entry);
         }
+
+        // entries in the file are sorted by pubkey then slot,
+        // so we want to keep the *last* entry (if there are duplicates)
+        let entries: HashMap<_, _> = entries
+            .into_iter()
+            .map(|entry| (entry.pubkey, (entry.hash, entry.lamports)))
+            .collect();
         Ok(entries)
     };
-    let mut entries1 = do_extract(1, &mut reader1, &header1)?;
-    let mut entries2 = do_extract(2, &mut reader2, &header2)?;
-
-    // entries are sorted by pubkey, then *reverse* slot,
-    // so we want to keep the *first* duplicate entry
-    entries1.dedup_by_key(|entry| entry.pubkey);
-    entries2.dedup_by_key(|entry| entry.pubkey);
-
-    let entries1: HashMap<_, _> = entries1
-        .into_iter()
-        .map(|entry| (entry.pubkey, (entry.hash, entry.lamports)))
-        .collect();
-    let entries2: HashMap<_, _> = entries2
-        .into_iter()
-        .map(|entry| (entry.pubkey, (entry.hash, entry.lamports)))
-        .collect();
+    let entries1 = do_extract(1, &mut reader1, &header1)?;
+    let entries2 = do_extract(2, &mut reader2, &header2)?;
 
     // compute the differences between the files
     let do_compute = |lhs: &HashMap<_, (_, _)>, rhs: &HashMap<_, (_, _)>| {
