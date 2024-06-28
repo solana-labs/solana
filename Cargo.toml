@@ -254,7 +254,7 @@ libsecp256k1 = { version = "0.6.0", default-features = false, features = [
     "static-context",
 ] }
 light-poseidon = "0.2.0"
-log = "0.4.21"
+log = "0.4.22"
 lru = "0.7.7"
 lz4 = "1.25.0"
 memmap2 = "0.5.10"
