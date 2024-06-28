@@ -257,49 +257,6 @@ impl<'a> Default for CreateVoteAccountConfig<'a> {
     }
 }
 
-#[deprecated(
-    since = "1.16.0",
-    note = "Please use `create_account_with_config()` instead."
-)]
-pub fn create_account(
-    from_pubkey: &Pubkey,
-    vote_pubkey: &Pubkey,
-    vote_init: &VoteInit,
-    lamports: u64,
-) -> Vec<Instruction> {
-    create_account_with_config(
-        from_pubkey,
-        vote_pubkey,
-        vote_init,
-        lamports,
-        CreateVoteAccountConfig::default(),
-    )
-}
-
-#[deprecated(
-    since = "1.16.0",
-    note = "Please use `create_account_with_config()` instead."
-)]
-pub fn create_account_with_seed(
-    from_pubkey: &Pubkey,
-    vote_pubkey: &Pubkey,
-    base: &Pubkey,
-    seed: &str,
-    vote_init: &VoteInit,
-    lamports: u64,
-) -> Vec<Instruction> {
-    create_account_with_config(
-        from_pubkey,
-        vote_pubkey,
-        vote_init,
-        lamports,
-        CreateVoteAccountConfig {
-            with_seed: Some((base, seed)),
-            ..CreateVoteAccountConfig::default()
-        },
-    )
-}
-
 pub fn create_account_with_config(
     from_pubkey: &Pubkey,
     vote_pubkey: &Pubkey,
