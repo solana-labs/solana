@@ -13,14 +13,13 @@ use {
         },
     },
     solana_rpc_client::rpc_client::RpcClient,
-    solana_rpc_client_api::{config::RpcProgramAccountsConfig, response::Response},
+    solana_rpc_client_api::config::RpcProgramAccountsConfig,
     solana_sdk::{
         account::Account,
         client::{AsyncClient, Client, SyncClient},
-        clock::{Slot, MAX_PROCESSING_AGE},
+        clock::MAX_PROCESSING_AGE,
         commitment_config::CommitmentConfig,
         epoch_info::EpochInfo,
-        fee_calculator::{FeeCalculator, FeeRateGovernor},
         hash::Hash,
         instruction::Instruction,
         message::Message,
@@ -419,52 +418,6 @@ where
             .map_err(|e| e.into())
     }
 
-    fn get_recent_blockhash(&self) -> TransportResult<(Hash, FeeCalculator)> {
-        #[allow(deprecated)]
-        let (blockhash, fee_calculator, _last_valid_slot) =
-            self.get_recent_blockhash_with_commitment(CommitmentConfig::default())?;
-        Ok((blockhash, fee_calculator))
-    }
-
-    fn get_recent_blockhash_with_commitment(
-        &self,
-        commitment_config: CommitmentConfig,
-    ) -> TransportResult<(Hash, FeeCalculator, Slot)> {
-        let index = self.optimizer.experiment();
-        let now = Instant::now();
-        #[allow(deprecated)]
-        let recent_blockhash =
-            self.rpc_clients[index].get_recent_blockhash_with_commitment(commitment_config);
-        match recent_blockhash {
-            Ok(Response { value, .. }) => {
-                self.optimizer.report(index, duration_as_ms(&now.elapsed()));
-                Ok((value.0, value.1, value.2))
-            }
-            Err(e) => {
-                self.optimizer.report(index, u64::MAX);
-                Err(e.into())
-            }
-        }
-    }
-
-    fn get_fee_calculator_for_blockhash(
-        &self,
-        blockhash: &Hash,
-    ) -> TransportResult<Option<FeeCalculator>> {
-        #[allow(deprecated)]
-        self.rpc_client()
-            .get_fee_calculator_for_blockhash(blockhash)
-            .map_err(|e| e.into())
-    }
-
-    fn get_fee_rate_governor(&self) -> TransportResult<FeeRateGovernor> {
-        #[allow(deprecated)]
-        self.rpc_client()
-            .get_fee_rate_governor()
-            .map_err(|e| e.into())
-            .map(|r| r.value)
-    }
-
     fn get_signature_status(
         &self,
         signature: &Signature,
@@ -572,13 +525,6 @@ where
     fn poll_for_signature(&self, signature: &Signature) -> TransportResult<()> {
         self.rpc_client()
             .poll_for_signature(signature)
-            .map_err(|e| e.into())
-    }
-
-    fn get_new_blockhash(&self, blockhash: &Hash) -> TransportResult<(Hash, FeeCalculator)> {
-        #[allow(deprecated)]
-        self.rpc_client()
-            .get_new_blockhash(blockhash)
             .map_err(|e| e.into())
     }
 

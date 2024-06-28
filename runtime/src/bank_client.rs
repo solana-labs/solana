@@ -6,7 +6,6 @@ use {
         client::{AsyncClient, Client, SyncClient},
         commitment_config::CommitmentConfig,
         epoch_info::EpochInfo,
-        fee_calculator::{FeeCalculator, FeeRateGovernor},
         hash::Hash,
         instruction::Instruction,
         message::{Message, SanitizedMessage},
@@ -120,42 +119,6 @@ impl SyncClient for BankClient {
         Ok(self.bank.get_minimum_balance_for_rent_exemption(data_len))
     }
 
-    fn get_recent_blockhash(&self) -> Result<(Hash, FeeCalculator)> {
-        Ok((
-            self.bank.last_blockhash(),
-            FeeCalculator::new(self.bank.get_lamports_per_signature()),
-        ))
-    }
-
-    fn get_recent_blockhash_with_commitment(
-        &self,
-        _commitment_config: CommitmentConfig,
-    ) -> Result<(Hash, FeeCalculator, u64)> {
-        let blockhash = self.bank.last_blockhash();
-        #[allow(deprecated)]
-        let last_valid_slot = self
-            .bank
-            .get_blockhash_last_valid_slot(&blockhash)
-            .expect("bank blockhash queue should contain blockhash");
-        Ok((
-            blockhash,
-            FeeCalculator::new(self.bank.get_lamports_per_signature()),
-            last_valid_slot,
-        ))
-    }
-
-    fn get_fee_calculator_for_blockhash(&self, blockhash: &Hash) -> Result<Option<FeeCalculator>> {
-        Ok(self
-            .bank
-            .get_lamports_per_signature_for_blockhash(blockhash)
-            .map(FeeCalculator::new))
-    }
-
-    fn get_fee_rate_governor(&self) -> Result<FeeRateGovernor> {
-        #[allow(deprecated)]
-        Ok(self.bank.get_fee_rate_governor().clone())
-    }
-
     fn get_signature_status(
         &self,
         signature: &Signature,
@@ -239,21 +202,6 @@ impl SyncClient for BankClient {
             sleep(Duration::from_millis(250));
         }
         Ok(())
-    }
-
-    fn get_new_blockhash(&self, blockhash: &Hash) -> Result<(Hash, FeeCalculator)> {
-        let recent_blockhash = self.get_latest_blockhash()?;
-        if recent_blockhash != *blockhash {
-            Ok((
-                recent_blockhash,
-                FeeCalculator::new(self.bank.get_lamports_per_signature()),
-            ))
-        } else {
-            Err(TransportError::IoError(io::Error::new(
-                io::ErrorKind::Other,
-                "Unable to get new blockhash",
-            )))
-        }
     }
 
     fn get_epoch_info(&self) -> Result<EpochInfo> {

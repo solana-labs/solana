@@ -14,7 +14,6 @@ use crate::{
     clock::Slot,
     commitment_config::CommitmentConfig,
     epoch_info::EpochInfo,
-    fee_calculator::{FeeCalculator, FeeRateGovernor},
     hash::Hash,
     instruction::Instruction,
     message::Message,
@@ -82,35 +81,6 @@ pub trait SyncClient {
 
     fn get_minimum_balance_for_rent_exemption(&self, data_len: usize) -> Result<u64>;
 
-    /// Get recent blockhash
-    #[deprecated(since = "1.9.0", note = "Please use `get_latest_blockhash` instead")]
-    fn get_recent_blockhash(&self) -> Result<(Hash, FeeCalculator)>;
-
-    /// Get recent blockhash. Uses explicit commitment configuration.
-    #[deprecated(
-        since = "1.9.0",
-        note = "Please use `get_latest_blockhash_with_commitment` and `get_latest_blockhash_with_commitment` instead"
-    )]
-    fn get_recent_blockhash_with_commitment(
-        &self,
-        commitment_config: CommitmentConfig,
-    ) -> Result<(Hash, FeeCalculator, Slot)>;
-
-    /// Get `Some(FeeCalculator)` associated with `blockhash` if it is still in
-    /// the BlockhashQueue`, otherwise `None`
-    #[deprecated(
-        since = "1.9.0",
-        note = "Please use `get_fee_for_message` or `is_blockhash_valid` instead"
-    )]
-    fn get_fee_calculator_for_blockhash(&self, blockhash: &Hash) -> Result<Option<FeeCalculator>>;
-
-    /// Get recent fee rate governor
-    #[deprecated(
-        since = "1.9.0",
-        note = "Please do not use, will no longer be available in the future"
-    )]
-    fn get_fee_rate_governor(&self) -> Result<FeeRateGovernor>;
-
     /// Get signature status.
     fn get_signature_status(
         &self,
@@ -150,12 +120,6 @@ pub trait SyncClient {
 
     /// Poll to confirm a transaction.
     fn poll_for_signature(&self, signature: &Signature) -> Result<()>;
-
-    #[deprecated(
-        since = "1.9.0",
-        note = "Please do not use, will no longer be available in the future"
-    )]
-    fn get_new_blockhash(&self, blockhash: &Hash) -> Result<(Hash, FeeCalculator)>;
 
     /// Get last known blockhash
     fn get_latest_blockhash(&self) -> Result<Hash>;

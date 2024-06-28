@@ -11,10 +11,8 @@ use {
     solana_sdk::{
         account::Account,
         client::{AsyncClient, Client, SyncClient},
-        clock::Slot,
         commitment_config::CommitmentConfig,
         epoch_info::EpochInfo,
-        fee_calculator::{FeeCalculator, FeeRateGovernor},
         hash::Hash,
         instruction::Instruction,
         message::Message,
@@ -213,20 +211,6 @@ impl SyncClient for ThinClient {
 
     dispatch!(fn get_minimum_balance_for_rent_exemption(&self, data_len: usize) -> TransportResult<u64>);
 
-    dispatch!(#[allow(deprecated)] fn get_recent_blockhash(&self) -> TransportResult<(Hash, FeeCalculator)>);
-
-    dispatch!(#[allow(deprecated)] fn get_recent_blockhash_with_commitment(
-        &self,
-        commitment_config: CommitmentConfig
-    ) -> TransportResult<(Hash, FeeCalculator, Slot)>);
-
-    dispatch!(#[allow(deprecated)] fn get_fee_calculator_for_blockhash(
-        &self,
-        blockhash: &Hash
-    ) -> TransportResult<Option<FeeCalculator>>);
-
-    dispatch!(#[allow(deprecated)] fn get_fee_rate_governor(&self) -> TransportResult<FeeRateGovernor>);
-
     dispatch!(fn get_signature_status(
         &self,
         signature: &Signature
@@ -261,8 +245,6 @@ impl SyncClient for ThinClient {
     ) -> TransportResult<usize>);
 
     dispatch!(fn poll_for_signature(&self, signature: &Signature) -> TransportResult<()>);
-
-    dispatch!(#[allow(deprecated)] fn get_new_blockhash(&self, blockhash: &Hash) -> TransportResult<(Hash, FeeCalculator)>);
 
     dispatch!(fn get_latest_blockhash(&self) -> TransportResult<Hash>);
 
