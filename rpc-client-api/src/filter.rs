@@ -79,7 +79,10 @@ impl RpcFilterType {
         }
     }
 
-    #[deprecated = "Use solana_rpc::filter::filter_allows instead"]
+    #[deprecated(
+        since = "2.0.0",
+        note = "Use solana_rpc::filter::filter_allows instead"
+    )]
     pub fn allows(&self, account: &AccountSharedData) -> bool {
         match self {
             RpcFilterType::DataSize(size) => account.data().len() as u64 == *size,
