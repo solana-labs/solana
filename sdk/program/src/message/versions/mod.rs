@@ -4,7 +4,6 @@ use {
         instruction::CompiledInstruction,
         message::{legacy::Message as LegacyMessage, v0::MessageAddressTableLookup, MessageHeader},
         pubkey::Pubkey,
-        sanitize::{Sanitize, SanitizeError},
         short_vec,
     },
     serde::{
@@ -12,6 +11,7 @@ use {
         ser::{SerializeTuple, Serializer},
     },
     serde_derive::{Deserialize, Serialize},
+    solana_sanitize::{Sanitize, SanitizeError},
     std::{collections::HashSet, fmt},
 };
 

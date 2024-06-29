@@ -4,7 +4,8 @@ extern crate serde_derive;
 pub use self::legacy::{LegacyVersion1, LegacyVersion2};
 use {
     serde_derive::{Deserialize, Serialize},
-    solana_sdk::{sanitize::Sanitize, serde_varint},
+    solana_sanitize::Sanitize,
+    solana_sdk::serde_varint,
     std::{convert::TryInto, fmt},
 };
 #[cfg_attr(feature = "frozen-abi", macro_use)]

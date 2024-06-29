@@ -13,13 +13,13 @@ use {
         precompiles::verify_if_precompile,
         pubkey::Pubkey,
         reserved_account_keys::ReservedAccountKeys,
-        sanitize::Sanitize,
         signature::Signature,
         simple_vote_transaction_checker::is_simple_vote_transaction,
         solana_sdk::feature_set,
         transaction::{Result, Transaction, TransactionError, VersionedTransaction},
     },
     solana_program::message::SanitizedVersionedMessage,
+    solana_sanitize::Sanitize,
     std::collections::HashSet,
 };
 

@@ -5,10 +5,8 @@ use {
     fnv::FnvHasher,
     rand::{self, Rng},
     serde::{Deserialize, Serialize},
-    solana_sdk::{
-        sanitize::{Sanitize, SanitizeError},
-        timing::AtomicInterval,
-    },
+    solana_sanitize::{Sanitize, SanitizeError},
+    solana_sdk::timing::AtomicInterval,
     std::{
         cmp, fmt,
         hash::Hasher,

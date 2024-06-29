@@ -3,11 +3,11 @@ use {
     crate::{crds_value::MAX_WALLCLOCK, legacy_contact_info::LegacyContactInfo},
     assert_matches::{assert_matches, debug_assert_matches},
     serde::{Deserialize, Deserializer, Serialize},
+    solana_sanitize::{Sanitize, SanitizeError},
     solana_sdk::{
         pubkey::Pubkey,
         quic::QUIC_PORT_OFFSET,
         rpc_port::{DEFAULT_RPC_PORT, DEFAULT_RPC_PUBSUB_PORT},
-        sanitize::{Sanitize, SanitizeError},
         serde_varint, short_vec,
     },
     solana_streamer::socket::SocketAddrSpace,

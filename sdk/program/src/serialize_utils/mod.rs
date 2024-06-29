@@ -1,7 +1,7 @@
 //! Helpers for reading and writing bytes.
 
 #![allow(clippy::arithmetic_side_effects)]
-use crate::{pubkey::Pubkey, sanitize::SanitizeError};
+use {crate::pubkey::Pubkey, solana_sanitize::SanitizeError};
 
 pub mod cursor;
 

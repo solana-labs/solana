@@ -8,9 +8,9 @@ use crate::wasm_bindgen;
 #[cfg(feature = "borsh")]
 use borsh::{BorshDeserialize, BorshSchema, BorshSerialize};
 use {
-    crate::sanitize::Sanitize,
     bytemuck_derive::{Pod, Zeroable},
     sha2::{Digest, Sha256},
+    solana_sanitize::Sanitize,
     std::{convert::TryFrom, fmt, mem, str::FromStr},
     thiserror::Error,
 };

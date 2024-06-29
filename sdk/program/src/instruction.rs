@@ -18,9 +18,10 @@ use crate::wasm_bindgen;
 #[cfg(feature = "borsh")]
 use borsh::BorshSerialize;
 use {
-    crate::{pubkey::Pubkey, sanitize::Sanitize, short_vec},
+    crate::{pubkey::Pubkey, short_vec},
     bincode::serialize,
     serde::Serialize,
+    solana_sanitize::Sanitize,
     thiserror::Error,
 };
 

@@ -95,7 +95,7 @@ impl From<u64> for PubkeyError {
 #[cfg_attr(test, derive(Arbitrary))]
 pub struct Pubkey(pub(crate) [u8; 32]);
 
-impl crate::sanitize::Sanitize for Pubkey {}
+impl solana_sanitize::Sanitize for Pubkey {}
 
 #[derive(Error, Debug, Serialize, Clone, PartialEq, Eq, FromPrimitive, ToPrimitive)]
 pub enum ParsePubkeyError {

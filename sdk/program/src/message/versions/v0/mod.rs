@@ -21,9 +21,9 @@ use {
             AccountKeys, MessageHeader, MESSAGE_VERSION_PREFIX,
         },
         pubkey::Pubkey,
-        sanitize::SanitizeError,
         short_vec,
     },
+    solana_sanitize::SanitizeError,
     std::collections::HashSet,
 };
 

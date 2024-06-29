@@ -1,6 +1,7 @@
 use {
     super::VersionedMessage,
-    crate::{instruction::CompiledInstruction, pubkey::Pubkey, sanitize::SanitizeError},
+    crate::{instruction::CompiledInstruction, pubkey::Pubkey},
+    solana_sanitize::SanitizeError,
 };
 
 /// Wraps a sanitized `VersionedMessage` to provide a safe API

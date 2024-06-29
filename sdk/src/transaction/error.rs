@@ -2,9 +2,9 @@ use {
     crate::{
         instruction::InstructionError,
         message::{AddressLoaderError, SanitizeMessageError},
-        sanitize::SanitizeError,
     },
     serde::Serialize,
+    solana_sanitize::SanitizeError,
     thiserror::Error,
 };
 

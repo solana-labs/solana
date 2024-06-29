@@ -6,11 +6,8 @@ use {
         blockstore_meta::{DuplicateSlotProof, ErasureMeta},
         shred::{self, Shred, ShredType},
     },
-    solana_sdk::{
-        clock::Slot,
-        pubkey::Pubkey,
-        sanitize::{Sanitize, SanitizeError},
-    },
+    solana_sanitize::{Sanitize, SanitizeError},
+    solana_sdk::{clock::Slot, pubkey::Pubkey},
     std::{
         collections::{hash_map::Entry, HashMap},
         convert::TryFrom,

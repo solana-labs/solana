@@ -3,10 +3,10 @@ use {
     lru::LruCache,
     rand::{CryptoRng, Fill, Rng},
     serde::Serialize,
+    solana_sanitize::{Sanitize, SanitizeError},
     solana_sdk::{
         hash::{self, Hash},
         pubkey::Pubkey,
-        sanitize::{Sanitize, SanitizeError},
         signature::{Keypair, Signable, Signature, Signer},
     },
     std::{

@@ -5,7 +5,7 @@
 #[cfg(feature = "borsh")]
 use borsh::{BorshDeserialize, BorshSchema, BorshSerialize};
 use {
-    crate::sanitize::Sanitize,
+    solana_sanitize::Sanitize,
     std::{convert::TryFrom, fmt, mem, str::FromStr},
     thiserror::Error,
 };

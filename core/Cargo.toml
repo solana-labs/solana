@@ -65,6 +65,7 @@ solana-rayon-threadlimit = { workspace = true }
 solana-rpc = { workspace = true }
 solana-rpc-client-api = { workspace = true }
 solana-runtime = { workspace = true }
+solana-sanitize = { workspace = true }
 solana-sdk = { workspace = true }
 solana-send-transaction-service = { workspace = true }
 solana-streamer = { workspace = true }

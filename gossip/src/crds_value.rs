@@ -11,11 +11,11 @@ use {
     bincode::{serialize, serialized_size},
     rand::{CryptoRng, Rng},
     serde::de::{Deserialize, Deserializer},
+    solana_sanitize::{Sanitize, SanitizeError},
     solana_sdk::{
         clock::Slot,
         hash::Hash,
         pubkey::{self, Pubkey},
-        sanitize::{Sanitize, SanitizeError},
         signature::{Keypair, Signable, Signature, Signer},
         timing::timestamp,
         transaction::Transaction,

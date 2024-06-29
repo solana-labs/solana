@@ -16,6 +16,7 @@ serde = { workspace = true }
 serde_derive = { workspace = true }
 solana-frozen-abi = { workspace = true, optional = true }
 solana-frozen-abi-macro = { workspace = true, optional = true }
+solana-sanitize = { workspace = true }
 solana-sdk = { workspace = true }
 
 [features]

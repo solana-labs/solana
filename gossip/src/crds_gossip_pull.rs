@@ -73,8 +73,8 @@ impl Default for CrdsFilter {
     }
 }
 
-impl solana_sdk::sanitize::Sanitize for CrdsFilter {
-    fn sanitize(&self) -> std::result::Result<(), solana_sdk::sanitize::SanitizeError> {
+impl solana_sanitize::Sanitize for CrdsFilter {
+    fn sanitize(&self) -> std::result::Result<(), solana_sanitize::SanitizeError> {
         self.filter.sanitize()?;
         Ok(())
     }

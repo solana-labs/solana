@@ -519,7 +519,6 @@ pub mod program_stubs;
 pub mod program_utils;
 pub mod pubkey;
 pub mod rent;
-pub mod sanitize;
 pub mod secp256k1_program;
 pub mod secp256k1_recover;
 pub mod serde_varint;
@@ -545,6 +544,8 @@ pub mod address_lookup_table_account {
     pub use crate::address_lookup_table::AddressLookupTableAccount;
 }
 
+#[deprecated(since = "2.1.0", note = "Use `solana-sanitize` crate instead")]
+pub use solana_sanitize as sanitize;
 #[cfg(target_arch = "wasm32")]
 pub use wasm_bindgen::prelude::wasm_bindgen;
 

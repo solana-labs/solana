@@ -7,10 +7,8 @@ use {
         },
         crds_value::MAX_WALLCLOCK,
     },
-    solana_sdk::{
-        pubkey::Pubkey,
-        sanitize::{Sanitize, SanitizeError},
-    },
+    solana_sanitize::{Sanitize, SanitizeError},
+    solana_sdk::pubkey::Pubkey,
     solana_streamer::socket::SocketAddrSpace,
     std::net::{IpAddr, SocketAddr},
 };

@@ -5706,6 +5706,7 @@ dependencies = [
  "serde_derive",
  "solana-frozen-abi",
  "solana-frozen-abi-macro",
+ "solana-sanitize",
  "solana-sdk",
 ]
 
@@ -6122,6 +6123,7 @@ dependencies = [
  "solana-rpc",
  "solana-rpc-client-api",
  "solana-runtime",
+ "solana-sanitize",
  "solana-sdk",
  "solana-send-transaction-service",
  "solana-stake-program",
@@ -6416,6 +6418,7 @@ dependencies = [
  "solana-perf",
  "solana-rayon-threadlimit",
  "solana-runtime",
+ "solana-sanitize",
  "solana-sdk",
  "solana-streamer",
  "solana-tpu-client",
@@ -6835,6 +6838,7 @@ dependencies = [
  "solana-frozen-abi",
  "solana-frozen-abi-macro",
  "solana-logger",
+ "solana-sanitize",
  "solana-sdk-macro",
  "static_assertions",
  "thiserror",
@@ -7244,6 +7248,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-sanitize"
+version = "2.1.0"
+dependencies = [
+ "thiserror",
+]
+
+[[package]]
 name = "solana-sdk"
 version = "2.1.0"
 dependencies = [
@@ -7291,6 +7302,7 @@ dependencies = [
  "solana-frozen-abi-macro",
  "solana-logger",
  "solana-program",
+ "solana-sanitize",
  "solana-sdk",
  "solana-sdk-macro",
  "static_assertions",
@@ -7798,6 +7810,7 @@ dependencies = [
  "serde_derive",
  "solana-frozen-abi",
  "solana-frozen-abi-macro",
+ "solana-sanitize",
  "solana-sdk",
 ]
 
