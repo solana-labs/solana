@@ -75,6 +75,7 @@ members = [
     "programs/ed25519-tests",
     "programs/loader-v4",
     "programs/stake",
+    "programs/stake-tests",
     "programs/system",
     "programs/vote",
     "programs/zk-elgamal-proof",

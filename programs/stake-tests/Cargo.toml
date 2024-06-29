@@ -1,0 +1,26 @@
+# This package only exists to avoid circular dependencies during cargo publish:
+# solana-program-test <--> solana-stake-program
+
+[package]
+name = "solana-stake-program-tests"
+publish = false
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dev-dependencies]
+assert_matches = { workspace = true }
+bincode = { workspace = true }
+solana-program-test = { workspace = true }
+solana-sdk = { workspace = true }
+solana-vote-program = { workspace = true }
+test-case = { workspace = true }
+
+[build-dependencies]
+rustc_version = { workspace = true }
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

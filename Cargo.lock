@@ -7379,6 +7379,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-stake-program-tests"
+version = "2.1.0"
+dependencies = [
+ "assert_matches",
+ "bincode",
+ "rustc_version 0.4.0",
+ "solana-program-test",
+ "solana-sdk",
+ "solana-vote-program",
+ "test-case",
+]
+
+[[package]]
 name = "solana-storage-bigtable"
 version = "2.1.0"
 dependencies = [

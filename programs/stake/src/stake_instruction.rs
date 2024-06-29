@@ -1,7 +1,8 @@
 use {
     crate::stake_state::{
         authorize, authorize_with_seed, deactivate, deactivate_delinquent, delegate, initialize,
-        merge, new_warmup_cooldown_rate_epoch, redelegate, set_lockup, split, withdraw,
+        merge, move_lamports, move_stake, new_warmup_cooldown_rate_epoch, redelegate, set_lockup,
+        split, withdraw,
     },
     log::*,
     solana_program_runtime::{
@@ -352,6 +353,44 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
                 Err(InstructionError::InvalidInstructionData)
             }
         }
+        StakeInstruction::MoveStake(lamports) => {
+            if invoke_context
+                .get_feature_set()
+                .is_active(&feature_set::move_stake_and_move_lamports_ixs::id())
+            {
+                instruction_context.check_number_of_instruction_accounts(3)?;
+                move_stake(
+                    invoke_context,
+                    transaction_context,
+                    instruction_context,
+                    0,
+                    lamports,
+                    1,
+                    2,
+                )
+            } else {
+                Err(InstructionError::InvalidInstructionData)
+            }
+        }
+        StakeInstruction::MoveLamports(lamports) => {
+            if invoke_context
+                .get_feature_set()
+                .is_active(&feature_set::move_stake_and_move_lamports_ixs::id())
+            {
+                instruction_context.check_number_of_instruction_accounts(3)?;
+                move_lamports(
+                    invoke_context,
+                    transaction_context,
+                    instruction_context,
+                    0,
+                    lamports,
+                    1,
+                    2,
+                )
+            } else {
+                Err(InstructionError::InvalidInstructionData)
+            }
+        }
     }
 });
 
@@ -476,6 +515,7 @@ mod tests {
             .collect();
         pubkeys.insert(clock::id());
         pubkeys.insert(epoch_schedule::id());
+        pubkeys.insert(stake_history::id());
         #[allow(deprecated)]
         pubkeys
             .iter()
@@ -668,6 +708,26 @@ mod tests {
                 &Pubkey::new_unique(),
                 &invalid_vote_state_pubkey(),
                 &invalid_vote_state_pubkey(),
+            ),
+            Err(InstructionError::InvalidAccountData),
+        );
+        process_instruction_as_one_arg(
+            Arc::clone(&feature_set),
+            &instruction::move_stake(
+                &Pubkey::new_unique(),
+                &Pubkey::new_unique(),
+                &Pubkey::new_unique(),
+                100,
+            ),
+            Err(InstructionError::InvalidAccountData),
+        );
+        process_instruction_as_one_arg(
+            Arc::clone(&feature_set),
+            &instruction::move_lamports(
+                &Pubkey::new_unique(),
+                &Pubkey::new_unique(),
+                &Pubkey::new_unique(),
+                100,
             ),
             Err(InstructionError::InvalidAccountData),
         );
@@ -8028,6 +8088,26 @@ mod tests {
                 &Pubkey::new_unique(),
                 &Pubkey::new_unique(),
             )[2],
+            Err(StakeError::EpochRewardsActive.into()),
+        );
+        process_instruction_as_one_arg(
+            Arc::clone(&feature_set),
+            &instruction::move_stake(
+                &Pubkey::new_unique(),
+                &Pubkey::new_unique(),
+                &Pubkey::new_unique(),
+                100,
+            ),
+            Err(StakeError::EpochRewardsActive.into()),
+        );
+        process_instruction_as_one_arg(
+            Arc::clone(&feature_set),
+            &instruction::move_lamports(
+                &Pubkey::new_unique(),
+                &Pubkey::new_unique(),
+                &Pubkey::new_unique(),
+                100,
+            ),
             Err(StakeError::EpochRewardsActive.into()),
         );
 

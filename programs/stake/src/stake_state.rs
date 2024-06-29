@@ -132,6 +132,86 @@ fn redelegate_stake(
     Ok(())
 }
 
+fn move_stake_or_lamports_shared_checks(
+    invoke_context: &InvokeContext,
+    transaction_context: &TransactionContext,
+    instruction_context: &InstructionContext,
+    source_account: &BorrowedAccount,
+    lamports: u64,
+    destination_account: &BorrowedAccount,
+    stake_authority_index: IndexOfAccount,
+) -> Result<(MergeKind, MergeKind), InstructionError> {
+    // authority must sign
+    let stake_authority_pubkey = transaction_context.get_key_of_account_at_index(
+        instruction_context
+            .get_index_of_instruction_account_in_transaction(stake_authority_index)?,
+    )?;
+    if !instruction_context.is_instruction_account_signer(stake_authority_index)? {
+        return Err(InstructionError::MissingRequiredSignature);
+    }
+
+    let mut signers = HashSet::new();
+    signers.insert(*stake_authority_pubkey);
+
+    // check owners
+    if *source_account.get_owner() != id() || *destination_account.get_owner() != id() {
+        return Err(InstructionError::IncorrectProgramId);
+    }
+
+    // confirm not the same account
+    if *source_account.get_key() == *destination_account.get_key() {
+        return Err(InstructionError::InvalidInstructionData);
+    }
+
+    // source and destination must be writable
+    if !source_account.is_writable() || !destination_account.is_writable() {
+        return Err(InstructionError::InvalidInstructionData);
+    }
+
+    // must move something
+    if lamports == 0 {
+        return Err(InstructionError::InvalidArgument);
+    }
+
+    let clock = invoke_context.get_sysvar_cache().get_clock()?;
+    let stake_history = invoke_context.get_sysvar_cache().get_stake_history()?;
+
+    // get_if_mergeable ensures accounts are not partly activated or in any form of deactivating
+    // we still need to exclude activating state ourselves
+    let source_merge_kind = MergeKind::get_if_mergeable(
+        invoke_context,
+        &source_account.get_state()?,
+        source_account.get_lamports(),
+        &clock,
+        &stake_history,
+    )?;
+
+    // Authorized staker is allowed to move stake
+    source_merge_kind
+        .meta()
+        .authorized
+        .check(&signers, StakeAuthorize::Staker)?;
+
+    // same transient assurance as with source
+    let destination_merge_kind = MergeKind::get_if_mergeable(
+        invoke_context,
+        &destination_account.get_state()?,
+        destination_account.get_lamports(),
+        &clock,
+        &stake_history,
+    )?;
+
+    // ensure all authorities match and lockups match if lockup is in force
+    MergeKind::metas_can_merge(
+        invoke_context,
+        source_merge_kind.meta(),
+        destination_merge_kind.meta(),
+        &clock,
+    )?;
+
+    Ok((source_merge_kind, destination_merge_kind))
+}
+
 pub(crate) fn new_stake(
     stake: u64,
     voter_pubkey: &Pubkey,
@@ -701,6 +781,191 @@ pub fn redelegate(
         ),
         StakeFlags::MUST_FULLY_ACTIVATE_BEFORE_DEACTIVATION_IS_PERMITTED,
     ))?;
+
+    Ok(())
+}
+
+pub fn move_stake(
+    invoke_context: &InvokeContext,
+    transaction_context: &TransactionContext,
+    instruction_context: &InstructionContext,
+    source_account_index: IndexOfAccount,
+    lamports: u64,
+    destination_account_index: IndexOfAccount,
+    stake_authority_index: IndexOfAccount,
+) -> Result<(), InstructionError> {
+    let mut source_account = instruction_context
+        .try_borrow_instruction_account(transaction_context, source_account_index)?;
+
+    let mut destination_account = instruction_context
+        .try_borrow_instruction_account(transaction_context, destination_account_index)?;
+
+    let (source_merge_kind, destination_merge_kind) = move_stake_or_lamports_shared_checks(
+        invoke_context,
+        transaction_context,
+        instruction_context,
+        &source_account,
+        lamports,
+        &destination_account,
+        stake_authority_index,
+    )?;
+
+    // ensure source and destination are the right size for the current version of StakeState
+    // this a safeguard in case there is a new version of the struct that cannot fit into an old account
+    if source_account.get_data().len() != StakeStateV2::size_of()
+        || destination_account.get_data().len() != StakeStateV2::size_of()
+    {
+        return Err(InstructionError::InvalidAccountData);
+    }
+
+    // source must be fully active
+    let MergeKind::FullyActive(source_meta, mut source_stake) = source_merge_kind else {
+        return Err(InstructionError::InvalidAccountData);
+    };
+
+    let minimum_delegation = crate::get_minimum_delegation(invoke_context.get_feature_set());
+    let source_effective_stake = source_stake.delegation.stake;
+
+    // source cannot move more stake than it has, regardless of how many lamports it has
+    let source_final_stake = source_effective_stake
+        .checked_sub(lamports)
+        .ok_or(InstructionError::InvalidArgument)?;
+
+    // unless all stake is being moved, source must retain at least the minimum delegation
+    if source_final_stake != 0 && source_final_stake < minimum_delegation {
+        return Err(InstructionError::InvalidArgument);
+    }
+
+    // destination must be fully active or fully inactive
+    let destination_meta = match destination_merge_kind {
+        MergeKind::FullyActive(destination_meta, mut destination_stake) => {
+            // if active, destination must be delegated to the same vote account as source
+            if source_stake.delegation.voter_pubkey != destination_stake.delegation.voter_pubkey {
+                return Err(StakeError::VoteAddressMismatch.into());
+            }
+
+            let destination_effective_stake = destination_stake.delegation.stake;
+            let destination_final_stake = destination_effective_stake
+                .checked_add(lamports)
+                .ok_or(InstructionError::ArithmeticOverflow)?;
+
+            // ensure destination meets miniumum delegation
+            // since it is already active, this only really applies if the minimum is raised
+            if destination_final_stake < minimum_delegation {
+                return Err(InstructionError::InvalidArgument);
+            }
+
+            merge_delegation_stake_and_credits_observed(
+                &mut destination_stake,
+                lamports,
+                source_stake.credits_observed,
+            )?;
+
+            // StakeFlags::empty() is valid here because the only existing stake flag,
+            // MUST_FULLY_ACTIVATE_BEFORE_DEACTIVATION_IS_PERMITTED, does not apply to active stakes
+            destination_account.set_state(&StakeStateV2::Stake(
+                destination_meta,
+                destination_stake,
+                StakeFlags::empty(),
+            ))?;
+
+            destination_meta
+        }
+        MergeKind::Inactive(destination_meta, _, _) => {
+            // if destination is inactive, it must be given at least the minimum delegation
+            if lamports < minimum_delegation {
+                return Err(InstructionError::InvalidArgument);
+            }
+
+            let mut destination_stake = source_stake;
+            destination_stake.delegation.stake = lamports;
+
+            // StakeFlags::empty() is valid here because the only existing stake flag,
+            // MUST_FULLY_ACTIVATE_BEFORE_DEACTIVATION_IS_PERMITTED, is cleared when a stake is activated
+            destination_account.set_state(&StakeStateV2::Stake(
+                destination_meta,
+                destination_stake,
+                StakeFlags::empty(),
+            ))?;
+
+            destination_meta
+        }
+        _ => return Err(InstructionError::InvalidAccountData),
+    };
+
+    if source_final_stake == 0 {
+        source_account.set_state(&StakeStateV2::Initialized(source_meta))?;
+    } else {
+        source_stake.delegation.stake = source_final_stake;
+
+        // StakeFlags::empty() is valid here because the only existing stake flag,
+        // MUST_FULLY_ACTIVATE_BEFORE_DEACTIVATION_IS_PERMITTED, does not apply to active stakes
+        source_account.set_state(&StakeStateV2::Stake(
+            source_meta,
+            source_stake,
+            StakeFlags::empty(),
+        ))?;
+    }
+
+    source_account.checked_sub_lamports(lamports)?;
+    destination_account.checked_add_lamports(lamports)?;
+
+    // this should be impossible, but because we do all our math with delegations, best to guard it
+    if source_account.get_lamports() < source_meta.rent_exempt_reserve
+        || destination_account.get_lamports() < destination_meta.rent_exempt_reserve
+    {
+        ic_msg!(
+            invoke_context,
+            "Delegation calculations violated lamport balance assumptions"
+        );
+        return Err(InstructionError::InvalidArgument);
+    }
+
+    Ok(())
+}
+
+pub fn move_lamports(
+    invoke_context: &InvokeContext,
+    transaction_context: &TransactionContext,
+    instruction_context: &InstructionContext,
+    source_account_index: IndexOfAccount,
+    lamports: u64,
+    destination_account_index: IndexOfAccount,
+    stake_authority_index: IndexOfAccount,
+) -> Result<(), InstructionError> {
+    let mut source_account = instruction_context
+        .try_borrow_instruction_account(transaction_context, source_account_index)?;
+
+    let mut destination_account = instruction_context
+        .try_borrow_instruction_account(transaction_context, destination_account_index)?;
+
+    let (source_merge_kind, _) = move_stake_or_lamports_shared_checks(
+        invoke_context,
+        transaction_context,
+        instruction_context,
+        &source_account,
+        lamports,
+        &destination_account,
+        stake_authority_index,
+    )?;
+
+    let source_free_lamports = match source_merge_kind {
+        MergeKind::FullyActive(source_meta, source_stake) => source_account
+            .get_lamports()
+            .saturating_sub(source_stake.delegation.stake)
+            .saturating_sub(source_meta.rent_exempt_reserve),
+        MergeKind::Inactive(source_meta, source_lamports, _) => {
+            source_lamports.saturating_sub(source_meta.rent_exempt_reserve)
+        }
+        _ => return Err(InstructionError::InvalidAccountData),
+    };
+
+    if lamports > source_free_lamports {
+        return Err(InstructionError::InvalidArgument);
+    }
+
+    source_account.checked_sub_lamports(lamports)?;
+    destination_account.checked_add_lamports(lamports)?;
 
     Ok(())
 }
