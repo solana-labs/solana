@@ -337,7 +337,7 @@ impl AccountsHashVerifier {
                 store_detailed_debug_info_on_failure: true,
                 ..calculate_accounts_hash_config
             };
-            _ = accounts_package
+            let second_accounts_hash = accounts_package
                 .accounts
                 .accounts_db
                 .calculate_accounts_hash(
@@ -345,12 +345,14 @@ impl AccountsHashVerifier {
                     &sorted_storages,
                     HashStats::default(),
                 );
+            panic!(
+                "accounts hash capitalization mismatch: expected {}, but calculated {} (then recalculated {})",
+                accounts_package.expected_capitalization,
+                lamports,
+                second_accounts_hash.1,
+            );
         }
 
-        assert_eq!(
-            accounts_package.expected_capitalization, lamports,
-            "accounts hash capitalization mismatch"
-        );
         if let Some(expected_hash) = accounts_package.accounts_hash_for_testing {
             assert_eq!(expected_hash, accounts_hash);
         };
