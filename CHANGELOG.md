@@ -26,7 +26,7 @@ Release channels have their own copy of this changelog:
     confirmTransaction, getSignatureStatus, getSignatureConfirmation, getTotalSupply,
     getConfirmedSignaturesForAddress, getConfirmedBlock, getConfirmedBlocks, getConfirmedBlocksWithLimit,
     getConfirmedTransaction, getConfirmedSignaturesForAddress2, getRecentBlockhash, getFees,
-    getFeeCalculatorForBlockhash, getFeeRateGovernor, getSnapshotSlot
+    getFeeCalculatorForBlockhash, getFeeRateGovernor, getSnapshotSlot getStakeActivation
   * `--enable-rpc-obsolete_v1_7` flag removed
   * Deprecated methods are removed from `RpcClient` and `RpcClient::nonblocking`
 * Changes

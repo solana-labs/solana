@@ -5,10 +5,7 @@ use {
         cluster_tpu_info::ClusterTpuInfo,
         max_slots::MaxSlots,
         optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
-        rpc::{
-            rpc_accounts::*, rpc_accounts_scan::*, rpc_bank::*, rpc_deprecated_v1_18::*,
-            rpc_full::*, rpc_minimal::*, *,
-        },
+        rpc::{rpc_accounts::*, rpc_accounts_scan::*, rpc_bank::*, rpc_full::*, rpc_minimal::*, *},
         rpc_cache::LargestAccountsCache,
         rpc_health::*,
     },
@@ -506,7 +503,6 @@ impl JsonRpcService {
                     io.extend_with(rpc_accounts::AccountsDataImpl.to_delegate());
                     io.extend_with(rpc_accounts_scan::AccountsScanImpl.to_delegate());
                     io.extend_with(rpc_full::FullImpl.to_delegate());
-                    io.extend_with(rpc_deprecated_v1_18::DeprecatedV1_18Impl.to_delegate());
                 }
 
                 let request_middleware = RpcRequestMiddleware::new(
