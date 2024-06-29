@@ -12,8 +12,7 @@ use {
     solana_faucet::faucet::run_local_faucet,
     solana_rpc_client::rpc_client::RpcClient,
     solana_rpc_client_api::{
-        request::DELINQUENT_VALIDATOR_SLOT_DISTANCE,
-        response::{RpcStakeActivation, StakeActivationState},
+        request::DELINQUENT_VALIDATOR_SLOT_DISTANCE, response::StakeActivationState,
     },
     solana_rpc_client_nonce_utils::blockhash_query::{self, BlockhashQuery},
     solana_sdk::{
@@ -29,8 +28,9 @@ use {
         stake::{
             self,
             instruction::LockupArgs,
-            state::{Lockup, StakeAuthorize, StakeStateV2},
+            state::{Delegation, Lockup, StakeActivationStatus, StakeAuthorize, StakeStateV2},
         },
+        sysvar::stake_history,
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_test_validator::{TestValidator, TestValidatorGenesis},
@@ -163,6 +163,30 @@ fn test_stake_redelegation() {
     // wait for new epoch plus one additional slot for rewards payout
     wait_for_next_epoch_plus_n_slots(&rpc_client, 1);
 
+    let check_activation_status = |delegation: &Delegation,
+                                   expected_state: StakeActivationState,
+                                   expected_active_stake: u64| {
+        let stake_history_account = rpc_client.get_account(&stake_history::id()).unwrap();
+        let stake_history = solana_sdk::account::from_account(&stake_history_account).unwrap();
+        let current_epoch = rpc_client.get_epoch_info().unwrap().epoch;
+        let StakeActivationStatus {
+            effective,
+            activating,
+            deactivating,
+        } = delegation.stake_activating_and_deactivating(current_epoch, &stake_history, None);
+        let stake_activation_state = if deactivating > 0 {
+            StakeActivationState::Deactivating
+        } else if activating > 0 {
+            StakeActivationState::Activating
+        } else if effective > 0 {
+            StakeActivationState::Active
+        } else {
+            StakeActivationState::Inactive
+        };
+        assert_eq!(stake_activation_state, expected_state);
+        assert_eq!(effective, expected_active_stake);
+    };
+
     // `stake_keypair` should now be delegated to `vote_keypair` and fully activated
     let stake_account = rpc_client.get_account(&stake_keypair.pubkey()).unwrap();
     let stake_state: StakeStateV2 = stake_account.state().unwrap();
@@ -170,21 +194,16 @@ fn test_stake_redelegation() {
     let rent_exempt_reserve = match stake_state {
         StakeStateV2::Stake(meta, stake, _) => {
             assert_eq!(stake.delegation.voter_pubkey, vote_keypair.pubkey());
+            check_activation_status(
+                &stake.delegation,
+                StakeActivationState::Active,
+                50_000_000_000 - meta.rent_exempt_reserve,
+            );
             meta.rent_exempt_reserve
         }
         _ => panic!("Unexpected stake state!"),
     };
 
-    assert_eq!(
-        rpc_client
-            .get_stake_activation(stake_keypair.pubkey(), None)
-            .unwrap(),
-        RpcStakeActivation {
-            state: StakeActivationState::Active,
-            active: 50_000_000_000 - rent_exempt_reserve,
-            inactive: 0
-        }
-    );
     check_balance!(50_000_000_000, &rpc_client, &stake_keypair.pubkey());
 
     let stake2_keypair = Keypair::new();
@@ -226,28 +245,24 @@ fn test_stake_redelegation() {
     process_command(&config).unwrap();
 
     // `stake_keypair` should now be deactivating
-    assert_eq!(
-        rpc_client
-            .get_stake_activation(stake_keypair.pubkey(), None)
-            .unwrap(),
-        RpcStakeActivation {
-            state: StakeActivationState::Deactivating,
-            active: 50_000_000_000 - rent_exempt_reserve,
-            inactive: 0,
-        }
+    let stake_account = rpc_client.get_account(&stake_keypair.pubkey()).unwrap();
+    let stake_state: StakeStateV2 = stake_account.state().unwrap();
+    let StakeStateV2::Stake(_, stake, _) = stake_state else {
+        panic!()
+    };
+    check_activation_status(
+        &stake.delegation,
+        StakeActivationState::Deactivating,
+        50_000_000_000 - rent_exempt_reserve,
     );
 
     // `stake_keypair2` should now be activating
-    assert_eq!(
-        rpc_client
-            .get_stake_activation(stake2_keypair.pubkey(), None)
-            .unwrap(),
-        RpcStakeActivation {
-            state: StakeActivationState::Activating,
-            active: 0,
-            inactive: 50_000_000_000 - rent_exempt_reserve,
-        }
-    );
+    let stake_account = rpc_client.get_account(&stake2_keypair.pubkey()).unwrap();
+    let stake_state: StakeStateV2 = stake_account.state().unwrap();
+    let StakeStateV2::Stake(_, stake, _) = stake_state else {
+        panic!()
+    };
+    check_activation_status(&stake.delegation, StakeActivationState::Activating, 0);
 
     // check that all the stake, save `rent_exempt_reserve`, have been moved from `stake_keypair`
     // to `stake2_keypair`
@@ -258,38 +273,28 @@ fn test_stake_redelegation() {
     wait_for_next_epoch_plus_n_slots(&rpc_client, 1);
 
     // `stake_keypair` should now be deactivated
-    assert_eq!(
-        rpc_client
-            .get_stake_activation(stake_keypair.pubkey(), None)
-            .unwrap(),
-        RpcStakeActivation {
-            state: StakeActivationState::Inactive,
-            active: 0,
-            inactive: 0,
-        }
-    );
+    let stake_account = rpc_client.get_account(&stake_keypair.pubkey()).unwrap();
+    let stake_state: StakeStateV2 = stake_account.state().unwrap();
+    let StakeStateV2::Stake(_, stake, _) = stake_state else {
+        panic!()
+    };
+    check_activation_status(&stake.delegation, StakeActivationState::Inactive, 0);
 
     // `stake2_keypair` should now be delegated to `vote2_keypair` and fully activated
     let stake2_account = rpc_client.get_account(&stake2_keypair.pubkey()).unwrap();
     let stake2_state: StakeStateV2 = stake2_account.state().unwrap();
 
     match stake2_state {
-        StakeStateV2::Stake(_meta, stake, _) => {
+        StakeStateV2::Stake(meta, stake, _) => {
             assert_eq!(stake.delegation.voter_pubkey, vote2_keypair.pubkey());
+            check_activation_status(
+                &stake.delegation,
+                StakeActivationState::Active,
+                50_000_000_000 - meta.rent_exempt_reserve,
+            );
         }
         _ => panic!("Unexpected stake2 state!"),
     };
-
-    assert_eq!(
-        rpc_client
-            .get_stake_activation(stake2_keypair.pubkey(), None)
-            .unwrap(),
-        RpcStakeActivation {
-            state: StakeActivationState::Active,
-            active: 50_000_000_000 - rent_exempt_reserve,
-            inactive: 0
-        }
-    );
 }
 
 #[test]

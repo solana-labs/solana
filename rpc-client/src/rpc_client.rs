@@ -1774,6 +1774,11 @@ impl RpcClient {
     /// assert_eq!(activation.state, StakeActivationState::Activating);
     /// # Ok::<(), Error>(())
     /// ```
+    #[deprecated(
+        since = "1.18.18",
+        note = "Do not use; getStakeActivation is deprecated on the JSON-RPC server"
+    )]
+    #[allow(deprecated)]
     pub fn get_stake_activation(
         &self,
         stake_account: Pubkey,
