@@ -78,6 +78,7 @@ array-bytes = { workspace = true }
 assert_matches = { workspace = true }
 itertools = { workspace = true }
 serde_json = { workspace = true }
+serial_test = { workspace = true }
 static_assertions = { workspace = true }
 
 [build-dependencies]

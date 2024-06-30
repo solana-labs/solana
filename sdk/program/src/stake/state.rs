@@ -14,7 +14,7 @@ use {
             instruction::{LockupArgs, StakeError},
             stake_flags::StakeFlags,
         },
-        stake_history::{StakeHistory, StakeHistoryEntry},
+        stake_history::{StakeHistoryEntry, StakeHistoryGetEntry},
     },
     std::collections::HashSet,
 };
@@ -627,10 +627,10 @@ impl Delegation {
         self.activation_epoch == u64::MAX
     }
 
-    pub fn stake(
+    pub fn stake<T: StakeHistoryGetEntry>(
         &self,
         epoch: Epoch,
-        history: &StakeHistory,
+        history: &T,
         new_rate_activation_epoch: Option<Epoch>,
     ) -> u64 {
         self.stake_activating_and_deactivating(epoch, history, new_rate_activation_epoch)
@@ -638,10 +638,10 @@ impl Delegation {
     }
 
     #[allow(clippy::comparison_chain)]
-    pub fn stake_activating_and_deactivating(
+    pub fn stake_activating_and_deactivating<T: StakeHistoryGetEntry>(
         &self,
         target_epoch: Epoch,
-        history: &StakeHistory,
+        history: &T,
         new_rate_activation_epoch: Option<Epoch>,
     ) -> StakeActivationStatus {
         // first, calculate an effective and activating stake
@@ -663,7 +663,7 @@ impl Delegation {
             // can only deactivate what's activated
             StakeActivationStatus::with_deactivating(effective_stake)
         } else if let Some((history, mut prev_epoch, mut prev_cluster_stake)) = history
-            .get(self.deactivation_epoch)
+            .get_entry(self.deactivation_epoch)
             .map(|cluster_stake_at_deactivation_epoch| {
                 (
                     history,
@@ -708,7 +708,7 @@ impl Delegation {
                 if current_epoch >= target_epoch {
                     break;
                 }
-                if let Some(current_cluster_stake) = history.get(current_epoch) {
+                if let Some(current_cluster_stake) = history.get_entry(current_epoch) {
                     prev_epoch = current_epoch;
                     prev_cluster_stake = current_cluster_stake;
                 } else {
@@ -725,10 +725,10 @@ impl Delegation {
     }
 
     // returned tuple is (effective, activating) stake
-    fn stake_and_activating(
+    fn stake_and_activating<T: StakeHistoryGetEntry>(
         &self,
         target_epoch: Epoch,
-        history: &StakeHistory,
+        history: &T,
         new_rate_activation_epoch: Option<Epoch>,
     ) -> (u64, u64) {
         let delegated_stake = self.stake;
@@ -747,7 +747,7 @@ impl Delegation {
             // not yet enabled
             (0, 0)
         } else if let Some((history, mut prev_epoch, mut prev_cluster_stake)) = history
-            .get(self.activation_epoch)
+            .get_entry(self.activation_epoch)
             .map(|cluster_stake_at_activation_epoch| {
                 (
                     history,
@@ -793,7 +793,7 @@ impl Delegation {
                 if current_epoch >= target_epoch || current_epoch >= self.deactivation_epoch {
                     break;
                 }
-                if let Some(current_cluster_stake) = history.get(current_epoch) {
+                if let Some(current_cluster_stake) = history.get_entry(current_epoch) {
                     prev_epoch = current_epoch;
                     prev_cluster_stake = current_cluster_stake;
                 } else {
@@ -902,10 +902,10 @@ pub struct Stake {
 }
 
 impl Stake {
-    pub fn stake(
+    pub fn stake<T: StakeHistoryGetEntry>(
         &self,
         epoch: Epoch,
-        history: &StakeHistory,
+        history: &T,
         new_rate_activation_epoch: Option<Epoch>,
     ) -> u64 {
         self.delegation

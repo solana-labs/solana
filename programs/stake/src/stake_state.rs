@@ -76,7 +76,7 @@ fn get_stake_status(
     let stake_history = invoke_context.get_sysvar_cache().get_stake_history()?;
     Ok(stake.delegation.stake_activating_and_deactivating(
         clock.epoch,
-        &stake_history,
+        stake_history.as_ref(),
         new_warmup_cooldown_rate_epoch(invoke_context),
     ))
 }
@@ -390,7 +390,7 @@ fn deactivate_stake(
             // deactivation is only permitted when the stake delegation activating amount is zero.
             let status = stake.delegation.stake_activating_and_deactivating(
                 epoch,
-                &stake_history,
+                stake_history.as_ref(),
                 new_warmup_cooldown_rate_epoch(invoke_context),
             );
             if status.activating != 0 {

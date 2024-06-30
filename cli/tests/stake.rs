@@ -30,7 +30,7 @@ use {
             instruction::LockupArgs,
             state::{Delegation, Lockup, StakeActivationStatus, StakeAuthorize, StakeStateV2},
         },
-        sysvar::stake_history,
+        sysvar::stake_history::{self, StakeHistory},
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_test_validator::{TestValidator, TestValidatorGenesis},
@@ -167,7 +167,8 @@ fn test_stake_redelegation() {
                                    expected_state: StakeActivationState,
                                    expected_active_stake: u64| {
         let stake_history_account = rpc_client.get_account(&stake_history::id()).unwrap();
-        let stake_history = solana_sdk::account::from_account(&stake_history_account).unwrap();
+        let stake_history: StakeHistory =
+            solana_sdk::account::from_account(&stake_history_account).unwrap();
         let current_epoch = rpc_client.get_epoch_info().unwrap().epoch;
         let StakeActivationStatus {
             effective,

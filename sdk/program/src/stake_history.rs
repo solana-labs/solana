@@ -84,6 +84,18 @@ impl Deref for StakeHistory {
     }
 }
 
+pub trait StakeHistoryGetEntry {
+    fn get_entry(&self, epoch: Epoch) -> Option<StakeHistoryEntry>;
+}
+
+impl StakeHistoryGetEntry for StakeHistory {
+    fn get_entry(&self, epoch: Epoch) -> Option<StakeHistoryEntry> {
+        self.binary_search_by(|probe| epoch.cmp(&probe.0))
+            .ok()
+            .map(|index| self[index].1.clone())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -129,51 +129,12 @@ mod tests {
         super::*,
         crate::{
             clock::Slot,
-            entrypoint::SUCCESS,
             hash::{hash, Hash},
-            program_stubs::{set_syscall_stubs, SyscallStubs},
-            slot_hashes::{SlotHash, MAX_ENTRIES},
+            slot_hashes::MAX_ENTRIES,
+            sysvar::tests::mock_get_sysvar_syscall,
         },
+        serial_test::serial,
     };
-
-    struct MockSlotHashesSyscall {
-        slot_hashes: SlotHashes,
-    }
-
-    impl SyscallStubs for MockSlotHashesSyscall {
-        #[allow(clippy::arithmetic_side_effects)]
-        fn sol_get_sysvar(
-            &self,
-            _sysvar_id_addr: *const u8,
-            var_addr: *mut u8,
-            offset: u64,
-            length: u64,
-        ) -> u64 {
-            // The syscall tests for `sol_get_sysvar` should ensure the following:
-            //
-            // - The provided `sysvar_id_addr` can be translated into a valid
-            //   sysvar ID for a sysvar contained in the sysvar cache, of which
-            //   `SlotHashes` is one.
-            // - Length and memory checks on `offset` and `length`.
-            //
-            // Therefore this mockup can simply just unsafely use the provided
-            // `offset` and `length` to copy the serialized `SlotHashes` into
-            // the provided `var_addr`.
-            let data = bincode::serialize(&self.slot_hashes).unwrap();
-            let slice = unsafe { std::slice::from_raw_parts_mut(var_addr, length as usize) };
-            slice.copy_from_slice(&data[offset as usize..(offset + length) as usize]);
-            SUCCESS
-        }
-    }
-
-    fn mock_get_sysvar_syscall(slot_hashes: &[SlotHash]) {
-        static ONCE: std::sync::Once = std::sync::Once::new();
-        ONCE.call_once(|| {
-            set_syscall_stubs(Box::new(MockSlotHashesSyscall {
-                slot_hashes: SlotHashes::new(slot_hashes),
-            }));
-        });
-    }
 
     #[test]
     fn test_size_of() {
@@ -188,6 +149,7 @@ mod tests {
         );
     }
 
+    #[serial]
     #[test]
     fn test_slot_hashes_sysvar() {
         let mut slot_hashes = vec![];
@@ -198,9 +160,8 @@ mod tests {
             ));
         }
 
-        mock_get_sysvar_syscall(&slot_hashes);
-
         let check_slot_hashes = SlotHashes::new(&slot_hashes);
+        mock_get_sysvar_syscall(&bincode::serialize(&check_slot_hashes).unwrap());
 
         // `get`:
         assert_eq!(
