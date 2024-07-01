@@ -352,6 +352,7 @@ impl Tvu {
                 leader_schedule_cache.clone(),
                 bank_forks.clone(),
                 duplicate_slots_sender,
+                tvu_config.shred_version,
             ),
         );
 

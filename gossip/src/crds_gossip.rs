@@ -90,6 +90,7 @@ impl CrdsGossip {
         leader_schedule: Option<F>,
         // Maximum serialized size of each DuplicateShred chunk payload.
         max_payload_size: usize,
+        shred_version: u16,
     ) -> Result<(), duplicate_shred::Error>
     where
         F: FnOnce(Slot) -> Option<Pubkey>,
@@ -114,6 +115,7 @@ impl CrdsGossip {
             leader_schedule,
             timestamp(),
             max_payload_size,
+            shred_version,
         )?;
         // Find the index of oldest duplicate shred.
         let mut num_dup_shreds = 0;

@@ -48,6 +48,7 @@ pub struct DuplicateShredHandler {
     cached_slots_in_epoch: u64,
     // Used to notify duplicate consensus state machine
     duplicate_slots_sender: Sender<Slot>,
+    shred_version: u16,
 }
 
 impl DuplicateShredHandlerTrait for DuplicateShredHandler {
@@ -68,6 +69,7 @@ impl DuplicateShredHandler {
         leader_schedule_cache: Arc<LeaderScheduleCache>,
         bank_forks: Arc<RwLock<BankForks>>,
         duplicate_slots_sender: Sender<Slot>,
+        shred_version: u16,
     ) -> Self {
         Self {
             buffer: HashMap::<(Slot, Pubkey), BufferEntry>::default(),
@@ -80,6 +82,7 @@ impl DuplicateShredHandler {
             leader_schedule_cache,
             bank_forks,
             duplicate_slots_sender,
+            shred_version,
         }
     }
 
@@ -130,7 +133,8 @@ impl DuplicateShredHandler {
                 .leader_schedule_cache
                 .slot_leader_at(slot, /*bank:*/ None)
                 .ok_or(Error::UnknownSlotLeader(slot))?;
-            let (shred1, shred2) = duplicate_shred::into_shreds(&pubkey, chunks)?;
+            let (shred1, shred2) =
+                duplicate_shred::into_shreds(&pubkey, chunks, self.shred_version)?;
             if !self.blockstore.has_duplicate_shreds_in_slot(slot) {
                 self.blockstore.store_duplicate_slot(
                     slot,
@@ -255,16 +259,17 @@ mod tests {
         slot: u64,
         expected_error: Option<Error>,
         chunk_size: usize,
+        shred_version: u16,
     ) -> Result<impl Iterator<Item = DuplicateShred>, Error> {
         let my_keypair = match expected_error {
             Some(Error::InvalidSignature) => Arc::new(Keypair::new()),
             _ => keypair,
         };
         let mut rng = rand::thread_rng();
-        let shredder = Shredder::new(slot, slot - 1, 0, 0).unwrap();
+        let shredder = Shredder::new(slot, slot - 1, 0, shred_version).unwrap();
         let next_shred_index = 353;
         let shred1 = new_rand_shred(&mut rng, next_shred_index, &shredder, &my_keypair);
-        let shredder1 = Shredder::new(slot + 1, slot, 0, 0).unwrap();
+        let shredder1 = Shredder::new(slot + 1, slot, 0, shred_version).unwrap();
         let shred2 = match expected_error {
             Some(Error::SlotMismatch) => {
                 new_rand_shred(&mut rng, next_shred_index, &shredder1, &my_keypair)
@@ -283,6 +288,7 @@ mod tests {
             None::<fn(Slot) -> Option<Pubkey>>,
             timestamp(), // wallclock
             chunk_size,  // max_size
+            shred_version,
         )?;
         Ok(chunks)
     }
@@ -295,6 +301,7 @@ mod tests {
         let blockstore = Arc::new(Blockstore::open(ledger_path.path()).unwrap());
         let my_keypair = Arc::new(Keypair::new());
         let my_pubkey = my_keypair.pubkey();
+        let shred_version = 0;
         let genesis_config_info = create_genesis_config_with_leader(10_000, &my_pubkey, 10_000);
         let GenesisConfigInfo { genesis_config, .. } = genesis_config_info;
         let mut bank = Bank::new_for_tests(&genesis_config);
@@ -322,6 +329,7 @@ mod tests {
             leader_schedule_cache,
             bank_forks_arc,
             sender,
+            shred_version,
         );
         let chunks = create_duplicate_proof(
             my_keypair.clone(),
@@ -329,6 +337,7 @@ mod tests {
             start_slot,
             None,
             DUPLICATE_SHRED_MAX_PAYLOAD_SIZE,
+            shred_version,
         )
         .unwrap();
         let chunks1 = create_duplicate_proof(
@@ -337,6 +346,7 @@ mod tests {
             start_slot + 1,
             None,
             DUPLICATE_SHRED_MAX_PAYLOAD_SIZE,
+            shred_version,
         )
         .unwrap();
         assert!(!blockstore.has_duplicate_shreds_in_slot(start_slot));
@@ -365,6 +375,7 @@ mod tests {
                 start_slot + 2,
                 Some(error),
                 DUPLICATE_SHRED_MAX_PAYLOAD_SIZE,
+                shred_version,
             ) {
                 Err(_) => (),
                 Ok(chunks) => {
@@ -386,6 +397,7 @@ mod tests {
         let blockstore = Arc::new(Blockstore::open(ledger_path.path()).unwrap());
         let my_keypair = Arc::new(Keypair::new());
         let my_pubkey = my_keypair.pubkey();
+        let shred_version = 0;
         let genesis_config_info = create_genesis_config_with_leader(10_000, &my_pubkey, 10_000);
         let GenesisConfigInfo { genesis_config, .. } = genesis_config_info;
         let mut bank = Bank::new_for_tests(&genesis_config);
@@ -410,6 +422,7 @@ mod tests {
             leader_schedule_cache,
             bank_forks_arc,
             sender,
+            shred_version,
         );
         // The feature will only be activated at Epoch 1.
         let start_slot: Slot = slots_in_epoch + 1;
@@ -421,6 +434,7 @@ mod tests {
             start_slot,
             None,
             DUPLICATE_SHRED_MAX_PAYLOAD_SIZE / 2,
+            shred_version,
         )
         .unwrap();
         for chunk in chunks {
@@ -438,6 +452,7 @@ mod tests {
             future_slot,
             None,
             DUPLICATE_SHRED_MAX_PAYLOAD_SIZE,
+            shred_version,
         )
         .unwrap();
         for chunk in chunks {
@@ -454,6 +469,7 @@ mod tests {
             start_slot,
             None,
             DUPLICATE_SHRED_MAX_PAYLOAD_SIZE,
+            shred_version,
         )
         .unwrap();
         // handle chunk 0 of the first proof.
@@ -474,6 +490,7 @@ mod tests {
         let blockstore = Arc::new(Blockstore::open(ledger_path.path()).unwrap());
         let my_keypair = Arc::new(Keypair::new());
         let my_pubkey = my_keypair.pubkey();
+        let shred_version = 0;
         let genesis_config_info = create_genesis_config_with_leader(10_000, &my_pubkey, 10_000);
         let GenesisConfigInfo { genesis_config, .. } = genesis_config_info;
         let mut bank = Bank::new_for_tests(&genesis_config);
@@ -492,6 +509,7 @@ mod tests {
             leader_schedule_cache,
             bank_forks_arc,
             sender,
+            shred_version,
         );
         let chunks = create_duplicate_proof(
             my_keypair.clone(),
@@ -499,6 +517,7 @@ mod tests {
             1,
             None,
             DUPLICATE_SHRED_MAX_PAYLOAD_SIZE,
+            shred_version,
         )
         .unwrap();
         assert!(!blockstore.has_duplicate_shreds_in_slot(1));
