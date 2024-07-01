@@ -47,9 +47,6 @@ pub mod rpc_config {
 pub mod rpc_custom_error {
     pub use solana_rpc_client_api::custom_error::*;
 }
-pub mod rpc_deprecated_config {
-    pub use solana_rpc_client_api::deprecated_config::*;
-}
 pub mod rpc_filter {
     pub use solana_rpc_client_api::filter::*;
 }
