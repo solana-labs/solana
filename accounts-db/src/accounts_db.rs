@@ -7010,30 +7010,26 @@ impl AccountsDb {
     /// return true iff storage is valid for loading from cache
     fn hash_storage_info(
         hasher: &mut impl StdHasher,
-        storage: Option<&Arc<AccountStorageEntry>>,
+        storage: &AccountStorageEntry,
         slot: Slot,
     ) -> bool {
-        if let Some(append_vec) = storage {
-            // hash info about this storage
-            append_vec.written_bytes().hash(hasher);
-            let storage_file = append_vec.accounts.path();
-            slot.hash(hasher);
-            storage_file.hash(hasher);
-            let amod = std::fs::metadata(storage_file);
-            if amod.is_err() {
-                return false;
-            }
-            let amod = amod.unwrap().modified();
-            if amod.is_err() {
-                return false;
-            }
-            let amod = amod
-                .unwrap()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs();
-            amod.hash(hasher);
-        }
+        // hash info about this storage
+        storage.written_bytes().hash(hasher);
+        slot.hash(hasher);
+        let storage_file = storage.accounts.path();
+        storage_file.hash(hasher);
+        let Ok(metadata) = std::fs::metadata(storage_file) else {
+            return false;
+        };
+        let Ok(amod) = metadata.modified() else {
+            return false;
+        };
+        let amod = amod
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        amod.hash(hasher);
+
         // if we made it here, we have hashed info and we should try to load from the cache
         true
     }
@@ -7089,9 +7085,12 @@ impl AccountsDb {
                     if is_first_scan_pass && slot < one_epoch_old {
                         self.update_old_slot_stats(stats, storage);
                     }
-                    if !Self::hash_storage_info(&mut hasher, storage, slot) {
-                        load_from_cache = false;
-                        break;
+                    if let Some(storage) = storage {
+                        let ok = Self::hash_storage_info(&mut hasher, storage, slot);
+                        if !ok {
+                            load_from_cache = false;
+                            break;
+                        }
                     }
                 }
                 if empty {
@@ -16469,13 +16468,9 @@ pub mod tests {
     #[test]
     fn test_hash_storage_info() {
         {
-            let mut hasher = hash_map::DefaultHasher::new();
-            let storages = None;
-            let slot = 1;
-            let load = AccountsDb::hash_storage_info(&mut hasher, storages, slot);
+            let hasher = hash_map::DefaultHasher::new();
             let hash = hasher.finish();
             assert_eq!(15130871412783076140, hash);
-            assert!(load);
         }
         {
             let mut hasher = hash_map::DefaultHasher::new();
@@ -16487,26 +16482,26 @@ pub mod tests {
             let mark_alive = false;
             let storage = sample_storage_with_entries(&tf, slot, &pubkey1, mark_alive);
 
-            let load = AccountsDb::hash_storage_info(&mut hasher, Some(&storage), slot);
+            let load = AccountsDb::hash_storage_info(&mut hasher, &storage, slot);
             let hash = hasher.finish();
             // can't assert hash here - it is a function of mod date
             assert!(load);
             let slot = 2; // changed this
             let mut hasher = hash_map::DefaultHasher::new();
-            let load = AccountsDb::hash_storage_info(&mut hasher, Some(&storage), slot);
+            let load = AccountsDb::hash_storage_info(&mut hasher, &storage, slot);
             let hash2 = hasher.finish();
             assert_ne!(hash, hash2); // slot changed, these should be different
                                      // can't assert hash here - it is a function of mod date
             assert!(load);
             let mut hasher = hash_map::DefaultHasher::new();
             append_sample_data_to_storage(&storage, &solana_sdk::pubkey::new_rand(), false, None);
-            let load = AccountsDb::hash_storage_info(&mut hasher, Some(&storage), slot);
+            let load = AccountsDb::hash_storage_info(&mut hasher, &storage, slot);
             let hash3 = hasher.finish();
             assert_ne!(hash2, hash3); // moddate and written size changed
                                       // can't assert hash here - it is a function of mod date
             assert!(load);
             let mut hasher = hash_map::DefaultHasher::new();
-            let load = AccountsDb::hash_storage_info(&mut hasher, Some(&storage), slot);
+            let load = AccountsDb::hash_storage_info(&mut hasher, &storage, slot);
             let hash4 = hasher.finish();
             assert_eq!(hash4, hash3); // same
                                       // can't assert hash here - it is a function of mod date
