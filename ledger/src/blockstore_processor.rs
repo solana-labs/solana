@@ -62,8 +62,7 @@ use {
     solana_svm::{
         transaction_processor::ExecutionRecordingConfig,
         transaction_results::{
-            TransactionExecutionDetails, TransactionExecutionResult,
-            TransactionLoadedAccountsStats, TransactionResults,
+            TransactionExecutionDetails, TransactionExecutionResult, TransactionResults,
         },
     },
     solana_transaction_status::token_balances::TransactionTokenBalancesSet,
@@ -182,39 +181,10 @@ pub fn execute_batch(
 
     let TransactionResults {
         fee_collection_results,
-        loaded_accounts_stats,
         execution_results,
         rent_debits,
         ..
     } = tx_results;
-
-    let (check_block_cost_limits_result, check_block_cost_limits_time): (Result<()>, Measure) =
-        measure!(if bank
-            .feature_set
-            .is_active(&feature_set::apply_cost_tracker_during_replay::id())
-        {
-            check_block_cost_limits(
-                bank,
-                &loaded_accounts_stats,
-                &execution_results,
-                batch.sanitized_transactions(),
-            )
-        } else {
-            Ok(())
-        });
-
-    timings.saturating_add_in_place(
-        ExecuteTimingType::CheckBlockLimitsUs,
-        check_block_cost_limits_time.as_us(),
-    );
-    for tx_loaded_accounts_stats in loaded_accounts_stats.iter().flatten() {
-        timings
-            .execute_accounts_details
-            .increment_loaded_accounts_data_size(
-                tx_loaded_accounts_stats.loaded_accounts_data_size as u64,
-            );
-    }
-    check_block_cost_limits_result?;
 
     let executed_transactions = execution_results
         .iter()
@@ -248,49 +218,6 @@ pub fn execute_batch(
 
     let first_err = get_first_error(batch, fee_collection_results);
     first_err.map(|(result, _)| result).unwrap_or(Ok(()))
-}
-
-// collect transactions actual execution costs, subject to block limits;
-// block will be marked as dead if exceeds cost limits, details will be
-// reported to metric `replay-stage-mark_dead_slot`
-fn check_block_cost_limits(
-    bank: &Bank,
-    loaded_accounts_stats: &[Result<TransactionLoadedAccountsStats>],
-    execution_results: &[TransactionExecutionResult],
-    sanitized_transactions: &[SanitizedTransaction],
-) -> Result<()> {
-    assert_eq!(loaded_accounts_stats.len(), execution_results.len());
-
-    let tx_costs_with_actual_execution_units: Vec<_> = execution_results
-        .iter()
-        .zip(loaded_accounts_stats)
-        .zip(sanitized_transactions)
-        .filter_map(|((execution_result, loaded_accounts_stats), tx)| {
-            if let Some(details) = execution_result.details() {
-                let tx_cost = CostModel::calculate_cost_for_executed_transaction(
-                    tx,
-                    details.executed_units,
-                    loaded_accounts_stats
-                        .as_ref()
-                        .map_or(0, |stats| stats.loaded_accounts_data_size),
-                    &bank.feature_set,
-                );
-                Some(tx_cost)
-            } else {
-                None
-            }
-        })
-        .collect();
-
-    {
-        let mut cost_tracker = bank.write_cost_tracker().unwrap();
-        for tx_cost in &tx_costs_with_actual_execution_units {
-            cost_tracker
-                .try_add(tx_cost)
-                .map_err(TransactionError::from)?;
-        }
-    }
-    Ok(())
 }
 
 #[derive(Default)]
@@ -529,9 +456,21 @@ fn rebatch_and_execute_batches(
             let cost = tx_cost.sum();
             minimal_tx_cost = std::cmp::min(minimal_tx_cost, cost);
             total_cost = total_cost.saturating_add(cost);
-            cost
+            tx_cost
         })
         .collect::<Vec<_>>();
+
+    if bank
+        .feature_set
+        .is_active(&feature_set::apply_cost_tracker_during_replay::id())
+    {
+        let mut cost_tracker = bank.write_cost_tracker().unwrap();
+        for tx_cost in &tx_costs {
+            cost_tracker
+                .try_add(tx_cost)
+                .map_err(TransactionError::from)?;
+        }
+    }
 
     let target_batch_count = get_thread_count() as u64;
 
@@ -540,23 +479,26 @@ fn rebatch_and_execute_batches(
         let target_batch_cost = total_cost / target_batch_count;
         let mut batch_cost: u64 = 0;
         let mut slice_start = 0;
-        tx_costs.into_iter().enumerate().for_each(|(index, cost)| {
-            let next_index = index + 1;
-            batch_cost = batch_cost.saturating_add(cost);
-            if batch_cost >= target_batch_cost || next_index == sanitized_txs.len() {
-                let tx_batch = rebatch_transactions(
-                    &lock_results,
-                    bank,
-                    &sanitized_txs,
-                    slice_start,
-                    index,
-                    &transaction_indexes,
-                );
-                slice_start = next_index;
-                tx_batches.push(tx_batch);
-                batch_cost = 0;
-            }
-        });
+        tx_costs
+            .into_iter()
+            .enumerate()
+            .for_each(|(index, tx_cost)| {
+                let next_index = index + 1;
+                batch_cost = batch_cost.saturating_add(tx_cost.sum());
+                if batch_cost >= target_batch_cost || next_index == sanitized_txs.len() {
+                    let tx_batch = rebatch_transactions(
+                        &lock_results,
+                        bank,
+                        &sanitized_txs,
+                        slice_start,
+                        index,
+                        &transaction_indexes,
+                    );
+                    slice_start = next_index;
+                    tx_batches.push(tx_batch);
+                    batch_cost = 0;
+                }
+            });
         &tx_batches[..]
     } else {
         batches
@@ -2257,7 +2199,6 @@ pub mod tests {
         },
         assert_matches::assert_matches,
         rand::{thread_rng, Rng},
-        solana_cost_model::transaction_cost::TransactionCost,
         solana_entry::entry::{create_ticks, next_entry, next_entry_mut},
         solana_program_runtime::declare_process_instruction,
         solana_runtime::{
@@ -5081,70 +5022,5 @@ pub mod tests {
                 }
             }
         }
-    }
-
-    #[test]
-    fn test_check_block_cost_limit() {
-        let dummy_leader_pubkey = solana_sdk::pubkey::new_rand();
-        let GenesisConfigInfo {
-            genesis_config,
-            mint_keypair,
-            ..
-        } = create_genesis_config_with_leader(500, &dummy_leader_pubkey, 100);
-        let bank = Bank::new_for_tests(&genesis_config);
-
-        let tx = SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
-            &mint_keypair,
-            &Pubkey::new_unique(),
-            1,
-            genesis_config.hash(),
-        ));
-        let mut tx_cost = CostModel::calculate_cost(&tx, &bank.feature_set);
-        let actual_execution_cu = 1;
-        let actual_loaded_accounts_data_size = 64 * 1024;
-        let TransactionCost::Transaction(ref mut usage_cost_details) = tx_cost else {
-            unreachable!("test tx is non-vote tx");
-        };
-        usage_cost_details.programs_execution_cost = actual_execution_cu;
-        usage_cost_details.loaded_accounts_data_size_cost =
-            CostModel::calculate_loaded_accounts_data_size_cost(
-                actual_loaded_accounts_data_size,
-                &bank.feature_set,
-            );
-        // set block-limit to be able to just have one transaction
-        let block_limit = tx_cost.sum();
-
-        bank.write_cost_tracker()
-            .unwrap()
-            .set_limits(u64::MAX, block_limit, u64::MAX);
-        let txs = vec![tx.clone(), tx];
-        let results = vec![
-            TransactionExecutionResult::Executed {
-                details: TransactionExecutionDetails {
-                    status: Ok(()),
-                    log_messages: None,
-                    inner_instructions: None,
-                    fee_details: solana_sdk::fee::FeeDetails::default(),
-                    return_data: None,
-                    executed_units: actual_execution_cu,
-                    accounts_data_len_delta: 0,
-                },
-                programs_modified_by_tx: HashMap::new(),
-            },
-            TransactionExecutionResult::NotExecuted(TransactionError::AccountNotFound),
-        ];
-        let loaded_accounts_stats = vec![
-            Ok(TransactionLoadedAccountsStats {
-                loaded_accounts_data_size: actual_loaded_accounts_data_size,
-                loaded_accounts_count: 2
-            });
-            2
-        ];
-
-        assert!(check_block_cost_limits(&bank, &loaded_accounts_stats, &results, &txs).is_ok());
-        assert_eq!(
-            Err(TransactionError::WouldExceedMaxBlockCostLimit),
-            check_block_cost_limits(&bank, &loaded_accounts_stats, &results, &txs)
-        );
     }
 }

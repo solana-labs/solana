@@ -14,7 +14,6 @@ base64 = { workspace = true }
 bincode = { workspace = true }
 eager = { workspace = true }
 enum-iterator = { workspace = true }
-histogram = { workspace = true }
 itertools = { workspace = true }
 libc = { workspace = true }
 log = { workspace = true }

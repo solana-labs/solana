@@ -858,13 +858,11 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
 
         loaded_transaction.accounts = accounts;
         saturating_add_assign!(
-            execute_timings.execute_accounts_details.total_account_count,
+            execute_timings.details.total_account_count,
             loaded_transaction.accounts.len() as u64
         );
         saturating_add_assign!(
-            execute_timings
-                .execute_accounts_details
-                .changed_account_count,
+            execute_timings.details.changed_account_count,
             touched_account_count
         );
 
