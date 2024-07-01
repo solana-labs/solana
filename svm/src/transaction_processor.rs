@@ -1,5 +1,3 @@
-#[cfg(feature = "dev-context-only-utils")]
-use qualifier_attr::qualifiers;
 use {
     crate::{
         account_loader::{
@@ -29,7 +27,7 @@ use {
         invoke_context::{EnvironmentConfig, InvokeContext},
         loaded_programs::{
             ForkGraph, ProgramCache, ProgramCacheEntry, ProgramCacheForTxBatch,
-            ProgramCacheMatchCriteria, ProgramRuntimeEnvironments,
+            ProgramCacheMatchCriteria,
         },
         log_collector::LogCollector,
         sysvar_cache::SysvarCache,
@@ -208,8 +206,11 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
 
     /// Returns the current environments depending on the given epoch
     /// Returns None if the call could result in a deadlock
-    #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
-    pub fn get_environments_for_epoch(&self, epoch: Epoch) -> Option<ProgramRuntimeEnvironments> {
+    #[cfg(feature = "dev-context-only-utils")]
+    pub fn get_environments_for_epoch(
+        &self,
+        epoch: Epoch,
+    ) -> Option<solana_program_runtime::loaded_programs::ProgramRuntimeEnvironments> {
         self.program_cache
             .try_read()
             .ok()
