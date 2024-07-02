@@ -1,10 +1,7 @@
 //! Calculation of transaction fees.
 
 #![allow(clippy::arithmetic_side_effects)]
-use {
-    crate::{clock::DEFAULT_MS_PER_SLOT, ed25519_program, message::Message, secp256k1_program},
-    log::*,
-};
+use {crate::clock::DEFAULT_MS_PER_SLOT, log::*};
 
 #[repr(C)]
 #[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
@@ -23,29 +20,6 @@ impl FeeCalculator {
         Self {
             lamports_per_signature,
         }
-    }
-
-    #[deprecated(
-        since = "1.9.0",
-        note = "Please do not use, will no longer be available in the future"
-    )]
-    pub fn calculate_fee(&self, message: &Message) -> u64 {
-        let mut num_signatures: u64 = 0;
-        for instruction in &message.instructions {
-            let program_index = instruction.program_id_index as usize;
-            // Message may not be sanitized here
-            if program_index < message.account_keys.len() {
-                let id = message.account_keys[program_index];
-                if (secp256k1_program::check_id(&id) || ed25519_program::check_id(&id))
-                    && !instruction.data.is_empty()
-                {
-                    num_signatures += instruction.data[0] as u64;
-                }
-            }
-        }
-
-        self.lamports_per_signature
-            * (u64::from(message.header.num_required_signatures) + num_signatures)
     }
 }
 
@@ -188,10 +162,7 @@ impl FeeRateGovernor {
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::*,
-        crate::{pubkey::Pubkey, system_instruction},
-    };
+    use super::*;
 
     #[test]
     fn test_fee_rate_governor_burn() {
@@ -203,64 +174,6 @@ mod tests {
 
         fee_rate_governor.burn_percent = 100;
         assert_eq!(fee_rate_governor.burn(2), (0, 2));
-    }
-
-    #[test]
-    #[allow(deprecated)]
-    fn test_fee_calculator_calculate_fee() {
-        // Default: no fee.
-        let message = Message::default();
-        assert_eq!(FeeCalculator::default().calculate_fee(&message), 0);
-
-        // No signature, no fee.
-        assert_eq!(FeeCalculator::new(1).calculate_fee(&message), 0);
-
-        // One signature, a fee.
-        let pubkey0 = Pubkey::from([0; 32]);
-        let pubkey1 = Pubkey::from([1; 32]);
-        let ix0 = system_instruction::transfer(&pubkey0, &pubkey1, 1);
-        let message = Message::new(&[ix0], Some(&pubkey0));
-        assert_eq!(FeeCalculator::new(2).calculate_fee(&message), 2);
-
-        // Two signatures, double the fee.
-        let ix0 = system_instruction::transfer(&pubkey0, &pubkey1, 1);
-        let ix1 = system_instruction::transfer(&pubkey1, &pubkey0, 1);
-        let message = Message::new(&[ix0, ix1], Some(&pubkey0));
-        assert_eq!(FeeCalculator::new(2).calculate_fee(&message), 4);
-    }
-
-    #[test]
-    #[allow(deprecated)]
-    fn test_fee_calculator_calculate_fee_secp256k1() {
-        use crate::instruction::Instruction;
-        let pubkey0 = Pubkey::from([0; 32]);
-        let pubkey1 = Pubkey::from([1; 32]);
-        let ix0 = system_instruction::transfer(&pubkey0, &pubkey1, 1);
-        let mut secp_instruction = Instruction {
-            program_id: crate::secp256k1_program::id(),
-            accounts: vec![],
-            data: vec![],
-        };
-        let mut secp_instruction2 = Instruction {
-            program_id: crate::secp256k1_program::id(),
-            accounts: vec![],
-            data: vec![1],
-        };
-
-        let message = Message::new(
-            &[
-                ix0.clone(),
-                secp_instruction.clone(),
-                secp_instruction2.clone(),
-            ],
-            Some(&pubkey0),
-        );
-        assert_eq!(FeeCalculator::new(1).calculate_fee(&message), 2);
-
-        secp_instruction.data = vec![0];
-        secp_instruction2.data = vec![10];
-        let message = Message::new(&[ix0, secp_instruction, secp_instruction2], Some(&pubkey0));
-        assert_eq!(FeeCalculator::new(1).calculate_fee(&message), 11);
     }
 
     #[test]

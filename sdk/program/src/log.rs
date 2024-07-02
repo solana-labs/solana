@@ -36,24 +36,6 @@
 use crate::account_info::AccountInfo;
 
 /// Print a message to the log.
-#[macro_export]
-#[deprecated(since = "1.4.14", note = "Please use `msg` macro instead")]
-macro_rules! info {
-    ($msg:expr) => {
-        $crate::log::sol_log($msg)
-    };
-    ($arg1:expr, $arg2:expr, $arg3:expr, $arg4:expr, $arg5:expr) => {
-        $crate::log::sol_log_64(
-            $arg1 as u64,
-            $arg2 as u64,
-            $arg3 as u64,
-            $arg4 as u64,
-            $arg5 as u64,
-        )
-    };
-}
-
-/// Print a message to the log.
 ///
 /// Supports simple strings as well as Rust [format strings][fs]. When passed a
 /// single expression it will be passed directly to [`sol_log`]. The expression

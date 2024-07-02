@@ -662,29 +662,6 @@ impl Message {
         i < self.header.num_required_signatures as usize
     }
 
-    #[deprecated]
-    pub fn get_account_keys_by_lock_type(&self) -> (Vec<&Pubkey>, Vec<&Pubkey>) {
-        let mut writable_keys = vec![];
-        let mut readonly_keys = vec![];
-        for (i, key) in self.account_keys.iter().enumerate() {
-            if self.is_maybe_writable(i, None) {
-                writable_keys.push(key);
-            } else {
-                readonly_keys.push(key);
-            }
-        }
-        (writable_keys, readonly_keys)
-    }
-
-    #[deprecated]
-    pub fn deserialize_instruction(
-        index: usize,
-        data: &[u8],
-    ) -> Result<Instruction, SanitizeError> {
-        #[allow(deprecated)]
-        sysvar::instructions::load_instruction_at(index, data)
-    }
-
     pub fn signer_keys(&self) -> Vec<&Pubkey> {
         // Clamp in case we're working on un-`sanitize()`ed input
         let last_key = self
@@ -905,36 +882,6 @@ mod tests {
         assert!(!message.is_account_maybe_reserved(0, None));
         assert!(!message.is_account_maybe_reserved(1, None));
         assert!(!message.is_account_maybe_reserved(2, None));
-    }
-
-    #[test]
-    fn test_get_account_keys_by_lock_type() {
-        let program_id = Pubkey::default();
-        let id0 = Pubkey::new_unique();
-        let id1 = Pubkey::new_unique();
-        let id2 = Pubkey::new_unique();
-        let id3 = Pubkey::new_unique();
-        let message = Message::new(
-            &[
-                Instruction::new_with_bincode(program_id, &0, vec![AccountMeta::new(id0, false)]),
-                Instruction::new_with_bincode(program_id, &0, vec![AccountMeta::new(id1, true)]),
-                Instruction::new_with_bincode(
-                    program_id,
-                    &0,
-                    vec![AccountMeta::new_readonly(id2, false)],
-                ),
-                Instruction::new_with_bincode(
-                    program_id,
-                    &0,
-                    vec![AccountMeta::new_readonly(id3, true)],
-                ),
-            ],
-            Some(&id1),
-        );
-        assert_eq!(
-            message.get_account_keys_by_lock_type(),
-            (vec![&id1, &id0], vec![&id3, &program_id, &id2])
-        );
     }
 
     #[test]

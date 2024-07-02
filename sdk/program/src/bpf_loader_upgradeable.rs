@@ -82,42 +82,6 @@ impl UpgradeableLoaderState {
     pub const fn size_of_programdata(program_len: usize) -> usize {
         Self::size_of_programdata_metadata().saturating_add(program_len)
     }
-
-    /// Length of a Buffer account's data.
-    #[deprecated(since = "1.11.0", note = "Please use `size_of_buffer` instead")]
-    pub fn buffer_len(program_len: usize) -> Result<usize, InstructionError> {
-        Ok(Self::size_of_buffer(program_len))
-    }
-
-    /// Offset into the Buffer account's data of the program bits.
-    #[deprecated(
-        since = "1.11.0",
-        note = "Please use `size_of_buffer_metadata` instead"
-    )]
-    pub fn buffer_data_offset() -> Result<usize, InstructionError> {
-        Ok(Self::size_of_buffer_metadata())
-    }
-
-    /// Length of a Program account's data.
-    #[deprecated(since = "1.11.0", note = "Please use `size_of_program` instead")]
-    pub fn program_len() -> Result<usize, InstructionError> {
-        Ok(Self::size_of_program())
-    }
-
-    /// Length of a ProgramData account's data.
-    #[deprecated(since = "1.11.0", note = "Please use `size_of_programdata` instead")]
-    pub fn programdata_len(program_len: usize) -> Result<usize, InstructionError> {
-        Ok(Self::size_of_programdata(program_len))
-    }
-
-    /// Offset into the ProgramData account's data of the program bits.
-    #[deprecated(
-        since = "1.11.0",
-        note = "Please use `size_of_programdata_metadata` instead"
-    )]
-    pub fn programdata_data_offset() -> Result<usize, InstructionError> {
-        Ok(Self::size_of_programdata_metadata())
-    }
 }
 
 /// Returns the program data address for a program ID
@@ -423,24 +387,6 @@ mod tests {
         };
         let size = serialized_size(&program_state).unwrap();
         assert_eq!(UpgradeableLoaderState::size_of_program() as u64, size);
-    }
-
-    #[test]
-    #[allow(deprecated)]
-    fn test_account_lengths() {
-        assert_eq!(
-            4,
-            serialized_size(&UpgradeableLoaderState::Uninitialized).unwrap()
-        );
-        assert_eq!(36, UpgradeableLoaderState::program_len().unwrap());
-        assert_eq!(
-            45,
-            UpgradeableLoaderState::programdata_data_offset().unwrap()
-        );
-        assert_eq!(
-            45 + 42,
-            UpgradeableLoaderState::programdata_len(42).unwrap()
-        );
     }
 
     fn assert_is_instruction<F>(
