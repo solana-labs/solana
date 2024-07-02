@@ -511,6 +511,13 @@ solana-zk-token-sdk = { path = "zk-token-sdk" }
 git = "https://github.com/RustCrypto/AEADs"
 rev = "6105d7a5591aefa646a95d12b5e8d3f55a9214ef"
 
+# We maintain a fork of `curve25519-dalek`. Within the forked repository,
+# the `3.2.1-fix-audit` branch contains patches for two issues:
+#   1. `zeroize` dependency
+#   2. RUSTSEC-2024-0344
+#
+# 1. `zeroize` dependency
+#
 # Our dependency tree has `curve25519-dalek` v3.2.1.  They have removed the
 # constraint in the next major release. The commit that removes the `zeroize`
 # constraint was added to multiple release branches, but not to the 3.2 branch.
@@ -532,17 +539,25 @@ rev = "6105d7a5591aefa646a95d12b5e8d3f55a9214ef"
 #
 # https://github.com/dalek-cryptography/curve25519-dalek/commit/29e5c29b0e5c6821e4586af58b0d0891dd2ec639
 #
-# Comparison with `b500cdc2a920cd5bff9e2dd974d7b97349d61464`:
+# Comparison with `a4885c8391490389897ff88227b4e86874f33acc`:
 #
-# https://github.com/dalek-cryptography/curve25519-dalek/compare/3.2.1...solana-labs:curve25519-dalek:b500cdc2a920cd5bff9e2dd974d7b97349d61464
+# https://github.com/dalek-cryptography/curve25519-dalek/compare/3.2.1...anza-xyz:curve25519-dalek:a4885c8391490389897ff88227b4e86874f33acc
 #
-# Or, using the branch name instead of the hash:
+# 2. RUSTSEC-2024-0344
 #
-# https://github.com/dalek-cryptography/curve25519-dalek/compare/3.2.1...solana-labs:curve25519-dalek:3.2.1-unpin-zeroize
+# The following security advisory was released for `curve25519-dalek`:
+#
+# https://rustsec.org/advisories/RUSTSEC-2024-0344.html
+#
+# New releases were not made on the older release branches, so we have
+# cherry-picked these commits into our branch as well.
+#
+# https://github.com/dalek-cryptography/curve25519-dalek/commit/415892acf1cdf9161bd6a4c99bc2f4cb8fae5e6a
+# https://github.com/dalek-cryptography/curve25519-dalek/commit/b4f9e4df92a4689fb59e312a21f940ba06ba7013
 #
 [patch.crates-io.curve25519-dalek]
 git = "https://github.com/anza-xyz/curve25519-dalek.git"
-rev = "b500cdc2a920cd5bff9e2dd974d7b97349d61464"
+rev = "0382b672560493840f453f2a0e24c4a129abd3a4"
 
 # Solana RPC nodes experience stalls when running with `tokio` containing this
 # commit:

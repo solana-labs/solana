@@ -1507,7 +1507,7 @@ dependencies = [
 [[package]]
 name = "curve25519-dalek"
 version = "3.2.1"
-source = "git+https://github.com/anza-xyz/curve25519-dalek.git?rev=b500cdc2a920cd5bff9e2dd974d7b97349d61464#b500cdc2a920cd5bff9e2dd974d7b97349d61464"
+source = "git+https://github.com/anza-xyz/curve25519-dalek.git?rev=0382b672560493840f453f2a0e24c4a129abd3a4#0382b672560493840f453f2a0e24c4a129abd3a4"
 dependencies = [
  "byteorder",
  "digest 0.9.0",
