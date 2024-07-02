@@ -18,7 +18,6 @@ use {
         clock::Slot,
         commitment_config::CommitmentLevel,
         feature_set::FeatureSet,
-        fee_calculator::FeeCalculator,
         hash::Hash,
         message::{Message, SanitizedMessage},
         pubkey::Pubkey,
@@ -230,24 +229,6 @@ impl Banks for BanksServer {
             None,
         );
         self.transaction_sender.send(info).unwrap();
-    }
-
-    async fn get_fees_with_commitment_and_context(
-        self,
-        _: Context,
-        commitment: CommitmentLevel,
-    ) -> (FeeCalculator, Hash, u64) {
-        let bank = self.bank(commitment);
-        let blockhash = bank.last_blockhash();
-        let lamports_per_signature = bank.get_lamports_per_signature();
-        let last_valid_block_height = bank
-            .get_blockhash_last_valid_block_height(&blockhash)
-            .unwrap();
-        (
-            FeeCalculator::new(lamports_per_signature),
-            blockhash,
-            last_valid_block_height,
-        )
     }
 
     async fn get_transaction_status_with_context(

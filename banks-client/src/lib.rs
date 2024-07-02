@@ -17,8 +17,7 @@ use {
         BanksTransactionResultWithSimulation,
     },
     solana_program::{
-        clock::Slot, fee_calculator::FeeCalculator, hash::Hash, program_pack::Pack, pubkey::Pubkey,
-        rent::Rent, sysvar::Sysvar,
+        clock::Slot, hash::Hash, program_pack::Pack, pubkey::Pubkey, rent::Rent, sysvar::Sysvar,
     },
     solana_sdk::{
         account::{from_account, Account},
@@ -66,21 +65,6 @@ impl BanksClient {
     ) -> impl Future<Output = Result<(), BanksClientError>> + '_ {
         self.inner
             .send_transaction_with_context(ctx, transaction.into())
-            .map_err(Into::into)
-    }
-
-    #[deprecated(
-        since = "1.9.0",
-        note = "Please use `get_fee_for_message` or `is_blockhash_valid` instead"
-    )]
-    pub fn get_fees_with_commitment_and_context(
-        &mut self,
-        ctx: Context,
-        commitment: CommitmentLevel,
-    ) -> impl Future<Output = Result<(FeeCalculator, Hash, u64), BanksClientError>> + '_ {
-        #[allow(deprecated)]
-        self.inner
-            .get_fees_with_commitment_and_context(ctx, commitment)
             .map_err(Into::into)
     }
 
@@ -185,20 +169,6 @@ impl BanksClient {
         self.send_transaction_with_context(context::current(), transaction.into())
     }
 
-    /// Return the fee parameters associated with a recent, rooted blockhash. The cluster
-    /// will use the transaction's blockhash to look up these same fee parameters and
-    /// use them to calculate the transaction fee.
-    #[deprecated(
-        since = "1.9.0",
-        note = "Please use `get_fee_for_message` or `is_blockhash_valid` instead"
-    )]
-    pub fn get_fees(
-        &mut self,
-    ) -> impl Future<Output = Result<(FeeCalculator, Hash, u64), BanksClientError>> + '_ {
-        #[allow(deprecated)]
-        self.get_fees_with_commitment_and_context(context::current(), CommitmentLevel::default())
-    }
-
     /// Return the cluster Sysvar
     pub fn get_sysvar<T: Sysvar>(
         &mut self,
@@ -214,17 +184,6 @@ impl BanksClient {
     /// Return the cluster rent
     pub fn get_rent(&mut self) -> impl Future<Output = Result<Rent, BanksClientError>> + '_ {
         self.get_sysvar::<Rent>()
-    }
-
-    /// Return a recent, rooted blockhash from the server. The cluster will only accept
-    /// transactions with a blockhash that has not yet expired. Use the `get_fees`
-    /// method to get both a blockhash and the blockhash's last valid slot.
-    #[deprecated(since = "1.9.0", note = "Please use `get_latest_blockhash` instead")]
-    pub fn get_recent_blockhash(
-        &mut self,
-    ) -> impl Future<Output = Result<Hash, BanksClientError>> + '_ {
-        #[allow(deprecated)]
-        self.get_fees().map(|result| Ok(result?.1))
     }
 
     /// Send a transaction and return after the transaction has been rejected or
