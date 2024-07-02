@@ -25,6 +25,7 @@ log = { workspace = true }
 memoffset = { workspace = true }
 num-derive = { workspace = true }
 num-traits = { workspace = true, features = ["i128"] }
+qualifier_attr = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_bytes = { workspace = true }
 serde_derive = { workspace = true }
@@ -94,4 +95,5 @@ crate-type = ["cdylib", "rlib"]
 [features]
 default = ["borsh"]
 borsh = ["dep:borsh", "dep:borsh0-10"]
+dev-context-only-utils = ["dep:qualifier_attr"]
 frozen-abi = ["dep:solana-frozen-abi", "dep:solana-frozen-abi-macro"]
