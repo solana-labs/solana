@@ -157,16 +157,6 @@ pub use solana_sdk_macro::pubkey;
 /// Convenience macro to define multiple static public keys.
 pub use solana_sdk_macro::pubkeys;
 
-// Unused `solana_sdk::program_stubs!()` macro retained for source backwards compatibility with older programs
-#[macro_export]
-#[deprecated(
-    since = "1.4.3",
-    note = "program_stubs macro is obsolete and can be safely removed"
-)]
-macro_rules! program_stubs {
-    () => {};
-}
-
 /// Convenience macro for `AddAssign` with saturating arithmetic.
 /// Replace by `std::num::Saturating` once stable
 #[macro_export]

@@ -675,15 +675,6 @@ impl AccountSharedData {
 pub type InheritableAccountFields = (u64, Epoch);
 pub const DUMMY_INHERITABLE_ACCOUNT_FIELDS: InheritableAccountFields = (1, INITIAL_RENT_EPOCH);
 
-/// Create an `Account` from a `Sysvar`.
-#[deprecated(
-    since = "1.5.17",
-    note = "Please use `create_account_for_test` instead"
-)]
-pub fn create_account<S: Sysvar>(sysvar: &S, lamports: u64) -> Account {
-    create_account_with_fields(sysvar, (lamports, INITIAL_RENT_EPOCH))
-}
-
 pub fn create_account_with_fields<S: Sysvar>(
     sysvar: &S,
     (lamports, rent_epoch): InheritableAccountFields,
@@ -700,17 +691,6 @@ pub fn create_account_for_test<S: Sysvar>(sysvar: &S) -> Account {
 }
 
 /// Create an `Account` from a `Sysvar`.
-#[deprecated(
-    since = "1.5.17",
-    note = "Please use `create_account_shared_data_for_test` instead"
-)]
-pub fn create_account_shared_data<S: Sysvar>(sysvar: &S, lamports: u64) -> AccountSharedData {
-    AccountSharedData::from(create_account_with_fields(
-        sysvar,
-        (lamports, INITIAL_RENT_EPOCH),
-    ))
-}
-
 pub fn create_account_shared_data_with_fields<S: Sysvar>(
     sysvar: &S,
     fields: InheritableAccountFields,
