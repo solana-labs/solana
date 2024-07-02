@@ -268,7 +268,7 @@ edition = "2021"
 
 * Once all review feedback has been addressed, publish v0.0.1 of the crate
   under your personal crates.io account, and then transfer the crate ownership
-  to solana-grimes.
+  to "anza-team".
   https://crates.io/policies#package-ownership
 
 * After successful publication, update the PR by replacing the v0.0.1 version
