@@ -14,17 +14,11 @@ use {
         parse_account_data::SplTokenAdditionalData,
         parse_token::{token_amount_to_ui_amount_v2, UiAccountState},
     },
-    solana_sdk::{
-        instruction::{AccountMeta, CompiledInstruction, Instruction},
-        message::AccountKeys,
-    },
+    solana_sdk::{instruction::CompiledInstruction, message::AccountKeys},
     spl_token_2022::{
         extension::ExtensionType,
         instruction::{AuthorityType, TokenInstruction},
-        solana_program::{
-            instruction::Instruction as SplTokenInstruction, program_option::COption,
-            pubkey::Pubkey,
-        },
+        solana_program::{program_option::COption, pubkey::Pubkey},
     },
     spl_token_group_interface::instruction::TokenGroupInstruction,
     spl_token_metadata_interface::instruction::TokenMetadataInstruction,
@@ -849,23 +843,6 @@ fn parse_signers(
 
 fn check_num_token_accounts(accounts: &[u8], num: usize) -> Result<(), ParseInstructionError> {
     check_num_accounts(accounts, num, ParsableProgram::SplToken)
-}
-
-#[deprecated(since = "1.16.0", note = "Instruction conversions no longer needed")]
-pub fn spl_token_instruction(instruction: SplTokenInstruction) -> Instruction {
-    Instruction {
-        program_id: instruction.program_id,
-        accounts: instruction
-            .accounts
-            .iter()
-            .map(|meta| AccountMeta {
-                pubkey: meta.pubkey,
-                is_signer: meta.is_signer,
-                is_writable: meta.is_writable,
-            })
-            .collect(),
-        data: instruction.data,
-    }
 }
 
 fn map_coption_pubkey(pubkey: COption<Pubkey>) -> Option<String> {
