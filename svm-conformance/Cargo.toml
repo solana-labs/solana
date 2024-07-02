@@ -1,0 +1,21 @@
+[package]
+name = "solana-svm-conformance"
+description = "Solana SVM conformance"
+documentation = "https://docs.rs/solana-svm-conformance"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+publish = false
+
+[dependencies]
+prost = { workspace = true }
+prost-types = { workspace = true }
+
+[build-dependencies]
+prost-build = { workspace = true }
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
