@@ -7,13 +7,13 @@ use {
     memmap2::Mmap,
     solana_accounts_db::{
         parse_cache_hash_data_filename, CacheHashDataFileEntry, CacheHashDataFileHeader,
+        ParsedCacheHashDataFilename,
     },
     std::{
         cmp::Ordering,
         collections::HashMap,
-        fs::{self, File},
+        fs::{self, File, Metadata},
         io::{self, BufReader, Read},
-        iter,
         mem::size_of,
         num::Saturating,
         path::{Path, PathBuf},
@@ -303,49 +303,15 @@ fn do_diff_dirs(
     dir2: impl AsRef<Path>,
     then_diff_files: bool,
 ) -> Result<(), String> {
-    let get_files_in = |dir: &Path| {
-        let mut files = Vec::new();
-        let entries = fs::read_dir(dir)?;
-        for entry in entries {
-            let path = entry?.path();
-            let meta = fs::metadata(&path)?;
-            if meta.is_file() {
-                let path = fs::canonicalize(path)?;
-                files.push((path, meta));
-            }
-        }
-        Ok::<_, io::Error>(files)
-    };
-    let parse_files = |files: &[(PathBuf, _)]| {
-        files
-            .iter()
-            .map(|(file, _)| {
-                Path::file_name(file)
-                    .and_then(parse_cache_hash_data_filename)
-                    .ok_or_else(|| format!("failed to parse '{}'", file.display()))
-            })
-            .collect::<Result<Vec<_>, String>>()
-    };
-    let parse_and_sort_files_in = |dir: &Path| {
-        let files = get_files_in(dir)
-            .map_err(|err| format!("failed to get files in '{}': {err}", dir.display()))?;
-        let parsed_files = parse_files(&files)?;
-        let mut combined: Vec<_> = iter::zip(files, parsed_files).collect();
-        combined.sort_unstable_by(|a, b| {
-            a.1.slot_range_start
-                .cmp(&b.1.slot_range_start)
-                .then_with(|| a.1.slot_range_end.cmp(&b.1.slot_range_end))
-        });
-        Ok::<_, String>(combined)
-    };
-
     let _timer = ElapsedOnDrop {
         message: "diffing directories took ".to_string(),
         start: Instant::now(),
     };
 
-    let files1 = parse_and_sort_files_in(dir1.as_ref())?;
-    let files2 = parse_and_sort_files_in(dir2.as_ref())?;
+    let files1 = get_cache_files_in(dir1)
+        .map_err(|err| format!("failed to get cache files in dir1: {err}"))?;
+    let files2 = get_cache_files_in(dir2)
+        .map_err(|err| format!("failed to get cache files in dir2: {err}"))?;
 
     let mut uniques1 = Vec::new();
     let mut uniques2 = Vec::new();
@@ -355,7 +321,11 @@ fn do_diff_dirs(
     while idx1.0 < files1.len() && idx2.0 < files2.len() {
         let file1 = &files1[idx1.0];
         let file2 = &files2[idx2.0];
-        match file1.1.slot_range_start.cmp(&file2.1.slot_range_start) {
+        match file1
+            .parsed
+            .slot_range_start
+            .cmp(&file2.parsed.slot_range_start)
+        {
             Ordering::Less => {
                 // file1 is an older slot range than file2, so note it and advance idx1
                 uniques1.push(file1);
@@ -367,7 +337,11 @@ fn do_diff_dirs(
                 idx2 += 1;
             }
             Ordering::Equal => {
-                match file1.1.slot_range_end.cmp(&file2.1.slot_range_end) {
+                match file1
+                    .parsed
+                    .slot_range_end
+                    .cmp(&file2.parsed.slot_range_end)
+                {
                     Ordering::Less => {
                         // file1 is a smaller slot range than file2, so note it and advance idx1
                         uniques1.push(file1);
@@ -382,20 +356,20 @@ fn do_diff_dirs(
                         // slot ranges match, so compare the files and advance both idx1 and idx2
                         let is_equal = || {
                             // if the files have different sizes, they are not equal
-                            if file1.0 .1.len() != file2.0 .1.len() {
+                            if file1.metadata.len() != file2.metadata.len() {
                                 return false;
                             }
 
                             // if the parsed file names have different hashes, they are not equal
-                            if file1.1.hash != file2.1.hash {
+                            if file1.parsed.hash != file2.parsed.hash {
                                 return false;
                             }
 
                             // if the file headers have different entry counts, they are not equal
-                            let Ok((mmap1, header1)) = map_file(&file1.0 .0, false) else {
+                            let Ok((mmap1, header1)) = map_file(&file1.path, false) else {
                                 return false;
                             };
-                            let Ok((mmap2, header2)) = map_file(&file2.0 .0, false) else {
+                            let Ok((mmap2, header2)) = map_file(&file2.path, false) else {
                                 return false;
                             };
                             if header1.count != header2.count {
@@ -431,13 +405,13 @@ fn do_diff_dirs(
         uniques2.push(file);
     }
 
-    let do_print = |entries: &[&((PathBuf, _), _)]| {
+    let do_print = |entries: &[&CacheFileInfo]| {
         let count_width = (entries.len() as f64).log10().ceil() as usize;
         if entries.is_empty() {
             println!("(none)");
         } else {
             for (i, entry) in entries.iter().enumerate() {
-                println!("{i:count_width$}: '{}'", entry.0 .0.display());
+                println!("{i:count_width$}: '{}'", entry.path.display());
             }
         }
     };
@@ -454,18 +428,18 @@ fn do_diff_dirs(
         for (i, (file1, file2)) in mismatches.iter().enumerate() {
             println!(
                 "{i:count_width$}: '{}', '{}'",
-                file1.0 .0.display(),
-                file2.0 .0.display(),
+                file1.path.display(),
+                file2.path.display(),
             );
         }
         if then_diff_files {
             for (file1, file2) in &mismatches {
                 println!(
                     "Differences between '{}' and '{}':",
-                    file1.0 .0.display(),
-                    file2.0 .0.display(),
+                    file1.path.display(),
+                    file2.path.display(),
                 );
-                if let Err(err) = do_diff_files(&file1.0 .0, &file2.0 .0) {
+                if let Err(err) = do_diff_files(&file1.path, &file2.path) {
                     eprintln!("Error: failed to diff files: {err}");
                 }
             }
@@ -473,6 +447,51 @@ fn do_diff_dirs(
     }
 
     Ok(())
+}
+
+/// Returns all the cache hash data files in `dir`, sorted in ascending slot-and-bin-range order
+fn get_cache_files_in(dir: impl AsRef<Path>) -> Result<Vec<CacheFileInfo>, io::Error> {
+    fn get_files_in(dir: impl AsRef<Path>) -> Result<Vec<(PathBuf, Metadata)>, io::Error> {
+        let mut files = Vec::new();
+        let entries = fs::read_dir(dir)?;
+        for entry in entries {
+            let path = entry?.path();
+            let meta = fs::metadata(&path)?;
+            if meta.is_file() {
+                let path = fs::canonicalize(path)?;
+                files.push((path, meta));
+            }
+        }
+        Ok(files)
+    }
+
+    let files = get_files_in(&dir).map_err(|err| {
+        io::Error::other(format!(
+            "failed to get files in '{}': {err}",
+            dir.as_ref().display(),
+        ))
+    })?;
+    let mut cache_files: Vec<_> = files
+        .into_iter()
+        .filter_map(|file| {
+            Path::file_name(&file.0)
+                .and_then(parse_cache_hash_data_filename)
+                .map(|parsed_file_name| CacheFileInfo {
+                    path: file.0,
+                    metadata: file.1,
+                    parsed: parsed_file_name,
+                })
+        })
+        .collect();
+    cache_files.sort_unstable_by(|a, b| {
+        a.parsed
+            .slot_range_start
+            .cmp(&b.parsed.slot_range_start)
+            .then_with(|| a.parsed.slot_range_end.cmp(&b.parsed.slot_range_end))
+            .then_with(|| a.parsed.bin_range_start.cmp(&b.parsed.bin_range_start))
+            .then_with(|| a.parsed.bin_range_end.cmp(&b.parsed.bin_range_end))
+    });
+    Ok(cache_files)
 }
 
 /// Scan file with `reader` and apply `user_fn` to each entry
@@ -557,6 +576,14 @@ fn open_file(
     Ok((reader, header))
 }
 
+#[derive(Debug)]
+struct CacheFileInfo {
+    path: PathBuf,
+    metadata: Metadata,
+    parsed: ParsedCacheHashDataFilename,
+}
+
+#[derive(Debug)]
 struct ElapsedOnDrop {
     message: String,
     start: Instant,
