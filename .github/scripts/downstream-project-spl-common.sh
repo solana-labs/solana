@@ -19,6 +19,7 @@ project_used_solana_version=$(sed -nE 's/solana-sdk = \"[>=<~]*(.*)\"/\1/p' <"to
 echo "used solana version: $project_used_solana_version"
 if semverGT "$project_used_solana_version" "$SOLANA_VER"; then
   echo "skip"
+  export SKIP_SPL_DOWNSTREAM_PROJECT_TEST=1
   return
 fi
 
