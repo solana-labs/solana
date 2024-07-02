@@ -4938,6 +4938,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-define-syscall"
+version = "2.1.0"
+
+[[package]]
 name = "solana-download-utils"
 version = "2.1.0"
 dependencies = [
@@ -5273,6 +5277,7 @@ version = "2.1.0"
 dependencies = [
  "ark-bn254",
  "light-poseidon",
+ "solana-define-syscall",
  "thiserror",
 ]
 
@@ -5314,6 +5319,7 @@ dependencies = [
  "serde_derive",
  "sha2 0.10.8",
  "sha3 0.10.8",
+ "solana-define-syscall",
  "solana-sanitize",
  "solana-sdk-macro",
  "thiserror",

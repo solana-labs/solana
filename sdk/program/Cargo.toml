@@ -44,6 +44,7 @@ thiserror = { workspace = true }
 # hashbrown dependency as optional.
 [target.'cfg(target_os = "solana")'.dependencies]
 getrandom = { workspace = true, features = ["custom"] }
+solana-define-syscall = { workspace = true }
 
 [target.'cfg(not(target_os = "solana"))'.dependencies]
 ark-bn254 = { workspace = true }

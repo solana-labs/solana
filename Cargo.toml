@@ -32,6 +32,7 @@ members = [
     "core",
     "cost-model",
     "curves/*",
+    "define-syscall",
     "dos",
     "download-utils",
     "entry",
@@ -346,6 +347,7 @@ solana-connection-cache = { path = "connection-cache", version = "=2.1.0", defau
 solana-core = { path = "core", version = "=2.1.0" }
 solana-cost-model = { path = "cost-model", version = "=2.1.0" }
 solana-curve25519 = { path = "curves/curve25519", version = "=2.1.0" }
+solana-define-syscall = { path = "define-syscall", version = "=2.1.0" }
 solana-download-utils = { path = "download-utils", version = "=2.1.0" }
 solana-entry = { path = "entry", version = "=2.1.0" }
 solana-faucet = { path = "faucet", version = "=2.1.0" }
