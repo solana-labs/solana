@@ -54,6 +54,9 @@ jobs:
         run: |
           source .github/scripts/downstream-project-spl-common.sh
           source .github/scripts/downstream-project-spl-install-deps.sh
+          if [ -n "$SKIP_SPL_DOWNSTREAM_PROJECT_TEST" ]; then
+            exit 0
+          fi
 
           cargo check
 
@@ -103,6 +106,9 @@ jobs:
         run: |
           source .github/scripts/downstream-project-spl-common.sh
           source .github/scripts/downstream-project-spl-install-deps.sh
+          if [ -n "$SKIP_SPL_DOWNSTREAM_PROJECT_TEST" ]; then
+            exit 0
+          fi
 
           programStr="${{ tojson(matrix.arrays.required_programs) }}"
           IFS=', ' read -ra programs <<<"${programStr//[\[\]$'\n'$'\r' ]/}"
@@ -153,6 +159,9 @@ jobs:
       - shell: bash
         run: |
           source .github/scripts/downstream-project-spl-common.sh
+          if [ -n "$SKIP_SPL_DOWNSTREAM_PROJECT_TEST" ]; then
+            exit 0
+          fi
 
           programStr="${{ tojson(matrix.programs) }}"
           IFS=', ' read -ra programs <<<"${programStr//[\[\]$'\n'$'\r' ]/}"
