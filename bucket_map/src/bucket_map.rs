@@ -220,8 +220,8 @@ mod tests {
         let key = Pubkey::new_unique();
         let config = BucketMapConfig::new(1 << 1);
         let index = BucketMap::new(config);
-        index.update(&key, |_| Some((vec![0], 0)));
-        assert_eq!(index.read_value(&key), Some((vec![0], 0)));
+        index.update(&key, |_| Some((vec![0], 1)));
+        assert_eq!(index.read_value(&key), Some((vec![0], 1)));
     }
 
     #[test]
@@ -256,10 +256,10 @@ mod tests {
         let key = Pubkey::new_unique();
         let config = BucketMapConfig::new(1 << 1);
         let index = BucketMap::new(config);
-        index.insert(&key, (&[0], 0));
-        assert_eq!(index.read_value(&key), Some((vec![0], 0)));
-        index.insert(&key, (&[1], 0));
-        assert_eq!(index.read_value(&key), Some((vec![1], 0)));
+        index.insert(&key, (&[0], 1));
+        assert_eq!(index.read_value(&key), Some((vec![0], 1)));
+        index.insert(&key, (&[1], 1));
+        assert_eq!(index.read_value(&key), Some((vec![1], 1)));
     }
 
     #[test]
@@ -267,10 +267,10 @@ mod tests {
         let key = Pubkey::new_unique();
         let config = BucketMapConfig::new(1 << 1);
         let index = BucketMap::new(config);
-        index.update(&key, |_| Some((vec![0], 0)));
-        assert_eq!(index.read_value(&key), Some((vec![0], 0)));
-        index.update(&key, |_| Some((vec![1], 0)));
-        assert_eq!(index.read_value(&key), Some((vec![1], 0)));
+        index.update(&key, |_| Some((vec![0], 1)));
+        assert_eq!(index.read_value(&key), Some((vec![0], 1)));
+        index.update(&key, |_| Some((vec![1], 1)));
+        assert_eq!(index.read_value(&key), Some((vec![1], 1)));
     }
 
     #[test]
@@ -300,14 +300,14 @@ mod tests {
             let key = Pubkey::new_unique();
             assert_eq!(index.read_value(&key), None);
 
-            index.update(&key, |_| Some((vec![i], 0)));
-            assert_eq!(index.read_value(&key), Some((vec![i], 0)));
+            index.update(&key, |_| Some((vec![i], 1)));
+            assert_eq!(index.read_value(&key), Some((vec![i], 1)));
 
             index.delete_key(&key);
             assert_eq!(index.read_value(&key), None);
 
-            index.update(&key, |_| Some((vec![i], 0)));
-            assert_eq!(index.read_value(&key), Some((vec![i], 0)));
+            index.update(&key, |_| Some((vec![i], 1)));
+            assert_eq!(index.read_value(&key), Some((vec![i], 1)));
             index.delete_key(&key);
         }
     }
@@ -320,14 +320,14 @@ mod tests {
             let key = Pubkey::new_unique();
             assert_eq!(index.read_value(&key), None);
 
-            index.update(&key, |_| Some((vec![i], 0)));
-            assert_eq!(index.read_value(&key), Some((vec![i], 0)));
+            index.update(&key, |_| Some((vec![i], 1)));
+            assert_eq!(index.read_value(&key), Some((vec![i], 1)));
 
             index.delete_key(&key);
             assert_eq!(index.read_value(&key), None);
 
-            index.update(&key, |_| Some((vec![i], 0)));
-            assert_eq!(index.read_value(&key), Some((vec![i], 0)));
+            index.update(&key, |_| Some((vec![i], 1)));
+            assert_eq!(index.read_value(&key), Some((vec![i], 1)));
             index.delete_key(&key);
         }
     }
@@ -338,8 +338,8 @@ mod tests {
         let index = BucketMap::new(config);
         for i in 0..100 {
             let key = Pubkey::new_unique();
-            index.update(&key, |_| Some((vec![i], 0)));
-            assert_eq!(index.read_value(&key), Some((vec![i], 0)));
+            index.update(&key, |_| Some((vec![i], 1)));
+            assert_eq!(index.read_value(&key), Some((vec![i], 1)));
         }
     }
     #[test]
@@ -350,12 +350,12 @@ mod tests {
         for k in 0..keys.len() {
             let key = &keys[k];
             let i = read_be_u64(key.as_ref());
-            index.update(key, |_| Some((vec![i], 0)));
-            assert_eq!(index.read_value(key), Some((vec![i], 0)));
+            index.update(key, |_| Some((vec![i], 1)));
+            assert_eq!(index.read_value(key), Some((vec![i], 1)));
             for (ix, key) in keys.iter().enumerate() {
                 let i = read_be_u64(key.as_ref());
                 //debug!("READ: {:?} {}", key, i);
-                let expected = if ix <= k { Some((vec![i], 0)) } else { None };
+                let expected = if ix <= k { Some((vec![i], 1)) } else { None };
                 assert_eq!(index.read_value(key), expected);
             }
         }
@@ -368,13 +368,13 @@ mod tests {
         let keys: Vec<Pubkey> = (0..20).map(|_| Pubkey::new_unique()).collect();
         for key in keys.iter() {
             let i = read_be_u64(key.as_ref());
-            index.update(key, |_| Some((vec![i], 0)));
-            assert_eq!(index.read_value(key), Some((vec![i], 0)));
+            index.update(key, |_| Some((vec![i], 1)));
+            assert_eq!(index.read_value(key), Some((vec![i], 1)));
         }
         for key in keys.iter() {
             let i = read_be_u64(key.as_ref());
             //debug!("READ: {:?} {}", key, i);
-            assert_eq!(index.read_value(key), Some((vec![i], 0)));
+            assert_eq!(index.read_value(key), Some((vec![i], 1)));
         }
         for k in 0..keys.len() {
             let key = &keys[k];
@@ -382,7 +382,7 @@ mod tests {
             assert_eq!(index.read_value(key), None);
             for key in keys.iter().skip(k + 1) {
                 let i = read_be_u64(key.as_ref());
-                assert_eq!(index.read_value(key), Some((vec![i], 0)));
+                assert_eq!(index.read_value(key), Some((vec![i], 1)));
             }
         }
     }
