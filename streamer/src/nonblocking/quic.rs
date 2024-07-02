@@ -314,6 +314,9 @@ async fn run_server(
         }
 
         if let Ok(Some(connection)) = timeout_connection {
+            stats
+                .total_incoming_connection_attempts
+                .fetch_add(1, Ordering::Relaxed);
             let remote_address = connection.remote_address();
 
             // first check overall connection rate limit:
@@ -345,6 +348,9 @@ async fn run_server(
                     .fetch_add(1, Ordering::Relaxed);
                 continue;
             }
+            stats
+                .outstanding_incoming_connection_attempts
+                .fetch_add(1, Ordering::Relaxed);
             tokio::spawn(setup_connection(
                 connection,
                 unstaked_connection_table.clone(),
@@ -640,7 +646,11 @@ async fn setup_connection(
 ) {
     const PRUNE_RANDOM_SAMPLE_SIZE: usize = 2;
     let from = connecting.remote_address();
-    if let Ok(connecting_result) = timeout(QUIC_CONNECTION_HANDSHAKE_TIMEOUT, connecting).await {
+    let res = timeout(QUIC_CONNECTION_HANDSHAKE_TIMEOUT, connecting).await;
+    stats
+        .outstanding_incoming_connection_attempts
+        .fetch_sub(1, Ordering::Relaxed);
+    if let Ok(connecting_result) = res {
         match connecting_result {
             Ok(new_connection) => {
                 stats.total_new_connections.fetch_add(1, Ordering::Relaxed);
