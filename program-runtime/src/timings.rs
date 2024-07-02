@@ -53,6 +53,7 @@ pub enum ExecuteTimingType {
     TotalBatchesLen,
     UpdateTransactionStatuses,
     ProgramCacheUs,
+    CheckBlockLimitsUs,
 }
 
 pub struct Metrics([u64; ExecuteTimingType::CARDINALITY]);
@@ -175,6 +176,11 @@ eager_macro_rules! { $eager_1
 
                     .metrics
                     .index(ExecuteTimingType::UpdateTransactionStatuses),
+                i64
+            ),
+            (
+                "check_block_limits_us",
+                *$self.metrics.index(ExecuteTimingType::CheckBlockLimitsUs),
                 i64
             ),
             (

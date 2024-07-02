@@ -518,26 +518,13 @@ impl Consumer {
 
         // Costs of all transactions are added to the cost_tracker before processing.
         // To ensure accurate tracking of compute units, transactions that ultimately
-        // were not included in the block should have their cost removed.
-        QosService::remove_costs(
+        // were not included in the block should have their cost removed, the rest
+        // should update with their actually consumed units.
+        QosService::remove_or_update_costs(
             transaction_qos_cost_results.iter(),
             commit_transactions_result.as_ref().ok(),
             bank,
         );
-
-        // once feature `apply_cost_tracker_during_replay` is activated, leader shall no longer
-        // adjust block with executed cost (a behavior more inline with bankless leader), it
-        // should use requested, or default `compute_unit_limit` as transaction's execution cost.
-        if !bank
-            .feature_set
-            .is_active(&feature_set::apply_cost_tracker_during_replay::id())
-        {
-            QosService::update_costs(
-                transaction_qos_cost_results.iter(),
-                commit_transactions_result.as_ref().ok(),
-                bank,
-            );
-        }
 
         retryable_transaction_indexes
             .iter_mut()
@@ -1432,16 +1419,6 @@ mod tests {
 
     #[test]
     fn test_bank_process_and_record_transactions_cost_tracker() {
-        for apply_cost_tracker_during_replay_enabled in [true, false] {
-            bank_process_and_record_transactions_cost_tracker(
-                apply_cost_tracker_during_replay_enabled,
-            );
-        }
-    }
-
-    fn bank_process_and_record_transactions_cost_tracker(
-        apply_cost_tracker_during_replay_enabled: bool,
-    ) {
         solana_logger::setup();
         let GenesisConfigInfo {
             genesis_config,
@@ -1450,9 +1427,6 @@ mod tests {
         } = create_slow_genesis_config(10_000);
         let mut bank = Bank::new_for_tests(&genesis_config);
         bank.ns_per_slot = u128::MAX;
-        if !apply_cost_tracker_during_replay_enabled {
-            bank.deactivate_feature(&feature_set::apply_cost_tracker_during_replay::id());
-        }
         let bank = bank.wrap_with_bank_forks_for_tests().0;
         let pubkey = solana_sdk::pubkey::new_rand();
 
@@ -1521,8 +1495,7 @@ mod tests {
 
             // TEST: it's expected that the allocation will execute but the transfer will not
             // because of a shared write-lock between mint_keypair. Ensure only the first transaction
-            // takes compute units in the block AND the apply_cost_tracker_during_replay_enabled feature
-            // is applied correctly
+            // takes compute units in the block
             let allocate_keypair = Keypair::new();
             let transactions = sanitize_transactions(vec![
                 system_transaction::allocate(
@@ -1561,7 +1534,7 @@ mod tests {
             );
             assert_eq!(retryable_transaction_indexes, vec![1]);
 
-            let expected_block_cost = if !apply_cost_tracker_during_replay_enabled {
+            let expected_block_cost = {
                 let (actual_programs_execution_cost, actual_loaded_accounts_data_size_cost) =
                     match commit_transactions_result.first().unwrap() {
                         CommitTransactionDetails::Committed {
@@ -1587,8 +1560,6 @@ mod tests {
                 }
 
                 block_cost + cost.sum()
-            } else {
-                block_cost + CostModel::calculate_cost(&transactions[0], &bank.feature_set).sum()
             };
 
             assert_eq!(get_block_cost(), expected_block_cost);
