@@ -91,6 +91,12 @@ fn main() {
                                 .takes_value(true)
                                 .value_name("PATH2")
                                 .help("Accounts hash cache directory 2 to diff"),
+                        )
+                        .arg(
+                            Arg::with_name("then_diff_files")
+                                .long("then-diff-files")
+                                .takes_value(false)
+                                .help("After diff-ing the directories, diff the files that were found to have mismatches"),
                         ),
                 ),
         )
@@ -144,7 +150,8 @@ fn cmd_diff_dirs(
 ) -> Result<(), String> {
     let path1 = value_t_or_exit!(subcommand_matches, "path1", String);
     let path2 = value_t_or_exit!(subcommand_matches, "path2", String);
-    do_diff_dirs(path1, path2)
+    let then_diff_files = subcommand_matches.is_present("then_diff_files");
+    do_diff_dirs(path1, path2, then_diff_files)
 }
 
 fn do_inspect(file: impl AsRef<Path>, force: bool) -> Result<(), String> {
@@ -291,7 +298,11 @@ fn do_diff_files(file1: impl AsRef<Path>, file2: impl AsRef<Path>) -> Result<(),
     Ok(())
 }
 
-fn do_diff_dirs(dir1: impl AsRef<Path>, dir2: impl AsRef<Path>) -> Result<(), String> {
+fn do_diff_dirs(
+    dir1: impl AsRef<Path>,
+    dir2: impl AsRef<Path>,
+    then_diff_files: bool,
+) -> Result<(), String> {
     let get_files_in = |dir: &Path| {
         let mut files = Vec::new();
         let entries = fs::read_dir(dir)?;
@@ -446,6 +457,18 @@ fn do_diff_dirs(dir1: impl AsRef<Path>, dir2: impl AsRef<Path>) -> Result<(), St
                 file1.0 .0.display(),
                 file2.0 .0.display(),
             );
+        }
+        if then_diff_files {
+            for (file1, file2) in &mismatches {
+                println!(
+                    "Differences between '{}' and '{}':",
+                    file1.0 .0.display(),
+                    file2.0 .0.display(),
+                );
+                if let Err(err) = do_diff_files(&file1.0 .0, &file2.0 .0) {
+                    eprintln!("Error: failed to diff files: {err}");
+                }
+            }
         }
     }
 
