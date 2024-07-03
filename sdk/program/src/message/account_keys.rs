@@ -33,7 +33,7 @@ impl<'a> AccountKeys<'a> {
     /// Returns an iterator of account key segments. The ordering of segments
     /// affects how account indexes from compiled instructions are resolved and
     /// so should not be changed.
-    fn key_segment_iter(&self) -> impl Iterator<Item = &'a [Pubkey]> {
+    fn key_segment_iter(&self) -> impl Iterator<Item = &'a [Pubkey]> + Clone {
         if let Some(dynamic_keys) = self.dynamic_keys {
             [
                 self.static_keys,
@@ -77,7 +77,7 @@ impl<'a> AccountKeys<'a> {
     }
 
     /// Iterator for the addresses of the loaded accounts for a message
-    pub fn iter(&self) -> impl Iterator<Item = &'a Pubkey> {
+    pub fn iter(&self) -> impl Iterator<Item = &'a Pubkey> + Clone {
         self.key_segment_iter().flatten()
     }
 
