@@ -68,6 +68,8 @@ pub enum Error {
     InvalidErasureMetaConflict,
     #[error("invalid last index conflict")]
     InvalidLastIndexConflict,
+    #[error("invalid shred version: {0}")]
+    InvalidShredVersion(u16),
     #[error("invalid signature")]
     InvalidSignature,
     #[error("invalid size limit")]
@@ -92,6 +94,7 @@ pub enum Error {
 
 /// Check that `shred1` and `shred2` indicate a valid duplicate proof
 ///     - Must be for the same slot
+///     - Must match the expected shred version
 ///     - Must both sigverify for the correct leader
 ///     - Must have a merkle root conflict, otherwise `shred1` and `shred2` must have the same `shred_type`
 ///     - If `shred1` and `shred2` share the same index they must be not equal
@@ -100,12 +103,24 @@ pub enum Error {
 ///       LAST_SHRED_IN_SLOT, however the other shred must have a higher index.
 ///     - If `shred1` and `shred2` do not share the same index and are coding shreds
 ///       verify that they have conflicting erasure metas
-fn check_shreds<F>(leader_schedule: Option<F>, shred1: &Shred, shred2: &Shred) -> Result<(), Error>
+fn check_shreds<F>(
+    leader_schedule: Option<F>,
+    shred1: &Shred,
+    shred2: &Shred,
+    shred_version: u16,
+) -> Result<(), Error>
 where
     F: FnOnce(Slot) -> Option<Pubkey>,
 {
     if shred1.slot() != shred2.slot() {
         return Err(Error::SlotMismatch);
+    }
+
+    if shred1.version() != shred_version {
+        return Err(Error::InvalidShredVersion(shred1.version()));
+    }
+    if shred2.version() != shred_version {
+        return Err(Error::InvalidShredVersion(shred2.version()));
     }
 
     if let Some(leader_schedule) = leader_schedule {
@@ -167,6 +182,7 @@ pub(crate) fn from_shred<F>(
     leader_schedule: Option<F>,
     wallclock: u64,
     max_size: usize, // Maximum serialized size of each DuplicateShred.
+    shred_version: u16,
 ) -> Result<impl Iterator<Item = DuplicateShred>, Error>
 where
     F: FnOnce(Slot) -> Option<Pubkey>,
@@ -175,7 +191,7 @@ where
         return Err(Error::InvalidDuplicateShreds);
     }
     let other_shred = Shred::new_from_serialized_shred(other_payload)?;
-    check_shreds(leader_schedule, &shred, &other_shred)?;
+    check_shreds(leader_schedule, &shred, &other_shred, shred_version)?;
     let slot = shred.slot();
     let proof = DuplicateSlotProof {
         shred1: shred.into_payload(),
@@ -228,6 +244,7 @@ fn check_chunk(slot: Slot, num_chunks: u8) -> impl Fn(&DuplicateShred) -> Result
 pub(crate) fn into_shreds(
     slot_leader: &Pubkey,
     chunks: impl IntoIterator<Item = DuplicateShred>,
+    shred_version: u16,
 ) -> Result<(Shred, Shred), Error> {
     let mut chunks = chunks.into_iter();
     let DuplicateShred {
@@ -263,10 +280,16 @@ pub(crate) fn into_shreds(
     }
     let shred1 = Shred::new_from_serialized_shred(proof.shred1)?;
     let shred2 = Shred::new_from_serialized_shred(proof.shred2)?;
+
     if shred1.slot() != slot || shred2.slot() != slot {
         Err(Error::SlotMismatch)
     } else {
-        check_shreds(Some(|_| Some(slot_leader).copied()), &shred1, &shred2)?;
+        check_shreds(
+            Some(|_| Some(slot_leader).copied()),
+            &shred1,
+            &shred2,
+            shred_version,
+        )?;
         Ok((shred1, shred2))
     }
 }
@@ -489,11 +512,12 @@ pub(crate) mod tests {
             Some(leader_schedule),
             rng.gen(), // wallclock
             512,       // max_size
+            version,
         )
         .unwrap()
         .collect();
         assert!(chunks.len() > 4);
-        let (shred3, shred4) = into_shreds(&leader.pubkey(), chunks).unwrap();
+        let (shred3, shred4) = into_shreds(&leader.pubkey(), chunks, version).unwrap();
         assert_eq!(shred1, shred3);
         assert_eq!(shred2, shred4);
     }
@@ -544,6 +568,7 @@ pub(crate) mod tests {
                     Some(leader_schedule),
                     rng.gen(), // wallclock
                     512,       // max_size
+                    version,
                 )
                 .err()
                 .unwrap(),
@@ -562,7 +587,9 @@ pub(crate) mod tests {
             assert!(chunks.len() > 4);
 
             assert_matches!(
-                into_shreds(&leader.pubkey(), chunks).err().unwrap(),
+                into_shreds(&leader.pubkey(), chunks, version)
+                    .err()
+                    .unwrap(),
                 Error::InvalidDuplicateSlotProof
             );
         }
@@ -631,11 +658,12 @@ pub(crate) mod tests {
                 Some(leader_schedule),
                 rng.gen(), // wallclock
                 512,       // max_size
+                version,
             )
             .unwrap()
             .collect();
             assert!(chunks.len() > 4);
-            let (shred3, shred4) = into_shreds(&leader.pubkey(), chunks).unwrap();
+            let (shred3, shred4) = into_shreds(&leader.pubkey(), chunks, version).unwrap();
             assert_eq!(shred1, &shred3);
             assert_eq!(shred2, &shred4);
         }
@@ -739,6 +767,7 @@ pub(crate) mod tests {
                     Some(leader_schedule),
                     rng.gen(), // wallclock
                     512,       // max_size
+                    version,
                 )
                 .err()
                 .unwrap(),
@@ -757,7 +786,9 @@ pub(crate) mod tests {
             assert!(chunks.len() > 4);
 
             assert_matches!(
-                into_shreds(&leader.pubkey(), chunks).err().unwrap(),
+                into_shreds(&leader.pubkey(), chunks, version)
+                    .err()
+                    .unwrap(),
                 Error::InvalidLastIndexConflict
             );
         }
@@ -816,11 +847,12 @@ pub(crate) mod tests {
                 Some(leader_schedule),
                 rng.gen(), // wallclock
                 512,       // max_size
+                version,
             )
             .unwrap()
             .collect();
             assert!(chunks.len() > 4);
-            let (shred3, shred4) = into_shreds(&leader.pubkey(), chunks).unwrap();
+            let (shred3, shred4) = into_shreds(&leader.pubkey(), chunks, version).unwrap();
             assert_eq!(shred1, shred3);
             assert_eq!(shred2, shred4);
         }
@@ -897,6 +929,7 @@ pub(crate) mod tests {
                     Some(leader_schedule),
                     rng.gen(), // wallclock
                     512,       // max_size
+                    version,
                 )
                 .err()
                 .unwrap(),
@@ -915,7 +948,9 @@ pub(crate) mod tests {
             assert!(chunks.len() > 4);
 
             assert_matches!(
-                into_shreds(&leader.pubkey(), chunks).err().unwrap(),
+                into_shreds(&leader.pubkey(), chunks, version)
+                    .err()
+                    .unwrap(),
                 Error::InvalidErasureMetaConflict
             );
         }
@@ -988,11 +1023,12 @@ pub(crate) mod tests {
                 Some(leader_schedule),
                 rng.gen(), // wallclock
                 512,       // max_size
+                version,
             )
             .unwrap()
             .collect();
             assert!(chunks.len() > 4);
-            let (shred3, shred4) = into_shreds(&leader.pubkey(), chunks).unwrap();
+            let (shred3, shred4) = into_shreds(&leader.pubkey(), chunks, version).unwrap();
             assert_eq!(shred1, shred3);
             assert_eq!(shred2, shred4);
         }
@@ -1079,6 +1115,7 @@ pub(crate) mod tests {
                     Some(leader_schedule),
                     rng.gen(), // wallclock
                     512,       // max_size
+                    version,
                 )
                 .err()
                 .unwrap(),
@@ -1097,8 +1134,123 @@ pub(crate) mod tests {
             assert!(chunks.len() > 4);
 
             assert_matches!(
-                into_shreds(&leader.pubkey(), chunks).err().unwrap(),
+                into_shreds(&leader.pubkey(), chunks, version)
+                    .err()
+                    .unwrap(),
                 Error::ShredTypeMismatch
+            );
+        }
+    }
+
+    #[test]
+    fn test_shred_version() {
+        let mut rng = rand::thread_rng();
+        let leader = Arc::new(Keypair::new());
+        let (slot, parent_slot, reference_tick, version) = (53084024, 53084023, 0, 0);
+        let shredder = Shredder::new(slot, parent_slot, reference_tick, version).unwrap();
+        let next_shred_index = rng.gen_range(0..31_000);
+        let leader_schedule = |s| {
+            if s == slot {
+                Some(leader.pubkey())
+            } else {
+                None
+            }
+        };
+
+        let (data_shreds, coding_shreds) = new_rand_shreds(
+            &mut rng,
+            next_shred_index,
+            next_shred_index,
+            10,
+            true,
+            &shredder,
+            &leader,
+            true,
+        );
+
+        // Wrong shred version 1
+        let shredder = Shredder::new(slot, parent_slot, reference_tick, version + 1).unwrap();
+        let (wrong_data_shreds_1, wrong_coding_shreds_1) = new_rand_shreds(
+            &mut rng,
+            next_shred_index,
+            next_shred_index,
+            10,
+            true,
+            &shredder,
+            &leader,
+            true,
+        );
+
+        // Wrong shred version 2
+        let shredder = Shredder::new(slot, parent_slot, reference_tick, version + 2).unwrap();
+        let (wrong_data_shreds_2, wrong_coding_shreds_2) = new_rand_shreds(
+            &mut rng,
+            next_shred_index,
+            next_shred_index,
+            10,
+            true,
+            &shredder,
+            &leader,
+            true,
+        );
+
+        let test_cases = vec![
+            // One correct shred version, one wrong
+            (coding_shreds[0].clone(), wrong_coding_shreds_1[0].clone()),
+            (coding_shreds[0].clone(), wrong_data_shreds_1[0].clone()),
+            (data_shreds[0].clone(), wrong_coding_shreds_1[0].clone()),
+            (data_shreds[0].clone(), wrong_data_shreds_1[0].clone()),
+            // Both wrong shred version
+            (
+                wrong_coding_shreds_2[0].clone(),
+                wrong_coding_shreds_1[0].clone(),
+            ),
+            (
+                wrong_coding_shreds_2[0].clone(),
+                wrong_data_shreds_1[0].clone(),
+            ),
+            (
+                wrong_data_shreds_2[0].clone(),
+                wrong_coding_shreds_1[0].clone(),
+            ),
+            (
+                wrong_data_shreds_2[0].clone(),
+                wrong_data_shreds_1[0].clone(),
+            ),
+        ];
+
+        for (shred1, shred2) in test_cases.into_iter() {
+            assert_matches!(
+                from_shred(
+                    shred1.clone(),
+                    Pubkey::new_unique(), // self_pubkey
+                    shred2.payload().clone(),
+                    Some(leader_schedule),
+                    rng.gen(), // wallclock
+                    512,       // max_size
+                    version,
+                )
+                .err()
+                .unwrap(),
+                Error::InvalidShredVersion(_)
+            );
+
+            let chunks: Vec<_> = from_shred_bypass_checks(
+                shred1.clone(),
+                Pubkey::new_unique(), // self_pubkey
+                shred2.clone(),
+                rng.gen(), // wallclock
+                512,       // max_size
+            )
+            .unwrap()
+            .collect();
+            assert!(chunks.len() > 4);
+
+            assert_matches!(
+                into_shreds(&leader.pubkey(), chunks, version)
+                    .err()
+                    .unwrap(),
+                Error::InvalidShredVersion(_)
             );
         }
     }
