@@ -41,6 +41,8 @@ pub use signer::signers;
 pub use solana_program::program_stubs;
 // These solana_program imports could be *-imported, but that causes a bunch of
 // confusing duplication in the docs due to a rustdoc bug. #26211
+#[allow(deprecated)]
+pub use solana_program::sdk_ids;
 #[cfg(target_arch = "wasm32")]
 pub use solana_program::wasm_bindgen;
 pub use solana_program::{
@@ -55,8 +57,6 @@ pub use solana_program::{
     stake_history, syscalls, system_instruction, system_program, sysvar, unchecked_div_by_const,
     vote,
 };
-#[allow(deprecated)]
-pub use solana_program::{address_lookup_table_account, sdk_ids};
 #[cfg(feature = "borsh")]
 pub use solana_program::{borsh, borsh0_10, borsh1};
 

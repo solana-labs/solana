@@ -12,7 +12,7 @@
 pub use loaded::*;
 use {
     crate::{
-        address_lookup_table_account::AddressLookupTableAccount,
+        address_lookup_table::AddressLookupTableAccount,
         bpf_loader_upgradeable,
         hash::Hash,
         instruction::{CompiledInstruction, Instruction},
@@ -200,7 +200,7 @@ impl Message {
     /// use solana_rpc_client::rpc_client::RpcClient;
     /// use solana_program::address_lookup_table::{self, state::{AddressLookupTable, LookupTableMeta}};
     /// use solana_sdk::{
-    ///      address_lookup_table_account::AddressLookupTableAccount,
+    ///      address_lookup_table::AddressLookupTableAccount,
     ///      instruction::{AccountMeta, Instruction},
     ///      message::{VersionedMessage, v0},
     ///      pubkey::Pubkey,

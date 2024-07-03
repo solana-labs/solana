@@ -1,6 +1,6 @@
 #[cfg(not(target_os = "solana"))]
 use crate::{
-    address_lookup_table_account::AddressLookupTableAccount,
+    address_lookup_table::AddressLookupTableAccount,
     message::v0::{LoadedAddresses, MessageAddressTableLookup},
 };
 use {
