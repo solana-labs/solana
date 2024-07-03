@@ -12,7 +12,7 @@ use {
         request::RpcRequest,
         response::{
             Response, RpcAccountBalance, RpcBlockProduction, RpcBlockProductionRange, RpcBlockhash,
-            RpcConfirmedTransactionStatusWithSignature, RpcContactInfo, RpcFees, RpcIdentity,
+            RpcConfirmedTransactionStatusWithSignature, RpcContactInfo, RpcIdentity,
             RpcInflationGovernor, RpcInflationRate, RpcInflationReward, RpcKeyedAccount,
             RpcPerfSample, RpcPrioritizationFee, RpcResponseContext, RpcSimulateTransactionResult,
             RpcSnapshotSlotInfo, RpcStakeActivation, RpcSupply, RpcVersionInfo, RpcVoteAccountInfo,
@@ -23,7 +23,6 @@ use {
         account::Account,
         clock::{Slot, UnixTimestamp},
         epoch_info::EpochInfo,
-        fee_calculator::{FeeCalculator, FeeRateGovernor},
         instruction::InstructionError,
         message::MessageHeader,
         pubkey::Pubkey,
@@ -117,13 +116,6 @@ impl RpcSender for MockSender {
                 context: RpcResponseContext { slot: 1, api_version: None },
                 value: Value::Number(Number::from(50)),
             })?,
-            "getRecentBlockhash" => serde_json::to_value(Response {
-                context: RpcResponseContext { slot: 1, api_version: None },
-                value: (
-                    Value::String(PUBKEY.to_string()),
-                    serde_json::to_value(FeeCalculator::default()).unwrap(),
-                ),
-            })?,
             "getEpochInfo" => serde_json::to_value(EpochInfo {
                 epoch: 1,
                 slot_index: 2,
@@ -131,31 +123,6 @@ impl RpcSender for MockSender {
                 absolute_slot: 34,
                 block_height: 34,
                 transaction_count: Some(123),
-            })?,
-            "getFeeCalculatorForBlockhash" => {
-                let value = if self.url == "blockhash_expired" {
-                    Value::Null
-                } else {
-                    serde_json::to_value(Some(FeeCalculator::default())).unwrap()
-                };
-                serde_json::to_value(Response {
-                    context: RpcResponseContext { slot: 1, api_version: None },
-                    value,
-                })?
-            }
-            "getFeeRateGovernor" => serde_json::to_value(Response {
-                context: RpcResponseContext { slot: 1, api_version: None },
-                value: serde_json::to_value(FeeRateGovernor::default()).unwrap(),
-            })?,
-            "getFees" => serde_json::to_value(Response {
-                context: RpcResponseContext { slot: 1, api_version: None },
-                value: serde_json::to_value(RpcFees {
-                    blockhash: PUBKEY.to_string(),
-                    fee_calculator: FeeCalculator::default(),
-                    last_valid_slot: 42,
-                    last_valid_block_height: 42,
-                })
-                .unwrap(),
             })?,
             "getSignatureStatuses" => {
                 let status: transaction::Result<()> = if self.url == "account_in_use" {
@@ -242,7 +209,6 @@ impl RpcSender for MockSender {
             "getSlot" => json![0],
             "getMaxShredInsertSlot" => json![0],
             "requestAirdrop" => Value::String(Signature::from([8; 64]).to_string()),
-            "getSnapshotSlot" => Value::Number(Number::from(0)),
             "getHighestSnapshotSlot" => json!(RpcSnapshotSlotInfo {
                 full: 100,
                 incremental: Some(110),
