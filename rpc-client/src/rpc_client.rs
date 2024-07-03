@@ -1776,7 +1776,9 @@ impl RpcClient {
     /// ```
     #[deprecated(
         since = "1.18.18",
-        note = "Do not use; getStakeActivation is deprecated on the JSON-RPC server"
+        note = "Do not use; getStakeActivation is deprecated on the JSON-RPC server. Please use \
+                the stake account and StakeHistory sysvar to call \
+                `Delegation::stake_activating_and_deactivating()` instead"
     )]
     #[allow(deprecated)]
     pub fn get_stake_activation(
