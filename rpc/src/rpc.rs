@@ -269,23 +269,13 @@ impl JsonRpcRequestProcessor {
             .slot_with_commitment(commitment.commitment);
 
         match commitment.commitment {
-            // Recent variant is deprecated
-            CommitmentLevel::Recent | CommitmentLevel::Processed => {
+            CommitmentLevel::Processed => {
                 debug!("RPC using the heaviest slot: {:?}", slot);
             }
-            // Root variant is deprecated
-            CommitmentLevel::Root => {
-                debug!("RPC using node root: {:?}", slot);
-            }
-            // Single variant is deprecated
-            CommitmentLevel::Single => {
-                debug!("RPC using confirmed slot: {:?}", slot);
-            }
-            // Max variant is deprecated
-            CommitmentLevel::Max | CommitmentLevel::Finalized => {
+            CommitmentLevel::Finalized => {
                 debug!("RPC using block: {:?}", slot);
             }
-            CommitmentLevel::SingleGossip | CommitmentLevel::Confirmed => unreachable!(), // SingleGossip variant is deprecated
+            CommitmentLevel::Confirmed => unreachable!(), // SingleGossip variant is deprecated
         };
 
         let r_bank_forks = self.bank_forks.read().unwrap();
