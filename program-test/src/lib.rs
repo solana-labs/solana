@@ -545,13 +545,6 @@ impl ProgramTest {
         self.transaction_account_lock_limit = Some(transaction_account_lock_limit);
     }
 
-    /// Override the SBF compute budget
-    #[allow(deprecated)]
-    #[deprecated(since = "1.8.0", note = "please use `set_compute_max_units` instead")]
-    pub fn set_bpf_compute_max_units(&mut self, bpf_compute_max_units: u64) {
-        self.set_compute_max_units(bpf_compute_max_units);
-    }
-
     /// Add an account to the test environment's genesis config.
     pub fn add_genesis_account(&mut self, address: Pubkey, account: Account) {
         self.genesis_accounts

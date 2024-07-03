@@ -13,12 +13,6 @@
 //!
 //! Bank needs to provide an interface for us to query the stake weight
 
-#[deprecated(
-    since = "1.10.6",
-    note = "Please use `solana_net_utils::{MINIMUM_VALIDATOR_PORT_RANGE_WIDTH, VALIDATOR_PORT_RANGE}` instead"
-)]
-#[allow(deprecated)]
-pub use solana_net_utils::{MINIMUM_VALIDATOR_PORT_RANGE_WIDTH, VALIDATOR_PORT_RANGE};
 use {
     crate::{
         cluster_info_metrics::{
@@ -57,6 +51,7 @@ use {
         bind_common, bind_common_in_range, bind_in_range, bind_in_range_with_config,
         bind_more_with_config, bind_two_in_range_with_offset_and_config,
         find_available_port_in_range, multi_bind_in_range, PortRange, SocketConfig,
+        VALIDATOR_PORT_RANGE,
     },
     solana_perf::{
         data_budget::DataBudget,
