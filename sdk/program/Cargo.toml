@@ -31,6 +31,7 @@ serde_bytes = { workspace = true }
 serde_derive = { workspace = true }
 sha2 = { workspace = true }
 sha3 = { workspace = true }
+solana-atomic-u64 = { workspace = true }
 solana-frozen-abi = { workspace = true, optional = true }
 solana-frozen-abi-macro = { workspace = true, optional = true }
 solana-sanitize = { workspace = true }

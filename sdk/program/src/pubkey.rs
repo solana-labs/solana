@@ -186,7 +186,7 @@ impl Pubkey {
 
     /// unique Pubkey for tests and benchmarks.
     pub fn new_unique() -> Self {
-        use crate::atomic_u64::AtomicU64;
+        use solana_atomic_u64::AtomicU64;
         static I: AtomicU64 = AtomicU64::new(1);
 
         let mut b = [0u8; 32];

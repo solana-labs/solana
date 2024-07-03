@@ -4601,6 +4601,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-atomic-u64"
+version = "2.1.0"
+dependencies = [
+ "parking_lot 0.12.2",
+]
+
+[[package]]
 name = "solana-banks-client"
 version = "2.1.0"
 dependencies = [
@@ -5319,6 +5326,7 @@ dependencies = [
  "serde_derive",
  "sha2 0.10.8",
  "sha3 0.10.8",
+ "solana-atomic-u64",
  "solana-define-syscall",
  "solana-sanitize",
  "solana-sdk-macro",

@@ -96,6 +96,7 @@ members = [
     "runtime-transaction",
     "sanitize",
     "sdk",
+    "sdk/atomic-u64",
     "sdk/cargo-build-bpf",
     "sdk/cargo-build-sbf",
     "sdk/cargo-test-bpf",
@@ -326,6 +327,7 @@ soketto = "0.7"
 solana-account-decoder = { path = "account-decoder", version = "=2.1.0" }
 solana-accounts-db = { path = "accounts-db", version = "=2.1.0" }
 solana-address-lookup-table-program = { path = "programs/address-lookup-table", version = "=2.1.0" }
+solana-atomic-u64 = { path = "sdk/atomic-u64", version = "=2.1.0" }
 solana-banks-client = { path = "banks-client", version = "=2.1.0" }
 solana-banks-interface = { path = "banks-interface", version = "=2.1.0" }
 solana-banks-server = { path = "banks-server", version = "=2.1.0" }
