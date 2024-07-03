@@ -1920,7 +1920,12 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         self.roots_added.fetch_add(1, Ordering::Relaxed);
         let mut w_roots_tracker = self.roots_tracker.write().unwrap();
         // `AccountsDb::flush_accounts_cache()` relies on roots being added in order
-        assert!(slot >= w_roots_tracker.alive_roots.max_inclusive());
+        assert!(
+            slot >= w_roots_tracker.alive_roots.max_inclusive(),
+            "Roots must be added in order: {} < {}",
+            slot,
+            w_roots_tracker.alive_roots.max_inclusive()
+        );
         // 'slot' is a root, so it is both 'root' and 'original'
         w_roots_tracker.alive_roots.insert(slot);
     }
