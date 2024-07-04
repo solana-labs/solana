@@ -1,29 +1,19 @@
 //! Helpers for the recent blockhashes sysvar.
 
 #[allow(deprecated)]
-use solana_program::sysvar::recent_blockhashes::{
+use solana_sdk::sysvar::recent_blockhashes::{
     IntoIterSorted, IterItem, RecentBlockhashes, MAX_ENTRIES,
 };
 use {
-    crate::{
-        account::{
-            create_account_shared_data_with_fields, to_account, AccountSharedData,
-            InheritableAccountFields, DUMMY_INHERITABLE_ACCOUNT_FIELDS,
-        },
-        clock::INITIAL_RENT_EPOCH,
+    solana_sdk::account::{
+        create_account_shared_data_with_fields, to_account, AccountSharedData,
+        InheritableAccountFields,
     },
     std::{collections::BinaryHeap, iter::FromIterator},
 };
 
-#[deprecated(
-    since = "1.9.0",
-    note = "Please do not use, will no longer be available in the future"
-)]
 #[allow(deprecated)]
-pub fn update_account<'a, I>(
-    account: &mut AccountSharedData,
-    recent_blockhash_iter: I,
-) -> Option<()>
+fn update_account<'a, I>(account: &mut AccountSharedData, recent_blockhash_iter: I) -> Option<()>
 where
     I: IntoIterator<Item = IterItem<'a>>,
 {
@@ -37,25 +27,8 @@ where
     to_account(&recent_blockhashes, account)
 }
 
-#[deprecated(
-    since = "1.5.17",
-    note = "Please use `create_account_with_data_for_test` instead"
-)]
 #[allow(deprecated)]
-pub fn create_account_with_data<'a, I>(lamports: u64, recent_blockhash_iter: I) -> AccountSharedData
-where
-    I: IntoIterator<Item = IterItem<'a>>,
-{
-    #[allow(deprecated)]
-    create_account_with_data_and_fields(recent_blockhash_iter, (lamports, INITIAL_RENT_EPOCH))
-}
-
-#[deprecated(
-    since = "1.9.0",
-    note = "Please do not use, will no longer be available in the future"
-)]
-#[allow(deprecated)]
-pub fn create_account_with_data_and_fields<'a, I>(
+pub(in crate::bank) fn create_account_with_data_and_fields<'a, I>(
     recent_blockhash_iter: I,
     fields: InheritableAccountFields,
 ) -> AccountSharedData
@@ -70,30 +43,25 @@ where
     account
 }
 
-#[deprecated(
-    since = "1.9.0",
-    note = "Please do not use, will no longer be available in the future"
-)]
-#[allow(deprecated)]
-pub fn create_account_with_data_for_test<'a, I>(recent_blockhash_iter: I) -> AccountSharedData
-where
-    I: IntoIterator<Item = IterItem<'a>>,
-{
-    create_account_with_data_and_fields(recent_blockhash_iter, DUMMY_INHERITABLE_ACCOUNT_FIELDS)
-}
-
 #[cfg(test)]
 mod tests {
     #![allow(deprecated)]
     use {
         super::*,
-        crate::account::from_account,
         rand::{seq::SliceRandom, thread_rng},
-        solana_program::{
+        solana_sdk::{
+            account::{from_account, DUMMY_INHERITABLE_ACCOUNT_FIELDS},
             hash::{Hash, HASH_BYTES},
             sysvar::recent_blockhashes::Entry,
         },
     };
+
+    fn create_account_with_data_for_test<'a, I>(recent_blockhash_iter: I) -> AccountSharedData
+    where
+        I: IntoIterator<Item = IterItem<'a>>,
+    {
+        create_account_with_data_and_fields(recent_blockhash_iter, DUMMY_INHERITABLE_ACCOUNT_FIELDS)
+    }
 
     #[test]
     fn test_create_account_empty() {

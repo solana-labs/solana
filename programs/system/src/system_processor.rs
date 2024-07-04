@@ -542,7 +542,10 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
 mod tests {
     #[allow(deprecated)]
     use solana_sdk::{
-        account::{self, Account, AccountSharedData, ReadableAccount},
+        account::{
+            self, create_account_shared_data_with_fields, to_account, Account, AccountSharedData,
+            ReadableAccount, DUMMY_INHERITABLE_ACCOUNT_FIELDS,
+        },
         fee_calculator::FeeCalculator,
         hash::{hash, Hash},
         instruction::{AccountMeta, Instruction, InstructionError},
@@ -552,8 +555,12 @@ mod tests {
                 Data as NonceData, DurableNonce, State as NonceState, Versions as NonceVersions,
             },
         },
-        nonce_account, recent_blockhashes_account, system_instruction, system_program,
-        sysvar::{self, recent_blockhashes::IterItem, rent::Rent},
+        nonce_account, system_instruction, system_program,
+        sysvar::{
+            self,
+            recent_blockhashes::{IntoIterSorted, IterItem, RecentBlockhashes, MAX_ENTRIES},
+            rent::Rent,
+        },
     };
     use {
         super::*,
@@ -562,6 +569,7 @@ mod tests {
         solana_program_runtime::{
             invoke_context::mock_process_instruction, with_mock_invoke_context,
         },
+        std::collections::BinaryHeap,
     };
 
     impl From<Pubkey> for Address {
@@ -595,11 +603,30 @@ mod tests {
     fn create_default_account() -> AccountSharedData {
         AccountSharedData::new(0, 0, &Pubkey::new_unique())
     }
+    #[allow(deprecated)]
+    fn create_recent_blockhashes_account_for_test<'a, I>(
+        recent_blockhash_iter: I,
+    ) -> AccountSharedData
+    where
+        I: IntoIterator<Item = IterItem<'a>>,
+    {
+        let mut account = create_account_shared_data_with_fields::<RecentBlockhashes>(
+            &RecentBlockhashes::default(),
+            DUMMY_INHERITABLE_ACCOUNT_FIELDS,
+        );
+        let sorted = BinaryHeap::from_iter(recent_blockhash_iter);
+        let sorted_iter = IntoIterSorted::new(sorted);
+        let recent_blockhash_iter = sorted_iter.take(MAX_ENTRIES);
+        let recent_blockhashes: RecentBlockhashes = recent_blockhash_iter.collect();
+        to_account(&recent_blockhashes, &mut account);
+        account
+    }
     fn create_default_recent_blockhashes_account() -> AccountSharedData {
         #[allow(deprecated)]
-        recent_blockhashes_account::create_account_with_data_for_test(
-            vec![IterItem(0u64, &Hash::default(), 0); sysvar::recent_blockhashes::MAX_ENTRIES],
-        )
+        create_recent_blockhashes_account_for_test(vec![
+            IterItem(0u64, &Hash::default(), 0);
+            sysvar::recent_blockhashes::MAX_ENTRIES
+        ])
     }
     fn create_default_rent_account() -> AccountSharedData {
         account::create_account_shared_data_for_test(&Rent::free())
@@ -1551,10 +1578,10 @@ mod tests {
         );
         let blockhash = hash(&serialize(&0).unwrap());
         #[allow(deprecated)]
-        let new_recent_blockhashes_account =
-            solana_sdk::recent_blockhashes_account::create_account_with_data_for_test(
-                vec![IterItem(0u64, &blockhash, 0); sysvar::recent_blockhashes::MAX_ENTRIES],
-            );
+        let new_recent_blockhashes_account = create_recent_blockhashes_account_for_test(vec![
+                IterItem(0u64, &blockhash, 0);
+                sysvar::recent_blockhashes::MAX_ENTRIES
+            ]);
         mock_process_instruction(
             &system_program::id(),
             Vec::new(),
@@ -1837,8 +1864,7 @@ mod tests {
         #[allow(deprecated)]
         let blockhash_id = sysvar::recent_blockhashes::id();
         #[allow(deprecated)]
-        let new_recent_blockhashes_account =
-            solana_sdk::recent_blockhashes_account::create_account_with_data_for_test(vec![]);
+        let new_recent_blockhashes_account = create_recent_blockhashes_account_for_test(vec![]);
         process_instruction(
             &serialize(&SystemInstruction::InitializeNonceAccount(nonce_address)).unwrap(),
             vec![
@@ -1900,8 +1926,7 @@ mod tests {
             Ok(()),
         );
         #[allow(deprecated)]
-        let new_recent_blockhashes_account =
-            solana_sdk::recent_blockhashes_account::create_account_with_data_for_test(vec![]);
+        let new_recent_blockhashes_account = create_recent_blockhashes_account_for_test(vec![]);
         mock_process_instruction(
             &system_program::id(),
             Vec::new(),

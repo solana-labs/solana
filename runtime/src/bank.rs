@@ -33,8 +33,6 @@
 //! It offers a high-level API that signs transactions
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
-#[allow(deprecated)]
-use solana_sdk::recent_blockhashes_account;
 use {
     crate::{
         bank::{
@@ -228,6 +226,7 @@ pub mod epoch_accounts_hash_utils;
 mod fee_distribution;
 mod metrics;
 pub(crate) mod partitioned_epoch_rewards;
+mod recent_blockhashes_account;
 mod serde_snapshot;
 mod sysvar_cache;
 pub(crate) mod tests;

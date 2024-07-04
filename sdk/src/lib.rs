@@ -93,7 +93,6 @@ pub mod precompiles;
 pub mod program_utils;
 pub mod pubkey;
 pub mod quic;
-pub mod recent_blockhashes_account;
 pub mod rent_collector;
 pub mod rent_debits;
 pub mod reserved_account_keys;
