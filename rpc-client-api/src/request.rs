@@ -8,7 +8,9 @@ use {
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum RpcRequest {
-    Custom { method: &'static str },
+    Custom {
+        method: &'static str,
+    },
     DeregisterNode,
     GetAccountInfo,
     GetBalance,
@@ -48,6 +50,10 @@ pub enum RpcRequest {
     GetStorageTurn,
     GetStorageTurnRate,
     GetSlotsPerSegment,
+    #[deprecated(
+        since = "1.18.18",
+        note = "Do not use; getStakeActivation is not supported by the JSON-RPC server."
+    )]
     GetStakeActivation,
     GetStakeMinimumDelegation,
     GetStoragePubkeysForSlot,
