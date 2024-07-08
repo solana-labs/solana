@@ -15,8 +15,8 @@ use {
             RpcConfirmedTransactionStatusWithSignature, RpcContactInfo, RpcIdentity,
             RpcInflationGovernor, RpcInflationRate, RpcInflationReward, RpcKeyedAccount,
             RpcPerfSample, RpcPrioritizationFee, RpcResponseContext, RpcSimulateTransactionResult,
-            RpcSnapshotSlotInfo, RpcStakeActivation, RpcSupply, RpcVersionInfo, RpcVoteAccountInfo,
-            RpcVoteAccountStatus, StakeActivationState,
+            RpcSnapshotSlotInfo, RpcSupply, RpcVersionInfo, RpcVoteAccountInfo,
+            RpcVoteAccountStatus,
         },
     },
     solana_sdk::{
@@ -253,11 +253,6 @@ impl RpcSender for MockSender {
                     })
                 }
             }
-            "getStakeActivation" => json!(RpcStakeActivation {
-                state: StakeActivationState::Activating,
-                active: 123,
-                inactive: 12,
-            }),
             "getStakeMinimumDelegation" => json!(Response {
                 context: RpcResponseContext { slot: 1, api_version: None },
                 value: 123_456_789,

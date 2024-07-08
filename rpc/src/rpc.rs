@@ -61,7 +61,6 @@ use {
     },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
-        account_utils::StateMut,
         clock::{Slot, UnixTimestamp, MAX_PROCESSING_AGE},
         commitment_config::{CommitmentConfig, CommitmentLevel},
         epoch_info::EpochInfo,
@@ -73,10 +72,7 @@ use {
         message::SanitizedMessage,
         pubkey::{Pubkey, PUBKEY_BYTES},
         signature::{Keypair, Signature, Signer},
-        stake::state::{StakeActivationStatus, StakeStateV2},
-        stake_history::StakeHistory,
         system_instruction,
-        sysvar::stake_history,
         transaction::{
             self, AddressLoader, MessageHash, SanitizedTransaction, TransactionError,
             VersionedTransaction, MAX_TX_ACCOUNT_LOCKS,
@@ -1811,87 +1807,6 @@ impl JsonRpcRequestProcessor {
             }
         }
         slot
-    }
-
-    pub fn get_stake_activation(
-        &self,
-        pubkey: &Pubkey,
-        config: Option<RpcEpochConfig>,
-    ) -> Result<RpcStakeActivation> {
-        let config = config.unwrap_or_default();
-        let bank = self.get_bank_with_config(RpcContextConfig {
-            commitment: config.commitment,
-            min_context_slot: config.min_context_slot,
-        })?;
-        let epoch = config.epoch.unwrap_or_else(|| bank.epoch());
-        if epoch != bank.epoch() {
-            return Err(Error::invalid_params(format!(
-                "Invalid param: epoch {epoch:?}. Only the current epoch ({:?}) is supported",
-                bank.epoch()
-            )));
-        }
-
-        let stake_account = bank
-            .get_account(pubkey)
-            .ok_or_else(|| Error::invalid_params("Invalid param: account not found".to_string()))?;
-        let stake_state: StakeStateV2 = stake_account
-            .state()
-            .map_err(|_| Error::invalid_params("Invalid param: not a stake account".to_string()))?;
-        let delegation = stake_state.delegation();
-
-        let rent_exempt_reserve = stake_state
-            .meta()
-            .ok_or_else(|| {
-                Error::invalid_params("Invalid param: stake account not initialized".to_string())
-            })?
-            .rent_exempt_reserve;
-
-        let delegation = match delegation {
-            None => {
-                return Ok(RpcStakeActivation {
-                    state: StakeActivationState::Inactive,
-                    active: 0,
-                    inactive: stake_account.lamports().saturating_sub(rent_exempt_reserve),
-                })
-            }
-            Some(delegation) => delegation,
-        };
-
-        let stake_history_account = bank
-            .get_account(&stake_history::id())
-            .ok_or_else(Error::internal_error)?;
-        let stake_history =
-            solana_sdk::account::from_account::<StakeHistory, _>(&stake_history_account)
-                .ok_or_else(Error::internal_error)?;
-        let new_rate_activation_epoch = bank.new_warmup_cooldown_rate_epoch();
-
-        let StakeActivationStatus {
-            effective,
-            activating,
-            deactivating,
-        } = delegation.stake_activating_and_deactivating(
-            epoch,
-            &stake_history,
-            new_rate_activation_epoch,
-        );
-        let stake_activation_state = if deactivating > 0 {
-            StakeActivationState::Deactivating
-        } else if activating > 0 {
-            StakeActivationState::Activating
-        } else if effective > 0 {
-            StakeActivationState::Active
-        } else {
-            StakeActivationState::Inactive
-        };
-        let inactive_stake = stake_account
-            .lamports()
-            .saturating_sub(effective)
-            .saturating_sub(rent_exempt_reserve);
-        Ok(RpcStakeActivation {
-            state: stake_activation_state,
-            active: effective,
-            inactive: inactive_stake,
-        })
     }
 
     pub fn get_token_account_balance(

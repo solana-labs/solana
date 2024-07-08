@@ -443,14 +443,6 @@ pub enum StakeActivationState {
     Inactive,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct RpcStakeActivation {
-    pub state: StakeActivationState,
-    pub active: u64,
-    pub inactive: u64,
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcTokenAccountBalance {
