@@ -31,9 +31,11 @@ pub struct Header {
 // In order to safely guarantee Header is Pod, it cannot have any padding
 // This is obvious by inspection, but this will also catch any inadvertent
 // changes in the future (i.e. it is a test).
+// Additionally, we compare the header size with `u64` instead of `usize`
+// to ensure binary compatibility doesn't break.
 const _: () = assert!(
-    std::mem::size_of::<Header>() == std::mem::size_of::<usize>(),
-    "Header cannot have any padding"
+    std::mem::size_of::<Header>() == std::mem::size_of::<u64>(),
+    "Header cannot have any padding and must be the same size as u64",
 );
 
 /// cache hash data file to be mmapped later
