@@ -46,10 +46,8 @@ use {
     log::*,
     rand::{thread_rng, Rng},
     solana_bench_tps::bench::generate_and_fund_keypairs,
-    solana_client::{
-        connection_cache::ConnectionCache, tpu_client::TpuClientWrapper,
-        tpu_connection::TpuConnection,
-    },
+    solana_client::{connection_cache::ConnectionCache, tpu_client::TpuClientWrapper},
+    solana_connection_cache::client_connection::ClientConnection as TpuConnection,
     solana_core::repair::serve_repair::{RepairProtocol, RepairRequestHeader, ServeRepair},
     solana_dos::cli::*,
     solana_gossip::{

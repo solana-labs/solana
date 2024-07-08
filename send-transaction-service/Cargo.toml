@@ -13,6 +13,7 @@ edition = { workspace = true }
 crossbeam-channel = { workspace = true }
 log = { workspace = true }
 solana-client = { workspace = true }
+solana-connection-cache = { workspace = true }
 solana-measure = { workspace = true }
 solana-metrics = { workspace = true }
 solana-runtime = { workspace = true }

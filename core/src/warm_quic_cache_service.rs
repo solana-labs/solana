@@ -3,10 +3,8 @@
 
 use {
     rand::{thread_rng, Rng},
-    solana_client::{
-        connection_cache::{ConnectionCache, Protocol},
-        tpu_connection::TpuConnection,
-    },
+    solana_client::connection_cache::{ConnectionCache, Protocol},
+    solana_connection_cache::client_connection::ClientConnection as TpuConnection,
     solana_gossip::cluster_info::ClusterInfo,
     solana_poh::poh_recorder::PohRecorder,
     std::{

@@ -1,7 +1,4 @@
-pub mod quic_client;
 pub mod tpu_client;
-pub mod tpu_connection;
-pub mod udp_client;
 
 pub mod blockhash_query {
     pub use solana_rpc_client_nonce_utils::nonblocking::blockhash_query::*;

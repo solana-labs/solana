@@ -2,10 +2,8 @@ use {
     crate::tpu_info::TpuInfo,
     crossbeam_channel::{Receiver, RecvTimeoutError},
     log::*,
-    solana_client::{
-        connection_cache::{ConnectionCache, Protocol},
-        tpu_connection::TpuConnection,
-    },
+    solana_client::connection_cache::{ConnectionCache, Protocol},
+    solana_connection_cache::client_connection::ClientConnection as TpuConnection,
     solana_measure::measure::Measure,
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{

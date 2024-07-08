@@ -19,6 +19,7 @@ rand = { workspace = true }
 serde = { workspace = true }
 solana-bench-tps = { workspace = true }
 solana-client = { workspace = true }
+solana-connection-cache = { workspace = true }
 solana-core = { workspace = true }
 solana-faucet = { workspace = true }
 solana-gossip = { workspace = true }
