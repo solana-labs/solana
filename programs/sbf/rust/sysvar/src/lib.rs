@@ -2,8 +2,6 @@
 
 extern crate solana_program;
 #[allow(deprecated)]
-use solana_program::sysvar::fees::Fees;
-#[allow(deprecated)]
 use solana_program::sysvar::recent_blockhashes::RecentBlockhashes;
 use solana_program::{
     account_info::AccountInfo,
@@ -70,7 +68,6 @@ pub fn process_instruction(
                 AccountMeta::new_readonly(*accounts[8].key, false),
                 AccountMeta::new_readonly(*accounts[9].key, false),
                 AccountMeta::new_readonly(*accounts[10].key, false),
-                AccountMeta::new_readonly(*accounts[11].key, false),
             ],
         )
     );
@@ -114,21 +111,11 @@ pub fn process_instruction(
     sysvar::stake_history::id().log();
     let _ = StakeHistory::from_account_info(&accounts[9]).unwrap();
 
-    // Fees
-    #[allow(deprecated)]
-    if instruction_data[0] == 1 {
-        msg!("Fee identifier:");
-        sysvar::fees::id().log();
-        let fees = Fees::from_account_info(&accounts[10]).unwrap();
-        let got_fees = Fees::get().unwrap();
-        assert_eq!(fees, got_fees);
-    }
-
     // Epoch Rewards
     {
         msg!("EpochRewards identifier:");
         sysvar::epoch_rewards::id().log();
-        let epoch_rewards = EpochRewards::from_account_info(&accounts[11]).unwrap();
+        let epoch_rewards = EpochRewards::from_account_info(&accounts[10]).unwrap();
         let got_epoch_rewards = EpochRewards::get().unwrap();
         assert_eq!(epoch_rewards, got_epoch_rewards);
     }

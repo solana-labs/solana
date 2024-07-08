@@ -5,7 +5,6 @@ use {
     solana_sdk::{
         clock::{Epoch, Slot, UnixTimestamp},
         fee_calculator::{FeeCalculator, FeeRateGovernor},
-        hash::Hash,
         inflation::Inflation,
         transaction::{Result, TransactionError},
     },
@@ -116,31 +115,6 @@ pub struct RpcBlockhashFeeCalculator {
 #[serde(rename_all = "camelCase")]
 pub struct RpcBlockhash {
     pub blockhash: String,
-    pub last_valid_block_height: u64,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct RpcFees {
-    pub blockhash: String,
-    pub fee_calculator: FeeCalculator,
-    pub last_valid_slot: Slot,
-    pub last_valid_block_height: u64,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct DeprecatedRpcFees {
-    pub blockhash: String,
-    pub fee_calculator: FeeCalculator,
-    pub last_valid_slot: Slot,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct Fees {
-    pub blockhash: Hash,
-    pub fee_calculator: FeeCalculator,
     pub last_valid_block_height: u64,
 }
 

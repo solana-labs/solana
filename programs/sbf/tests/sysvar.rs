@@ -12,7 +12,7 @@ use {
         pubkey::Pubkey,
         signature::{Keypair, Signer},
         sysvar::{
-            clock, epoch_rewards, epoch_schedule, fees, instructions, recent_blockhashes, rent,
+            clock, epoch_rewards, epoch_schedule, instructions, recent_blockhashes, rent,
             slot_hashes, slot_history, stake_history,
         },
         transaction::{SanitizedTransaction, Transaction},
@@ -67,8 +67,6 @@ fn test_sysvar_syscalls() {
                 AccountMeta::new_readonly(slot_hashes::id(), false),
                 AccountMeta::new_readonly(slot_history::id(), false),
                 AccountMeta::new_readonly(stake_history::id(), false),
-                #[allow(deprecated)]
-                AccountMeta::new_readonly(fees::id(), false),
                 AccountMeta::new_readonly(epoch_rewards::id(), false),
             ],
         );

@@ -1,6 +1,4 @@
 #![cfg(test)]
-#[allow(deprecated)]
-use solana_sdk::sysvar::fees::Fees;
 use {
     super::{
         test_utils::{goto_end_of_slot, update_vote_account_timestamp},
@@ -4253,22 +4251,6 @@ fn test_bank_cloned_stake_delegations() {
     assert!(stake_delegations.get(&stake_keypair.pubkey()).is_some());
 }
 
-#[allow(deprecated)]
-#[test]
-fn test_bank_fees_account() {
-    let (mut genesis_config, _) = create_genesis_config(500);
-    genesis_config.fee_rate_governor = FeeRateGovernor::new(12345, 0);
-    let bank = Arc::new(Bank::new_for_tests(&genesis_config));
-
-    let fees_account = bank.get_account(&sysvar::fees::id()).unwrap();
-    let fees = from_account::<Fees, _>(&fees_account).unwrap();
-    assert_eq!(
-        bank.fee_rate_governor.lamports_per_signature,
-        fees.fee_calculator.lamports_per_signature
-    );
-    assert_eq!(fees.fee_calculator.lamports_per_signature, 12345);
-}
-
 #[test]
 fn test_is_delta_with_no_committables() {
     let (genesis_config, mint_keypair) = create_genesis_config(8000);
@@ -6413,26 +6395,26 @@ fn test_bank_hash_consistency() {
         if bank.slot == 0 {
             assert_eq!(
                 bank.hash().to_string(),
-                "i5hGiQ3WtEehNrvhbfPFkUdm267t18fSpujcYtkBioW",
+                "Hn2FoJuoFWXVFVnwcQ6peuT24mUPmhDtXHXVjKD7M4yP",
             );
         }
 
         if bank.slot == 32 {
             assert_eq!(
                 bank.hash().to_string(),
-                "7NmBtNvbhoqzatJv8NgBs84qWrm4ZhpuC75DCpbqwiS"
+                "7FPfwBut4b7bXtKPsobQS1cuFgF47SZHDb4teQcJRomv"
             );
         }
         if bank.slot == 64 {
             assert_eq!(
                 bank.hash().to_string(),
-                "A1jjuUaENeDcsSvwejFGaZ5zWmnJ77doSzqdKtfzpoFk"
+                "28CWiEuA3izdt5xe4LyS4Q1DTALmYgrVctSTazFiPVcW"
             );
         }
         if bank.slot == 128 {
             assert_eq!(
                 bank.hash().to_string(),
-                "ApnMkFt5Bs4yDJ8S2CCPsQRL1He6vWXw6vMzAyc5i811"
+                "AdCmEvRXWKpvXb9fG6AFQhzGgB5ciAXnDajvaNK7YUg8"
             );
             break;
         }
@@ -6655,7 +6637,7 @@ fn test_shrink_candidate_slots_cached() {
     // No more slots should be shrunk
     assert_eq!(bank2.shrink_candidate_slots(), 0);
     // alive_counts represents the count of alive accounts in the three slots 0,1,2
-    assert_eq!(alive_counts, vec![15, 1, 7]);
+    assert_eq!(alive_counts, vec![15, 1, 6]);
 }
 
 #[test]
