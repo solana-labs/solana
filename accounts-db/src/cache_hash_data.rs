@@ -332,11 +332,7 @@ impl CacheHashData {
         let _ignored = remove_file(&cache_path);
         let cell_size = std::mem::size_of::<EntryType>() as u64;
         let mut m1 = Measure::start("create save");
-        let entries = data
-            .iter()
-            .map(|x: &Vec<EntryType>| x.len())
-            .collect::<Vec<_>>();
-        let entries = entries.iter().sum::<usize>();
+        let entries = data.iter().map(Vec::len).sum::<usize>();
         let capacity = cell_size * (entries as u64) + std::mem::size_of::<Header>() as u64;
 
         let mmap = CacheHashDataFile::new_map(&cache_path, capacity)?;
