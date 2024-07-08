@@ -12,7 +12,7 @@ USAGE:
 
 FLAGS:
         --help                Display this help message
-        --no-solana-prefix    Do not require \`solana-\` prefix on PACKAGE_NAME
+        --no-prefix           Do not require \`agave-\` or \`solana-\` prefix on PACKAGE_NAME
         --publish             Upload the reserved package. Without this flag, a
                               dry-run is performed
 
@@ -26,7 +26,7 @@ ARGS:
 EOF
 }
 
-require_solana_prefix=true
+require_prefix=true
 maybe_publish='--dry-run'
 positional=()
 while [[ -n "$1" ]]; do
@@ -38,8 +38,8 @@ while [[ -n "$1" ]]; do
       display_help
       exit 0
       ;;
-    --no-solana-prefix)
-      require_solana_prefix=false
+    --no-prefix)
+      require_prefix=false
       ;;
     --publish)
       maybe_publish=''
@@ -89,9 +89,9 @@ if ! [[ "${package_name}" =~ ^[a-zA-Z0-9_-]{1,64} ]]; then
   exit 1
 fi
 
-if ${require_solana_prefix} && ! [[ "${package_name}" =~ ^solana- ]]; then
+if ${require_prefix} && ! [[ "${package_name}" =~ ^(agave|solana)- ]]; then
   # shellcheck disable=SC2016 # backticks are not a command here
-  echo 'error: PACKAGE_NAME MUST start with `solana-`' 1>&2
+  echo 'error: PACKAGE_NAME MUST start with `agave-` or `solana-`' 1>&2
   display_help
   exit 1
 fi
