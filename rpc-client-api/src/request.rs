@@ -94,6 +94,10 @@ pub enum RpcRequest {
     GetStorageTurn,
     GetStorageTurnRate,
     GetSlotsPerSegment,
+    #[deprecated(
+        since = "1.18.18",
+        note = "Do not use; getStakeActivation is not supported by the JSON-RPC server."
+    )]
     GetStakeActivation,
     GetStakeMinimumDelegation,
     GetStoragePubkeysForSlot,
