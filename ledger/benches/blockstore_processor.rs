@@ -12,7 +12,7 @@ use {
     },
     solana_program_runtime::timings::ExecuteTimings,
     solana_runtime::{
-        bank::Bank, prioritization_fee_cache::PrioritizationFeeCache,
+        bank::Bank, bank_forks::BankForks, prioritization_fee_cache::PrioritizationFeeCache,
         transaction_batch::TransactionBatch,
     },
     solana_sdk::{
@@ -24,7 +24,10 @@ use {
         system_program, system_transaction,
         transaction::SanitizedTransaction,
     },
-    std::{borrow::Cow, sync::Arc},
+    std::{
+        borrow::Cow,
+        sync::{Arc, RwLock},
+    },
     test::Bencher,
 };
 
@@ -74,6 +77,7 @@ fn create_transactions(bank: &Bank, num: usize) -> Vec<SanitizedTransaction> {
 
 struct BenchFrame {
     bank: Arc<Bank>,
+    _bank_forks: Arc<RwLock<BankForks>>,
     prioritization_fee_cache: PrioritizationFeeCache,
 }
 
@@ -100,10 +104,11 @@ fn setup(apply_cost_tracker_during_replay: bool) -> BenchFrame {
     bank.write_cost_tracker()
         .unwrap()
         .set_limits(u64::MAX, u64::MAX, u64::MAX);
-    let bank = bank.wrap_with_bank_forks_for_tests().0;
+    let (bank, bank_forks) = bank.wrap_with_bank_forks_for_tests();
     let prioritization_fee_cache = PrioritizationFeeCache::default();
     BenchFrame {
         bank,
+        _bank_forks: bank_forks,
         prioritization_fee_cache,
     }
 }
@@ -124,6 +129,7 @@ fn bench_execute_batch(
 
     let BenchFrame {
         bank,
+        _bank_forks,
         prioritization_fee_cache,
     } = setup(apply_cost_tracker_during_replay);
     let transactions = create_transactions(&bank, 2_usize.pow(20));

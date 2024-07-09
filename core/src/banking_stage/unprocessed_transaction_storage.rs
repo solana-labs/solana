@@ -1069,7 +1069,7 @@ mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(10);
-        let current_bank = Bank::new_with_bank_forks_for_tests(&genesis_config).0;
+        let (current_bank, _bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
 
         let simple_transactions: Vec<Transaction> = (0..256)
             .map(|_id| {

@@ -19,7 +19,7 @@ use {
         poh_recorder::{create_test_recorder, PohRecorder},
         poh_service::PohService,
     },
-    solana_runtime::bank::Bank,
+    solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{
         account::{Account, ReadableAccount},
         signature::Keypair,
@@ -89,6 +89,7 @@ fn create_consumer(poh_recorder: &RwLock<PohRecorder>) -> Consumer {
 
 struct BenchFrame {
     bank: Arc<Bank>,
+    _bank_forks: Arc<RwLock<BankForks>>,
     ledger_path: TempDir,
     exit: Arc<AtomicBool>,
     poh_recorder: Arc<RwLock<PohRecorder>>,
@@ -115,7 +116,7 @@ fn setup() -> BenchFrame {
     bank.write_cost_tracker()
         .unwrap()
         .set_limits(u64::MAX, u64::MAX, u64::MAX);
-    let bank = bank.wrap_with_bank_forks_for_tests().0;
+    let (bank, bank_forks) = bank.wrap_with_bank_forks_for_tests();
 
     let ledger_path = TempDir::new().unwrap();
     let blockstore = Arc::new(
@@ -126,6 +127,7 @@ fn setup() -> BenchFrame {
 
     BenchFrame {
         bank,
+        _bank_forks: bank_forks,
         ledger_path,
         exit,
         poh_recorder,
@@ -147,6 +149,7 @@ fn bench_process_and_record_transactions(bencher: &mut Bencher, batch_size: usiz
 
     let BenchFrame {
         bank,
+        _bank_forks,
         ledger_path: _ledger_path,
         exit,
         poh_recorder,

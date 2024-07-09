@@ -129,6 +129,7 @@ fn create_custom_environment<'a>() -> BuiltinProgram<InvokeContext<'a>> {
 }
 
 fn create_executable_environment(
+    fork_graph: Arc<RwLock<MockForkGraph>>,
     mock_bank: &mut MockBankCallback,
     program_cache: &mut ProgramCache<MockForkGraph>,
 ) {
@@ -141,7 +142,7 @@ fn create_executable_environment(
         )),
     };
 
-    program_cache.fork_graph = Some(Arc::new(RwLock::new(MockForkGraph {})));
+    program_cache.fork_graph = Some(Arc::downgrade(&fork_graph));
 
     // We must fill in the sysvar cache entries
     let time_now = SystemTime::now()
@@ -446,7 +447,10 @@ fn svm_integration() {
         HashSet::new(),
     );
 
+    let fork_graph = Arc::new(RwLock::new(MockForkGraph {}));
+
     create_executable_environment(
+        fork_graph.clone(),
         &mut mock_bank,
         &mut batch_processor.program_cache.write().unwrap(),
     );

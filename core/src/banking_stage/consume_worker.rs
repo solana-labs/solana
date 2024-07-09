@@ -710,7 +710,8 @@ mod tests {
         },
         solana_poh::poh_recorder::{PohRecorder, WorkingBankEntry},
         solana_runtime::{
-            prioritization_fee_cache::PrioritizationFeeCache, vote_sender_types::ReplayVoteReceiver,
+            bank_forks::BankForks, prioritization_fee_cache::PrioritizationFeeCache,
+            vote_sender_types::ReplayVoteReceiver,
         },
         solana_sdk::{
             genesis_config::GenesisConfig, poh_config::PohConfig, pubkey::Pubkey,
@@ -729,6 +730,7 @@ mod tests {
         mint_keypair: Keypair,
         genesis_config: GenesisConfig,
         bank: Arc<Bank>,
+        _bank_forks: Arc<RwLock<BankForks>>,
         _ledger_path: TempDir,
         _entry_receiver: Receiver<WorkingBankEntry>,
         poh_recorder: Arc<RwLock<PohRecorder>>,
@@ -745,7 +747,7 @@ mod tests {
             mint_keypair,
             ..
         } = create_slow_genesis_config(10_000);
-        let bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config).0;
+        let (bank, bank_forks) = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
 
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path())
@@ -788,6 +790,7 @@ mod tests {
                 mint_keypair,
                 genesis_config,
                 bank,
+                _bank_forks: bank_forks,
                 _ledger_path: ledger_path,
                 _entry_receiver: entry_receiver,
                 poh_recorder,

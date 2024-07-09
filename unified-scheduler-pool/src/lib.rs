@@ -1477,7 +1477,10 @@ mod tests {
             system_transaction,
             transaction::{SanitizedTransaction, TransactionError},
         },
-        std::{sync::Arc, thread::JoinHandle},
+        std::{
+            sync::{Arc, RwLock},
+            thread::JoinHandle,
+        },
     };
 
     #[derive(Debug)]
@@ -1756,7 +1759,7 @@ mod tests {
             ..
         } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank = setup_dummy_fork_graph(bank);
+        let (bank, _bank_forks) = setup_dummy_fork_graph(bank);
 
         let context = SchedulingContext::new(bank.clone());
 
@@ -1824,7 +1827,7 @@ mod tests {
 
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank = setup_dummy_fork_graph(bank);
+        let (bank, _bank_forks) = setup_dummy_fork_graph(bank);
 
         let context = SchedulingContext::new(bank.clone());
 
@@ -1876,7 +1879,7 @@ mod tests {
             ..
         } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank = setup_dummy_fork_graph(bank);
+        let (bank, _bank_forks) = setup_dummy_fork_graph(bank);
 
         let context = SchedulingContext::new(bank.clone());
 
@@ -1957,7 +1960,7 @@ mod tests {
         ));
 
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank = setup_dummy_fork_graph(bank);
+        let (bank, _bank_forks) = setup_dummy_fork_graph(bank);
         let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool = SchedulerPool::<PooledScheduler<FaultyHandler>, _>::new(
             None,
@@ -2050,7 +2053,7 @@ mod tests {
         } = create_genesis_config(10_000);
 
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank = setup_dummy_fork_graph(bank);
+        let (bank, _bank_forks) = setup_dummy_fork_graph(bank);
         let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool = SchedulerPool::<PooledScheduler<CountingHandler>, _>::new(
             None,
@@ -2197,12 +2200,12 @@ mod tests {
         assert!(!child_bank.has_installed_scheduler());
     }
 
-    fn setup_dummy_fork_graph(bank: Bank) -> Arc<Bank> {
+    fn setup_dummy_fork_graph(bank: Bank) -> (Arc<Bank>, Arc<RwLock<BankForks>>) {
         let slot = bank.slot();
         let bank_fork = BankForks::new_rw_arc(bank);
         let bank = bank_fork.read().unwrap().get(slot).unwrap();
-        bank.set_fork_graph_in_program_cache(bank_fork);
-        bank
+        bank.set_fork_graph_in_program_cache(Arc::downgrade(&bank_fork));
+        (bank, bank_fork)
     }
 
     #[test]
@@ -2221,7 +2224,7 @@ mod tests {
             genesis_config.hash(),
         ));
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank = setup_dummy_fork_graph(bank);
+        let (bank, _bank_forks) = setup_dummy_fork_graph(bank);
         let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool =
             DefaultSchedulerPool::new_dyn(None, None, None, None, ignored_prioritization_fee_cache);
@@ -2255,7 +2258,7 @@ mod tests {
             ..
         } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank = setup_dummy_fork_graph(bank);
+        let (bank, _bank_forks) = setup_dummy_fork_graph(bank);
 
         let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool_raw = DefaultSchedulerPool::do_new(
@@ -2384,7 +2387,7 @@ mod tests {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
 
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank = setup_dummy_fork_graph(bank);
+        let (bank, _bank_forks) = setup_dummy_fork_graph(bank);
 
         // Use 2 transactions with different timings to deliberately cover the two code paths of
         // notifying panics in the handler threads, taken conditionally depending on whether the
@@ -2466,7 +2469,7 @@ mod tests {
         } = create_genesis_config(10_000);
 
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank = setup_dummy_fork_graph(bank);
+        let (bank, _bank_forks) = setup_dummy_fork_graph(bank);
         let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool = SchedulerPool::<PooledScheduler<CountingFaultyHandler>, _>::new(
             None,
@@ -2558,7 +2561,7 @@ mod tests {
         ));
 
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank = setup_dummy_fork_graph(bank);
+        let (bank, _bank_forks) = setup_dummy_fork_graph(bank);
         let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let pool = SchedulerPool::<PooledScheduler<StallingHandler>, _>::new_dyn(
             None,
@@ -2619,7 +2622,7 @@ mod tests {
 
         // Create two banks for two contexts
         let bank0 = Bank::new_for_tests(&genesis_config);
-        let bank0 = setup_dummy_fork_graph(bank0);
+        let bank0 = setup_dummy_fork_graph(bank0).0;
         let bank1 = Arc::new(Bank::new_from_parent(
             bank0.clone(),
             &Pubkey::default(),
@@ -2817,7 +2820,7 @@ mod tests {
                 slot.checked_add(1).unwrap(),
             );
         }
-        let bank = setup_dummy_fork_graph(bank);
+        let (bank, _bank_forks) = setup_dummy_fork_graph(bank);
         let context = SchedulingContext::new(bank.clone());
 
         let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
@@ -2888,7 +2891,7 @@ mod tests {
             ..
         } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
-        let bank = &setup_dummy_fork_graph(bank);
+        let (bank, _bank_forks) = &setup_dummy_fork_graph(bank);
 
         let mut tx = system_transaction::transfer(
             mint_keypair,

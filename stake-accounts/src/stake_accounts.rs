@@ -283,7 +283,7 @@ pub(crate) fn move_stake_accounts(
 mod tests {
     use {
         super::*,
-        solana_runtime::{bank::Bank, bank_client::BankClient},
+        solana_runtime::{bank::Bank, bank_client::BankClient, bank_forks::BankForks},
         solana_sdk::{
             account::{AccountSharedData, ReadableAccount},
             client::SyncClient,
@@ -292,16 +292,16 @@ mod tests {
             stake::state::StakeStateV2,
         },
         solana_stake_program::stake_state,
-        std::sync::Arc,
+        std::sync::{Arc, RwLock},
     };
 
-    fn create_bank(lamports: u64) -> (Arc<Bank>, Keypair, u64, u64) {
+    fn create_bank(lamports: u64) -> (Arc<Bank>, Arc<RwLock<BankForks>>, Keypair, u64, u64) {
         let (mut genesis_config, mint_keypair) = create_genesis_config(lamports);
         genesis_config.fee_rate_governor = solana_sdk::fee_calculator::FeeRateGovernor::new(0, 0);
-        let bank = Bank::new_with_bank_forks_for_tests(&genesis_config).0;
+        let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
         let stake_rent = bank.get_minimum_balance_for_rent_exemption(StakeStateV2::size_of());
         let system_rent = bank.get_minimum_balance_for_rent_exemption(0);
-        (bank, mint_keypair, stake_rent, system_rent)
+        (bank, bank_forks, mint_keypair, stake_rent, system_rent)
     }
 
     fn create_account<C: SyncClient>(
@@ -355,7 +355,7 @@ mod tests {
 
     #[test]
     fn test_new_derived_stake_account() {
-        let (bank, funding_keypair, stake_rent, system_rent) = create_bank(10_000_000);
+        let (bank, _bank_forks, funding_keypair, stake_rent, system_rent) = create_bank(10_000_000);
         let funding_pubkey = funding_keypair.pubkey();
         let bank_client = BankClient::new_shared(bank);
         let fee_payer_keypair = create_account(&bank_client, &funding_keypair, system_rent);
@@ -392,7 +392,7 @@ mod tests {
 
     #[test]
     fn test_authorize_stake_accounts() {
-        let (bank, funding_keypair, stake_rent, system_rent) = create_bank(10_000_000);
+        let (bank, _bank_forks, funding_keypair, stake_rent, system_rent) = create_bank(10_000_000);
         let funding_pubkey = funding_keypair.pubkey();
         let bank_client = BankClient::new_shared(bank);
         let fee_payer_keypair = create_account(&bank_client, &funding_keypair, system_rent);
@@ -454,7 +454,7 @@ mod tests {
 
     #[test]
     fn test_lockup_stake_accounts() {
-        let (bank, funding_keypair, stake_rent, system_rent) = create_bank(10_000_000);
+        let (bank, _bank_forks, funding_keypair, stake_rent, system_rent) = create_bank(10_000_000);
         let funding_pubkey = funding_keypair.pubkey();
         let bank_client = BankClient::new_shared(bank);
         let fee_payer_keypair = create_account(&bank_client, &funding_keypair, system_rent);
@@ -545,7 +545,7 @@ mod tests {
 
     #[test]
     fn test_rebase_stake_accounts() {
-        let (bank, funding_keypair, stake_rent, system_rent) = create_bank(10_000_000);
+        let (bank, _bank_forks, funding_keypair, stake_rent, system_rent) = create_bank(10_000_000);
         let funding_pubkey = funding_keypair.pubkey();
         let bank_client = BankClient::new_shared(bank);
         let fee_payer_keypair = create_account(&bank_client, &funding_keypair, system_rent);
@@ -608,7 +608,7 @@ mod tests {
 
     #[test]
     fn test_move_stake_accounts() {
-        let (bank, funding_keypair, stake_rent, system_rent) = create_bank(10_000_000);
+        let (bank, _bank_forks, funding_keypair, stake_rent, system_rent) = create_bank(10_000_000);
         let funding_pubkey = funding_keypair.pubkey();
         let bank_client = BankClient::new_shared(bank);
         let fee_payer_keypair = create_account(&bank_client, &funding_keypair, system_rent);

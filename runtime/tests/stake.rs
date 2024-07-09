@@ -142,7 +142,7 @@ fn test_stake_create_and_split_single_signature() {
 
     let staker_pubkey = staker_keypair.pubkey();
 
-    let bank = Bank::new_with_bank_forks_for_tests(&genesis_config).0;
+    let (bank, _bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
     let bank_client = BankClient::new_shared(bank.clone());
 
     let stake_address =
@@ -218,7 +218,7 @@ fn test_stake_create_and_split_to_existing_system_account() {
 
     let staker_pubkey = staker_keypair.pubkey();
 
-    let bank = Bank::new_with_bank_forks_for_tests(&genesis_config).0;
+    let (bank, _bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
     let bank_client = BankClient::new_shared(bank.clone());
 
     let stake_address =
@@ -593,7 +593,7 @@ fn test_create_stake_account_from_seed() {
         &solana_sdk::pubkey::new_rand(),
         1_000_000,
     );
-    let bank = Bank::new_with_bank_forks_for_tests(&genesis_config).0;
+    let (bank, _bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
     let mint_pubkey = mint_keypair.pubkey();
     let bank_client = BankClient::new_shared(bank.clone());
 

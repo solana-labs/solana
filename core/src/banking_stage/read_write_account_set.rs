@@ -84,7 +84,7 @@ mod tests {
     use {
         super::ReadWriteAccountSet,
         solana_ledger::genesis_utils::GenesisConfigInfo,
-        solana_runtime::{bank::Bank, genesis_utils::create_genesis_config},
+        solana_runtime::{bank::Bank, bank_forks::BankForks, genesis_utils::create_genesis_config},
         solana_sdk::{
             account::AccountSharedData,
             address_lookup_table::{
@@ -101,7 +101,10 @@ mod tests {
             signer::Signer,
             transaction::{MessageHash, SanitizedTransaction, VersionedTransaction},
         },
-        std::{borrow::Cow, sync::Arc},
+        std::{
+            borrow::Cow,
+            sync::{Arc, RwLock},
+        },
     };
 
     fn create_test_versioned_message(
@@ -171,9 +174,9 @@ mod tests {
         )
     }
 
-    fn create_test_bank() -> Arc<Bank> {
+    fn create_test_bank() -> (Arc<Bank>, Arc<RwLock<BankForks>>) {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
-        Bank::new_no_wallclock_throttle_for_tests(&genesis_config).0
+        Bank::new_no_wallclock_throttle_for_tests(&genesis_config)
     }
 
     // Helper function (could potentially use test_case in future).
@@ -182,7 +185,7 @@ mod tests {
     // conflict_index = 2 means write lock conflict with address table key
     // conflict_index = 3 means read lock conflict with address table key
     fn test_check_and_take_locks(conflict_index: usize, add_write: bool, expectation: bool) {
-        let bank = create_test_bank();
+        let (bank, _bank_forks) = create_test_bank();
         let (bank, table_address) = create_test_address_lookup_table(bank, 2);
         let tx = create_test_sanitized_transaction(
             &Keypair::new(),

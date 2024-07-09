@@ -83,7 +83,7 @@ fn test_scheduler_waited_by_drop_bank_service() {
     bank_forks.write().unwrap().install_scheduler_pool(pool);
     let genesis = 0;
     let genesis_bank = &bank_forks.read().unwrap().get(genesis).unwrap();
-    genesis_bank.set_fork_graph_in_program_cache(bank_forks.clone());
+    genesis_bank.set_fork_graph_in_program_cache(Arc::downgrade(&bank_forks));
 
     // Create bank, which is pruned later
     let pruned = 2;
