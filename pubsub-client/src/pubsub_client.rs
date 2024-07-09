@@ -103,7 +103,6 @@ use {
             RpcProgramAccountsConfig, RpcSignatureSubscribeConfig, RpcTransactionLogsConfig,
             RpcTransactionLogsFilter,
         },
-        filter,
         response::{
             Response as RpcResponse, RpcBlockUpdate, RpcKeyedAccount, RpcLogsResponse,
             RpcSignatureResult, RpcVote, SlotInfo, SlotUpdate,
@@ -205,35 +204,6 @@ where
                 .to_string(),
             ))
             .map_err(|err| err.into())
-    }
-
-    fn get_version(
-        writable_socket: &Arc<RwLock<WebSocket<MaybeTlsStream<TcpStream>>>>,
-    ) -> Result<semver::Version, PubsubClientError> {
-        writable_socket.write().unwrap().send(Message::Text(
-            json!({
-                "jsonrpc":"2.0","id":1,"method":"getVersion",
-            })
-            .to_string(),
-        ))?;
-        let message = writable_socket.write().unwrap().read()?;
-        let message_text = &message.into_text()?;
-
-        if let Ok(json_msg) = serde_json::from_str::<Map<String, Value>>(message_text) {
-            if let Some(Object(version_map)) = json_msg.get("result") {
-                if let Some(node_version) = version_map.get("solana-core") {
-                    if let Some(node_version) = node_version.as_str() {
-                        if let Ok(parsed) = semver::Version::parse(node_version) {
-                            return Ok(parsed);
-                        }
-                    }
-                }
-            }
-        }
-
-        Err(PubsubClientError::UnexpectedGetVersionResponse(format!(
-            "msg={message_text}"
-        )))
     }
 
     fn read_message(
@@ -523,7 +493,7 @@ impl PubsubClient {
     pub fn program_subscribe(
         url: &str,
         pubkey: &Pubkey,
-        mut config: Option<RpcProgramAccountsConfig>,
+        config: Option<RpcProgramAccountsConfig>,
     ) -> Result<ProgramSubscription, PubsubClientError> {
         let url = Url::parse(url)?;
         let socket = connect_with_retry(url)?;
@@ -533,16 +503,6 @@ impl PubsubClient {
         let socket_clone = socket.clone();
         let exit = Arc::new(AtomicBool::new(false));
         let exit_clone = exit.clone();
-
-        if let Some(ref mut config) = config {
-            if let Some(ref mut filters) = config.filters {
-                let node_version = PubsubProgramClientSubscription::get_version(&socket_clone).ok();
-                // If node does not support the pubsub `getVersion` method, assume version is old
-                // and filters should be mapped (node_version.is_none()).
-                filter::maybe_map_filters(node_version, filters)
-                    .map_err(PubsubClientError::RequestError)?;
-            }
-        }
 
         let body = json!({
             "jsonrpc":"2.0",

@@ -32,7 +32,6 @@ use {
             Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult,
         },
         config::{RpcAccountInfoConfig, *},
-        filter::{self, RpcFilterType},
         request::{RpcError, RpcRequest, RpcResponseErrorData, TokenAccountsFilter},
         response::*,
     },
@@ -57,7 +56,7 @@ use {
         str::FromStr,
         time::{Duration, Instant},
     },
-    tokio::{sync::RwLock, time::sleep},
+    tokio::time::sleep,
 };
 
 /// A client of a remote Solana node.
@@ -141,7 +140,6 @@ use {
 pub struct RpcClient {
     sender: Box<dyn RpcSender + Send + Sync + 'static>,
     config: RpcClientConfig,
-    node_version: RwLock<Option<semver::Version>>,
 }
 
 impl RpcClient {
@@ -157,7 +155,6 @@ impl RpcClient {
     ) -> Self {
         Self {
             sender: Box::new(sender),
-            node_version: RwLock::new(None),
             config,
         }
     }
@@ -509,28 +506,9 @@ impl RpcClient {
         self.sender.url()
     }
 
-    pub async fn set_node_version(&self, version: semver::Version) -> Result<(), ()> {
-        let mut w_node_version = self.node_version.write().await;
-        *w_node_version = Some(version);
+    #[deprecated(since = "2.0.2", note = "RpcClient::node_version is no longer used")]
+    pub async fn set_node_version(&self, _version: semver::Version) -> Result<(), ()> {
         Ok(())
-    }
-
-    async fn get_node_version(&self) -> Result<semver::Version, RpcError> {
-        let r_node_version = self.node_version.read().await;
-        if let Some(version) = &*r_node_version {
-            Ok(version.clone())
-        } else {
-            drop(r_node_version);
-            let mut w_node_version = self.node_version.write().await;
-            let node_version = self.get_version().await.map_err(|e| {
-                RpcError::RpcRequestError(format!("cluster version query failed: {e}"))
-            })?;
-            let node_version = semver::Version::parse(&node_version.solana_core).map_err(|e| {
-                RpcError::RpcRequestError(format!("failed to parse cluster version: {e}"))
-            })?;
-            *w_node_version = Some(node_version.clone());
-            Ok(node_version)
-        }
     }
 
     /// Get the configured default [commitment level][cl].
@@ -548,17 +526,6 @@ impl RpcClient {
     /// [`RpcClient::confirm_transaction_with_commitment`].
     pub fn commitment(&self) -> CommitmentConfig {
         self.config.commitment_config
-    }
-
-    #[allow(deprecated)]
-    async fn maybe_map_filters(
-        &self,
-        mut filters: Vec<RpcFilterType>,
-    ) -> Result<Vec<RpcFilterType>, RpcError> {
-        let node_version = self.get_node_version().await?;
-        filter::maybe_map_filters(Some(node_version), &mut filters)
-            .map_err(RpcError::RpcRequestError)?;
-        Ok(filters)
     }
 
     /// Submit a transaction and wait for confirmation.
@@ -895,11 +862,7 @@ impl RpcClient {
         transaction: &impl SerializableTransaction,
         config: RpcSendTransactionConfig,
     ) -> ClientResult<Signature> {
-        let encoding = if let Some(encoding) = config.encoding {
-            encoding
-        } else {
-            self.default_cluster_transaction_encoding().await?
-        };
+        let encoding = config.encoding.unwrap_or(UiTransactionEncoding::Base64);
         let preflight_commitment = CommitmentConfig {
             commitment: config.preflight_commitment.unwrap_or_default(),
         };
@@ -1185,16 +1148,6 @@ impl RpcClient {
         }
     }
 
-    async fn default_cluster_transaction_encoding(
-        &self,
-    ) -> Result<UiTransactionEncoding, RpcError> {
-        if self.get_node_version().await? < semver::Version::new(1, 3, 16) {
-            Ok(UiTransactionEncoding::Base58)
-        } else {
-            Ok(UiTransactionEncoding::Base64)
-        }
-    }
-
     /// Simulates sending a transaction.
     ///
     /// If the transaction fails, then the [`err`] field of the returned
@@ -1344,11 +1297,7 @@ impl RpcClient {
         transaction: &impl SerializableTransaction,
         config: RpcSimulateTransactionConfig,
     ) -> RpcResult<RpcSimulateTransactionResult> {
-        let encoding = if let Some(encoding) = config.encoding {
-            encoding
-        } else {
-            self.default_cluster_transaction_encoding().await?
-        };
+        let encoding = config.encoding.unwrap_or(UiTransactionEncoding::Base64);
         let commitment = config.commitment.unwrap_or_default();
         let config = RpcSimulateTransactionConfig {
             encoding: Some(encoding),
@@ -4046,9 +3995,6 @@ impl RpcClient {
             .commitment
             .unwrap_or_else(|| self.commitment());
         config.account_config.commitment = Some(commitment);
-        if let Some(filters) = config.filters {
-            config.filters = Some(self.maybe_map_filters(filters).await?);
-        }
 
         let accounts = self
             .send::<OptionalContext<Vec<RpcKeyedAccount>>>(

@@ -1,6 +1,5 @@
 #![allow(deprecated)]
 use {
-    crate::version_req::VersionReq,
     solana_inline_spl::{token::GenericTokenAccount, token_2022::Account},
     solana_sdk::account::{AccountSharedData, ReadableAccount},
     std::borrow::Cow,
@@ -296,34 +295,6 @@ impl From<RpcMemcmp> for Memcmp {
             encoding: None,
         }
     }
-}
-
-pub fn maybe_map_filters(
-    node_version: Option<semver::Version>,
-    filters: &mut [RpcFilterType],
-) -> Result<(), String> {
-    let version_reqs = VersionReq::from_strs(&["<1.11.2", "~1.13"])?;
-    let needs_mapping = node_version
-        .map(|version| version_reqs.matches_any(&version))
-        .unwrap_or(true);
-    if needs_mapping {
-        for filter in filters.iter_mut() {
-            if let RpcFilterType::Memcmp(memcmp) = filter {
-                match &memcmp.bytes {
-                    MemcmpEncodedBytes::Base58(string) => {
-                        memcmp.bytes = MemcmpEncodedBytes::Binary(string.clone());
-                    }
-                    MemcmpEncodedBytes::Base64(_) => {
-                        return Err("RPC node on old version does not support base64 \
-                            encoding for memcmp filters"
-                            .to_string());
-                    }
-                    _ => {}
-                }
-            }
-        }
-    }
-    Ok(())
 }
 
 #[cfg(test)]
