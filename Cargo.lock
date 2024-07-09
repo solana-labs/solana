@@ -5762,14 +5762,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-cargo-build-bpf"
-version = "2.1.0"
-dependencies = [
- "log",
- "solana-logger",
-]
-
-[[package]]
 name = "solana-cargo-build-sbf"
 version = "2.1.0"
 dependencies = [
@@ -5789,10 +5781,6 @@ dependencies = [
  "solana-sdk",
  "tar",
 ]
-
-[[package]]
-name = "solana-cargo-test-bpf"
-version = "2.1.0"
 
 [[package]]
 name = "solana-cargo-test-sbf"
