@@ -358,7 +358,7 @@ impl ElGamalPubkey {
     #[allow(non_snake_case)]
     pub fn new(secret: &ElGamalSecretKey) -> Self {
         let s = &secret.0;
-        assert!(s != &Scalar::zero());
+        assert_ne!(s, &Scalar::ZERO);
 
         ElGamalPubkey(s.invert() * &(*H))
     }
@@ -377,10 +377,11 @@ impl ElGamalPubkey {
         if bytes.len() != ELGAMAL_PUBKEY_LEN {
             return None;
         }
+        let Ok(compressed_ristretto) = CompressedRistretto::from_slice(bytes) else {
+            return None;
+        };
 
-        Some(ElGamalPubkey(
-            CompressedRistretto::from_slice(bytes).decompress()?,
-        ))
+        compressed_ristretto.decompress().map(ElGamalPubkey)
     }
 
     /// Encrypts an amount under the public key.
@@ -440,8 +441,12 @@ impl TryFrom<&[u8]> for ElGamalPubkey {
             return Err(ElGamalError::PubkeyDeserialization);
         }
 
+        let Ok(compressed_ristretto) = CompressedRistretto::from_slice(bytes) else {
+            return Err(ElGamalError::PubkeyDeserialization);
+        };
+
         Ok(ElGamalPubkey(
-            CompressedRistretto::from_slice(bytes)
+            compressed_ristretto
                 .decompress()
                 .ok_or(ElGamalError::PubkeyDeserialization)?,
         ))
@@ -552,7 +557,9 @@ impl ElGamalSecretKey {
     #[deprecated(since = "2.0.0", note = "please use `try_from()` instead")]
     pub fn from_bytes(bytes: &[u8]) -> Option<ElGamalSecretKey> {
         match bytes.try_into() {
-            Ok(bytes) => Scalar::from_canonical_bytes(bytes).map(ElGamalSecretKey),
+            Ok(bytes) => Scalar::from_canonical_bytes(bytes)
+                .map(ElGamalSecretKey)
+                .into(),
             _ => None,
         }
     }
@@ -611,6 +618,7 @@ impl TryFrom<&[u8]> for ElGamalSecretKey {
         match bytes.try_into() {
             Ok(bytes) => Ok(ElGamalSecretKey::from(
                 Scalar::from_canonical_bytes(bytes)
+                    .into_option()
                     .ok_or(ElGamalError::SecretKeyDeserialization)?,
             )),
             _ => Err(ElGamalError::SecretKeyDeserialization),
@@ -799,9 +807,11 @@ impl DecryptHandle {
             return None;
         }
 
-        Some(DecryptHandle(
-            CompressedRistretto::from_slice(bytes).decompress()?,
-        ))
+        let Ok(compressed_ristretto) = CompressedRistretto::from_slice(bytes) else {
+            return None;
+        };
+
+        compressed_ristretto.decompress().map(DecryptHandle)
     }
 }
 

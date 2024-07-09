@@ -149,16 +149,16 @@ impl RangeProof {
 
         let mut i = 0;
         let mut exp_z = z * z;
-        let mut exp_y = Scalar::one();
+        let mut exp_y = Scalar::ONE;
 
         for (amount_i, n_i) in amounts.iter().zip(bit_lengths.iter()) {
-            let mut exp_2 = Scalar::one();
+            let mut exp_2 = Scalar::ONE;
 
             for j in 0..(*n_i) {
                 // `j` is guaranteed to be at most `u64::BITS` (a 6-bit number) and therefore,
                 // casting is lossless and right shift can be safely unwrapped
                 let a_L_j = Scalar::from(amount_i.checked_shr(j as u32).unwrap() & 1);
-                let a_R_j = a_L_j - Scalar::one();
+                let a_R_j = a_L_j - Scalar::ONE;
 
                 l_poly.0[i] = a_L_j - z;
                 l_poly.1[i] = s_L[i];
@@ -193,7 +193,7 @@ impl RangeProof {
         // z^2 * V_1 + z^3 * V_2 + ... + z^{m+1} * V_m + delta(y, z)*G + x*T_1 + x^2*T_2
         let x = transcript.challenge_scalar(b"x");
 
-        let mut agg_opening = Scalar::zero();
+        let mut agg_opening = Scalar::ZERO;
         let mut exp_z = z;
         for opening in openings {
             exp_z *= z;
@@ -224,7 +224,7 @@ impl RangeProof {
         let w = transcript.challenge_scalar(b"w");
         let Q = w * &(*G);
 
-        let G_factors: Vec<Scalar> = iter::repeat(Scalar::one()).take(nm).collect();
+        let G_factors: Vec<Scalar> = iter::repeat(Scalar::ONE).take(nm).collect();
         let H_factors: Vec<Scalar> = util::exp_iter(y.invert()).take(nm).collect();
 
         // generate challenge `c` for consistency with the verifier's transcript
@@ -325,7 +325,7 @@ impl RangeProof {
         let value_commitment_scalars = util::exp_iter(z).take(m).map(|z_exp| c * zz * z_exp);
 
         let mega_check = RistrettoPoint::optional_multiscalar_mul(
-            iter::once(Scalar::one())
+            iter::once(Scalar::ONE)
                 .chain(iter::once(x))
                 .chain(iter::once(c * x))
                 .chain(iter::once(c * x * x))
@@ -388,10 +388,13 @@ impl RangeProof {
         let T_2 = CompressedRistretto(util::read32(&slice[3 * 32..]));
 
         let t_x = Scalar::from_canonical_bytes(util::read32(&slice[4 * 32..]))
+            .into_option()
             .ok_or(RangeProofVerificationError::Deserialization)?;
         let t_x_blinding = Scalar::from_canonical_bytes(util::read32(&slice[5 * 32..]))
+            .into_option()
             .ok_or(RangeProofVerificationError::Deserialization)?;
         let e_blinding = Scalar::from_canonical_bytes(util::read32(&slice[6 * 32..]))
+            .into_option()
             .ok_or(RangeProofVerificationError::Deserialization)?;
 
         let ipp_proof = InnerProductProof::from_bytes(&slice[7 * 32..])?;

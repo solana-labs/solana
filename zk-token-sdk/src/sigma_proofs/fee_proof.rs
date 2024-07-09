@@ -358,7 +358,7 @@ impl FeeSigmaProof {
                 c_max_proof,
                 -c_max_proof * m,
                 -z_max,
-                Scalar::one(),
+                Scalar::ONE,
                 w * z_x,
                 w * z_delta_real,
                 -w * c_equality,
