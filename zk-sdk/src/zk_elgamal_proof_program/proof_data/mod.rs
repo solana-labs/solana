@@ -57,8 +57,8 @@ pub enum ProofType {
     BatchedRangeProofU128,
     BatchedRangeProofU256,
     GroupedCiphertext2HandlesValidity,
-    GroupedCiphertext3HandlesValidity,
     BatchedGroupedCiphertext2HandlesValidity,
+    GroupedCiphertext3HandlesValidity,
     BatchedGroupedCiphertext3HandlesValidity,
 }
 
