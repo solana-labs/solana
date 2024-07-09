@@ -42,7 +42,6 @@ use {
             enable_partitioned_epoch_reward, enable_poseidon_syscall,
             error_on_syscall_bpf_function_hash_collisions, get_sysvar_syscall_enabled,
             last_restart_slot_sysvar, reject_callx_r10, remaining_compute_units_syscall_enabled,
-            switch_to_new_elf_parser,
         },
         hash::{Hash, Hasher},
         instruction::{AccountMeta, InstructionError, ProcessedSiblingInstruction},
@@ -306,7 +305,6 @@ pub fn create_program_runtime_environment_v1<'a>(
         enable_sbpf_v1: true,
         enable_sbpf_v2: false,
         optimize_rodata: false,
-        new_elf_parser: feature_set.is_active(&switch_to_new_elf_parser::id()),
         aligned_memory_mapping: !feature_set.is_active(&bpf_account_data_direct_mapping::id()),
         // Warning, do not use `Config::default()` so that configuration here is explicit.
     };

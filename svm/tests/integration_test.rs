@@ -94,7 +94,6 @@ fn create_custom_environment<'a>() -> BuiltinProgram<InvokeContext<'a>> {
         enable_sbpf_v1: true,
         enable_sbpf_v2: false,
         optimize_rodata: false,
-        new_elf_parser: false,
         aligned_memory_mapping: true,
     };
 
