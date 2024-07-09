@@ -1958,16 +1958,6 @@ fn deprecated_arguments() -> Vec<DeprecatedArg> {
         (@into-option $v:expr) => { Some($v) };
     }
 
-    add_arg!(Arg::with_name("accounts_db_caching_enabled").long("accounts-db-caching-enabled"));
-    add_arg!(
-        Arg::with_name("accounts_db_index_hashing")
-            .long("accounts-db-index-hashing")
-            .help(
-                "Enables the use of the index in hash calculation in \
-                 AccountsHashVerifier/Accounts Background Service.",
-            ),
-        usage_warning: "The accounts hash is only calculated without using the index.",
-    );
     add_arg!(
         Arg::with_name("accounts_db_skip_shrink")
             .long("accounts-db-skip-shrink")
@@ -2062,16 +2052,6 @@ fn deprecated_arguments() -> Vec<DeprecatedArg> {
         .long("minimal-rpc-api")
         .takes_value(false)
         .help("Only expose the RPC methods required to serve snapshots to other nodes"));
-    add_arg!(
-        Arg::with_name("no_accounts_db_index_hashing")
-            .long("no-accounts-db-index-hashing")
-            .help(
-                "This is obsolete. See --accounts-db-index-hashing. \
-                 Disables the use of the index in hash calculation in \
-                 AccountsHashVerifier/Accounts Background Service.",
-            ),
-        usage_warning: "The accounts hash is only calculated without using the index.",
-    );
     add_arg!(
         Arg::with_name("no_check_vote_account")
             .long("no-check-vote-account")
