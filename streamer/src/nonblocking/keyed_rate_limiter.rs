@@ -40,13 +40,12 @@ where
         allowed
     }
 
-    /// retain only keys whose throttle start date is within the throttle interval.
+    /// retain only keys whose rate-limiting start date is within the set up interval.
     /// Otherwise drop them as inactive
     pub fn retain_recent(&self) {
         let now = tokio::time::Instant::now();
-        self.limiters.retain(|_key, limiter| {
-            now.duration_since(*limiter.throttle_start_instant()) <= self.interval
-        });
+        self.limiters
+            .retain(|_key, limiter| now.duration_since(*limiter.start_instant()) <= self.interval);
     }
 
     /// Returns the number of "live" keys in the rate limiter.
@@ -79,7 +78,7 @@ pub mod test {
         assert!(!limiter.check_and_update(2));
         assert!(limiter.len() == 2);
 
-        // sleep 150 ms, the throttle parameters should have been reset.
+        // sleep 150 ms, the rate-limiting parameters should have been reset.
         sleep(Duration::from_millis(150)).await;
         assert!(limiter.len() == 2);
 

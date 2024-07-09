@@ -28,7 +28,7 @@ impl ConnectionRateLimiter {
         }
     }
 
-    /// retain only keys whose throttle start date is within the throttle interval.
+    /// retain only keys whose rate-limiting start date is within the rate-limiting interval.
     /// Otherwise drop them as inactive
     pub fn retain_recent(&self) {
         self.limiter.retain_recent()

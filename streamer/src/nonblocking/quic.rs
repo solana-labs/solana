@@ -326,7 +326,7 @@ async fn run_server(
                     remote_address.ip()
                 );
                 stats
-                    .connection_throttled_across_all
+                    .connection_rate_limited_across_all
                     .fetch_add(1, Ordering::Relaxed);
                 continue;
             }
@@ -344,7 +344,7 @@ async fn run_server(
                     remote_address
                 );
                 stats
-                    .connection_throttled_per_ipaddr
+                    .connection_rate_limited_per_ipaddr
                     .fetch_add(1, Ordering::Relaxed);
                 continue;
             }
