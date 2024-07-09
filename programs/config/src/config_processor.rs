@@ -3,7 +3,8 @@
 use {
     crate::ConfigKeys,
     bincode::deserialize,
-    solana_program_runtime::{declare_process_instruction, ic_msg},
+    solana_log_collector::ic_msg,
+    solana_program_runtime::declare_process_instruction,
     solana_sdk::{
         instruction::InstructionError, program_utils::limited_deserialize, pubkey::Pubkey,
         transaction_context::IndexOfAccount,

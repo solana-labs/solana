@@ -1,0 +1,16 @@
+[package]
+name = "solana-log-collector"
+description = "Solana log collector"
+documentation = "https://docs.rs/solana-log-collector"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+log = { workspace = true }
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

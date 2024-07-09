@@ -19,6 +19,7 @@ solana-program = { workspace = true }
 thiserror = { workspace = true }
 
 [target.'cfg(not(target_os = "solana"))'.dependencies]
+solana-log-collector = { workspace = true }
 solana-program-runtime = { workspace = true }
 solana-sdk = { workspace = true }
 

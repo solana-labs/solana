@@ -22,6 +22,7 @@ use {
         compute_budget_processor::process_compute_budget_instructions,
     },
     solana_loader_v4_program::create_program_runtime_environment_v2,
+    solana_log_collector::LogCollector,
     solana_measure::{measure, measure::Measure},
     solana_program_runtime::{
         invoke_context::{EnvironmentConfig, InvokeContext},
@@ -29,7 +30,6 @@ use {
             ForkGraph, ProgramCache, ProgramCacheEntry, ProgramCacheForTxBatch,
             ProgramCacheMatchCriteria,
         },
-        log_collector::LogCollector,
         sysvar_cache::SysvarCache,
         timings::{ExecuteTimingType, ExecuteTimings},
     },

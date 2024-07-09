@@ -3,9 +3,9 @@
 //! The format of these log messages should not be modified to avoid breaking downstream consumers
 //! of program logging
 use {
-    crate::{ic_logger_msg, log_collector::LogCollector},
     base64::{prelude::BASE64_STANDARD, Engine},
     itertools::Itertools,
+    solana_log_collector::{ic_logger_msg, LogCollector},
     solana_sdk::pubkey::Pubkey,
     std::{cell::RefCell, rc::Rc},
 };

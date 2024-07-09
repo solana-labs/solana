@@ -4594,6 +4594,7 @@ dependencies = [
  "num-derive",
  "num-traits",
  "rustc_version",
+ "solana-log-collector",
  "solana-program",
  "solana-program-runtime",
  "solana-sdk",
@@ -4677,6 +4678,7 @@ dependencies = [
  "scopeguard",
  "solana-compute-budget",
  "solana-curve25519",
+ "solana-log-collector",
  "solana-measure",
  "solana-poseidon",
  "solana-program-runtime",
@@ -4812,6 +4814,7 @@ dependencies = [
  "chrono",
  "serde",
  "serde_derive",
+ "solana-log-collector",
  "solana-program-runtime",
  "solana-sdk",
 ]
@@ -5166,11 +5169,19 @@ version = "2.1.0"
 dependencies = [
  "log",
  "solana-compute-budget",
+ "solana-log-collector",
  "solana-measure",
  "solana-program-runtime",
  "solana-sdk",
  "solana-type-overrides",
  "solana_rbpf",
+]
+
+[[package]]
+name = "solana-log-collector"
+version = "2.1.0"
+dependencies = [
+ "log",
 ]
 
 [[package]]
@@ -5353,6 +5364,7 @@ dependencies = [
  "rustc_version",
  "serde",
  "solana-compute-budget",
+ "solana-log-collector",
  "solana-measure",
  "solana-metrics",
  "solana-sdk",
@@ -5381,6 +5393,7 @@ dependencies = [
  "solana-bpf-loader-program",
  "solana-compute-budget",
  "solana-inline-spl",
+ "solana-log-collector",
  "solana-logger",
  "solana-program-runtime",
  "solana-runtime",
@@ -5682,6 +5695,7 @@ dependencies = [
  "solana-cli-output",
  "solana-compute-budget",
  "solana-ledger",
+ "solana-log-collector",
  "solana-logger",
  "solana-measure",
  "solana-program",
@@ -6207,6 +6221,7 @@ dependencies = [
  "log",
  "rustc_version",
  "solana-config-program",
+ "solana-log-collector",
  "solana-program-runtime",
  "solana-sdk",
  "solana-type-overrides",
@@ -6306,6 +6321,7 @@ dependencies = [
  "solana-bpf-loader-program",
  "solana-compute-budget",
  "solana-loader-v4-program",
+ "solana-log-collector",
  "solana-measure",
  "solana-metrics",
  "solana-program-runtime",
@@ -6323,6 +6339,7 @@ dependencies = [
  "log",
  "serde",
  "serde_derive",
+ "solana-log-collector",
  "solana-program-runtime",
  "solana-sdk",
  "solana-type-overrides",
@@ -6590,6 +6607,7 @@ dependencies = [
  "bytemuck",
  "num-derive",
  "num-traits",
+ "solana-log-collector",
  "solana-program-runtime",
  "solana-sdk",
  "solana-zk-sdk",
@@ -6629,6 +6647,7 @@ dependencies = [
  "bytemuck",
  "num-derive",
  "num-traits",
+ "solana-log-collector",
  "solana-program-runtime",
  "solana-sdk",
  "solana-zk-token-sdk",

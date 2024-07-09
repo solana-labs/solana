@@ -1,14 +1,13 @@
 use {
     solana_compute_budget::compute_budget::ComputeBudget,
+    solana_log_collector::{ic_logger_msg, LogCollector},
     solana_measure::measure::Measure,
     solana_program_runtime::{
-        ic_logger_msg,
         invoke_context::InvokeContext,
         loaded_programs::{
             LoadProgramMetrics, ProgramCacheEntry, ProgramCacheEntryType,
             DELAY_VISIBILITY_SLOT_OFFSET,
         },
-        log_collector::LogCollector,
         stable_log,
     },
     solana_rbpf::{

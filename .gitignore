@@ -17,6 +17,7 @@ target/
 *.log
 log-*.txt
 log-*/
+!log-collector/
 !log-analyzer/*
 
 # intellij files

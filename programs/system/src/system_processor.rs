@@ -4,8 +4,9 @@ use {
         withdraw_nonce_account,
     },
     log::*,
+    solana_log_collector::ic_msg,
     solana_program_runtime::{
-        declare_process_instruction, ic_msg, invoke_context::InvokeContext,
+        declare_process_instruction, invoke_context::InvokeContext,
         sysvar_cache::get_sysvar_with_account_check,
     },
     solana_sdk::{

@@ -186,6 +186,7 @@ dependencies = [
  "solana-geyser-plugin-manager",
  "solana-gossip",
  "solana-ledger",
+ "solana-log-collector",
  "solana-logger",
  "solana-measure",
  "solana-program-runtime",
@@ -5549,6 +5550,7 @@ dependencies = [
  "num-derive",
  "num-traits",
  "rustc_version 0.4.0",
+ "solana-log-collector",
  "solana-program",
  "solana-program-runtime",
  "solana-sdk",
@@ -5731,6 +5733,7 @@ dependencies = [
  "scopeguard",
  "solana-compute-budget",
  "solana-curve25519",
+ "solana-log-collector",
  "solana-measure",
  "solana-poseidon",
  "solana-program-runtime",
@@ -6040,6 +6043,7 @@ dependencies = [
  "chrono",
  "serde",
  "serde_derive",
+ "solana-log-collector",
  "solana-logger",
  "solana-program-runtime",
  "solana-sdk",
@@ -6548,6 +6552,7 @@ dependencies = [
  "bincode",
  "log",
  "solana-compute-budget",
+ "solana-log-collector",
  "solana-measure",
  "solana-program-runtime",
  "solana-sdk",
@@ -6606,6 +6611,13 @@ dependencies = [
  "serde_json",
  "solana-logger",
  "solana-version",
+]
+
+[[package]]
+name = "solana-log-collector"
+version = "2.1.0"
+dependencies = [
+ "log",
 ]
 
 [[package]]
@@ -6884,6 +6896,7 @@ dependencies = [
  "solana-compute-budget",
  "solana-frozen-abi",
  "solana-frozen-abi-macro",
+ "solana-log-collector",
  "solana-logger",
  "solana-measure",
  "solana-metrics",
@@ -6914,6 +6927,7 @@ dependencies = [
  "solana-bpf-loader-program",
  "solana-compute-budget",
  "solana-inline-spl",
+ "solana-log-collector",
  "solana-logger",
  "solana-program-runtime",
  "solana-runtime",
@@ -7388,6 +7402,7 @@ dependencies = [
  "rustc_version 0.4.0",
  "solana-compute-budget",
  "solana-config-program",
+ "solana-log-collector",
  "solana-logger",
  "solana-program-runtime",
  "solana-sdk",
@@ -7514,6 +7529,7 @@ dependencies = [
  "solana-frozen-abi",
  "solana-frozen-abi-macro",
  "solana-loader-v4-program",
+ "solana-log-collector",
  "solana-logger",
  "solana-measure",
  "solana-metrics",
@@ -7545,6 +7561,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "solana-compute-budget",
+ "solana-log-collector",
  "solana-logger",
  "solana-program-runtime",
  "solana-sdk",
@@ -7928,6 +7945,7 @@ dependencies = [
  "bytemuck",
  "num-derive",
  "num-traits",
+ "solana-log-collector",
  "solana-program-runtime",
  "solana-sdk",
  "solana-zk-sdk",
@@ -7989,6 +8007,7 @@ dependencies = [
  "curve25519-dalek",
  "num-derive",
  "num-traits",
+ "solana-log-collector",
  "solana-program-runtime",
  "solana-sdk",
  "solana-zk-token-sdk",

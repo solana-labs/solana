@@ -51,6 +51,7 @@ members = [
     "ledger-tool",
     "local-cluster",
     "log-analyzer",
+    "log-collector",
     "logger",
     "measure",
     "memory-management",
@@ -365,6 +366,7 @@ solana-inline-spl = { path = "inline-spl", version = "=2.1.0" }
 solana-ledger = { path = "ledger", version = "=2.1.0" }
 solana-loader-v4-program = { path = "programs/loader-v4", version = "=2.1.0" }
 solana-local-cluster = { path = "local-cluster", version = "=2.1.0" }
+solana-log-collector = { path = "log-collector", version = "=2.1.0" }
 solana-logger = { path = "logger", version = "=2.1.0" }
 solana-measure = { path = "measure", version = "=2.1.0" }
 solana-merkle-tree = { path = "merkle-tree", version = "=2.1.0" }

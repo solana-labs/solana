@@ -2,7 +2,8 @@
 
 use {
     bytemuck::Pod,
-    solana_program_runtime::{declare_process_instruction, ic_msg, invoke_context::InvokeContext},
+    solana_log_collector::ic_msg,
+    solana_program_runtime::{declare_process_instruction, invoke_context::InvokeContext},
     solana_sdk::{
         feature_set,
         instruction::{InstructionError, TRANSACTION_LEVEL_STACK_HEIGHT},

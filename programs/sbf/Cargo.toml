@@ -32,6 +32,7 @@ solana-cli-output = { path = "../../cli-output", version = "=2.1.0" }
 solana-compute-budget = { path = "../../compute-budget", version = "=2.1.0" }
 solana-curve25519 = { path = "../../curves/curve25519", version = "=2.1.0" }
 solana-ledger = { path = "../../ledger", version = "=2.1.0" }
+solana-log-collector = { path = "../../log-collector", version = "=2.1.0" }
 solana-logger = { path = "../../logger", version = "=2.1.0" }
 solana-measure = { path = "../../measure", version = "=2.1.0" }
 solana-poseidon = { path = "../../poseidon/", version = "=2.1.0" }
@@ -93,6 +94,7 @@ solana-bpf-loader-program = { workspace = true }
 solana-cli-output = { workspace = true }
 solana-compute-budget = { workspace = true }
 solana-ledger = { workspace = true }
+solana-log-collector = { workspace = true }
 solana-logger = { workspace = true }
 solana-measure = { workspace = true }
 solana-program = { workspace = true }
