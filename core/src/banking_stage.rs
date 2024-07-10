@@ -1015,7 +1015,7 @@ mod tests {
                 replay_vote_sender,
                 None,
                 Arc::new(ConnectionCache::new("connection_cache_test")),
-                bank_forks,
+                bank_forks.clone(), // keep a local-copy of bank-forks so worker threads do not lose weak access to bank-forks
                 &Arc::new(PrioritizationFeeCache::new(0u64)),
             );
 
