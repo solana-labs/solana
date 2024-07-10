@@ -136,7 +136,7 @@ impl ZeroCiphertextProof {
             vec![
                 &self.z,            // z
                 &(-&c),             // -c
-                &(-&Scalar::ONE),   // -identity
+                &(-&Scalar::one()), // -identity
                 &(&w * &self.z),    // w * z
                 &(&w_negated * &c), // -w * c
                 &w_negated,         // -w

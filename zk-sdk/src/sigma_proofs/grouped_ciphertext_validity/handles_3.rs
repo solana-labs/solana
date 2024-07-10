@@ -197,7 +197,7 @@ impl GroupedCiphertext3HandlesValidityProof {
                 &self.z_r,            // z_r
                 &self.z_x,            // z_x
                 &(-&c),               // -c
-                &-(&Scalar::ONE),     // -identity
+                &-(&Scalar::one()),   // -identity
                 &(&w * &self.z_r),    // w * z_r
                 &(&w_negated * &c),   // -w * c
                 &w_negated,           // -w
