@@ -7090,6 +7090,7 @@ dependencies = [
  "anyhow",
  "base64 0.22.1",
  "bs58",
+ "const_format",
  "jsonrpc-core",
  "reqwest",
  "reqwest-middleware",

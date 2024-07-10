@@ -28,6 +28,7 @@ solana-version = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
+const_format = { workspace = true }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
