@@ -5,7 +5,11 @@
 #![cfg(feature = "full")]
 
 use {
-    crate::{feature_set::FeatureSet, instruction::Instruction, precompiles::PrecompileError},
+    crate::{
+        feature_set::{ed25519_precompile_verify_strict, FeatureSet},
+        instruction::Instruction,
+        precompiles::PrecompileError,
+    },
     bytemuck::bytes_of,
     bytemuck_derive::{Pod, Zeroable},
     ed25519_dalek::{ed25519::signature::Signature, Signer, Verifier},
@@ -86,7 +90,7 @@ pub fn new_ed25519_instruction(keypair: &ed25519_dalek::Keypair, message: &[u8])
 pub fn verify(
     data: &[u8],
     instruction_datas: &[&[u8]],
-    _feature_set: &FeatureSet,
+    feature_set: &FeatureSet,
 ) -> Result<(), PrecompileError> {
     if data.len() < SIGNATURE_OFFSETS_START {
         return Err(PrecompileError::InvalidInstructionDataSize);
@@ -145,9 +149,15 @@ pub fn verify(
             offsets.message_data_size as usize,
         )?;
 
-        publickey
-            .verify(message, &signature)
-            .map_err(|_| PrecompileError::InvalidSignature)?;
+        if feature_set.is_active(&ed25519_precompile_verify_strict::id()) {
+            publickey
+                .verify_strict(message, &signature)
+                .map_err(|_| PrecompileError::InvalidSignature)?;
+        } else {
+            publickey
+                .verify(message, &signature)
+                .map_err(|_| PrecompileError::InvalidSignature)?;
+        }
     }
     Ok(())
 }
@@ -189,8 +199,63 @@ pub mod test {
             signature::{Keypair, Signer},
             transaction::Transaction,
         },
+        hex,
         rand0_7::{thread_rng, Rng},
     };
+
+    pub fn new_ed25519_instruction_raw(
+        pubkey: &[u8],
+        signature: &[u8],
+        message: &[u8],
+    ) -> Instruction {
+        assert_eq!(pubkey.len(), PUBKEY_SERIALIZED_SIZE);
+        assert_eq!(signature.len(), SIGNATURE_SERIALIZED_SIZE);
+
+        let mut instruction_data = Vec::with_capacity(
+            DATA_START
+                .saturating_add(SIGNATURE_SERIALIZED_SIZE)
+                .saturating_add(PUBKEY_SERIALIZED_SIZE)
+                .saturating_add(message.len()),
+        );
+
+        let num_signatures: u8 = 1;
+        let public_key_offset = DATA_START;
+        let signature_offset = public_key_offset.saturating_add(PUBKEY_SERIALIZED_SIZE);
+        let message_data_offset = signature_offset.saturating_add(SIGNATURE_SERIALIZED_SIZE);
+
+        // add padding byte so that offset structure is aligned
+        instruction_data.extend_from_slice(bytes_of(&[num_signatures, 0]));
+
+        let offsets = Ed25519SignatureOffsets {
+            signature_offset: signature_offset as u16,
+            signature_instruction_index: u16::MAX,
+            public_key_offset: public_key_offset as u16,
+            public_key_instruction_index: u16::MAX,
+            message_data_offset: message_data_offset as u16,
+            message_data_size: message.len() as u16,
+            message_instruction_index: u16::MAX,
+        };
+
+        instruction_data.extend_from_slice(bytes_of(&offsets));
+
+        debug_assert_eq!(instruction_data.len(), public_key_offset);
+
+        instruction_data.extend_from_slice(pubkey);
+
+        debug_assert_eq!(instruction_data.len(), signature_offset);
+
+        instruction_data.extend_from_slice(signature);
+
+        debug_assert_eq!(instruction_data.len(), message_data_offset);
+
+        instruction_data.extend_from_slice(message);
+
+        Instruction {
+            program_id: solana_sdk::ed25519_program::id(),
+            accounts: vec![],
+            data: instruction_data,
+        }
+    }
 
     fn test_case(
         num_signatures: u16,
@@ -379,5 +444,51 @@ pub mod test {
             Hash::default(),
         );
         assert!(tx.verify_precompiles(&feature_set).is_err());
+    }
+
+    #[test]
+    fn test_ed25519_malleability() {
+        solana_logger::setup();
+        let mint_keypair = Keypair::new();
+
+        // sig created via ed25519_dalek: both pass
+        let privkey = ed25519_dalek::Keypair::generate(&mut thread_rng());
+        let message_arr = b"hello";
+        let instruction = new_ed25519_instruction(&privkey, message_arr);
+        let tx = Transaction::new_signed_with_payer(
+            &[instruction.clone()],
+            Some(&mint_keypair.pubkey()),
+            &[&mint_keypair],
+            Hash::default(),
+        );
+
+        let feature_set = FeatureSet::default();
+        assert!(tx.verify_precompiles(&feature_set).is_ok());
+
+        let feature_set = FeatureSet::all_enabled();
+        assert!(tx.verify_precompiles(&feature_set).is_ok());
+
+        // malleable sig: verify_strict does NOT pass
+        // for example, test number 5:
+        // https://github.com/C2SP/CCTV/tree/main/ed25519
+        // R has low order (in fact R == 0)
+        let pubkey =
+            &hex::decode("10eb7c3acfb2bed3e0d6ab89bf5a3d6afddd1176ce4812e38d9fd485058fdb1f")
+                .unwrap();
+        let signature = &hex::decode("00000000000000000000000000000000000000000000000000000000000000009472a69cd9a701a50d130ed52189e2455b23767db52cacb8716fb896ffeeac09").unwrap();
+        let message = b"ed25519vectors 3";
+        let instruction = new_ed25519_instruction_raw(pubkey, signature, message);
+        let tx = Transaction::new_signed_with_payer(
+            &[instruction.clone()],
+            Some(&mint_keypair.pubkey()),
+            &[&mint_keypair],
+            Hash::default(),
+        );
+
+        let feature_set = FeatureSet::default();
+        assert!(tx.verify_precompiles(&feature_set).is_ok());
+
+        let feature_set = FeatureSet::all_enabled();
+        assert!(tx.verify_precompiles(&feature_set).is_err()); // verify_strict does NOT pass
     }
 }

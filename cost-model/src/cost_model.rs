@@ -40,7 +40,7 @@ impl CostModel {
         } else {
             let mut tx_cost = UsageCostDetails::new_with_default_capacity();
 
-            Self::get_signature_cost(&mut tx_cost, transaction);
+            Self::get_signature_cost(&mut tx_cost, transaction, feature_set);
             Self::get_write_lock_cost(&mut tx_cost, transaction, feature_set);
             Self::get_transaction_cost(&mut tx_cost, transaction, feature_set);
             tx_cost.allocated_accounts_data_size =
@@ -66,7 +66,7 @@ impl CostModel {
         } else {
             let mut tx_cost = UsageCostDetails::new_with_default_capacity();
 
-            Self::get_signature_cost(&mut tx_cost, transaction);
+            Self::get_signature_cost(&mut tx_cost, transaction, feature_set);
             Self::get_write_lock_cost(&mut tx_cost, transaction, feature_set);
             Self::get_instructions_data_cost(&mut tx_cost, transaction);
             tx_cost.allocated_accounts_data_size =
@@ -82,13 +82,25 @@ impl CostModel {
         }
     }
 
-    fn get_signature_cost(tx_cost: &mut UsageCostDetails, transaction: &SanitizedTransaction) {
+    fn get_signature_cost(
+        tx_cost: &mut UsageCostDetails,
+        transaction: &SanitizedTransaction,
+        feature_set: &FeatureSet,
+    ) {
         let signatures_count_detail = transaction.message().get_signature_details();
         tx_cost.num_transaction_signatures = signatures_count_detail.num_transaction_signatures();
         tx_cost.num_secp256k1_instruction_signatures =
             signatures_count_detail.num_secp256k1_instruction_signatures();
         tx_cost.num_ed25519_instruction_signatures =
             signatures_count_detail.num_ed25519_instruction_signatures();
+
+        let ed25519_verify_cost =
+            if feature_set.is_active(&feature_set::ed25519_precompile_verify_strict::id()) {
+                ED25519_VERIFY_STRICT_COST
+            } else {
+                ED25519_VERIFY_COST
+            };
+
         tx_cost.signature_cost = signatures_count_detail
             .num_transaction_signatures()
             .saturating_mul(SIGNATURE_COST)
@@ -100,7 +112,7 @@ impl CostModel {
             .saturating_add(
                 signatures_count_detail
                     .num_ed25519_instruction_signatures()
-                    .saturating_mul(ED25519_VERIFY_COST),
+                    .saturating_mul(ed25519_verify_cost),
             );
     }
 
