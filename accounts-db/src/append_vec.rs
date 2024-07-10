@@ -1813,6 +1813,51 @@ pub mod tests {
 
     #[test_case(StorageAccess::Mmap)]
     #[test_case(StorageAccess::File)]
+    fn test_get_account_sizes(storage_access: StorageAccess) {
+        const NUM_ACCOUNTS: usize = 37;
+        let pubkeys: Vec<_> = std::iter::repeat_with(Pubkey::new_unique)
+            .take(NUM_ACCOUNTS)
+            .collect();
+
+        let mut rng = thread_rng();
+        let mut accounts = Vec::with_capacity(pubkeys.len());
+        let mut stored_sizes = Vec::with_capacity(pubkeys.len());
+        for _ in &pubkeys {
+            let lamports = rng.gen();
+            let data_len = rng.gen_range(0..MAX_PERMITTED_DATA_LENGTH) as usize;
+            let account = AccountSharedData::new(lamports, data_len, &Pubkey::default());
+            accounts.push(account);
+            stored_sizes.push(aligned_stored_size(data_len));
+        }
+        let accounts = accounts;
+        let stored_sizes = stored_sizes;
+        let total_stored_size = stored_sizes.iter().sum();
+
+        let temp_file = get_append_vec_path("test_get_account_sizes");
+        let account_offsets = {
+            let append_vec = AppendVec::new(&temp_file.path, true, total_stored_size);
+            // wrap AppendVec in ManuallyDrop to ensure we do not remove the backing file when dropped
+            let append_vec = ManuallyDrop::new(append_vec);
+            let slot = 77; // the specific slot does not matter
+            let storable_accounts: Vec<_> = std::iter::zip(&pubkeys, &accounts).collect();
+            let stored_accounts_info = append_vec
+                .append_accounts(&(slot, storable_accounts.as_slice()), 0)
+                .unwrap();
+            append_vec.flush().unwrap();
+            stored_accounts_info.offsets
+        };
+
+        // now open the append vec with the given storage access method
+        // then get the account sizes to ensure they are correct
+        let (append_vec, _) =
+            AppendVec::new_from_file(&temp_file.path, total_stored_size, storage_access).unwrap();
+
+        let account_sizes = append_vec.get_account_sizes(account_offsets.as_slice());
+        assert_eq!(account_sizes, stored_sizes);
+    }
+
+    #[test_case(StorageAccess::Mmap)]
+    #[test_case(StorageAccess::File)]
     fn test_scan_pubkeys(storage_access: StorageAccess) {
         const NUM_ACCOUNTS: usize = 37;
         let pubkeys: Vec<_> = std::iter::repeat_with(solana_sdk::pubkey::new_rand)
