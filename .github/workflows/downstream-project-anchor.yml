@@ -13,8 +13,6 @@ on:
       - "**.rs"
       - "Cargo.toml"
       - "Cargo.lock"
-      - "cargo-build-bpf"
-      - "cargo-test-bpf"
       - "cargo-build-sbf"
       - "cargo-test-sbf"
       - "scripts/build-downstream-anchor-projects.sh"

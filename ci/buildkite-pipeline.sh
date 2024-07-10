@@ -181,8 +181,6 @@ all_test_steps() {
              ^fetch-perf-libs.sh \
              ^programs/ \
              ^sdk/ \
-             cargo-build-bpf$ \
-             cargo-test-bpf$ \
              cargo-build-sbf$ \
              cargo-test-sbf$ \
       ; then
@@ -212,8 +210,6 @@ EOF
              ^fetch-perf-libs.sh \
              ^programs/ \
              ^sdk/ \
-             cargo-build-bpf$ \
-             cargo-test-bpf$ \
              cargo-build-sbf$ \
              cargo-test-sbf$ \
              ^ci/downstream-projects \

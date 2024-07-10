@@ -86,9 +86,7 @@ if [[ $CI_OS_NAME = windows ]]; then
   # Limit windows to end-user command-line tools.  Full validator support is not
   # yet available on windows
   BINS=(
-    cargo-build-bpf
     cargo-build-sbf
-    cargo-test-bpf
     cargo-test-sbf
     solana
     agave-install
@@ -118,9 +116,7 @@ else
   # Speed up net.sh deploys by excluding unused binaries
   if [[ -z "$validatorOnly" ]]; then
     BINS+=(
-      cargo-build-bpf
       cargo-build-sbf
-      cargo-test-bpf
       cargo-test-sbf
       solana-dos
       agave-install-init
