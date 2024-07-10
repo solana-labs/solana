@@ -1810,4 +1810,51 @@ pub mod tests {
         let result = av.get_stored_account_meta_callback(0, |_| true);
         assert!(result.is_none()); // Expect None to be returned.
     }
+
+    #[test_case(StorageAccess::Mmap)]
+    #[test_case(StorageAccess::File)]
+    fn test_scan_pubkeys(storage_access: StorageAccess) {
+        const NUM_ACCOUNTS: usize = 37;
+        let pubkeys: Vec<_> = std::iter::repeat_with(solana_sdk::pubkey::new_rand)
+            .take(NUM_ACCOUNTS)
+            .collect();
+
+        let mut rng = thread_rng();
+        let mut accounts = Vec::with_capacity(pubkeys.len());
+        let mut total_stored_size = 0;
+        for _ in &pubkeys {
+            let lamports = rng.gen();
+            let data_len = rng.gen_range(0..MAX_PERMITTED_DATA_LENGTH) as usize;
+            let account = AccountSharedData::new(lamports, data_len, &Pubkey::default());
+            accounts.push(account);
+            total_stored_size += aligned_stored_size(data_len);
+        }
+        let accounts = accounts;
+        let total_stored_size = total_stored_size;
+
+        let temp_file = get_append_vec_path("test_scan_pubkeys");
+        {
+            // wrap AppendVec in ManuallyDrop to ensure we do not remove the backing file when dropped
+            let append_vec =
+                ManuallyDrop::new(AppendVec::new(&temp_file.path, true, total_stored_size));
+            let slot = 42; // the specific slot does not matter
+            let storable_accounts: Vec<_> = std::iter::zip(&pubkeys, &accounts).collect();
+            append_vec
+                .append_accounts(&(slot, storable_accounts.as_slice()), 0)
+                .unwrap();
+            append_vec.flush().unwrap();
+        }
+
+        // now open the append vec with the given storage access method
+        // then scan the pubkeys to ensure they are correct
+        let (append_vec, _) =
+            AppendVec::new_from_file(&temp_file.path, total_stored_size, storage_access).unwrap();
+
+        let mut i = 0;
+        append_vec.scan_pubkeys(|pubkey| {
+            assert_eq!(pubkey, pubkeys.get(i).unwrap());
+            i += 1;
+        });
+        assert_eq!(i, pubkeys.len());
+    }
 }
