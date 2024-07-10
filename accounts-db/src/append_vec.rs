@@ -285,7 +285,7 @@ const fn page_align(size: u64) -> u64 {
 lazy_static! {
     pub static ref APPEND_VEC_MMAPPED_FILES_OPEN: AtomicU64 = AtomicU64::default();
     pub static ref APPEND_VEC_MMAPPED_FILES_DIRTY: AtomicU64 = AtomicU64::default();
-    pub static ref APPEND_VEC_REOPEN_AS_FILE_IO: AtomicU64 = AtomicU64::default();
+    pub static ref APPEND_VEC_OPEN_AS_FILE_IO: AtomicU64 = AtomicU64::default();
 }
 
 impl Drop for AppendVec {
@@ -298,7 +298,7 @@ impl Drop for AppendVec {
                 }
             }
             AppendVecFileBacking::File(_) => {
-                APPEND_VEC_REOPEN_AS_FILE_IO.fetch_sub(1, Ordering::Relaxed);
+                APPEND_VEC_OPEN_AS_FILE_IO.fetch_sub(1, Ordering::Relaxed);
             }
         }
         if self.remove_file_on_drop.load(Ordering::Acquire) {
@@ -503,6 +503,7 @@ impl AppendVec {
         // we must use mmap on non-linux
         if storage_access == StorageAccess::File {
             APPEND_VEC_MMAPPED_FILES_OPEN.fetch_add(1, Ordering::Relaxed);
+            APPEND_VEC_OPEN_AS_FILE_IO.fetch_add(1, Ordering::Relaxed);
 
             return Ok(AppendVec {
                 path,
