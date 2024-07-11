@@ -42,7 +42,6 @@ use {
     solana_program_runtime::{
         declare_process_instruction,
         loaded_programs::{ProgramCacheEntry, ProgramCacheEntryType},
-        timings::ExecuteTimings,
     },
     solana_sdk::{
         account::{
@@ -102,6 +101,7 @@ use {
     },
     solana_stake_program::stake_state::{self, StakeStateV2},
     solana_svm::nonce_info::NoncePartial,
+    solana_timings::ExecuteTimings,
     solana_vote_program::{
         vote_instruction,
         vote_state::{

@@ -10,7 +10,6 @@ use {
         blockstore_processor::{execute_batch, TransactionBatchWithIndexes},
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
     },
-    solana_program_runtime::timings::ExecuteTimings,
     solana_runtime::{
         bank::Bank, bank_forks::BankForks, prioritization_fee_cache::PrioritizationFeeCache,
         transaction_batch::TransactionBatch,
@@ -24,6 +23,7 @@ use {
         system_program, system_transaction,
         transaction::SanitizedTransaction,
     },
+    solana_timings::ExecuteTimings,
     std::{
         borrow::Cow,
         sync::{Arc, RwLock},

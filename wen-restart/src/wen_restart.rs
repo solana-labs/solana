@@ -28,7 +28,6 @@ use {
         leader_schedule_cache::LeaderScheduleCache,
     },
     solana_program::{clock::Slot, hash::Hash},
-    solana_program_runtime::timings::ExecuteTimings,
     solana_runtime::{
         accounts_background_service::AbsRequestSender,
         bank::Bank,
@@ -42,6 +41,7 @@ use {
         },
     },
     solana_sdk::{shred_version::compute_shred_version, timing::timestamp},
+    solana_timings::ExecuteTimings,
     solana_vote_program::vote_state::VoteTransaction,
     std::{
         collections::{HashMap, HashSet},

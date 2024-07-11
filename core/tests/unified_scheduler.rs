@@ -15,7 +15,6 @@ use {
         unfrozen_gossip_verified_vote_hashes::UnfrozenGossipVerifiedVoteHashes,
     },
     solana_ledger::genesis_utils::create_genesis_config,
-    solana_program_runtime::timings::ExecuteTimings,
     solana_runtime::{
         accounts_background_service::AbsRequestSender, bank::Bank, bank_forks::BankForks,
         genesis_utils::GenesisConfigInfo, prioritization_fee_cache::PrioritizationFeeCache,
@@ -26,6 +25,7 @@ use {
         system_transaction,
         transaction::{Result, SanitizedTransaction},
     },
+    solana_timings::ExecuteTimings,
     solana_unified_scheduler_pool::{
         DefaultTaskHandler, HandlerContext, PooledScheduler, SchedulerPool, TaskHandler,
     },

@@ -95,9 +95,7 @@ use {
     solana_measure::{measure, measure::Measure, measure_us},
     solana_perf::perf_libs,
     solana_program_runtime::{
-        invoke_context::BuiltinFunctionWithContext,
-        loaded_programs::ProgramCacheEntry,
-        timings::{ExecuteTimingType, ExecuteTimings},
+        invoke_context::BuiltinFunctionWithContext, loaded_programs::ProgramCacheEntry,
     },
     solana_sdk::{
         account::{
@@ -175,6 +173,7 @@ use {
             TransactionLoadedAccountsStats, TransactionResults,
         },
     },
+    solana_timings::{ExecuteTimingType, ExecuteTimings},
     solana_vote::vote_account::{VoteAccount, VoteAccountsHashMap},
     solana_vote_program::vote_state::VoteState,
     std::{

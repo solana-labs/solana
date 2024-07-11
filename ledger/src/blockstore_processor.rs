@@ -27,10 +27,6 @@ use {
     },
     solana_measure::{measure, measure::Measure},
     solana_metrics::datapoint_error,
-    solana_program_runtime::{
-        report_execute_timings,
-        timings::{ExecuteTimingType, ExecuteTimings},
-    },
     solana_rayon_threadlimit::{get_max_thread_count, get_thread_count},
     solana_runtime::{
         accounts_background_service::{AbsRequestSender, SnapshotRequestKind},
@@ -66,6 +62,7 @@ use {
             TransactionLoadedAccountsStats, TransactionResults,
         },
     },
+    solana_timings::{report_execute_timings, ExecuteTimingType, ExecuteTimings},
     solana_transaction_status::token_balances::TransactionTokenBalancesSet,
     solana_vote::vote_account::VoteAccountsHashMap,
     std::{

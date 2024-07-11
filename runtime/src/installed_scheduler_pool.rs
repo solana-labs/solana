@@ -23,12 +23,12 @@
 use {
     crate::bank::Bank,
     log::*,
-    solana_program_runtime::timings::ExecuteTimings,
     solana_sdk::{
         clock::Slot,
         hash::Hash,
         transaction::{Result, SanitizedTransaction, TransactionError},
     },
+    solana_timings::ExecuteTimings,
     std::{
         fmt::{self, Debug},
         mem,

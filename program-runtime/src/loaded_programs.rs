@@ -1,8 +1,5 @@
 use {
-    crate::{
-        invoke_context::{BuiltinFunctionWithContext, InvokeContext},
-        timings::ExecuteDetailsTimings,
-    },
+    crate::invoke_context::{BuiltinFunctionWithContext, InvokeContext},
     log::{debug, error, log_enabled, trace},
     percentage::PercentageInteger,
     solana_measure::measure::Measure,
@@ -19,6 +16,7 @@ use {
         pubkey::Pubkey,
         saturating_add_assign,
     },
+    solana_timings::ExecuteDetailsTimings,
     solana_type_overrides::{
         rand::{thread_rng, Rng},
         sync::{

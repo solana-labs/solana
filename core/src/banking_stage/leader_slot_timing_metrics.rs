@@ -1,7 +1,7 @@
 use {
     solana_poh::poh_recorder::RecordTransactionsTimings,
-    solana_program_runtime::timings::ExecuteTimings,
     solana_sdk::{clock::Slot, saturating_add_assign},
+    solana_timings::ExecuteTimings,
     std::time::Instant,
 };
 

@@ -20,7 +20,6 @@ use {
     solana_ledger::blockstore_processor::{
         execute_batch, TransactionBatchWithIndexes, TransactionStatusSender,
     },
-    solana_program_runtime::timings::ExecuteTimings,
     solana_runtime::{
         bank::Bank,
         installed_scheduler_pool::{
@@ -36,6 +35,7 @@ use {
         pubkey::Pubkey,
         transaction::{Result, SanitizedTransaction, TransactionError},
     },
+    solana_timings::ExecuteTimings,
     solana_unified_scheduler_logic::{SchedulingStateMachine, Task, UsageQueue},
     std::{
         fmt::Debug,
@@ -1462,7 +1462,6 @@ mod tests {
         super::*,
         crate::sleepless_testing,
         assert_matches::assert_matches,
-        solana_program_runtime::timings::ExecuteTimingType,
         solana_runtime::{
             bank::Bank,
             bank_forks::BankForks,
@@ -1477,6 +1476,7 @@ mod tests {
             system_transaction,
             transaction::{SanitizedTransaction, TransactionError},
         },
+        solana_timings::ExecuteTimingType,
         std::{
             sync::{Arc, RwLock},
             thread::JoinHandle,

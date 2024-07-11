@@ -15,7 +15,7 @@ use {
     solana_compute_budget::compute_budget::ComputeBudget,
     solana_log_collector::{ic_logger_msg, ic_msg},
     solana_poseidon as poseidon,
-    solana_program_runtime::{invoke_context::InvokeContext, stable_log, timings::ExecuteTimings},
+    solana_program_runtime::{invoke_context::InvokeContext, stable_log},
     solana_rbpf::{
         declare_builtin_function,
         memory_region::{AccessType, MemoryMapping},
@@ -56,6 +56,7 @@ use {
         sysvar::{Sysvar, SysvarId},
         transaction_context::{IndexOfAccount, InstructionAccount},
     },
+    solana_timings::ExecuteTimings,
     solana_type_overrides::sync::Arc,
     std::{
         alloc::Layout,

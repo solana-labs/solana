@@ -1,11 +1,8 @@
 use {
     crate::transaction_processing_callback::TransactionProcessingCallback,
-    solana_program_runtime::{
-        loaded_programs::{
-            LoadProgramMetrics, ProgramCacheEntry, ProgramCacheEntryOwner, ProgramCacheEntryType,
-            ProgramRuntimeEnvironment, ProgramRuntimeEnvironments, DELAY_VISIBILITY_SLOT_OFFSET,
-        },
-        timings::ExecuteDetailsTimings,
+    solana_program_runtime::loaded_programs::{
+        LoadProgramMetrics, ProgramCacheEntry, ProgramCacheEntryOwner, ProgramCacheEntryType,
+        ProgramRuntimeEnvironment, ProgramRuntimeEnvironments, DELAY_VISIBILITY_SLOT_OFFSET,
     },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
@@ -18,6 +15,7 @@ use {
         pubkey::Pubkey,
         transaction::{self, TransactionError},
     },
+    solana_timings::ExecuteDetailsTimings,
     solana_type_overrides::sync::Arc,
 };
 

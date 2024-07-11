@@ -1,3 +1,5 @@
+#[macro_use]
+extern crate eager;
 use {
     core::fmt,
     enum_iterator::Sequence,

@@ -18,7 +18,7 @@ use {
         compute_budget_processor::process_compute_budget_instructions,
     },
     solana_ledger::token_balances::collect_token_balances,
-    solana_program_runtime::{invoke_context::mock_process_instruction, timings::ExecuteTimings},
+    solana_program_runtime::invoke_context::mock_process_instruction,
     solana_rbpf::vm::ContextObject,
     solana_runtime::{
         bank::{Bank, TransactionBalancesSet},
@@ -69,6 +69,7 @@ use {
             TransactionResults,
         },
     },
+    solana_timings::ExecuteTimings,
     solana_transaction_status::{
         map_inner_instructions, ConfirmedTransactionWithStatusMeta, TransactionStatusMeta,
         TransactionWithStatusMeta, VersionedTransactionWithStatusMeta,

@@ -15,7 +15,6 @@ use {
             program::{BuiltinProgram, FunctionRegistry},
             vm::Config,
         },
-        timings::ExecuteTimings,
     },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
@@ -43,6 +42,7 @@ use {
         },
     },
     solana_svm_conformance::proto::{InstrEffects, InstrFixture},
+    solana_timings::ExecuteTimings,
     std::{
         collections::{HashMap, HashSet},
         env,

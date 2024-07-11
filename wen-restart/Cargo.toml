@@ -20,9 +20,9 @@ solana-entry = { workspace = true }
 solana-gossip = { workspace = true }
 solana-ledger = { workspace = true }
 solana-program = { workspace = true }
-solana-program-runtime = { workspace = true }
 solana-runtime = { workspace = true }
 solana-sdk = { workspace = true }
+solana-timings = { workspace = true }
 solana-vote-program = { workspace = true }
 
 [dev-dependencies]

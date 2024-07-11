@@ -6,7 +6,6 @@ use {
         },
         stable_log,
         sysvar_cache::SysvarCache,
-        timings::{ExecuteDetailsTimings, ExecuteTimings},
     },
     solana_compute_budget::compute_budget::ComputeBudget,
     solana_log_collector::{ic_msg, LogCollector},
@@ -35,6 +34,7 @@ use {
             IndexOfAccount, InstructionAccount, TransactionAccount, TransactionContext,
         },
     },
+    solana_timings::{ExecuteDetailsTimings, ExecuteTimings},
     solana_type_overrides::sync::{atomic::Ordering, Arc},
     solana_vote::vote_account::VoteAccountsHashMap,
     std::{
