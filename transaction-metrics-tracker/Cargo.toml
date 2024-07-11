@@ -10,7 +10,6 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
-Inflector = { workspace = true }
 base64 = { workspace = true }
 bincode = { workspace = true }
 # Update this borsh dependency to the workspace version once

@@ -12,8 +12,10 @@ edition = { workspace = true }
 [dependencies]
 bytemuck = { workspace = true }
 bytemuck_derive = { workspace = true }
-solana-program = { workspace = true }
 thiserror = { workspace = true }
+
+[target.'cfg(target_os = "solana")'.dependencies]
+solana-program = { workspace = true }
 
 [target.'cfg(not(target_os = "solana"))'.dependencies]
 curve25519-dalek = { workspace = true, features = ["serde"] }

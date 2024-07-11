@@ -36,7 +36,6 @@ solana-cli-output = { workspace = true }
 solana-client = { workspace = true }
 solana-compute-budget = { workspace = true }
 solana-config-program = { workspace = true }
-solana-faucet = { workspace = true }
 solana-loader-v4-program = { workspace = true }
 solana-logger = { workspace = true }
 solana-program-runtime = { workspace = true }
@@ -61,6 +60,7 @@ tiny-bip39 = { workspace = true }
 
 [dev-dependencies]
 assert_matches = { workspace = true }
+solana-faucet = { workspace = true }
 solana-rpc = { workspace = true }
 solana-streamer = { workspace = true }
 solana-test-validator = { workspace = true }

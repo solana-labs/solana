@@ -17,7 +17,6 @@ rayon = { workspace = true }
 solana-clap-utils = { workspace = true }
 solana-cli = { workspace = true }
 solana-client = { workspace = true }
-solana-core = { workspace = true }
 solana-faucet = { workspace = true }
 solana-gossip = { workspace = true }
 solana-logger = { workspace = true }

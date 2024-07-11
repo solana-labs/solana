@@ -4628,7 +4628,6 @@ dependencies = [
  "fnv",
  "log",
  "rand 0.8.5",
- "rayon",
  "rustc_version",
  "serde",
  "serde_derive",
@@ -5207,7 +5206,6 @@ dependencies = [
  "solana-logger",
  "solana-sdk",
  "solana-version",
- "static_assertions",
  "tokio",
  "url 2.5.2",
 ]
@@ -6383,7 +6381,6 @@ dependencies = [
 name = "solana-transaction-metrics-tracker"
 version = "2.1.0"
 dependencies = [
- "Inflector",
  "base64 0.22.1",
  "bincode",
  "lazy_static",
@@ -6561,7 +6558,6 @@ dependencies = [
  "solana-entry",
  "solana-gossip",
  "solana-ledger",
- "solana-logger",
  "solana-program",
  "solana-program-runtime",
  "solana-runtime",

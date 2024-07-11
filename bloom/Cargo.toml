@@ -14,13 +14,15 @@ bv = { workspace = true, features = ["serde"] }
 fnv = { workspace = true }
 log = { workspace = true }
 rand = { workspace = true }
-rayon = { workspace = true }
 serde = { workspace = true, features = ["rc"] }
 serde_derive = { workspace = true }
 solana-frozen-abi = { workspace = true, optional = true }
 solana-frozen-abi-macro = { workspace = true, optional = true }
 solana-sanitize = { workspace = true }
 solana-sdk = { workspace = true }
+
+[dev-dependencies]
+rayon = { workspace = true }
 
 [lib]
 crate-type = ["lib"]
