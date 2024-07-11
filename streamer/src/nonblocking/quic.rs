@@ -7,7 +7,7 @@ use {
                 STREAM_THROTTLING_INTERVAL_MS,
             },
         },
-        quic::{configure_server, QuicServerError, StreamStats},
+        quic::{configure_server, QuicServerError, StreamerStats},
         streamer::StakedNodes,
         tls_certificates::get_pubkey_from_tls_certificate,
     },
@@ -99,7 +99,7 @@ const TOTAL_CONNECTIONS_PER_SECOND: u64 = 2500;
 /// The threshold of the size of the connection rate limiter map. When
 /// the map size is above this, we will trigger a cleanup of older
 /// entries used by past requests.
-const CONNECITON_RATE_LIMITER_CLEANUP_SIZE_THRESHOLD: usize = 100_000;
+const CONNECTION_RATE_LIMITER_CLEANUP_SIZE_THRESHOLD: usize = 100_000;
 
 // A sequence of bytes that is part of a packet
 // along with where in the packet it is
@@ -140,7 +140,7 @@ impl ConnectionPeerType {
 
 pub struct SpawnNonBlockingServerResult {
     pub endpoints: Vec<Endpoint>,
-    pub stats: Arc<StreamStats>,
+    pub stats: Arc<StreamerStats>,
     pub thread: JoinHandle<()>,
     pub max_concurrent_connections: usize,
 }
@@ -212,7 +212,7 @@ pub fn spawn_server_multi(
             .map_err(QuicServerError::EndpointFailed)
         })
         .collect::<Result<Vec<_>, _>>()?;
-    let stats = Arc::<StreamStats>::default();
+    let stats = Arc::<StreamerStats>::default();
     let handle = tokio::spawn(run_server(
         name,
         endpoints.clone(),
@@ -248,7 +248,7 @@ async fn run_server(
     max_unstaked_connections: usize,
     max_streams_per_ms: u64,
     max_connections_per_ipaddr_per_min: u64,
-    stats: Arc<StreamStats>,
+    stats: Arc<StreamerStats>,
     wait_for_chunk_timeout: Duration,
     coalesce: Duration,
 ) {
@@ -331,7 +331,7 @@ async fn run_server(
                 continue;
             }
 
-            if rate_limiter.len() > CONNECITON_RATE_LIMITER_CLEANUP_SIZE_THRESHOLD {
+            if rate_limiter.len() > CONNECTION_RATE_LIMITER_CLEANUP_SIZE_THRESHOLD {
                 rate_limiter.retain_recent();
             }
             stats
@@ -374,7 +374,7 @@ async fn run_server(
 fn prune_unstaked_connection_table(
     unstaked_connection_table: &mut ConnectionTable,
     max_unstaked_connections: usize,
-    stats: Arc<StreamStats>,
+    stats: Arc<StreamerStats>,
 ) {
     if unstaked_connection_table.total_size >= max_unstaked_connections {
         const PRUNE_TABLE_TO_PERCENTAGE: u8 = 90;
@@ -457,7 +457,7 @@ struct NewConnectionHandlerParams {
     peer_type: ConnectionPeerType,
     total_stake: u64,
     max_connections_per_peer: usize,
-    stats: Arc<StreamStats>,
+    stats: Arc<StreamerStats>,
     max_stake: u64,
     min_stake: u64,
 }
@@ -466,7 +466,7 @@ impl NewConnectionHandlerParams {
     fn new_unstaked(
         packet_sender: AsyncSender<PacketAccumulator>,
         max_connections_per_peer: usize,
-        stats: Arc<StreamStats>,
+        stats: Arc<StreamerStats>,
     ) -> NewConnectionHandlerParams {
         NewConnectionHandlerParams {
             packet_sender,
@@ -640,7 +640,7 @@ async fn setup_connection(
     max_staked_connections: usize,
     max_unstaked_connections: usize,
     max_streams_per_ms: u64,
-    stats: Arc<StreamStats>,
+    stats: Arc<StreamerStats>,
     wait_for_chunk_timeout: Duration,
     stream_load_ema: Arc<StakedStreamLoadEMA>,
 ) {
@@ -769,7 +769,7 @@ async fn setup_connection(
     }
 }
 
-fn handle_connection_error(e: quinn::ConnectionError, stats: &StreamStats, from: SocketAddr) {
+fn handle_connection_error(e: quinn::ConnectionError, stats: &StreamerStats, from: SocketAddr) {
     debug!("error: {:?} from: {:?}", e, from);
     stats.connection_setup_error.fetch_add(1, Ordering::Relaxed);
     match e {
@@ -811,7 +811,7 @@ async fn packet_batch_sender(
     packet_sender: Sender<PacketBatch>,
     packet_receiver: AsyncReceiver<PacketAccumulator>,
     exit: Arc<AtomicBool>,
-    stats: Arc<StreamStats>,
+    stats: Arc<StreamerStats>,
     coalesce: Duration,
 ) {
     trace!("enter packet_batch_sender");
@@ -902,7 +902,7 @@ async fn packet_batch_sender(
 
 fn track_streamer_fetch_packet_performance(
     packet_perf_measure: &[([u8; 64], Instant)],
-    stats: &StreamStats,
+    stats: &StreamerStats,
 ) {
     if packet_perf_measure.is_empty() {
         return;
@@ -1075,7 +1075,7 @@ async fn handle_chunk(
     packet_accum: &mut Option<PacketAccumulator>,
     remote_addr: &SocketAddr,
     packet_sender: &AsyncSender<PacketAccumulator>,
-    stats: Arc<StreamStats>,
+    stats: Arc<StreamerStats>,
     peer_type: ConnectionPeerType,
 ) -> bool {
     match chunk {
@@ -1493,7 +1493,7 @@ pub mod test {
         Arc<AtomicBool>,
         crossbeam_channel::Receiver<PacketBatch>,
         SocketAddr,
-        Arc<StreamStats>,
+        Arc<StreamerStats>,
     ) {
         let sockets = {
             #[cfg(not(target_os = "windows"))]
@@ -1742,7 +1742,7 @@ pub mod test {
         let (pkt_batch_sender, pkt_batch_receiver) = unbounded();
         let (ptk_sender, pkt_receiver) = async_unbounded();
         let exit = Arc::new(AtomicBool::new(false));
-        let stats = Arc::new(StreamStats::default());
+        let stats = Arc::new(StreamerStats::default());
 
         let handle = tokio::spawn(packet_batch_sender(
             pkt_batch_sender,

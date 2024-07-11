@@ -1,5 +1,5 @@
 use {
-    crate::{nonblocking::quic::ConnectionPeerType, quic::StreamStats},
+    crate::{nonblocking::quic::ConnectionPeerType, quic::StreamerStats},
     percentage::Percentage,
     std::{
         cmp,
@@ -23,7 +23,7 @@ pub(crate) struct StakedStreamLoadEMA {
     current_load_ema: AtomicU64,
     load_in_recent_interval: AtomicU64,
     last_update: RwLock<Instant>,
-    stats: Arc<StreamStats>,
+    stats: Arc<StreamerStats>,
     // Maximum number of streams for a staked connection in EMA window
     // Note: EMA window can be different than stream throttling window. EMA is being calculated
     //       specifically for staked connections. Unstaked connections have fixed limit on
@@ -35,7 +35,7 @@ pub(crate) struct StakedStreamLoadEMA {
 
 impl StakedStreamLoadEMA {
     pub(crate) fn new(
-        stats: Arc<StreamStats>,
+        stats: Arc<StreamerStats>,
         max_unstaked_connections: usize,
         max_streams_per_ms: u64,
     ) -> Self {
@@ -239,7 +239,7 @@ pub mod test {
             nonblocking::{
                 quic::DEFAULT_MAX_STREAMS_PER_MS, stream_throttle::STREAM_LOAD_EMA_INTERVAL_MS,
             },
-            quic::{StreamStats, MAX_UNSTAKED_CONNECTIONS},
+            quic::{StreamerStats, MAX_UNSTAKED_CONNECTIONS},
         },
         std::{
             sync::{atomic::Ordering, Arc},
@@ -250,7 +250,7 @@ pub mod test {
     #[test]
     fn test_max_streams_for_unstaked_connection() {
         let load_ema = Arc::new(StakedStreamLoadEMA::new(
-            Arc::new(StreamStats::default()),
+            Arc::new(StreamerStats::default()),
             MAX_UNSTAKED_CONNECTIONS,
             DEFAULT_MAX_STREAMS_PER_MS,
         ));
@@ -267,7 +267,7 @@ pub mod test {
     #[test]
     fn test_max_streams_for_staked_connection() {
         let load_ema = Arc::new(StakedStreamLoadEMA::new(
-            Arc::new(StreamStats::default()),
+            Arc::new(StreamerStats::default()),
             MAX_UNSTAKED_CONNECTIONS,
             DEFAULT_MAX_STREAMS_PER_MS,
         ));
@@ -359,7 +359,7 @@ pub mod test {
     #[test]
     fn test_max_streams_for_staked_connection_with_no_unstaked_connections() {
         let load_ema = Arc::new(StakedStreamLoadEMA::new(
-            Arc::new(StreamStats::default()),
+            Arc::new(StreamerStats::default()),
             0,
             DEFAULT_MAX_STREAMS_PER_MS,
         ));
@@ -447,7 +447,7 @@ pub mod test {
     #[test]
     fn test_update_ema() {
         let stream_load_ema = Arc::new(StakedStreamLoadEMA::new(
-            Arc::new(StreamStats::default()),
+            Arc::new(StreamerStats::default()),
             MAX_UNSTAKED_CONNECTIONS,
             DEFAULT_MAX_STREAMS_PER_MS,
         ));
@@ -476,7 +476,7 @@ pub mod test {
     #[test]
     fn test_update_ema_missing_interval() {
         let stream_load_ema = Arc::new(StakedStreamLoadEMA::new(
-            Arc::new(StreamStats::default()),
+            Arc::new(StreamerStats::default()),
             MAX_UNSTAKED_CONNECTIONS,
             DEFAULT_MAX_STREAMS_PER_MS,
         ));
@@ -496,7 +496,7 @@ pub mod test {
     #[test]
     fn test_update_ema_if_needed() {
         let stream_load_ema = Arc::new(StakedStreamLoadEMA::new(
-            Arc::new(StreamStats::default()),
+            Arc::new(StreamerStats::default()),
             MAX_UNSTAKED_CONNECTIONS,
             DEFAULT_MAX_STREAMS_PER_MS,
         ));

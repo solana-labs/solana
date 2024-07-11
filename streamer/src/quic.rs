@@ -136,7 +136,7 @@ impl NotifyKeyUpdate for EndpointKeyUpdater {
 }
 
 #[derive(Default)]
-pub struct StreamStats {
+pub struct StreamerStats {
     pub(crate) total_connections: AtomicUsize,
     pub(crate) total_new_connections: AtomicUsize,
     pub(crate) total_streams: AtomicUsize,
@@ -199,7 +199,7 @@ pub struct StreamStats {
     pub(crate) total_incoming_connection_attempts: AtomicUsize,
 }
 
-impl StreamStats {
+impl StreamerStats {
     pub fn report(&self, name: &'static str) {
         let process_sampled_packets_us_hist = {
             let mut metrics = self.process_sampled_packets_us_hist.lock().unwrap();
