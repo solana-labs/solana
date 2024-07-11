@@ -13,30 +13,31 @@
 static const uint8_t TEST_SUCCESS = 1;
 static const uint8_t TEST_PRIVILEGE_ESCALATION_SIGNER = 2;
 static const uint8_t TEST_PRIVILEGE_ESCALATION_WRITABLE = 3;
-static const uint8_t TEST_PPROGRAM_NOT_EXECUTABLE = 4;
-static const uint8_t TEST_EMPTY_ACCOUNTS_SLICE = 5;
-static const uint8_t TEST_CAP_SEEDS = 6;
-static const uint8_t TEST_CAP_SIGNERS = 7;
-static const uint8_t TEST_ALLOC_ACCESS_VIOLATION = 8;
-static const uint8_t TEST_MAX_INSTRUCTION_DATA_LEN_EXCEEDED = 9;
-static const uint8_t TEST_MAX_INSTRUCTION_ACCOUNTS_EXCEEDED = 10;
-static const uint8_t TEST_RETURN_ERROR = 11;
-static const uint8_t TEST_PRIVILEGE_DEESCALATION_ESCALATION_SIGNER = 12;
-static const uint8_t TEST_PRIVILEGE_DEESCALATION_ESCALATION_WRITABLE = 13;
-static const uint8_t TEST_WRITABLE_DEESCALATION_WRITABLE = 14;
-static const uint8_t TEST_NESTED_INVOKE_TOO_DEEP = 15;
-static const uint8_t TEST_CALL_PRECOMPILE = 16;
-static const uint8_t ADD_LAMPORTS = 17;
-static const uint8_t TEST_RETURN_DATA_TOO_LARGE = 18;
-static const uint8_t TEST_DUPLICATE_PRIVILEGE_ESCALATION_SIGNER = 19;
-static const uint8_t TEST_DUPLICATE_PRIVILEGE_ESCALATION_WRITABLE = 20;
-static const uint8_t TEST_MAX_ACCOUNT_INFOS_EXCEEDED = 21;
+static const uint8_t TEST_PPROGRAM_NOT_OWNED_BY_LOADER = 4;
+static const uint8_t TEST_PPROGRAM_NOT_EXECUTABLE = 5;
+static const uint8_t TEST_EMPTY_ACCOUNTS_SLICE = 6;
+static const uint8_t TEST_CAP_SEEDS = 7;
+static const uint8_t TEST_CAP_SIGNERS = 8;
+static const uint8_t TEST_ALLOC_ACCESS_VIOLATION = 9;
+static const uint8_t TEST_MAX_INSTRUCTION_DATA_LEN_EXCEEDED = 10;
+static const uint8_t TEST_MAX_INSTRUCTION_ACCOUNTS_EXCEEDED = 11;
+static const uint8_t TEST_RETURN_ERROR = 12;
+static const uint8_t TEST_PRIVILEGE_DEESCALATION_ESCALATION_SIGNER = 13;
+static const uint8_t TEST_PRIVILEGE_DEESCALATION_ESCALATION_WRITABLE = 14;
+static const uint8_t TEST_WRITABLE_DEESCALATION_WRITABLE = 15;
+static const uint8_t TEST_NESTED_INVOKE_TOO_DEEP = 16;
+static const uint8_t TEST_CALL_PRECOMPILE = 17;
+static const uint8_t ADD_LAMPORTS = 18;
+static const uint8_t TEST_RETURN_DATA_TOO_LARGE = 19;
+static const uint8_t TEST_DUPLICATE_PRIVILEGE_ESCALATION_SIGNER = 20;
+static const uint8_t TEST_DUPLICATE_PRIVILEGE_ESCALATION_WRITABLE = 21;
+static const uint8_t TEST_MAX_ACCOUNT_INFOS_EXCEEDED = 22;
 // TEST_CPI_INVALID_* must match the definitions in
 // https://github.com/solana-labs/solana/blob/master/programs/sbf/rust/invoke/src/instructions.rs
-static const uint8_t TEST_CPI_INVALID_KEY_POINTER = 34;
-static const uint8_t TEST_CPI_INVALID_OWNER_POINTER = 35;
-static const uint8_t TEST_CPI_INVALID_LAMPORTS_POINTER = 36;
-static const uint8_t TEST_CPI_INVALID_DATA_POINTER = 37;
+static const uint8_t TEST_CPI_INVALID_KEY_POINTER = 35;
+static const uint8_t TEST_CPI_INVALID_OWNER_POINTER = 36;
+static const uint8_t TEST_CPI_INVALID_LAMPORTS_POINTER = 37;
+static const uint8_t TEST_CPI_INVALID_DATA_POINTER = 38;
 
 static const int MINT_INDEX = 0;
 static const int ARGUMENT_INDEX = 1;
@@ -51,6 +52,7 @@ static const int SYSTEM_PROGRAM_INDEX = 9;
 static const int FROM_INDEX = 10;
 static const int ED25519_PROGRAM_INDEX = 11;
 static const int INVOKE_PROGRAM_INDEX = 12;
+static const int UNEXECUTABLE_PROGRAM_INDEX = 13;
 
 uint64_t do_nested_invokes(uint64_t num_nested_invokes,
                            SolAccountInfo *accounts, uint64_t num_accounts) {
@@ -84,7 +86,7 @@ uint64_t do_nested_invokes(uint64_t num_nested_invokes,
 extern uint64_t entrypoint(const uint8_t *input) {
   sol_log("invoke C program");
 
-  SolAccountInfo accounts[13];
+  SolAccountInfo accounts[14];
   SolParameters params = (SolParameters){.ka = accounts};
 
   if (!sol_deserialize(input, &params, SOL_ARRAY_SIZE(accounts))) {
@@ -374,12 +376,22 @@ extern uint64_t entrypoint(const uint8_t *input) {
     sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts));
     break;
   }
+  case TEST_PPROGRAM_NOT_OWNED_BY_LOADER: {
+    sol_log("Test program not owned by loader");
+    SolAccountMeta arguments[] = {
+        {accounts[INVOKED_ARGUMENT_INDEX].key, false, false}};
+    uint8_t data[] = {RETURN_OK};
+    const SolInstruction instruction = {accounts[ARGUMENT_INDEX].key, arguments,
+                                        SOL_ARRAY_SIZE(arguments), data,
+                                        SOL_ARRAY_SIZE(data)};
+    return sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts));
+  }
   case TEST_PPROGRAM_NOT_EXECUTABLE: {
     sol_log("Test program not executable");
     SolAccountMeta arguments[] = {
-        {accounts[DERIVED_KEY3_INDEX].key, false, false}};
-    uint8_t data[] = {VERIFY_PRIVILEGE_ESCALATION};
-    const SolInstruction instruction = {accounts[ARGUMENT_INDEX].key, arguments,
+        {accounts[INVOKED_ARGUMENT_INDEX].key, false, false}};
+    uint8_t data[] = {RETURN_OK};
+    const SolInstruction instruction = {accounts[UNEXECUTABLE_PROGRAM_INDEX].key, arguments,
                                         SOL_ARRAY_SIZE(arguments), data,
                                         SOL_ARRAY_SIZE(data)};
     return sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts));

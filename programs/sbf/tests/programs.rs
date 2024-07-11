@@ -747,6 +747,10 @@ fn test_program_sbf_invoke_sanity() {
         let account = AccountSharedData::new(84, 0, &system_program::id());
         bank.store_account(&from_keypair.pubkey(), &account);
 
+        let unexecutable_program_keypair = Keypair::new();
+        let account = AccountSharedData::new(1, 0, &bpf_loader::id());
+        bank.store_account(&unexecutable_program_keypair.pubkey(), &account);
+
         let (derived_key1, bump_seed1) =
             Pubkey::find_program_address(&[b"You pass butter"], &invoke_program_id);
         let (derived_key2, bump_seed2) =
@@ -769,6 +773,7 @@ fn test_program_sbf_invoke_sanity() {
             AccountMeta::new(from_keypair.pubkey(), true),
             AccountMeta::new_readonly(solana_sdk::ed25519_program::id(), false),
             AccountMeta::new_readonly(invoke_program_id, false),
+            AccountMeta::new_readonly(unexecutable_program_keypair.pubkey(), false),
         ];
 
         // success cases
@@ -917,6 +922,13 @@ fn test_program_sbf_invoke_sanity() {
             TEST_PRIVILEGE_ESCALATION_WRITABLE,
             TransactionError::InstructionError(0, InstructionError::PrivilegeEscalation),
             &[invoked_program_id.clone()],
+            None,
+        );
+
+        do_invoke_failure_test_local(
+            TEST_PPROGRAM_NOT_OWNED_BY_LOADER,
+            TransactionError::InstructionError(0, InstructionError::AccountNotExecutable),
+            &[],
             None,
         );
 

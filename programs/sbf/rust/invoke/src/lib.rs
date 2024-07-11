@@ -461,11 +461,20 @@ fn process_instruction<'a>(
             invoked_instruction.accounts[0].is_writable = true;
             invoke(&invoked_instruction, accounts)?;
         }
+        TEST_PPROGRAM_NOT_OWNED_BY_LOADER => {
+            msg!("Test program not owned by loader");
+            let instruction = create_instruction(
+                *accounts[ARGUMENT_INDEX].key,
+                &[(accounts[INVOKED_ARGUMENT_INDEX].key, false, false)],
+                vec![RETURN_OK],
+            );
+            invoke(&instruction, accounts)?;
+        }
         TEST_PPROGRAM_NOT_EXECUTABLE => {
             msg!("Test program not executable");
             let instruction = create_instruction(
-                *accounts[ARGUMENT_INDEX].key,
-                &[(accounts[ARGUMENT_INDEX].key, true, true)],
+                *accounts[UNEXECUTABLE_PROGRAM_INDEX].key,
+                &[(accounts[INVOKED_ARGUMENT_INDEX].key, false, false)],
                 vec![RETURN_OK],
             );
             invoke(&instruction, accounts)?;
