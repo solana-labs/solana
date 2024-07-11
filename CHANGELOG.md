@@ -14,6 +14,10 @@ Release channels have their own copy of this changelog:
 
 <a name="edge-channel"></a>
 ## [2.1.0] - Unreleased
+* Breaking:
+  * SDK:
+    * `cargo-build-sbf` and `cargo-build-bpf` have been deprecated for two years and have now been definitely removed.
+       Use `cargo-build-sbf` and `cargo-test-sbf` instead.
 * Changes
   * SDK: removed the `respan` macro. This was marked as "internal use only" and was no longer used internally.
 
