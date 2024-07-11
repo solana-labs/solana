@@ -297,6 +297,7 @@ const fn page_align(size: u64) -> u64 {
 /// be able to hold about half of the accounts, so there would not be many syscalls needed to scan
 /// the file.  Since we also expect some larger accounts, this will also avoid reading/copying
 /// large account data.  This should be a decent starting value, and can be modified over time.
+#[cfg_attr(feature = "dev-context-only-utils", qualifier_attr::qualifiers(pub))]
 const SCAN_BUFFER_SIZE_WITHOUT_DATA: usize = 1 << 18;
 
 lazy_static! {
@@ -1049,7 +1050,7 @@ impl AppendVec {
     /// `data` is completely ignored, for example.
     /// Also, no references have to be maintained/returned from an iterator function.
     /// This fn can operate on a batch of data at once.
-    pub(crate) fn scan_pubkeys(&self, mut callback: impl FnMut(&Pubkey)) {
+    pub fn scan_pubkeys(&self, mut callback: impl FnMut(&Pubkey)) {
         let mut offset = 0;
         match &self.backing {
             AppendVecFileBacking::Mmap(Mmap { mmap, .. }) => {
