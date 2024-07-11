@@ -1000,7 +1000,7 @@ impl AppendVec {
 
     /// for each offset in `sorted_offsets`, get the size of the account. No other information is needed for the account.
     pub(crate) fn get_account_sizes(&self, sorted_offsets: &[usize]) -> Vec<usize> {
-        let mut result = Vec::with_capacity(sorted_offsets.len());
+        let mut account_sizes = Vec::with_capacity(sorted_offsets.len());
         match &self.backing {
             AppendVecFileBacking::Mmap(Mmap { mmap, .. }) => {
                 let slice = self.get_valid_slice_from_mmap(mmap);
@@ -1013,18 +1013,35 @@ impl AppendVec {
                         // data doesn't fit, so don't include
                         break;
                     }
-                    result.push(next.stored_size_aligned);
+                    account_sizes.push(next.stored_size_aligned);
                 }
             }
-            AppendVecFileBacking::File(_file) => {
-                for &offset in sorted_offsets {
-                    self.get_stored_account_meta_callback(offset, |stored_meta| {
-                        result.push(stored_meta.stored_size());
-                    });
+            AppendVecFileBacking::File(file) => {
+                // self.len() is an atomic load, so only do it once
+                let valid_file_len = self.len();
+                let mut buffer = [0u8; mem::size_of::<StoredMeta>()];
+                for offset in sorted_offsets {
+                    let Some(bytes_read) =
+                        read_into_buffer(file, valid_file_len, *offset, &mut buffer).ok()
+                    else {
+                        break;
+                    };
+                    let bytes = ValidSlice(&buffer[..bytes_read]);
+                    let Some((stored_meta, _next)) = Self::get_type::<StoredMeta>(bytes, 0) else {
+                        break;
+                    };
+                    // Since we're only reading the StoredMeta and not the whole account, do a
+                    // quick sanity check that there is likely a valid account at this offset.
+                    debug_assert!(
+                        *offset + STORE_META_OVERHEAD + stored_meta.data_len as usize
+                            <= valid_file_len
+                    );
+                    let stored_size = aligned_stored_size(stored_meta.data_len as usize);
+                    account_sizes.push(stored_size);
                 }
             }
         }
-        result
+        account_sizes
     }
 
     /// iterate over all pubkeys and call `callback`.
