@@ -64,6 +64,7 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         banking_trace_dir_byte_limit: config.banking_trace_dir_byte_limit,
         block_verification_method: config.block_verification_method.clone(),
         block_production_method: config.block_production_method.clone(),
+        enable_block_production_forwarding: config.enable_block_production_forwarding,
         generator_config: config.generator_config.clone(),
         use_snapshot_archives_at_startup: config.use_snapshot_archives_at_startup,
         wen_restart_proto_path: config.wen_restart_proto_path.clone(),

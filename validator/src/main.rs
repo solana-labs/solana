@@ -957,10 +957,10 @@ pub fn main() {
         .value_of("staked_nodes_overrides")
         .map(str::to_string);
     let staked_nodes_overrides = Arc::new(RwLock::new(
-        match staked_nodes_overrides_path {
+        match &staked_nodes_overrides_path {
             None => StakedNodesOverrides::default(),
-            Some(p) => load_staked_nodes_overrides(&p).unwrap_or_else(|err| {
-                error!("Failed to load stake-nodes-overrides from {}: {}", &p, err);
+            Some(p) => load_staked_nodes_overrides(p).unwrap_or_else(|err| {
+                error!("Failed to load stake-nodes-overrides from {}: {}", p, err);
                 clap::Error::with_description(
                     "Failed to load configuration of stake-nodes-overrides argument",
                     clap::ErrorKind::InvalidValue,
@@ -1767,6 +1767,10 @@ pub fn main() {
         BlockProductionMethod
     )
     .unwrap_or_default();
+    validator_config.enable_block_production_forwarding = staked_nodes_overrides_path
+        .as_ref()
+        .map(|_| !matches.is_present("disable_block_production_forwarding"))
+        .unwrap_or_default();
     validator_config.unified_scheduler_handler_threads =
         value_t!(matches, "unified_scheduler_handler_threads", usize).ok();
 

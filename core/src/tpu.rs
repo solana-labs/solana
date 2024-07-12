@@ -116,6 +116,7 @@ impl Tpu {
         tpu_max_connections_per_ipaddr_per_minute: u64,
         prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
         block_production_method: BlockProductionMethod,
+        enable_block_production_forwarding: bool,
         _generator_config: Option<GeneratorConfig>, /* vestigial code for replay invalidator */
     ) -> (Self, Vec<Arc<dyn NotifyKeyUpdate + Sync + Send>>) {
         let TpuSockets {
@@ -246,6 +247,7 @@ impl Tpu {
             connection_cache.clone(),
             bank_forks.clone(),
             prioritization_fee_cache,
+            enable_block_production_forwarding,
         );
 
         let (entry_receiver, tpu_entry_notifier) =

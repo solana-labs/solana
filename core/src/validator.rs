@@ -266,6 +266,7 @@ pub struct ValidatorConfig {
     pub banking_trace_dir_byte_limit: banking_trace::DirByteLimit,
     pub block_verification_method: BlockVerificationMethod,
     pub block_production_method: BlockProductionMethod,
+    pub enable_block_production_forwarding: bool,
     pub generator_config: Option<GeneratorConfig>,
     pub use_snapshot_archives_at_startup: UseSnapshotArchivesAtStartup,
     pub wen_restart_proto_path: Option<PathBuf>,
@@ -337,6 +338,7 @@ impl Default for ValidatorConfig {
             banking_trace_dir_byte_limit: 0,
             block_verification_method: BlockVerificationMethod::default(),
             block_production_method: BlockProductionMethod::default(),
+            enable_block_production_forwarding: false,
             generator_config: None,
             use_snapshot_archives_at_startup: UseSnapshotArchivesAtStartup::default(),
             wen_restart_proto_path: None,
@@ -355,6 +357,7 @@ impl ValidatorConfig {
             enforce_ulimit_nofile: false,
             rpc_config: JsonRpcConfig::default_for_test(),
             block_production_method: BlockProductionMethod::default(),
+            enable_block_production_forwarding: true, // enable forwarding by default for tests
             replay_forks_threads: NonZeroUsize::new(1).expect("1 is non-zero"),
             replay_transactions_threads: NonZeroUsize::new(get_max_thread_count())
                 .expect("thread count is non-zero"),
@@ -1432,6 +1435,7 @@ impl Validator {
             tpu_max_connections_per_ipaddr_per_minute,
             &prioritization_fee_cache,
             config.block_production_method.clone(),
+            config.enable_block_production_forwarding,
             config.generator_config.clone(),
         );
 

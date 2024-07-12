@@ -65,8 +65,8 @@ pub(crate) struct SchedulerController {
     timing_metrics: SchedulerTimingMetrics,
     /// Metric report handles for the worker threads.
     worker_metrics: Vec<Arc<ConsumeWorkerMetrics>>,
-    /// State for forwarding packets to the leader.
-    forwarder: Forwarder,
+    /// State for forwarding packets to the leader, if enabled.
+    forwarder: Option<Forwarder>,
 }
 
 impl SchedulerController {
@@ -76,7 +76,7 @@ impl SchedulerController {
         bank_forks: Arc<RwLock<BankForks>>,
         scheduler: PrioGraphScheduler,
         worker_metrics: Vec<Arc<ConsumeWorkerMetrics>>,
-        forwarder: Forwarder,
+        forwarder: Option<Forwarder>,
     ) -> Self {
         Self {
             decision_maker,
@@ -147,6 +147,7 @@ impl SchedulerController {
         &mut self,
         decision: &BufferedPacketsDecision,
     ) -> Result<(), SchedulerError> {
+        let forwarding_enabled = self.forwarder.is_some();
         match decision {
             BufferedPacketsDecision::Consume(bank_start) => {
                 let (scheduling_summary, schedule_time_us) = measure_us!(self.scheduler.schedule(
@@ -186,16 +187,30 @@ impl SchedulerController {
                 });
             }
             BufferedPacketsDecision::Forward => {
-                let (_, forward_time_us) = measure_us!(self.forward_packets(false));
-                self.timing_metrics.update(|timing_metrics| {
-                    saturating_add_assign!(timing_metrics.forward_time_us, forward_time_us);
-                });
+                if forwarding_enabled {
+                    let (_, forward_time_us) = measure_us!(self.forward_packets(false));
+                    self.timing_metrics.update(|timing_metrics| {
+                        saturating_add_assign!(timing_metrics.forward_time_us, forward_time_us);
+                    });
+                } else {
+                    let (_, clear_time_us) = measure_us!(self.clear_container());
+                    self.timing_metrics.update(|timing_metrics| {
+                        saturating_add_assign!(timing_metrics.clear_time_us, clear_time_us);
+                    });
+                }
             }
             BufferedPacketsDecision::ForwardAndHold => {
-                let (_, forward_time_us) = measure_us!(self.forward_packets(true));
-                self.timing_metrics.update(|timing_metrics| {
-                    saturating_add_assign!(timing_metrics.forward_time_us, forward_time_us);
-                });
+                if forwarding_enabled {
+                    let (_, forward_time_us) = measure_us!(self.forward_packets(true));
+                    self.timing_metrics.update(|timing_metrics| {
+                        saturating_add_assign!(timing_metrics.forward_time_us, forward_time_us);
+                    });
+                } else {
+                    let (_, clean_time_us) = measure_us!(self.clean_queue());
+                    self.timing_metrics.update(|timing_metrics| {
+                        saturating_add_assign!(timing_metrics.clean_time_us, clean_time_us);
+                    });
+                }
             }
             BufferedPacketsDecision::Hold => {}
         }
@@ -234,6 +249,7 @@ impl SchedulerController {
         let start = Instant::now();
         let bank = self.bank_forks.read().unwrap().working_bank();
         let feature_set = &bank.feature_set;
+        let forwarder = self.forwarder.as_mut().expect("forwarder must exist");
 
         // Pop from the container in chunks, filter using bank checks, then attempt to forward.
         // This doubles as a way to clean the queue as well as forwarding transactions.
@@ -282,7 +298,7 @@ impl SchedulerController {
 
                 // If not already forwarded and can be forwarded, add to forwardable packets.
                 if state.should_forward()
-                    && self.forwarder.try_add_packet(
+                    && forwarder.try_add_packet(
                         sanitized_transaction,
                         immutable_packet,
                         feature_set,
@@ -300,9 +316,8 @@ impl SchedulerController {
         }
 
         // Forward each batch of transactions
-        self.forwarder
-            .forward_batched_packets(&ForwardOption::ForwardTransaction);
-        self.forwarder.clear_batches();
+        forwarder.forward_batched_packets(&ForwardOption::ForwardTransaction);
+        forwarder.clear_batches();
 
         // If we hit the time limit. Drop everything that was not checked/processed.
         // If we cannot run these simple checks in time, then we cannot run them during
@@ -330,7 +345,6 @@ impl SchedulerController {
 
     /// Clears the transaction state container.
     /// This only clears pending transactions, and does **not** clear in-flight transactions.
-    #[allow(dead_code)]
     fn clear_container(&mut self) {
         let mut num_dropped_on_clear: usize = 0;
         while let Some(id) = self.container.pop() {
@@ -346,7 +360,6 @@ impl SchedulerController {
     /// Clean unprocessable transactions from the queue. These will be transactions that are
     /// expired, already processed, or are no longer sanitizable.
     /// This only clears pending transactions, and does **not** clear in-flight transactions.
-    #[allow(dead_code)]
     fn clean_queue(&mut self) {
         // Clean up any transactions that have already been processed, are too old, or do not have
         // valid nonce accounts.
@@ -424,17 +437,19 @@ impl SchedulerController {
         let remaining_queue_capacity = self.container.remaining_queue_capacity();
 
         const MAX_PACKET_RECEIVE_TIME: Duration = Duration::from_millis(100);
-        let recv_timeout = match decision {
-            BufferedPacketsDecision::Consume(_) => {
+        let (recv_timeout, should_buffer) = match decision {
+            BufferedPacketsDecision::Consume(_) => (
                 if self.container.is_empty() {
                     MAX_PACKET_RECEIVE_TIME
                 } else {
                     Duration::ZERO
-                }
+                },
+                true,
+            ),
+            BufferedPacketsDecision::Forward => (MAX_PACKET_RECEIVE_TIME, false),
+            BufferedPacketsDecision::ForwardAndHold | BufferedPacketsDecision::Hold => {
+                (MAX_PACKET_RECEIVE_TIME, true)
             }
-            BufferedPacketsDecision::Forward
-            | BufferedPacketsDecision::ForwardAndHold
-            | BufferedPacketsDecision::Hold => MAX_PACKET_RECEIVE_TIME,
         };
 
         let (received_packet_results, receive_time_us) = measure_us!(self
@@ -456,11 +471,21 @@ impl SchedulerController {
                     saturating_add_assign!(count_metrics.num_received, num_received_packets);
                 });
 
-                let (_, buffer_time_us) =
-                    measure_us!(self.buffer_packets(receive_packet_results.deserialized_packets));
-                self.timing_metrics.update(|timing_metrics| {
-                    saturating_add_assign!(timing_metrics.buffer_time_us, buffer_time_us);
-                });
+                if should_buffer {
+                    let (_, buffer_time_us) = measure_us!(
+                        self.buffer_packets(receive_packet_results.deserialized_packets)
+                    );
+                    self.timing_metrics.update(|timing_metrics| {
+                        saturating_add_assign!(timing_metrics.buffer_time_us, buffer_time_us);
+                    });
+                } else {
+                    self.count_metrics.update(|count_metrics| {
+                        saturating_add_assign!(
+                            count_metrics.num_dropped_on_receive,
+                            num_received_packets
+                        );
+                    });
+                }
             }
             Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => return false,
@@ -636,14 +661,13 @@ mod tests {
             banking_stage::{
                 consumer::TARGET_NUM_TRANSACTIONS_PER_BATCH,
                 scheduler_messages::{ConsumeWork, FinishedConsumeWork, TransactionBatchId},
-                tests::{create_slow_genesis_config, new_test_cluster_info},
+                tests::create_slow_genesis_config,
             },
             banking_trace::BankingPacketBatch,
             sigverify::SigverifyTracerPacketStats,
         },
         crossbeam_channel::{unbounded, Receiver, Sender},
         itertools::Itertools,
-        solana_client::connection_cache::ConnectionCache,
         solana_ledger::{
             blockstore::Blockstore, genesis_utils::GenesisConfigInfo,
             get_tmp_ledger_path_auto_delete, leader_schedule_cache::LeaderScheduleCache,
@@ -712,17 +736,6 @@ mod tests {
         let (consume_work_senders, consume_work_receivers) = create_channels(num_threads);
         let (finished_consume_work_sender, finished_consume_work_receiver) = unbounded();
 
-        let validator_keypair = Arc::new(Keypair::new());
-        let (_local_node, cluster_info) = new_test_cluster_info(Some(validator_keypair));
-        let cluster_info = Arc::new(cluster_info);
-        let forwarder = Forwarder::new(
-            poh_recorder.clone(),
-            bank_forks.clone(),
-            cluster_info,
-            Arc::new(ConnectionCache::new("connection_cache_test")),
-            Arc::default(),
-        );
-
         let test_frame = TestFrame {
             bank,
             mint_keypair,
@@ -741,7 +754,7 @@ mod tests {
             bank_forks,
             PrioGraphScheduler::new(consume_work_senders, finished_consume_work_receiver),
             vec![], // no actual workers with metrics to report, this can be empty
-            forwarder,
+            None,
         );
 
         (test_frame, scheduler_controller)

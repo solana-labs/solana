@@ -339,6 +339,7 @@ impl BankingStage {
         connection_cache: Arc<ConnectionCache>,
         bank_forks: Arc<RwLock<BankForks>>,
         prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
+        enable_forwarding: bool,
     ) -> Self {
         Self::new_num_threads(
             block_production_method,
@@ -354,6 +355,7 @@ impl BankingStage {
             connection_cache,
             bank_forks,
             prioritization_fee_cache,
+            enable_forwarding,
         )
     }
 
@@ -372,6 +374,7 @@ impl BankingStage {
         connection_cache: Arc<ConnectionCache>,
         bank_forks: Arc<RwLock<BankForks>>,
         prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
+        enable_forwarding: bool,
     ) -> Self {
         match block_production_method {
             BlockProductionMethod::ThreadLocalMultiIterator => {
@@ -403,6 +406,7 @@ impl BankingStage {
                 connection_cache,
                 bank_forks,
                 prioritization_fee_cache,
+                enable_forwarding,
             ),
         }
     }
@@ -505,6 +509,7 @@ impl BankingStage {
         connection_cache: Arc<ConnectionCache>,
         bank_forks: Arc<RwLock<BankForks>>,
         prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
+        enable_forwarding: bool,
     ) -> Self {
         assert!(num_threads >= MIN_TOTAL_THREADS);
         // Single thread to generate entries from many banks.
@@ -586,13 +591,15 @@ impl BankingStage {
             )
         }
 
-        let forwarder = Forwarder::new(
-            poh_recorder.clone(),
-            bank_forks.clone(),
-            cluster_info.clone(),
-            connection_cache.clone(),
-            data_budget.clone(),
-        );
+        let forwarder = enable_forwarding.then(|| {
+            Forwarder::new(
+                poh_recorder.clone(),
+                bank_forks.clone(),
+                cluster_info.clone(),
+                connection_cache.clone(),
+                data_budget.clone(),
+            )
+        });
 
         // Spawn the central scheduler thread
         bank_thread_hdls.push({
@@ -883,6 +890,7 @@ mod tests {
                 Arc::new(ConnectionCache::new("connection_cache_test")),
                 bank_forks,
                 &Arc::new(PrioritizationFeeCache::new(0u64)),
+                false,
             );
             drop(non_vote_sender);
             drop(tpu_vote_sender);
@@ -938,6 +946,7 @@ mod tests {
                 Arc::new(ConnectionCache::new("connection_cache_test")),
                 bank_forks,
                 &Arc::new(PrioritizationFeeCache::new(0u64)),
+                false,
             );
             trace!("sending bank");
             drop(non_vote_sender);
@@ -1017,6 +1026,7 @@ mod tests {
                 Arc::new(ConnectionCache::new("connection_cache_test")),
                 bank_forks.clone(), // keep a local-copy of bank-forks so worker threads do not lose weak access to bank-forks
                 &Arc::new(PrioritizationFeeCache::new(0u64)),
+                false,
             );
 
             // fund another account so we can send 2 good transactions in a single batch.
@@ -1378,6 +1388,7 @@ mod tests {
                 Arc::new(ConnectionCache::new("connection_cache_test")),
                 bank_forks,
                 &Arc::new(PrioritizationFeeCache::new(0u64)),
+                false,
             );
 
             let keypairs = (0..100).map(|_| Keypair::new()).collect_vec();
