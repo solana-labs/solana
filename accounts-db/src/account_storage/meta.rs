@@ -66,15 +66,6 @@ impl<'storage> StoredAccountMeta<'storage> {
         }
     }
 
-    pub fn write_version(&self) -> StoredMetaWriteVersion {
-        match self {
-            Self::AppendVec(av) => av.write_version(),
-            // Hot account does not support this API as it does not
-            // use a write version.
-            Self::Hot(_) => StoredMetaWriteVersion::default(),
-        }
-    }
-
     pub fn meta(&self) -> &StoredMeta {
         match self {
             Self::AppendVec(av) => av.meta(),

@@ -6,9 +6,7 @@
 
 use {
     crate::{
-        account_storage::meta::{
-            AccountMeta, StoredAccountMeta, StoredMeta, StoredMetaWriteVersion,
-        },
+        account_storage::meta::{AccountMeta, StoredAccountMeta, StoredMeta},
         accounts_file::{
             AccountsFileError, InternalsForArchive, MatchAccountOwnerError, Result, StorageAccess,
             StoredAccountsInfo, ALIGN_BOUNDARY_OFFSET,
@@ -141,10 +139,6 @@ impl<'append_vec> AppendVecStoredAccountMeta<'append_vec> {
 
     pub fn data_len(&self) -> u64 {
         self.meta.data_len
-    }
-
-    pub fn write_version(&self) -> StoredMetaWriteVersion {
-        self.meta.write_version_obsolete
     }
 
     pub fn meta(&self) -> &StoredMeta {
