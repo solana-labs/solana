@@ -200,7 +200,6 @@ pub struct ProcessPullStats {
     pub success: usize,
     pub failed_insert: usize,
     pub failed_timeout: usize,
-    pub timeout_count: usize,
 }
 
 pub struct CrdsGossipPull {
@@ -354,7 +353,6 @@ impl CrdsGossipPull {
                 expired_values.push(response);
                 None
             } else {
-                stats.timeout_count += 1;
                 stats.failed_timeout += 1;
                 Some(response)
             }
@@ -564,7 +562,7 @@ impl CrdsGossipPull {
         );
         (
             stats.failed_timeout + stats.failed_insert,
-            stats.timeout_count,
+            stats.failed_timeout,
             stats.success,
         )
     }

@@ -2269,9 +2269,6 @@ impl ClusterInfo {
         self.stats.process_pull_response_count.add_relaxed(1);
         self.stats.process_pull_response_len.add_relaxed(len as u64);
         self.stats
-            .process_pull_response_timeout
-            .add_relaxed(pull_stats.timeout_count as u64);
-        self.stats
             .process_pull_response_fail_insert
             .add_relaxed(pull_stats.failed_insert as u64);
         self.stats
@@ -2283,7 +2280,7 @@ impl ClusterInfo {
 
         (
             pull_stats.failed_insert + pull_stats.failed_timeout,
-            pull_stats.timeout_count,
+            pull_stats.failed_timeout,
             pull_stats.success,
         )
     }
