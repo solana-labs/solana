@@ -1056,9 +1056,11 @@ impl AppendVec {
     /// Also, no references have to be maintained/returned from an iterator function.
     /// This fn can operate on a batch of data at once.
     pub fn scan_pubkeys(&self, mut callback: impl FnMut(&Pubkey)) {
-        let mut offset = 0;
+        // self.len() is an atomic load, so only do it once
+        let self_len = self.len();
         match &self.backing {
             AppendVecFileBacking::Mmap(Mmap { mmap, .. }) => {
+                let mut offset = 0;
                 let slice = self.get_valid_slice_from_mmap(mmap);
                 loop {
                     let Some((stored_meta, _)) = Self::get_type::<StoredMeta>(slice, offset) else {
@@ -1066,7 +1068,7 @@ impl AppendVec {
                         break;
                     };
                     let next = Self::next_account_offset(offset, stored_meta);
-                    if next.offset_to_end_of_data > self.len() {
+                    if next.offset_to_end_of_data > self_len {
                         // data doesn't fit, so don't include this pubkey
                         break;
                     }
@@ -1075,16 +1077,20 @@ impl AppendVec {
                 }
             }
             AppendVecFileBacking::File(file) => {
-                let buffer_size = std::cmp::min(SCAN_BUFFER_SIZE_WITHOUT_DATA, self.len());
+                let buffer_size = std::cmp::min(SCAN_BUFFER_SIZE_WITHOUT_DATA, self_len);
                 let mut reader =
-                    BufferedReader::new(buffer_size, self.len(), file, STORE_META_OVERHEAD);
+                    BufferedReader::new(buffer_size, self_len, file, STORE_META_OVERHEAD);
                 while reader.read().ok() == Some(BufferedReaderStatus::Success) {
-                    let (_offset, bytes) = reader.get_offset_and_data();
-                    let (stored_meta, _next) = Self::get_type::<StoredMeta>(bytes, 0).unwrap();
+                    let (offset, bytes) = reader.get_offset_and_data();
+                    let (stored_meta, _) = Self::get_type::<StoredMeta>(bytes, 0).unwrap();
+                    let next = Self::next_account_offset(offset, stored_meta);
+                    if next.offset_to_end_of_data > self.len() {
+                        // data doesn't fit, so don't include this pubkey
+                        break;
+                    }
                     callback(&stored_meta.pubkey);
                     // since we only needed to read the pubkey, skip ahead to the next account
-                    let stored_size = aligned_stored_size(stored_meta.data_len as usize);
-                    reader.advance_offset(stored_size);
+                    reader.advance_offset(next.stored_size_aligned);
                 }
             }
         }
