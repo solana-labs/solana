@@ -1,0 +1,13 @@
+[package]
+name = "solana-svm-transaction"
+description = "Solana SVM Transaction"
+documentation = "https://docs.rs/solana-svm-transaction"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+solana-sdk = { workspace = true }
