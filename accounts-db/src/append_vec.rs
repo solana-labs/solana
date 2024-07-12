@@ -875,9 +875,11 @@ impl AppendVec {
     /// Iterate over all accounts and call `callback` with `IndexInfo` for each.
     /// This fn can help generate an index of the data in this storage.
     pub(crate) fn scan_index(&self, mut callback: impl FnMut(IndexInfo)) {
-        let mut offset = 0;
+        // self.len() is an atomic load, so only do it once
+        let self_len = self.len();
         match &self.backing {
             AppendVecFileBacking::Mmap(Mmap { mmap, .. }) => {
+                let mut offset = 0;
                 let slice = self.get_valid_slice_from_mmap(mmap);
                 loop {
                     let Some((stored_meta, next)) = Self::get_type::<StoredMeta>(slice, offset)
@@ -891,10 +893,10 @@ impl AppendVec {
                     };
                     if account_meta.lamports == 0 && stored_meta.pubkey == Pubkey::default() {
                         // we passed the last useful account
-                        return;
+                        break;
                     }
                     let next = Self::next_account_offset(offset, stored_meta);
-                    if next.offset_to_end_of_data > self.len() {
+                    if next.offset_to_end_of_data > self_len {
                         // data doesn't fit, so don't include this account
                         break;
                     }
@@ -915,30 +917,36 @@ impl AppendVec {
                 }
             }
             AppendVecFileBacking::File(file) => {
+                let buffer_size = std::cmp::min(SCAN_BUFFER_SIZE, self_len);
                 let mut reader =
-                    BufferedReader::new(SCAN_BUFFER_SIZE, self.len(), file, STORE_META_OVERHEAD);
+                    BufferedReader::new(buffer_size, self_len, file, STORE_META_OVERHEAD);
                 while reader.read().ok() == Some(BufferedReaderStatus::Success) {
-                    let (offset, bytes_subset) = reader.get_offset_and_data();
-                    let (meta, next): (&StoredMeta, _) = Self::get_type(bytes_subset, 0).unwrap();
-                    let (account_meta, next): (&AccountMeta, _) =
-                        Self::get_type(bytes_subset, next).unwrap();
-                    let (_hash, next): (&AccountHash, _) =
-                        Self::get_type(bytes_subset, next).unwrap();
-                    let stored_size_aligned = u64_align!(next + (meta.data_len as usize));
+                    let (offset, bytes) = reader.get_offset_and_data();
+                    let (stored_meta, next) = Self::get_type::<StoredMeta>(bytes, 0).unwrap();
+                    let (account_meta, _) = Self::get_type::<AccountMeta>(bytes, next).unwrap();
+                    if account_meta.lamports == 0 && stored_meta.pubkey == Pubkey::default() {
+                        // we passed the last useful account
+                        break;
+                    }
+                    let next = Self::next_account_offset(offset, stored_meta);
+                    if next.offset_to_end_of_data > self_len {
+                        // data doesn't fit, so don't include this account
+                        break;
+                    }
                     callback(IndexInfo {
                         index_info: {
                             IndexInfoInner {
-                                pubkey: meta.pubkey,
+                                pubkey: stored_meta.pubkey,
                                 lamports: account_meta.lamports,
                                 offset,
-                                data_len: meta.data_len,
+                                data_len: stored_meta.data_len,
                                 executable: account_meta.executable,
                                 rent_epoch: account_meta.rent_epoch,
                             }
                         },
-                        stored_size_aligned,
+                        stored_size_aligned: next.stored_size_aligned,
                     });
-                    reader.advance_offset(stored_size_aligned);
+                    reader.advance_offset(next.stored_size_aligned);
                 }
             }
         }
