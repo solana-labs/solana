@@ -293,12 +293,12 @@ const fn page_align(size: u64) -> u64 {
 ///
 /// On mnb, the overwhelming majority of accounts are token accounts, which use 165 bytes of data.
 /// Including storage overhead and alignment, that's 304 bytes per account.
-/// Per slot, *with* rent rewrites, we store 1,200 to 1,500 accounts.  With a 256 KiB buffer, we'd
-/// be able to hold about half of the accounts, so there would not be many syscalls needed to scan
+/// Per slot, *with* rent rewrites, we store 1,200 to 1,500 accounts.  With a 64 KiB buffer, we'd
+/// be able to hold about 215 accounts, so there would not be many syscalls needed to scan
 /// the file.  Since we also expect some larger accounts, this will also avoid reading/copying
 /// large account data.  This should be a decent starting value, and can be modified over time.
 #[cfg_attr(feature = "dev-context-only-utils", qualifier_attr::qualifiers(pub))]
-const SCAN_BUFFER_SIZE_WITHOUT_DATA: usize = 1 << 18;
+const SCAN_BUFFER_SIZE_WITHOUT_DATA: usize = 1 << 16;
 
 lazy_static! {
     pub static ref APPEND_VEC_MMAPPED_FILES_OPEN: AtomicU64 = AtomicU64::default();
