@@ -4959,22 +4959,11 @@ fn test_boot_from_local_state() {
     info!("Waiting for validator2 to create a new bank snapshot...");
     let timer = Instant::now();
     let bank_snapshot = loop {
-        if let Some(full_snapshot_slot) = snapshot_utils::get_highest_full_snapshot_archive_slot(
-            &validator2_config.full_snapshot_archives_dir,
-        ) {
-            if let Some(incremental_snapshot_slot) =
-                snapshot_utils::get_highest_incremental_snapshot_archive_slot(
-                    &validator2_config.incremental_snapshot_archives_dir,
-                    full_snapshot_slot,
-                )
-            {
-                if let Some(bank_snapshot) = snapshot_utils::get_highest_bank_snapshot_post(
-                    &validator2_config.bank_snapshots_dir,
-                ) {
-                    if bank_snapshot.slot > incremental_snapshot_slot {
-                        break bank_snapshot;
-                    }
-                }
+        if let Some(bank_snapshot) =
+            snapshot_utils::get_highest_bank_snapshot_post(&validator2_config.bank_snapshots_dir)
+        {
+            if bank_snapshot.slot > incremental_snapshot_archive.slot() {
+                break bank_snapshot;
             }
         }
         assert!(
