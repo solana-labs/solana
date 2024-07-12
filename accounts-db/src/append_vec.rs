@@ -455,9 +455,14 @@ impl AppendVec {
                 self.flush().expect("flush must succeed");
                 // we are re-opening the file, so don't remove the file on disk when the old mmapped one is dropped
                 self.remove_file_on_drop.store(false, Ordering::Release);
-                AppendVec::new_from_file(self.path.clone(), self.len(), StorageAccess::File)
-                    .ok()
-                    .map(|(av, _size)| av)
+
+                // The file should have already been sanitized. Don't need to check when we open the file again.
+                AppendVec::new_from_file_unchecked(
+                    self.path.clone(),
+                    self.len(),
+                    StorageAccess::File,
+                )
+                .ok()
             }
         }
     }
