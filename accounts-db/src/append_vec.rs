@@ -1006,6 +1006,8 @@ impl AppendVec {
 
     /// for each offset in `sorted_offsets`, get the size of the account. No other information is needed for the account.
     pub(crate) fn get_account_sizes(&self, sorted_offsets: &[usize]) -> Vec<usize> {
+        // self.len() is an atomic load, so only do it once
+        let self_len = self.len();
         let mut account_sizes = Vec::with_capacity(sorted_offsets.len());
         match &self.backing {
             AppendVecFileBacking::Mmap(Mmap { mmap, .. }) => {
@@ -1015,7 +1017,7 @@ impl AppendVec {
                         break;
                     };
                     let next = Self::next_account_offset(offset, stored_meta);
-                    if next.offset_to_end_of_data > self.len() {
+                    if next.offset_to_end_of_data > self_len {
                         // data doesn't fit, so don't include
                         break;
                     }
@@ -1023,27 +1025,23 @@ impl AppendVec {
                 }
             }
             AppendVecFileBacking::File(file) => {
-                // self.len() is an atomic load, so only do it once
-                let valid_file_len = self.len();
                 let mut buffer = [0u8; mem::size_of::<StoredMeta>()];
-                for offset in sorted_offsets {
+                for &offset in sorted_offsets {
                     let Some(bytes_read) =
-                        read_into_buffer(file, valid_file_len, *offset, &mut buffer).ok()
+                        read_into_buffer(file, self_len, offset, &mut buffer).ok()
                     else {
                         break;
                     };
                     let bytes = ValidSlice(&buffer[..bytes_read]);
-                    let Some((stored_meta, _next)) = Self::get_type::<StoredMeta>(bytes, 0) else {
+                    let Some((stored_meta, _)) = Self::get_type::<StoredMeta>(bytes, 0) else {
                         break;
                     };
-                    // Since we're only reading the StoredMeta and not the whole account, do a
-                    // quick sanity check that there is likely a valid account at this offset.
-                    debug_assert!(
-                        *offset + STORE_META_OVERHEAD + stored_meta.data_len as usize
-                            <= valid_file_len
-                    );
-                    let stored_size = aligned_stored_size(stored_meta.data_len as usize);
-                    account_sizes.push(stored_size);
+                    let next = Self::next_account_offset(offset, stored_meta);
+                    if next.offset_to_end_of_data > self_len {
+                        // data doesn't fit, so don't include
+                        break;
+                    }
+                    account_sizes.push(next.stored_size_aligned);
                 }
             }
         }
