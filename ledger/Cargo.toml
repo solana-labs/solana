@@ -31,6 +31,7 @@ mockall = { workspace = true }
 num_cpus = { workspace = true }
 num_enum = { workspace = true }
 prost = { workspace = true }
+qualifier_attr = { workspace = true }
 rand = { workspace = true }
 rand_chacha = { workspace = true }
 rayon = { workspace = true }

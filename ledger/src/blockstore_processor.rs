@@ -1,3 +1,5 @@
+#[cfg(feature = "dev-context-only-utils")]
+use qualifier_attr::qualifiers;
 use {
     crate::{
         block_error::BlockError,
@@ -1075,6 +1077,7 @@ fn verify_ticks(
 }
 
 #[allow(clippy::too_many_arguments)]
+#[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
 fn confirm_full_slot(
     blockstore: &Blockstore,
     bank: &BankWithScheduler,
@@ -1681,6 +1684,7 @@ fn confirm_slot_entries(
 }
 
 // Special handling required for processing the entries in slot 0
+#[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
 fn process_bank_0(
     bank0: &BankWithScheduler,
     blockstore: &Blockstore,
