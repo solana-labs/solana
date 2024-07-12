@@ -855,8 +855,12 @@ impl AppendVec {
     /// data is at the end of each account and is variable sized
     /// the next account is then aligned on a 64 bit boundary.
     /// With these helpers, we can skip over reading some of the data depending on what the caller wants.
+    ///
+    /// *Safety* - The caller must ensure that the `stored_meta.data_len` won't overflow the calculation.
     fn next_account_offset(start_offset: usize, stored_meta: &StoredMeta) -> AccountOffsets {
-        let stored_size_unaligned = STORE_META_OVERHEAD + stored_meta.data_len as usize;
+        let stored_size_unaligned = STORE_META_OVERHEAD
+            .checked_add(stored_meta.data_len as usize)
+            .expect("stored size cannot overflow");
         let stored_size_aligned = u64_align!(stored_size_unaligned);
         let offset_to_end_of_data = start_offset + stored_size_unaligned;
         let next_account_offset = start_offset + stored_size_aligned;
