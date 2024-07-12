@@ -495,8 +495,6 @@ impl AppendVec {
 
         let (sanitized, num_accounts) = new.sanitize_layout_and_length();
         if !sanitized {
-            // This info show the failing accountvec file path.  It helps debugging
-            // the appendvec data corrupution issues related to recycling.
             return Err(AccountsFileError::AppendVecError(
                 AppendVecError::IncorrectLayout(new.path.clone()),
             ));
