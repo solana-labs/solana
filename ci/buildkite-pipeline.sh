@@ -14,12 +14,48 @@ if [[ -n $CI_PULL_REQUEST ]]; then
   pr_number=${BASH_REMATCH[1]}
   echo "get affected files from PR: $pr_number"
 
-  # Fetch the number of commits in the PR
-  commits_no=$(gh pr view "$pr_number" --json commits --jq '.commits | length')
-  echo "number of commits in this PR: $commits_no"
+  if [[ $BUILDKITE_REPO =~ ^https:\/\/github\.com\/([^\/]+)\/([^\/\.]+) ]]; then
+    owner="${BASH_REMATCH[1]}"
+    repo="${BASH_REMATCH[2]}"
+  elif [[ $BUILDKITE_REPO =~ ^git@github\.com:([^\/]+)\/([^\/\.]+) ]]; then
+    owner="${BASH_REMATCH[1]}"
+    repo="${BASH_REMATCH[2]}"
+  else
+    echo "couldn't parse owner and repo. use defaults"
+    owner="anza-xyz"
+    repo="agave"
+  fi
+
+  # ref: https://github.com/cli/cli/issues/5368#issuecomment-1087515074
+  #
+  # Variable value contains dollar prefixed words that look like bash variable
+  # references.  This is intentional.
+  # shellcheck disable=SC2016
+  query='
+  query($owner: String!, $repo: String!, $pr: Int!, $endCursor: String) {
+    repository(owner: $owner, name: $repo) {
+      pullRequest(number: $pr) {
+        files(first: 100, after: $endCursor) {
+          pageInfo{ hasNextPage, endCursor }
+          nodes {
+            path
+          }
+        }
+      }
+    }
+  }'
 
   # get affected files
-  readarray -t affected_files < <(git diff HEAD~"$commits_no"..HEAD --name-status | cut -f2)
+  readarray -t affected_files < <(
+    gh api graphql \
+      -f query="$query" \
+      -F pr="$pr_number" \
+      -F owner="$owner" \
+      -F repo="$repo" \
+      --paginate \
+      --jq '.data.repository.pullRequest.files.nodes.[].path'
+  )
+
   if [[ ${#affected_files[*]} -eq 0 ]]; then
     echo "Unable to determine the files affected by this PR"
     exit 1
