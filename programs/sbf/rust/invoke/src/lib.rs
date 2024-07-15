@@ -1362,19 +1362,46 @@ fn process_instruction<'a>(
         TEST_CALLEE_ACCOUNT_UPDATES => {
             msg!("TEST_CALLEE_ACCOUNT_UPDATES");
 
-            if instruction_data.len() < 2 + 2 * std::mem::size_of::<usize>() {
+            if instruction_data.len() < 3 + 3 * std::mem::size_of::<usize>() {
                 return Ok(());
             }
 
             let writable = instruction_data[1] != 0;
-            let resize = usize::from_le_bytes(instruction_data[2..10].try_into().unwrap());
-            let write_offset = usize::from_le_bytes(instruction_data[10..18].try_into().unwrap());
-            let invoke_struction = &instruction_data[18..];
+            let clone_data = instruction_data[2] != 0;
+            let resize = usize::from_le_bytes(instruction_data[3..11].try_into().unwrap());
+            let pre_write_offset =
+                usize::from_le_bytes(instruction_data[11..19].try_into().unwrap());
+            let post_write_offset =
+                usize::from_le_bytes(instruction_data[19..27].try_into().unwrap());
+            let invoke_struction = &instruction_data[27..];
+
+            let old_data = if clone_data {
+                let prev = accounts[ARGUMENT_INDEX].try_borrow_data().unwrap().as_ptr();
+
+                let data = accounts[ARGUMENT_INDEX].try_borrow_data().unwrap().to_vec();
+
+                let old = accounts[ARGUMENT_INDEX].data.replace(data.leak());
+
+                let post = accounts[ARGUMENT_INDEX].try_borrow_data().unwrap().as_ptr();
+
+                if prev == post {
+                    panic!("failed to clone the data");
+                }
+
+                Some(old)
+            } else {
+                None
+            };
 
             let account = &accounts[ARGUMENT_INDEX];
 
             if resize != 0 {
                 account.realloc(resize, false).unwrap();
+            }
+
+            if pre_write_offset != 0 {
+                // Ensure we still have access to the correct account
+                account.data.borrow_mut()[pre_write_offset] ^= 0xe5;
             }
 
             if !invoke_struction.is_empty() {
@@ -1397,9 +1424,13 @@ fn process_instruction<'a>(
                 .unwrap();
             }
 
-            if write_offset != 0 {
-                // Ensure we still have access to the correct account
-                account.data.borrow_mut()[write_offset] ^= 0xe5;
+            if post_write_offset != 0 {
+                if let Some(old) = old_data {
+                    old[post_write_offset] ^= 0xe5;
+                } else {
+                    // Ensure we still have access to the correct account
+                    account.data.borrow_mut()[post_write_offset] ^= 0xe5;
+                }
             }
         }
         TEST_STACK_HEAP_ZEROED => {
