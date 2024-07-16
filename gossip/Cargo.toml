@@ -41,6 +41,7 @@ solana-metrics = { workspace = true }
 solana-net-utils = { workspace = true }
 solana-perf = { workspace = true }
 solana-rayon-threadlimit = { workspace = true }
+solana-rpc-client = { workspace = true }
 solana-runtime = { workspace = true }
 solana-sanitize = { workspace = true }
 solana-sdk = { workspace = true }

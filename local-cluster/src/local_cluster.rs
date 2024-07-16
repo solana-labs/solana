@@ -8,7 +8,7 @@ use {
     itertools::izip,
     log::*,
     solana_accounts_db::utils::create_accounts_run_and_snapshot_dirs,
-    solana_client::{connection_cache::ConnectionCache, rpc_client::RpcClient},
+    solana_client::connection_cache::ConnectionCache,
     solana_core::{
         consensus::tower_storage::FileTowerStorage,
         validator::{Validator, ValidatorConfig, ValidatorStartProgress},
@@ -19,6 +19,7 @@ use {
         gossip_service::discover_cluster,
     },
     solana_ledger::{create_new_tmp_ledger, shred::Shred},
+    solana_rpc_client::rpc_client::RpcClient,
     solana_runtime::{
         genesis_utils::{
             create_genesis_config_with_vote_accounts_and_cluster_type, GenesisConfigInfo,

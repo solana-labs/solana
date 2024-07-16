@@ -18,7 +18,6 @@ serde_derive = { workspace = true }
 serde_json = { workspace = true }
 solana-accounts-db = { workspace = true }
 solana-cli-output = { workspace = true }
-solana-client = { workspace = true }
 solana-compute-budget = { workspace = true }
 solana-core = { workspace = true }
 solana-geyser-plugin-manager = { workspace = true }
@@ -29,6 +28,7 @@ solana-net-utils = { workspace = true }
 solana-program-test = { workspace = true }
 solana-rpc = { workspace = true }
 solana-rpc-client = { workspace = true }
+solana-rpc-client-api = { workspace = true }
 solana-runtime = { workspace = true }
 solana-sdk = { workspace = true }
 solana-streamer = { workspace = true }

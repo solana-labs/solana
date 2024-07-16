@@ -11,8 +11,9 @@ use {
     log::*,
     rand::distributions::{Distribution, Uniform},
     rayon::prelude::*,
-    solana_client::{nonce_utils, rpc_request::MAX_MULTIPLE_ACCOUNTS},
+    solana_client::nonce_utils,
     solana_metrics::{self, datapoint_info},
+    solana_rpc_client_api::request::MAX_MULTIPLE_ACCOUNTS,
     solana_sdk::{
         account::Account,
         clock::{DEFAULT_MS_PER_SLOT, DEFAULT_S_PER_SLOT, MAX_PROCESSING_AGE},

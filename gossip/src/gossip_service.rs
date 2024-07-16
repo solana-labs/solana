@@ -4,11 +4,10 @@ use {
     crate::{cluster_info::ClusterInfo, contact_info::ContactInfo},
     crossbeam_channel::{unbounded, Sender},
     rand::{thread_rng, Rng},
-    solana_client::{
-        connection_cache::ConnectionCache, rpc_client::RpcClient, tpu_client::TpuClientWrapper,
-    },
+    solana_client::{connection_cache::ConnectionCache, tpu_client::TpuClientWrapper},
     solana_net_utils::DEFAULT_IP_ECHO_SERVER_THREADS,
     solana_perf::recycler::Recycler,
+    solana_rpc_client::rpc_client::RpcClient,
     solana_runtime::bank_forks::BankForks,
     solana_sdk::{
         pubkey::Pubkey,

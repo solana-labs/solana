@@ -8,11 +8,12 @@ use {
         hidden_unless_forced, input_parsers::pubkey_of, input_validators::is_url_or_moniker,
     },
     solana_cli_config::{ConfigInput, CONFIG_FILE},
-    solana_client::{rpc_request::TokenAccountsFilter, transaction_executor::TransactionExecutor},
+    solana_client::transaction_executor::TransactionExecutor,
     solana_gossip::gossip_service::discover,
     solana_inline_spl::token,
     solana_measure::measure::Measure,
     solana_rpc_client::rpc_client::RpcClient,
+    solana_rpc_client_api::request::TokenAccountsFilter,
     solana_sdk::{
         commitment_config::CommitmentConfig,
         hash::Hash,

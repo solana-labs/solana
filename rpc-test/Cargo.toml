@@ -33,6 +33,7 @@ solana-transaction-status = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 
 [dev-dependencies]
+solana-connection-cache = { workspace = true }
 solana-logger = { workspace = true }
 
 [package.metadata.docs.rs]

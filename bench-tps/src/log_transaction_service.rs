@@ -7,8 +7,8 @@ use {
     crossbeam_channel::{select, tick, unbounded, Receiver, Sender},
     log::*,
     serde::Serialize,
-    solana_client::rpc_config::RpcBlockConfig,
     solana_measure::measure::Measure,
+    solana_rpc_client_api::config::RpcBlockConfig,
     solana_sdk::{
         clock::{DEFAULT_MS_PER_SLOT, MAX_PROCESSING_AGE},
         commitment_config::{CommitmentConfig, CommitmentLevel},

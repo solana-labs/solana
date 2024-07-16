@@ -1,11 +1,9 @@
 use {
-    solana_client::{
-        connection_cache::Protocol,
-        nonblocking::tpu_client::{LeaderTpuService, TpuClient},
-        tpu_client::TpuClientConfig,
-    },
+    solana_client::nonblocking::tpu_client::{LeaderTpuService, TpuClient},
+    solana_connection_cache::connection_cache::Protocol,
     solana_sdk::{clock::DEFAULT_MS_PER_SLOT, pubkey::Pubkey, system_transaction},
     solana_test_validator::TestValidatorGenesis,
+    solana_tpu_client::tpu_client::TpuClientConfig,
     std::sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
