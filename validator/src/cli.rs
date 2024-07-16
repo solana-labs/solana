@@ -2047,17 +2047,6 @@ fn deprecated_arguments() -> Vec<DeprecatedArg> {
             .long("enable-quic-servers"),
         usage_warning: "The quic server is now enabled by default.",
     );
-    add_arg!(
-        Arg::with_name("halt_on_known_validators_accounts_hash_mismatch")
-            .alias("halt-on-trusted-validators-accounts-hash-mismatch")
-            .long("halt-on-known-validators-accounts-hash-mismatch")
-            .requires("known_validators")
-            .takes_value(false)
-            .help(
-                "Abort the validator if a bank hash mismatch is detected within known validator \
-                 set"
-            ),
-    );
     add_arg!(Arg::with_name("minimal_rpc_api")
         .long("minimal-rpc-api")
         .takes_value(false)
