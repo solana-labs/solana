@@ -154,18 +154,24 @@ and de-activations per epoch. It is updated at the start of every epoch.
 
 ## EpochRewards
 
-The EpochRewards sysvar tracks the progress of epoch rewards distribution. The
-sysvar is created in the first block of the epoch, and lasts for several blocks
-while paying out the rewards. When all rewards have been distributed, the sysvar
-is deleted. Unlike other sysvars, which almost always exist on-chain,
-EpochRewards sysvar only exists during the reward period. Therefore, calling
-`EpochRewards::get()` on blocks that are outside of the reward period will
-return an error, i.e. `UnsupportedSysvar`. This can serve as a method for
-determining whether epoch rewards distribution has finished.
+The EpochRewards sysvar tracks whether the rewards period (including calculation
+and distribution) is in progress, as well as the details needed to resume
+distribution when starting from a snapshot during the rewards period. The sysvar
+is repopulated at the start of the first block of each epoch.
+
 
 - Address: `SysvarEpochRewards1111111111111111111111111`
 - Layout:
   [EpochRewards](https://docs.rs/solana-program/VERSION_FOR_DOCS_RS/solana_program/epoch_rewards/struct.EpochRewards.html)
+- Fields:
+
+  - `distribution_starting_block_height` - starting block height for distribution for the current epoch
+  - `num_partitions` - the number of partitions in the distribution
+  - `parent_blockhash` - the blockhash seed used to generate the partition hasher, ie. the blockhash of the parent of the first block in the epoch
+  - `total_points` - the total rewards points calculated for the epoch
+  - `total_rewards` - total rewards for epoch, in lamports
+  - `distributed_rewards` - rewards for the epoch distributed so far, in lamports
+  - `active` - whether the rewards period is currently active
 
 ## LastRestartSlot
 
