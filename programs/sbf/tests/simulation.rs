@@ -1,3 +1,5 @@
+#![cfg(feature = "sbf_rust")]
+
 use {
     agave_validator::test_validator::*,
     solana_runtime::{
@@ -17,7 +19,6 @@ use {
 };
 
 #[test]
-#[cfg(feature = "sbf_rust")]
 fn test_no_panic_banks_client() {
     solana_logger::setup();
 
@@ -55,7 +56,6 @@ fn test_no_panic_banks_client() {
 }
 
 #[test]
-#[cfg(feature = "sbf_rust")]
 fn test_no_panic_rpc_client() {
     solana_logger::setup();
 

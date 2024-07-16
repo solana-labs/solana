@@ -1,3 +1,5 @@
+#![cfg(feature = "sbf_rust")]
+
 use {
     solana_runtime::{
         bank::Bank,
@@ -20,7 +22,6 @@ use {
 };
 
 #[test]
-#[cfg(feature = "sbf_rust")]
 fn test_sysvar_syscalls() {
     solana_logger::setup();
 
