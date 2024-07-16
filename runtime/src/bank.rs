@@ -271,7 +271,6 @@ impl AddAssign for SquashTiming {
     }
 }
 
-#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
 #[derive(Debug, Default, PartialEq)]
 pub(crate) struct CollectorFeeDetails {
     transaction_fee: u64,
@@ -311,22 +310,6 @@ pub struct BankRc {
     pub(crate) parent: RwLock<Option<Arc<Bank>>>,
 
     pub(crate) bank_id_generator: Arc<AtomicU64>,
-}
-
-#[cfg(all(RUSTC_WITH_SPECIALIZATION, feature = "frozen-abi"))]
-use solana_frozen_abi::abi_example::AbiExample;
-
-#[cfg(all(RUSTC_WITH_SPECIALIZATION, feature = "frozen-abi"))]
-impl AbiExample for BankRc {
-    fn example() -> Self {
-        BankRc {
-            // Set parent to None to cut the recursion into another Bank
-            parent: RwLock::new(None),
-            // AbiExample for Accounts is specially implemented to contain a storage example
-            accounts: AbiExample::example(),
-            bank_id_generator: Arc::new(AtomicU64::new(0)),
-        }
-    }
 }
 
 impl BankRc {
@@ -380,7 +363,6 @@ impl TransactionBalancesSet {
 }
 pub type TransactionBalances = Vec<Vec<u64>>;
 
-#[cfg_attr(feature = "frozen-abi", derive(AbiExample, AbiEnumVisitor))]
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub enum TransactionLogCollectorFilter {
     All,
@@ -395,14 +377,12 @@ impl Default for TransactionLogCollectorFilter {
     }
 }
 
-#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
 #[derive(Debug, Default)]
 pub struct TransactionLogCollectorConfig {
     pub mentioned_addresses: HashSet<Pubkey>,
     pub filter: TransactionLogCollectorFilter,
 }
 
-#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TransactionLogInfo {
     pub signature: Signature,
@@ -411,7 +391,6 @@ pub struct TransactionLogInfo {
     pub log_messages: TransactionLogMessages,
 }
 
-#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
 #[derive(Default, Debug)]
 pub struct TransactionLogCollector {
     // All the logs collected for from this Bank.  Exact contents depend on the
@@ -696,17 +675,7 @@ pub trait DropCallback: fmt::Debug {
 #[derive(Debug, Default)]
 pub struct OptionalDropCallback(Option<Box<dyn DropCallback + Send + Sync>>);
 
-#[cfg(all(RUSTC_WITH_SPECIALIZATION, feature = "frozen-abi"))]
-impl AbiExample for OptionalDropCallback {
-    fn example() -> Self {
-        Self(None)
-    }
-}
-
 /// Manager for the state of all accounts and programs after processing its entries.
-/// AbiExample is needed even without Serialize/Deserialize; actual (de-)serialization
-/// are implemented elsewhere for versioning
-#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
 #[derive(Debug)]
 pub struct Bank {
     /// References to accounts, parent and signature status

@@ -127,7 +127,7 @@ impl AbiDigester {
             value.serialize(self.create_new())
         } else {
             // Don't call value.visit_for_abi(...) to prefer autoref specialization
-            // resolution for IgnoreAsHelper
+            // resolution for TransparentAsHelper
             <&T>::visit_for_abi(&value, &mut self.create_new())
         }
     }
@@ -657,7 +657,7 @@ mod tests {
     type TestBitVec = bv::BitVec<u64>;
 
     mod bitflags_abi {
-        use crate::abi_example::{AbiExample, EvenAsOpaque, IgnoreAsHelper};
+        use crate::abi_example::{AbiExample, EvenAsOpaque, TransparentAsHelper};
 
         bitflags::bitflags! {
             #[frozen_abi(digest = "HhKNkaeAd7AohTb8S8sPKjAWwzxWY2DPz5FvkWmx5bSH")]
@@ -673,7 +673,7 @@ mod tests {
             }
         }
 
-        impl IgnoreAsHelper for TestFlags {}
+        impl TransparentAsHelper for TestFlags {}
         // This (EvenAsOpaque) marker trait is needed for bitflags-generated types because we can't
         // impl AbiExample for its private type:
         // thread '...TestFlags_frozen_abi...' panicked at ...:

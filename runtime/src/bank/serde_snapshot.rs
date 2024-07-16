@@ -473,18 +473,36 @@ mod tests {
         assert_eq!(dbank.epoch_reward_status, EpochRewardStatus::Inactive);
     }
 
-    #[cfg(RUSTC_WITH_SPECIALIZATION)]
+    #[cfg(all(RUSTC_WITH_SPECIALIZATION, feature = "frozen-abi"))]
     mod test_bank_serialize {
         use {
             super::*,
             solana_accounts_db::{
                 account_storage::meta::StoredMetaWriteVersion, accounts_db::BankHashStats,
             },
+            solana_frozen_abi::abi_example::AbiExample,
             solana_sdk::clock::Slot,
+            std::marker::PhantomData,
         };
 
-        // This some what long test harness is required to freeze the ABI of
-        // Bank's serialization due to versioned nature
+        // This some what long test harness is required to freeze the ABI of Bank's serialization,
+        // which is implemented manually by calling serialize_bank_snapshot_with() mainly based on
+        // get_fields_to_serialize(). However, note that Bank's serialization is coupled with
+        // snapshot storages as well.
+        //
+        // It was avoided to impl AbiExample for Bank by wrapping it around PhantomData inside the
+        // spcecial wrapper called BankAbiTestWrapper. And internally, it creates an actual bank
+        // from Bank::default_for_tests().
+        //
+        // In this way, frozen abi can increase the coverage of the serialization code path as much
+        // as possible. Alternatively, we could derive AbiExample for the minimum set of actually
+        // serialized fields of bank as an ad-hoc tuple. But that was avoided to avoid maintenance
+        // burden instead.
+        //
+        // Involving the Bank here is preferred conceptually because snapshot abi is
+        // important and snapshot is just a (rooted) serialized bank at the high level. Only
+        // abi-freezing bank.get_fields_to_serialize() is kind of relying on the implementation
+        // detail.
         #[cfg_attr(
             feature = "frozen-abi",
             derive(AbiExample),
@@ -493,14 +511,15 @@ mod tests {
         #[derive(Serialize)]
         pub struct BankAbiTestWrapper {
             #[serde(serialize_with = "wrapper")]
-            bank: Bank,
+            bank: PhantomData<Bank>,
         }
 
-        pub fn wrapper<S>(bank: &Bank, serializer: S) -> Result<S::Ok, S::Error>
+        pub fn wrapper<S>(_bank: &PhantomData<Bank>, serializer: S) -> Result<S::Ok, S::Error>
         where
             S: serde::Serializer,
         {
-            let snapshot_storages = bank.get_snapshot_storages(None);
+            let bank = Bank::default_for_tests();
+            let snapshot_storages = AccountsDb::example().get_snapshot_storages(0..1).0;
             // ensure there is at least one snapshot storage example for ABI digesting
             assert!(!snapshot_storages.is_empty());
 

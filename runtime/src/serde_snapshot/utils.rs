@@ -3,7 +3,7 @@ use serde::{
     Serialize, Serializer,
 };
 #[cfg(all(test, RUSTC_WITH_SPECIALIZATION, feature = "frozen-abi"))]
-use solana_frozen_abi::abi_example::IgnoreAsHelper;
+use solana_frozen_abi::abi_example::TransparentAsHelper;
 
 // consumes an iterator and returns an object that will serialize as a serde seq
 #[allow(dead_code)]
@@ -18,7 +18,7 @@ where
     }
 
     #[cfg(all(test, RUSTC_WITH_SPECIALIZATION, feature = "frozen-abi"))]
-    impl<I> IgnoreAsHelper for SerializableSequencedIterator<I> {}
+    impl<I> TransparentAsHelper for SerializableSequencedIterator<I> {}
 
     impl<I> Serialize for SerializableSequencedIterator<I>
     where
@@ -57,7 +57,7 @@ where
     }
 
     #[cfg(all(test, RUSTC_WITH_SPECIALIZATION, feature = "frozen-abi"))]
-    impl<I> IgnoreAsHelper for SerializableSequencedIterator<I> {}
+    impl<I> TransparentAsHelper for SerializableSequencedIterator<I> {}
 
     impl<I> Serialize for SerializableSequencedIterator<I>
     where
@@ -96,7 +96,7 @@ where
     }
 
     #[cfg(all(test, RUSTC_WITH_SPECIALIZATION, feature = "frozen-abi"))]
-    impl<I> IgnoreAsHelper for SerializableMappedIterator<I> {}
+    impl<I> TransparentAsHelper for SerializableMappedIterator<I> {}
 
     impl<K, V, I> Serialize for SerializableMappedIterator<I>
     where

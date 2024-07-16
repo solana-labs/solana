@@ -23,24 +23,6 @@ impl std::fmt::Debug for BuiltinPrototype {
     }
 }
 
-#[cfg(all(RUSTC_WITH_SPECIALIZATION, feature = "frozen-abi"))]
-impl solana_frozen_abi::abi_example::AbiExample for BuiltinPrototype {
-    fn example() -> Self {
-        // BuiltinPrototype isn't serializable by definition.
-        solana_program_runtime::declare_process_instruction!(MockBuiltin, 0, |_invoke_context| {
-            // Do nothing
-            Ok(())
-        });
-        Self {
-            core_bpf_migration_config: None,
-            enable_feature_id: None,
-            program_id: Pubkey::default(),
-            name: "",
-            entrypoint: MockBuiltin::vm,
-        }
-    }
-}
-
 /// Transitions of stateless built-in programs at epoch boundaries when
 /// features are activated.
 /// These are built-in programs that don't actually exist, but their address

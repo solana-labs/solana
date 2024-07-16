@@ -58,7 +58,7 @@ impl ::solana_frozen_abi::abi_example::AbiExample for PacketFlags {
 }
 
 #[cfg(all(RUSTC_WITH_SPECIALIZATION, feature = "frozen-abi"))]
-impl ::solana_frozen_abi::abi_example::IgnoreAsHelper for PacketFlags {}
+impl ::solana_frozen_abi::abi_example::TransparentAsHelper for PacketFlags {}
 
 #[cfg(all(RUSTC_WITH_SPECIALIZATION, feature = "frozen-abi"))]
 impl ::solana_frozen_abi::abi_example::EvenAsOpaque for PacketFlags {

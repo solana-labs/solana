@@ -45,7 +45,6 @@ use {
 
 pub type PubkeyAccountSlot = (Pubkey, AccountSharedData, Slot);
 
-#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
 #[derive(Debug, Default)]
 pub struct AccountLocks {
     write_locks: HashSet<Pubkey>,
@@ -99,7 +98,6 @@ impl AccountLocks {
 }
 
 /// This structure handles synchronization for db
-#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
 #[derive(Debug)]
 pub struct Accounts {
     /// Single global AccountsDb

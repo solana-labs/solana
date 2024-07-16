@@ -26,7 +26,6 @@ use {
 /// Distributing rewards to stake accounts begins AFTER this many blocks.
 const REWARD_CALCULATION_NUM_BLOCKS: u64 = 1;
 
-#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub(crate) struct PartitionedStakeReward {
     /// Stake account address
@@ -55,7 +54,6 @@ impl PartitionedStakeReward {
 
 type PartitionedStakeRewards = Vec<PartitionedStakeReward>;
 
-#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct StartBlockHeightAndRewards {
     /// the block height of the slot at which rewards distribution began
@@ -65,7 +63,6 @@ pub(crate) struct StartBlockHeightAndRewards {
 }
 
 /// Represent whether bank is in the reward phase or not.
-#[cfg_attr(feature = "frozen-abi", derive(AbiExample, AbiEnumVisitor))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub(crate) enum EpochRewardStatus {
     /// this bank is in the reward phase.

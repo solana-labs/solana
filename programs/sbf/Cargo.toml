@@ -79,6 +79,8 @@ strip = true
 sbf_c = []
 sbf_rust = []
 dummy-for-ci-check = ["sbf_c", "sbf_rust"]
+# This was needed for ci
+frozen-abi = []
 
 [dev-dependencies]
 agave-validator = { workspace = true }
