@@ -591,19 +591,13 @@ impl AppendVec {
     /// Also return the offset of the first byte after the requested data that
     /// falls on a 64-byte boundary.
     fn get_slice(slice: ValidSlice, offset: usize, size: usize) -> Option<(&[u8], usize)> {
-        let (next, overflow) = offset.overflowing_add(size);
-        if overflow || next > slice.0.len() {
-            return None;
-        }
-        let data = &slice.0[offset..next];
-        let next = u64_align!(next);
-
-        Some((
-            //UNSAFE: This unsafe creates a slice that represents a chunk of self.map memory
-            //The lifetime of this slice is tied to &self, since it points to self.map memory
-            unsafe { std::slice::from_raw_parts(data.as_ptr(), size) },
-            next,
-        ))
+        // SAFETY: Wrapping math is safe here because if `end` does wrap, the Range
+        // parameter to `.get()` will be invalid, and `.get()` will correctly return None.
+        let end = offset.wrapping_add(size);
+        slice
+            .0
+            .get(offset..end)
+            .map(|subslice| (subslice, u64_align!(end)))
     }
 
     /// Copy `len` bytes from `src` to the first 64-byte boundary after position `offset` of
