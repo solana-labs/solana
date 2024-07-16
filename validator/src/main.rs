@@ -1303,7 +1303,7 @@ pub fn main() {
                 .collect(),
         )
     } else {
-        None
+        value_t_or_exit!(matches, "geyser_plugin_always_enabled", bool).then(Vec::new)
     };
     let starting_with_geyser_plugins: bool = on_start_geyser_plugin_config_files.is_some();
 

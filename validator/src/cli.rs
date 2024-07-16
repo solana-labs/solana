@@ -1179,6 +1179,14 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .help("Specify the configuration file for the Geyser plugin."),
         )
         .arg(
+            Arg::with_name("geyser_plugin_always_enabled")
+                .long("geyser-plugin-always-enabled")
+                .value_name("BOOLEAN")
+                .takes_value(true)
+                .default_value("false")
+                .help("Еnable Geyser interface even if no Geyser configs are specified."),
+        )
+        .arg(
             Arg::with_name("snapshot_archive_format")
                 .long("snapshot-archive-format")
                 .alias("snapshot-compression") // Legacy name used by Solana v1.5.x and older
