@@ -8,7 +8,7 @@ source "$here"/../../ci/downstream-projects/common.sh
 
 set -x
 rm -rf spl
-git clone https://github.com/solana-labs/solana-program-library.git spl
+git clone https://github.com/solana-labs/solana-program-library.git spl -b v1.18
 
 # copy toolchain file to use solana's rust version
 cp "$SOLANA_DIR"/rust-toolchain.toml spl/
