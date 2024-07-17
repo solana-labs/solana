@@ -100,6 +100,7 @@ members = [
     "sdk/atomic-u64",
     "sdk/cargo-build-sbf",
     "sdk/cargo-test-sbf",
+    "sdk/decode-error",
     "sdk/gen-headers",
     "sdk/macro",
     "sdk/package-metadata-macro",
@@ -351,6 +352,7 @@ solana-connection-cache = { path = "connection-cache", version = "=2.1.0", defau
 solana-core = { path = "core", version = "=2.1.0" }
 solana-cost-model = { path = "cost-model", version = "=2.1.0" }
 solana-curve25519 = { path = "curves/curve25519", version = "=2.1.0" }
+solana-decode-error = { path = "sdk/decode-error", version = "=2.1.0" }
 solana-define-syscall = { path = "define-syscall", version = "=2.1.0" }
 solana-download-utils = { path = "download-utils", version = "=2.1.0" }
 solana-entry = { path = "entry", version = "=2.1.0" }

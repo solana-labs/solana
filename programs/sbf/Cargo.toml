@@ -31,6 +31,7 @@ solana-bpf-loader-program = { path = "../bpf_loader", version = "=2.1.0" }
 solana-cli-output = { path = "../../cli-output", version = "=2.1.0" }
 solana-compute-budget = { path = "../../compute-budget", version = "=2.1.0" }
 solana-curve25519 = { path = "../../curves/curve25519", version = "=2.1.0" }
+solana-decode-error = { path = "../../sdk/decode-error", version = "=2.1.0" }
 solana-ledger = { path = "../../ledger", version = "=2.1.0" }
 solana-log-collector = { path = "../../log-collector", version = "=2.1.0" }
 solana-logger = { path = "../../logger", version = "=2.1.0" }

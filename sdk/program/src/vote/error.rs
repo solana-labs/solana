@@ -1,8 +1,8 @@
 //! Vote program errors
 
 use {
-    crate::decode_error::DecodeError,
     num_derive::{FromPrimitive, ToPrimitive},
+    solana_decode_error::DecodeError,
     thiserror::Error,
 };
 

@@ -42,7 +42,6 @@
 #[allow(deprecated)]
 use {
     crate::{
-        decode_error::DecodeError,
         instruction::{AccountMeta, Instruction},
         nonce,
         pubkey::Pubkey,
@@ -50,6 +49,7 @@ use {
         sysvar::{recent_blockhashes, rent},
     },
     num_derive::{FromPrimitive, ToPrimitive},
+    solana_decode_error::DecodeError,
     thiserror::Error,
 };
 

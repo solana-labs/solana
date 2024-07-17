@@ -9,9 +9,10 @@ use arbitrary::Arbitrary;
 #[cfg(feature = "borsh")]
 use borsh::{BorshDeserialize, BorshSchema, BorshSerialize};
 use {
-    crate::{decode_error::DecodeError, hash::hashv},
+    crate::hash::hashv,
     bytemuck_derive::{Pod, Zeroable},
     num_derive::{FromPrimitive, ToPrimitive},
+    solana_decode_error::DecodeError,
     std::{
         convert::{Infallible, TryFrom},
         fmt, mem,

@@ -1,0 +1,16 @@
+[package]
+name = "solana-decode-error"
+description = "Solana DecodeError Trait"
+documentation = "https://docs.rs/solana-decode-error"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+num-traits = { workspace = true }
+
+[dev-dependencies]
+num-derive = { workspace = true }

@@ -11,6 +11,7 @@ edition = { workspace = true }
 [dependencies]
 num-derive = { workspace = true }
 num-traits = { workspace = true }
+solana-decode-error = { workspace = true }
 solana-program = { workspace = true }
 thiserror = { workspace = true }
 

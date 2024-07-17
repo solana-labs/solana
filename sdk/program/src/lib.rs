@@ -486,7 +486,6 @@ pub mod bpf_loader_upgradeable;
 pub mod clock;
 pub mod compute_units;
 pub mod debug_account_data;
-pub mod decode_error;
 pub mod ed25519_program;
 pub mod entrypoint;
 pub mod entrypoint_deprecated;
@@ -593,6 +592,8 @@ pub mod sdk_ids {
     }
 }
 
+#[deprecated(since = "2.1.0", note = "Use `solana-decode-error` crate instead")]
+pub use solana_decode_error as decode_error;
 /// Same as [`declare_id`] except that it reports that this ID has been deprecated.
 pub use solana_sdk_macro::program_declare_deprecated_id as declare_deprecated_id;
 /// Convenience macro to declare a static public key and functions to interact with it.

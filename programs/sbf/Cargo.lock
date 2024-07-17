@@ -4920,6 +4920,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-decode-error"
+version = "2.1.0"
+dependencies = [
+ "num-traits",
+]
+
+[[package]]
 name = "solana-define-syscall"
 version = "2.1.0"
 
@@ -5313,6 +5320,7 @@ dependencies = [
  "sha2 0.10.8",
  "sha3 0.10.8",
  "solana-atomic-u64",
+ "solana-decode-error",
  "solana-define-syscall",
  "solana-sanitize",
  "solana-sdk-macro",
@@ -5797,6 +5805,7 @@ version = "2.1.0"
 dependencies = [
  "num-derive",
  "num-traits",
+ "solana-decode-error",
  "solana-program",
  "thiserror",
 ]
@@ -6154,6 +6163,7 @@ dependencies = [
  "sha2 0.10.8",
  "sha3 0.10.8",
  "siphasher",
+ "solana-decode-error",
  "solana-program",
  "solana-sanitize",
  "solana-sdk-macro",

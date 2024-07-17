@@ -4,9 +4,9 @@ extern crate solana_program;
 use {
     num_derive::FromPrimitive,
     num_traits::FromPrimitive,
+    solana_decode_error::DecodeError,
     solana_program::{
         account_info::AccountInfo,
-        decode_error::DecodeError,
         entrypoint::ProgramResult,
         msg,
         program_error::{PrintProgramError, ProgramError},

@@ -37,6 +37,7 @@ solana-client = { workspace = true }
 solana-compute-budget = { workspace = true }
 solana-config-program = { workspace = true }
 solana-connection-cache = { workspace = true }
+solana-decode-error = { workspace = true }
 solana-loader-v4-program = { workspace = true }
 solana-logger = { workspace = true }
 solana-program-runtime = { workspace = true }

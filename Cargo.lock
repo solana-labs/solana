@@ -5847,6 +5847,7 @@ dependencies = [
  "solana-compute-budget",
  "solana-config-program",
  "solana-connection-cache",
+ "solana-decode-error",
  "solana-faucet",
  "solana-loader-v4-program",
  "solana-logger",
@@ -6161,6 +6162,14 @@ dependencies = [
  "curve25519-dalek",
  "solana-program",
  "thiserror",
+]
+
+[[package]]
+name = "solana-decode-error"
+version = "2.1.0"
+dependencies = [
+ "num-derive",
+ "num-traits",
 ]
 
 [[package]]
@@ -6831,6 +6840,7 @@ dependencies = [
  "sha2 0.10.8",
  "sha3 0.10.8",
  "solana-atomic-u64",
+ "solana-decode-error",
  "solana-define-syscall",
  "solana-frozen-abi",
  "solana-frozen-abi-macro",
@@ -7302,6 +7312,7 @@ dependencies = [
  "sha2 0.10.8",
  "sha3 0.10.8",
  "siphasher",
+ "solana-decode-error",
  "solana-frozen-abi",
  "solana-frozen-abi-macro",
  "solana-logger",

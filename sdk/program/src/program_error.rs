@@ -4,8 +4,9 @@
 #[cfg(feature = "borsh")]
 use borsh::io::Error as BorshIoError;
 use {
-    crate::{decode_error::DecodeError, instruction::InstructionError, msg, pubkey::PubkeyError},
+    crate::{instruction::InstructionError, msg, pubkey::PubkeyError},
     num_traits::{FromPrimitive, ToPrimitive},
+    solana_decode_error::DecodeError,
     std::convert::TryFrom,
     thiserror::Error,
 };
