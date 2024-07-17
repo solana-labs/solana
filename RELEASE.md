@@ -61,6 +61,11 @@ There are three release channels that map to branches as follows:
 
 ## Steps to Create a Branch
 
+### Major release branch
+1. If the new branch will be the first branch of a new major release check that
+all eligible deprecated symbols have been removed. Our policy is to deprecate
+for at least one full minor version before removal.
+
 ### Create the new branch
 1. Check out the latest commit on `master` branch:
     ```
