@@ -18,11 +18,8 @@ use crate::wasm_bindgen;
 #[cfg(feature = "borsh")]
 use borsh::BorshSerialize;
 use {
-    crate::{pubkey::Pubkey, short_vec},
-    bincode::serialize,
-    serde::Serialize,
-    solana_sanitize::Sanitize,
-    thiserror::Error,
+    crate::pubkey::Pubkey, bincode::serialize, serde::Serialize, solana_sanitize::Sanitize,
+    solana_short_vec as short_vec, thiserror::Error,
 };
 
 /// Reasons the runtime might have rejected an instruction.

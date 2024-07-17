@@ -1,7 +1,7 @@
 #![feature(test)]
 
 extern crate test;
-use {bincode::deserialize, solana_sdk::short_vec::ShortVec, test::Bencher};
+use {bincode::deserialize, solana_short_vec::ShortVec, test::Bencher};
 
 // Return a ShortVec with 127 bytes
 fn create_encoded_short_vec() -> Vec<u8> {

@@ -7,13 +7,13 @@ use {
         hash::Hash,
         message::Message,
         pubkey::Pubkey,
-        short_vec::decode_shortu16_len,
         signature::Signature,
         transaction::{
             AddressLoader, SanitizedTransaction, SanitizedVersionedTransaction,
             VersionedTransaction,
         },
     },
+    solana_short_vec::decode_shortu16_len,
     std::{cmp::Ordering, collections::HashSet, mem::size_of},
     thiserror::Error,
 };

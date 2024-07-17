@@ -37,6 +37,7 @@ solana-frozen-abi-macro = { workspace = true, optional = true }
 solana-sanitize = { workspace = true }
 solana-sdk-macro = { workspace = true }
 solana-secp256k1-recover = { workspace = true }
+solana-short-vec = { workspace = true }
 thiserror = { workspace = true }
 
 # This is currently needed to build on-chain programs reliably.
@@ -97,4 +98,4 @@ crate-type = ["cdylib", "rlib"]
 default = ["borsh"]
 borsh = ["dep:borsh", "dep:borsh0-10"]
 dev-context-only-utils = ["dep:qualifier_attr"]
-frozen-abi = ["dep:solana-frozen-abi", "dep:solana-frozen-abi-macro"]
+frozen-abi = ["dep:solana-frozen-abi", "dep:solana-frozen-abi-macro", "solana-short-vec/frozen-abi"]

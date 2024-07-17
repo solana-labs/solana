@@ -22,9 +22,10 @@ use {
         instruction::{CompiledInstruction, Instruction},
         message::{compiled_keys::CompiledKeys, MessageHeader},
         pubkey::Pubkey,
-        short_vec, system_instruction, system_program, sysvar,
+        system_instruction, system_program, sysvar,
     },
     solana_sanitize::{Sanitize, SanitizeError},
+    solana_short_vec as short_vec,
     std::{collections::HashSet, convert::TryFrom, str::FromStr},
 };
 
@@ -122,7 +123,7 @@ fn compile_instructions(ixs: &[Instruction], keys: &[Pubkey]) -> Vec<CompiledIns
 #[cfg(not(target_arch = "wasm32"))]
 #[cfg_attr(
     feature = "frozen-abi",
-    frozen_abi(digest = "2KnLEqfLcTBQqitE22Pp8JYkaqVVbAkGbCfdeHoyxcAU"),
+    frozen_abi(digest = "hPGFnQYLp3Ps4XLg7NHHvC7tDfNGMMBCN3x2jGXpF3G"),
     derive(AbiExample)
 )]
 #[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone)]
@@ -152,7 +153,7 @@ pub struct Message {
 #[wasm_bindgen]
 #[cfg_attr(
     feature = "frozen-abi",
-    frozen_abi(digest = "2KnLEqfLcTBQqitE22Pp8JYkaqVVbAkGbCfdeHoyxcAU"),
+    frozen_abi(digest = "hPGFnQYLp3Ps4XLg7NHHvC7tDfNGMMBCN3x2jGXpF3G"),
     derive(AbiExample)
 )]
 #[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone)]

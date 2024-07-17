@@ -6,7 +6,6 @@ use {
     crate::{
         hash::Hash,
         message::VersionedMessage,
-        short_vec,
         signature::Signature,
         signer::SignerError,
         signers::Signers,
@@ -14,6 +13,7 @@ use {
     },
     serde::Serialize,
     solana_sanitize::SanitizeError,
+    solana_short_vec as short_vec,
     std::cmp::Ordering,
 };
 

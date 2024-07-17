@@ -4,7 +4,6 @@ use {
         instruction::CompiledInstruction,
         message::{legacy::Message as LegacyMessage, v0::MessageAddressTableLookup, MessageHeader},
         pubkey::Pubkey,
-        short_vec,
     },
     serde::{
         de::{self, Deserializer, SeqAccess, Unexpected, Visitor},
@@ -12,6 +11,7 @@ use {
     },
     serde_derive::{Deserialize, Serialize},
     solana_sanitize::{Sanitize, SanitizeError},
+    solana_short_vec as short_vec,
     std::{collections::HashSet, fmt},
 };
 
@@ -33,7 +33,7 @@ pub const MESSAGE_VERSION_PREFIX: u8 = 0x80;
 /// format.
 #[cfg_attr(
     feature = "frozen-abi",
-    frozen_abi(digest = "G4EAiqmGgBprgf5ePYemLJcoFfx4R7rhC1Weo2FVJ7fn"),
+    frozen_abi(digest = "8wyn6rxrJ1WwsUJkVxtDH9VEmd7djwqMfBLL3EpuY7H4"),
     derive(AbiEnumVisitor, AbiExample)
 )]
 #[derive(Debug, PartialEq, Eq, Clone)]

@@ -16,8 +16,8 @@ use {
     solana_sdk::{
         account::{Account, AccountSharedData},
         pubkey::Pubkey,
-        short_vec,
     },
+    solana_short_vec as short_vec,
 };
 
 pub trait ConfigState: serde::Serialize + Default {

@@ -3,7 +3,8 @@ use {
     log::*,
     rand::Rng,
     solana_perf::sigverify::PacketError,
-    solana_sdk::{packet::Packet, short_vec::decode_shortu16_len, signature::SIGNATURE_BYTES},
+    solana_sdk::{packet::Packet, signature::SIGNATURE_BYTES},
+    solana_short_vec::decode_shortu16_len,
 };
 
 // The mask is 12 bits long (1<<12 = 4096), it means the probability of matching

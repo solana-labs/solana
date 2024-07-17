@@ -17,9 +17,9 @@ use {
         hash::Hash,
         message::{MESSAGE_HEADER_LENGTH, MESSAGE_VERSION_PREFIX},
         pubkey::Pubkey,
-        short_vec::decode_shortu16_len,
         signature::Signature,
     },
+    solana_short_vec::decode_shortu16_len,
     std::{convert::TryFrom, mem::size_of},
 };
 

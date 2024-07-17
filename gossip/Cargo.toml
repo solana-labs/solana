@@ -45,6 +45,7 @@ solana-rpc-client = { workspace = true }
 solana-runtime = { workspace = true }
 solana-sanitize = { workspace = true }
 solana-sdk = { workspace = true }
+solana-short-vec = { workspace = true }
 solana-streamer = { workspace = true }
 solana-tpu-client = { workspace = true }
 solana-version = { workspace = true }
@@ -71,6 +72,7 @@ frozen-abi = [
     "solana-perf/frozen-abi",
     "solana-runtime/frozen-abi",
     "solana-sdk/frozen-abi",
+    "solana-short-vec/frozen-abi",
     "solana-version/frozen-abi",
     "solana-vote/frozen-abi",
     "solana-vote-program/frozen-abi",

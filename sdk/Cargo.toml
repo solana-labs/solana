@@ -42,6 +42,7 @@ frozen-abi = [
   "dep:solana-frozen-abi",
   "dep:solana-frozen-abi-macro",
   "solana-program/frozen-abi",
+  "solana-short-vec/frozen-abi"
 ]
 
 [dependencies]
@@ -85,6 +86,7 @@ solana-program = { workspace = true }
 solana-sanitize = { workspace = true }
 solana-sdk-macro = { workspace = true }
 solana-secp256k1-recover = { workspace = true }
+solana-short-vec = { workspace = true }
 thiserror = { workspace = true }
 uriparse = { workspace = true }
 

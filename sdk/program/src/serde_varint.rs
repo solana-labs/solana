@@ -120,7 +120,7 @@ impl_var_int!(u64);
 
 #[cfg(test)]
 mod tests {
-    use {crate::short_vec::ShortU16, rand::Rng};
+    use {rand::Rng, solana_short_vec::ShortU16};
 
     #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
     struct Dummy {
