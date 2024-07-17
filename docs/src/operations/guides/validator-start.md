@@ -260,17 +260,15 @@ Read more about [creating and managing a vote account](./vote-accounts.md).
 
 ## Known validators
 
-If you know and respect other validator operators, you can specify this on the command line with the `--known-validator <PUBKEY>`
-argument to `agave-validator`. You can specify multiple ones by repeating the argument `--known-validator <PUBKEY1> --known-validator <PUBKEY2>`.
-This has two effects, one is when the validator is booting with `--only-known-rpc`, it will only ask that set of
-known nodes for downloading genesis and snapshot data. Another is that in combination with the `--halt-on-known-validators-accounts-hash-mismatch` option,
-it will monitor the merkle root hash of the entire accounts state of other known nodes on gossip and if the hashes produce any mismatch,
-the validator will halt the node to prevent the validator from voting or processing potentially incorrect state values. At the moment, the slot that
-the validator publishes the hash on is tied to the snapshot interval. For the feature to be effective, all validators in the known
-set should be set to the same snapshot interval value or multiples of the same.
+If you know and respect other validator operators, you can specify this on the
+command line with the `--known-validator <PUBKEY>` argument to
+`agave-validator`. You can specify multiple ones by repeating the argument
+`--known-validator <PUBKEY1> --known-validator <PUBKEY2>`. This has the effect
+that when the validator is booting with `--only-known-rpc`, it will only ask
+that set of known nodes for downloading genesis and snapshot data.
 
-It is highly recommended you use these options to prevent malicious snapshot state download or
-account state divergence.
+It is highly recommended you use this option to prevent malicious snapshot
+state download.
 
 ## Connect Your Validator
 
