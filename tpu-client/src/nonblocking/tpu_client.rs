@@ -503,6 +503,39 @@ where
         Self::new_with_connection_cache(rpc_client, websocket_url, config, connection_cache).await
     }
 
+    /// Try to create LeaderTpuService
+    /// Retries until successful or timeout is reached
+    async fn try_create_leader_tpu_service(
+        rpc_client: Arc<RpcClient>,
+        websocket_url: &str,
+        exit: Arc<AtomicBool>,
+        timeout_seconds: u64,
+    ) -> Result<LeaderTpuService> {
+        let start = tokio::time::Instant::now();
+        loop {
+            if start.elapsed().as_secs() > timeout_seconds {
+                return Err(TpuSenderError::Custom(format!(
+                    "Failed to create LeaderTpuService within {timeout_seconds}s timeout"
+                )));
+            }
+
+            match LeaderTpuService::new(
+                rpc_client.clone(),
+                websocket_url,
+                M::PROTOCOL,
+                exit.clone(),
+            )
+            .await
+            {
+                Ok(service) => return Ok(service),
+                Err(_) => {
+                    warn!("Failed to create TpuLeaderService. Will retry in 1 second");
+                    sleep(Duration::from_secs(1)).await;
+                }
+            }
+        }
+    }
+
     /// Create a new client that disconnects when dropped
     pub async fn new_with_connection_cache(
         rpc_client: Arc<RpcClient>,
@@ -510,10 +543,15 @@ where
         config: TpuClientConfig,
         connection_cache: Arc<ConnectionCache<P, M, C>>,
     ) -> Result<Self> {
+        const TPU_LEADER_SERVICE_CREATION_TIMEOUT: u64 = 20;
         let exit = Arc::new(AtomicBool::new(false));
-        let leader_tpu_service =
-            LeaderTpuService::new(rpc_client.clone(), websocket_url, M::PROTOCOL, exit.clone())
-                .await?;
+        let leader_tpu_service = Self::try_create_leader_tpu_service(
+            rpc_client.clone(),
+            websocket_url,
+            exit.clone(),
+            TPU_LEADER_SERVICE_CREATION_TIMEOUT,
+        )
+        .await?;
 
         Ok(Self {
             fanout_slots: config.fanout_slots.clamp(1, MAX_FANOUT_SLOTS),
