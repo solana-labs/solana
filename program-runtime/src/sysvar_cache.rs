@@ -7,7 +7,7 @@ use {
         instruction::InstructionError,
         pubkey::Pubkey,
         sysvar::{
-            clock::Clock, epoch_rewards::EpochRewards, epoch_schedule::EpochSchedule,
+            self, clock::Clock, epoch_rewards::EpochRewards, epoch_schedule::EpochSchedule,
             last_restart_slot::LastRestartSlot, rent::Rent, slot_hashes::SlotHashes,
             stake_history::StakeHistory, Sysvar, SysvarId,
         },
@@ -48,7 +48,60 @@ pub struct SysvarCache {
     recent_blockhashes: Option<RecentBlockhashes>,
 }
 
+// declare_deprecated_sysvar_id doesn't support const.
+// These sysvars are going away anyway.
+const FEES_ID: Pubkey = solana_sdk::pubkey!("SysvarFees111111111111111111111111111111111");
+const RECENT_BLOCKHASHES_ID: Pubkey =
+    solana_sdk::pubkey!("SysvarRecentB1ockHashes11111111111111111111");
+
 impl SysvarCache {
+    /// Overwrite a sysvar. For testing purposes only.
+    #[allow(deprecated)]
+    pub fn set_sysvar_for_tests<T: Sysvar + SysvarId>(&mut self, sysvar: &T) {
+        let data = bincode::serialize(sysvar).expect("Failed to serialize sysvar.");
+        let sysvar_id = T::id();
+        match sysvar_id {
+            sysvar::clock::ID => {
+                self.clock = Some(data);
+            }
+            sysvar::epoch_rewards::ID => {
+                self.epoch_rewards = Some(data);
+            }
+            sysvar::epoch_schedule::ID => {
+                self.epoch_schedule = Some(data);
+            }
+            FEES_ID => {
+                let fees: Fees =
+                    bincode::deserialize(&data).expect("Failed to deserialize Fees sysvar.");
+                self.fees = Some(fees);
+            }
+            sysvar::last_restart_slot::ID => {
+                self.last_restart_slot = Some(data);
+            }
+            RECENT_BLOCKHASHES_ID => {
+                let recent_blockhashes: RecentBlockhashes = bincode::deserialize(&data)
+                    .expect("Failed to deserialize RecentBlockhashes sysvar.");
+                self.recent_blockhashes = Some(recent_blockhashes);
+            }
+            sysvar::rent::ID => {
+                self.rent = Some(data);
+            }
+            sysvar::slot_hashes::ID => {
+                let slot_hashes: SlotHashes =
+                    bincode::deserialize(&data).expect("Failed to deserialize SlotHashes sysvar.");
+                self.slot_hashes = Some(data);
+                self.slot_hashes_obj = Some(Arc::new(slot_hashes));
+            }
+            sysvar::stake_history::ID => {
+                let stake_history: StakeHistory = bincode::deserialize(&data)
+                    .expect("Failed to deserialize StakeHistory sysvar.");
+                self.stake_history = Some(data);
+                self.stake_history_obj = Some(Arc::new(stake_history));
+            }
+            _ => panic!("Unrecognized Sysvar ID: {sysvar_id}"),
+        }
+    }
+
     // this is exposed for SyscallGetSysvar and should not otherwise be used
     pub fn sysvar_id_to_buffer(&self, sysvar_id: &Pubkey) -> &Option<Vec<u8>> {
         if Clock::check_id(sysvar_id) {
