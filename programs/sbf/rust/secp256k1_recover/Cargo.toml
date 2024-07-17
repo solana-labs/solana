@@ -11,6 +11,7 @@ edition = { workspace = true }
 [dependencies]
 libsecp256k1 = { workspace = true }
 solana-program = { workspace = true }
+solana-secp256k1-recover = { workspace = true }
 
 [lib]
 crate-type = ["cdylib"]

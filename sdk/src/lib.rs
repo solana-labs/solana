@@ -52,10 +52,9 @@ pub use solana_program::{
     decode_error, ed25519_program, epoch_rewards, epoch_schedule, fee_calculator, impl_sysvar_get,
     incinerator, instruction, keccak, lamports, loader_instruction, loader_upgradeable_instruction,
     loader_v4, loader_v4_instruction, message, msg, native_token, nonce, program, program_error,
-    program_memory, program_option, program_pack, rent, secp256k1_program, secp256k1_recover,
-    serde_varint, serialize_utils, short_vec, slot_hashes, slot_history, stable_layout, stake,
-    stake_history, syscalls, system_instruction, system_program, sysvar, unchecked_div_by_const,
-    vote,
+    program_memory, program_option, program_pack, rent, secp256k1_program, serde_varint,
+    serialize_utils, short_vec, slot_hashes, slot_history, stable_layout, stake, stake_history,
+    syscalls, system_instruction, system_program, sysvar, unchecked_div_by_const, vote,
 };
 #[cfg(feature = "borsh")]
 pub use solana_program::{borsh, borsh0_10, borsh1};
@@ -155,6 +154,8 @@ pub use solana_sdk_macro::declare_id;
 pub use solana_sdk_macro::pubkey;
 /// Convenience macro to define multiple static public keys.
 pub use solana_sdk_macro::pubkeys;
+#[deprecated(since = "2.1.0", note = "Use `solana-secp256k1-recover` crate instead")]
+pub use solana_secp256k1_recover as secp256k1_recover;
 
 /// Convenience macro for `AddAssign` with saturating arithmetic.
 /// Replace by `std::num::Saturating` once stable

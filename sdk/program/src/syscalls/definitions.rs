@@ -1,5 +1,10 @@
 #[cfg(target_feature = "static-syscalls")]
 pub use solana_define_syscall::sys_hash;
+#[deprecated(
+    since = "2.1.0",
+    note = "Use `solana_secp256k1_recover::sol_secp256k1_recover` instead"
+)]
+pub use solana_secp256k1_recover::sol_secp256k1_recover;
 use {
     crate::{
         instruction::{AccountMeta, ProcessedSiblingInstruction},
@@ -16,7 +21,6 @@ define_syscall!(fn sol_create_program_address(seeds_addr: *const u8, seeds_len: 
 define_syscall!(fn sol_try_find_program_address(seeds_addr: *const u8, seeds_len: u64, program_id_addr: *const u8, address_bytes_addr: *const u8, bump_seed_addr: *const u8) -> u64);
 define_syscall!(fn sol_sha256(vals: *const u8, val_len: u64, hash_result: *mut u8) -> u64);
 define_syscall!(fn sol_keccak256(vals: *const u8, val_len: u64, hash_result: *mut u8) -> u64);
-define_syscall!(fn sol_secp256k1_recover(hash: *const u8, recovery_id: u64, signature: *const u8, result: *mut u8) -> u64);
 define_syscall!(fn sol_blake3(vals: *const u8, val_len: u64, hash_result: *mut u8) -> u64);
 define_syscall!(fn sol_memcpy_(dst: *mut u8, src: *const u8, n: u64));
 define_syscall!(fn sol_memmove_(dst: *mut u8, src: *const u8, n: u64));

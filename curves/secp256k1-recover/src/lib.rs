@@ -1,3 +1,4 @@
+#![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(min_specialization))]
 //! Public key recovery from [secp256k1] ECDSA signatures.
 //!
 //! [secp256k1]: https://en.bitcoin.it/wiki/Secp256k1
@@ -21,7 +22,7 @@
 //! also provides the [secp256k1 program][sp], which is more flexible, has lower CPU
 //! cost, and can validate many signatures at once.
 //!
-//! [sp]: crate::secp256k1_program
+//! [sp]: https://docs.rs/solana-program/latest/solana_program/secp256k1_program/
 //! [`ecrecover`]: https://docs.soliditylang.org/en/v0.8.14/units-and-global-variables.html?highlight=ecrecover#mathematical-and-cryptographic-functions
 
 #[cfg(feature = "borsh")]
@@ -63,7 +64,7 @@ pub const SECP256K1_SIGNATURE_LENGTH: usize = 64;
 pub const SECP256K1_PUBLIC_KEY_LENGTH: usize = 64;
 
 #[repr(transparent)]
-#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+#[cfg_attr(feature = "frozen-abi", derive(solana_frozen_abi_macro::AbiExample))]
 #[cfg_attr(
     feature = "borsh",
     derive(BorshSerialize, BorshDeserialize, BorshSchema),
@@ -84,6 +85,9 @@ impl Secp256k1Pubkey {
         self.0
     }
 }
+
+#[cfg(target_os = "solana")]
+solana_define_syscall::define_syscall!(fn sol_secp256k1_recover(hash: *const u8, recovery_id: u64, signature: *const u8, result: *mut u8) -> u64);
 
 /// Recover the public key from a [secp256k1] ECDSA signature and
 /// cryptographically-hashed message.
@@ -110,7 +114,7 @@ impl Secp256k1Pubkey {
 /// "overflowing" signature, and this function returns an error when parsing
 /// overflowing signatures.
 ///
-/// [`keccak`]: crate::keccak
+/// [`keccak`]: https://docs.rs/solana-program/latest/solana_program/keccak/
 /// [`wrapping_sub`]: https://doc.rust-lang.org/std/primitive.u8.html#method.wrapping_sub
 ///
 /// On success this function returns a [`Secp256k1Pubkey`], a wrapper around a
@@ -123,7 +127,7 @@ impl Secp256k1Pubkey {
 /// the [secp256k1 program][sp], which is more flexible, has lower CPU cost, and
 /// can validate many signatures at once.
 ///
-/// [sp]: crate::secp256k1_program
+/// [sp]: https://docs.rs/solana-program/latest/solana_program/secp256k1_program/
 ///
 /// The `secp256k1_recover` syscall is implemented with the [`libsecp256k1`]
 /// crate, which clients may also want to use.
@@ -161,7 +165,7 @@ impl Secp256k1Pubkey {
 /// signatures with high-order `S` values. The following code will accomplish
 /// this:
 ///
-/// ```rust
+/// ```rust,ignore
 /// # use solana_program::program_error::ProgramError;
 /// # let signature_bytes = [
 /// #     0x83, 0x55, 0x81, 0xDF, 0xB1, 0x02, 0xA7, 0xD2,
@@ -257,13 +261,13 @@ impl Secp256k1Pubkey {
 /// The Solana program. Note that it uses `libsecp256k1` version 0.7.0 to parse
 /// the secp256k1 signature to prevent malleability.
 ///
-/// ```no_run
+/// ```rust,ignore
 /// use solana_program::{
 ///     entrypoint::ProgramResult,
 ///     keccak, msg,
 ///     program_error::ProgramError,
-///     secp256k1_recover::secp256k1_recover,
 /// };
+/// use solana_secp256k1_recover::secp256k1_recover;
 ///
 /// /// The key we expect to sign secp256k1 messages,
 /// /// as serialized by `libsecp256k1::PublicKey::serialize`.
@@ -327,7 +331,7 @@ impl Secp256k1Pubkey {
 ///
 /// The RPC client program:
 ///
-/// ```no_run
+/// ```rust,ignore
 /// # use solana_program::example_mocks::solana_rpc_client;
 /// # use solana_program::example_mocks::solana_sdk;
 /// use anyhow::Result;
@@ -399,7 +403,7 @@ pub fn secp256k1_recover(
     {
         let mut pubkey_buffer = [0u8; SECP256K1_PUBLIC_KEY_LENGTH];
         let result = unsafe {
-            crate::syscalls::sol_secp256k1_recover(
+            sol_secp256k1_recover(
                 hash.as_ptr(),
                 recovery_id as u64,
                 signature.as_ptr(),

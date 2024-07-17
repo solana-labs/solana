@@ -519,7 +519,6 @@ pub mod program_utils;
 pub mod pubkey;
 pub mod rent;
 pub mod secp256k1_program;
-pub mod secp256k1_recover;
 pub mod serde_varint;
 pub mod serialize_utils;
 pub mod short_vec;
@@ -537,6 +536,8 @@ pub mod wasm;
 
 #[deprecated(since = "2.1.0", note = "Use `solana-sanitize` crate instead")]
 pub use solana_sanitize as sanitize;
+#[deprecated(since = "2.1.0", note = "Use `solana-secp256k1-recover` crate instead")]
+pub use solana_secp256k1_recover as secp256k1_recover;
 #[cfg(target_arch = "wasm32")]
 pub use wasm_bindgen::prelude::wasm_bindgen;
 
