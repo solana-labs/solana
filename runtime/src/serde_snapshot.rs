@@ -907,7 +907,7 @@ pub(crate) fn remap_append_vec_file(
         let remapped_file_name = AccountsFile::file_name(slot, remapped_append_vec_id);
         remapped_append_vec_path = append_vec_path.parent().unwrap().join(remapped_file_name);
 
-        #[cfg(target_os = "linux")]
+        #[cfg(all(target_os = "linux", target_env = "gnu"))]
         {
             let remapped_append_vec_path_cstr = cstring_from_path(&remapped_append_vec_path)?;
 
@@ -923,7 +923,10 @@ pub(crate) fn remap_append_vec_file(
             }
         }
 
-        #[cfg(not(target_os = "linux"))]
+        #[cfg(any(
+            not(target_os = "linux"),
+            all(target_os = "linux", not(target_env = "gnu"))
+        ))]
         if std::fs::metadata(&remapped_append_vec_path).is_err() {
             break (remapped_append_vec_id, remapped_append_vec_path);
         }
@@ -935,7 +938,10 @@ pub(crate) fn remap_append_vec_file(
 
     // Only rename the file if the new ID is actually different from the original. In the target_os
     // = linux case, we have already renamed if necessary.
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(any(
+        not(target_os = "linux"),
+        all(target_os = "linux", not(target_env = "gnu"))
+    ))]
     if old_append_vec_id != remapped_append_vec_id as SerializedAccountsFileId {
         std::fs::rename(append_vec_path, &remapped_append_vec_path)?;
     }
@@ -1206,7 +1212,7 @@ where
 }
 
 // Rename `src` to `dest` only if `dest` doesn't already exist.
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
 fn rename_no_replace(src: &CStr, dest: &CStr) -> io::Result<()> {
     let ret = unsafe {
         libc::renameat2(
