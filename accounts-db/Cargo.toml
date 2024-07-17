@@ -45,7 +45,6 @@ solana-nohash-hasher = { workspace = true }
 solana-rayon-threadlimit = { workspace = true }
 solana-sdk = { workspace = true }
 solana-stake-program = { workspace = true, optional = true }
-solana-svm = { workspace = true }
 solana-vote-program = { workspace = true, optional = true }
 static_assertions = { workspace = true }
 tar = { workspace = true }
@@ -69,7 +68,6 @@ solana-accounts-db = { path = ".", features = ["dev-context-only-utils"] }
 solana-compute-budget = { workspace = true }
 solana-logger = { workspace = true }
 solana-sdk = { workspace = true, features = ["dev-context-only-utils"] }
-solana-svm = { workspace = true, features = ["dev-context-only-utils"] }
 static_assertions = { workspace = true }
 strum = { workspace = true, features = ["derive"] }
 strum_macros = { workspace = true }
@@ -87,7 +85,6 @@ frozen-abi = [
     "dep:solana-frozen-abi",
     "dep:solana-frozen-abi-macro",
     "solana-sdk/frozen-abi",
-    "solana-svm/frozen-abi",
     "solana-vote-program/frozen-abi",
 ]
 

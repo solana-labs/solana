@@ -4546,7 +4546,6 @@ dependencies = [
  "solana-nohash-hasher",
  "solana-rayon-threadlimit",
  "solana-sdk",
- "solana-svm",
  "static_assertions",
  "tar",
  "tempfile",

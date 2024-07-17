@@ -161,6 +161,7 @@ use {
             TransactionLoadResult,
         },
         account_overrides::AccountOverrides,
+        account_saver::collect_accounts_to_store,
         nonce_info::NoncePartial,
         transaction_error_metrics::TransactionErrorMetrics,
         transaction_processing_callback::TransactionProcessingCallback,
@@ -3963,15 +3964,19 @@ impl Bank {
         }
 
         let mut write_time = Measure::start("write_time");
-        let durable_nonce = DurableNonce::from_blockhash(&last_blockhash);
-        self.rc.accounts.store_cached(
-            self.slot(),
-            sanitized_txs,
-            &execution_results,
-            loaded_txs,
-            &durable_nonce,
-            lamports_per_signature,
-        );
+        {
+            let durable_nonce = DurableNonce::from_blockhash(&last_blockhash);
+            let (accounts_to_store, transactions) = collect_accounts_to_store(
+                sanitized_txs,
+                &execution_results,
+                loaded_txs,
+                &durable_nonce,
+                lamports_per_signature,
+            );
+            self.rc
+                .accounts
+                .store_cached((self.slot(), accounts_to_store.as_slice()), &transactions);
+        }
         let rent_debits = self.collect_rent(&execution_results, loaded_txs);
 
         // Cached vote and stake accounts are synchronized with accounts-db
