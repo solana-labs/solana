@@ -1105,7 +1105,7 @@ impl AppendVec {
         skip: usize,
     ) -> Option<StoredAccountsInfo> {
         let _lock = self.append_lock.lock().unwrap();
-        let default_hash: Hash = Hash::default(); // [0_u8; 32];
+        let default_hash = Hash::default();
         let mut offset = self.len();
         let len = accounts.len();
         // Here we have `len - skip` number of accounts.  The +1 extra capacity
@@ -1131,16 +1131,15 @@ impl AppendVec {
                     data_len: account.data().len() as u64,
                     write_version_obsolete: 0,
                 };
-                let meta_ptr = &stored_meta as *const StoredMeta;
-                let account_meta_ptr = &account_meta as *const AccountMeta;
-                let data_len = stored_meta.data_len as usize;
-                let data_ptr = account.data().as_ptr();
+                let stored_meta_ptr = ptr::from_ref(&stored_meta).cast();
+                let account_meta_ptr = ptr::from_ref(&account_meta).cast();
                 let hash_ptr = bytemuck::bytes_of(&default_hash).as_ptr();
+                let data_ptr = account.data().as_ptr();
                 let ptrs = [
-                    (meta_ptr as *const u8, mem::size_of::<StoredMeta>()),
-                    (account_meta_ptr as *const u8, mem::size_of::<AccountMeta>()),
+                    (stored_meta_ptr, mem::size_of::<StoredMeta>()),
+                    (account_meta_ptr, mem::size_of::<AccountMeta>()),
                     (hash_ptr, mem::size_of::<AccountHash>()),
-                    (data_ptr, data_len),
+                    (data_ptr, stored_meta.data_len as usize),
                 ];
                 if let Some(start_offset) = self.append_ptrs_locked(&mut offset, &ptrs) {
                     offsets.push(start_offset)
