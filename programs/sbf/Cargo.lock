@@ -4635,6 +4635,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-bn254"
+version = "2.1.0"
+dependencies = [
+ "ark-bn254",
+ "ark-ec",
+ "ark-ff",
+ "ark-serialize",
+ "bytemuck",
+ "solana-program",
+ "thiserror",
+]
+
+[[package]]
 name = "solana-bpf-loader-program"
 version = "2.1.0"
 dependencies = [
@@ -4643,6 +4656,7 @@ dependencies = [
  "libsecp256k1 0.6.0",
  "log",
  "scopeguard",
+ "solana-bn254",
  "solana-compute-budget",
  "solana-curve25519",
  "solana-log-collector",
@@ -5285,10 +5299,6 @@ dependencies = [
 name = "solana-program"
 version = "2.1.0"
 dependencies = [
- "ark-bn254",
- "ark-ec",
- "ark-ff",
- "ark-serialize",
  "base64 0.22.1",
  "bincode",
  "bitflags 2.6.0",
@@ -5724,6 +5734,7 @@ name = "solana-sbf-rust-alt-bn128"
 version = "2.1.0"
 dependencies = [
  "array-bytes",
+ "solana-bn254",
  "solana-program",
 ]
 
@@ -5732,6 +5743,7 @@ name = "solana-sbf-rust-alt-bn128-compression"
 version = "2.1.0"
 dependencies = [
  "array-bytes",
+ "solana-bn254",
  "solana-program",
 ]
 
@@ -6162,6 +6174,7 @@ dependencies = [
  "sha2 0.10.8",
  "sha3 0.10.8",
  "siphasher",
+ "solana-bn254",
  "solana-decode-error",
  "solana-program",
  "solana-sanitize",

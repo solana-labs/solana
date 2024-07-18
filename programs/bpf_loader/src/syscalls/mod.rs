@@ -12,6 +12,11 @@ pub use self::{
 };
 #[allow(deprecated)]
 use {
+    solana_bn254::prelude::{
+        alt_bn128_addition, alt_bn128_multiplication, alt_bn128_pairing, AltBn128Error,
+        ALT_BN128_ADDITION_OUTPUT_LEN, ALT_BN128_MULTIPLICATION_OUTPUT_LEN,
+        ALT_BN128_PAIRING_ELEMENT_LEN, ALT_BN128_PAIRING_OUTPUT_LEN,
+    },
     solana_compute_budget::compute_budget::ComputeBudget,
     solana_log_collector::{ic_logger_msg, ic_msg},
     solana_poseidon as poseidon,
@@ -24,11 +29,6 @@ use {
     },
     solana_sdk::{
         account_info::AccountInfo,
-        alt_bn128::prelude::{
-            alt_bn128_addition, alt_bn128_multiplication, alt_bn128_pairing, AltBn128Error,
-            ALT_BN128_ADDITION_OUTPUT_LEN, ALT_BN128_MULTIPLICATION_OUTPUT_LEN,
-            ALT_BN128_PAIRING_ELEMENT_LEN, ALT_BN128_PAIRING_OUTPUT_LEN,
-        },
         big_mod_exp::{big_mod_exp, BigModExpParams},
         blake3, bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
         entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, SUCCESS},
@@ -1572,7 +1572,7 @@ declare_builtin_function!(
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
     ) -> Result<u64, Error> {
-        use solana_sdk::alt_bn128::prelude::{ALT_BN128_ADD, ALT_BN128_MUL, ALT_BN128_PAIRING};
+        use solana_bn254::prelude::{ALT_BN128_ADD, ALT_BN128_MUL, ALT_BN128_PAIRING};
         let budget = invoke_context.get_compute_budget();
         let (cost, output): (u64, usize) = match group_op {
             ALT_BN128_ADD => (
@@ -1839,7 +1839,7 @@ declare_builtin_function!(
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
     ) -> Result<u64, Error> {
-        use solana_sdk::alt_bn128::compression::prelude::{
+        use solana_bn254::compression::prelude::{
             alt_bn128_g1_compress, alt_bn128_g1_decompress, alt_bn128_g2_compress,
             alt_bn128_g2_decompress, ALT_BN128_G1_COMPRESS, ALT_BN128_G1_DECOMPRESS,
             ALT_BN128_G2_COMPRESS, ALT_BN128_G2_DECOMPRESS, G1, G1_COMPRESSED, G2, G2_COMPRESSED,

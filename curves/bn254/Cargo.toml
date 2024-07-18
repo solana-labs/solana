@@ -1,0 +1,27 @@
+[package]
+name = "solana-bn254"
+description = "Solana BN254"
+documentation = "https://docs.rs/solana-bn254"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+bytemuck = { workspace = true, features = ["derive"] }
+solana-program = { workspace = true }
+thiserror = { workspace = true }
+
+[target.'cfg(not(target_os = "solana"))'.dependencies]
+ark-bn254 = { workspace = true }
+ark-ec = { workspace = true }
+ark-ff = { workspace = true }
+ark-serialize = { workspace = true }
+
+[dev-dependencies]
+array-bytes = { workspace = true }
+serde = { workspace = true }
+serde_derive = { workspace = true }
+serde_json = { workspace = true }

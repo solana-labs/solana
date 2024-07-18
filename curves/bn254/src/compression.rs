@@ -1,5 +1,5 @@
 pub mod prelude {
-    pub use crate::alt_bn128::compression::{
+    pub use crate::compression::{
         alt_bn128_compression_size::*, consts::*, target_arch::*, AltBn128CompressionError,
     };
 }
@@ -70,7 +70,7 @@ mod target_arch {
 
     use {
         super::*,
-        crate::alt_bn128::compression::alt_bn128_compression_size,
+        crate::compression::alt_bn128_compression_size,
         ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate},
     };
 
@@ -194,6 +194,7 @@ mod target_arch {
         super::*,
         alt_bn128_compression_size::{G1, G1_COMPRESSED, G2, G2_COMPRESSED},
         prelude::*,
+        solana_program::syscalls,
     };
 
     pub fn alt_bn128_g1_compress(
@@ -201,7 +202,7 @@ mod target_arch {
     ) -> Result<[u8; G1_COMPRESSED], AltBn128CompressionError> {
         let mut result_buffer = [0; G1_COMPRESSED];
         let result = unsafe {
-            crate::syscalls::sol_alt_bn128_compression(
+            syscalls::sol_alt_bn128_compression(
                 ALT_BN128_G1_COMPRESS,
                 input as *const _ as *const u8,
                 input.len() as u64,
@@ -218,7 +219,7 @@ mod target_arch {
     pub fn alt_bn128_g1_decompress(input: &[u8]) -> Result<[u8; G1], AltBn128CompressionError> {
         let mut result_buffer = [0; G1];
         let result = unsafe {
-            crate::syscalls::sol_alt_bn128_compression(
+            syscalls::sol_alt_bn128_compression(
                 ALT_BN128_G1_DECOMPRESS,
                 input as *const _ as *const u8,
                 input.len() as u64,
@@ -237,7 +238,7 @@ mod target_arch {
     ) -> Result<[u8; G2_COMPRESSED], AltBn128CompressionError> {
         let mut result_buffer = [0; G2_COMPRESSED];
         let result = unsafe {
-            crate::syscalls::sol_alt_bn128_compression(
+            syscalls::sol_alt_bn128_compression(
                 ALT_BN128_G2_COMPRESS,
                 input as *const _ as *const u8,
                 input.len() as u64,
@@ -256,7 +257,7 @@ mod target_arch {
     ) -> Result<[u8; G2], AltBn128CompressionError> {
         let mut result_buffer = [0; G2];
         let result = unsafe {
-            crate::syscalls::sol_alt_bn128_compression(
+            syscalls::sol_alt_bn128_compression(
                 ALT_BN128_G2_DECOMPRESS,
                 input as *const _ as *const u8,
                 input.len() as u64,
@@ -275,7 +276,7 @@ mod target_arch {
 mod tests {
     use {
         super::*,
-        crate::alt_bn128::compression::target_arch::convert_endianness,
+        crate::compression::target_arch::convert_endianness,
         ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate},
         std::ops::Neg,
         target_arch::{

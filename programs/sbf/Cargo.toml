@@ -27,6 +27,7 @@ serde_derive = "1.0.112" # must match the serde version, see https://github.com/
 serde_json = "1.0.56"
 solana-account-decoder = { path = "../../account-decoder", version = "=2.1.0" }
 solana-accounts-db = { path = "../../accounts-db", version = "=2.1.0" }
+solana-bn254 = { path = "../../curves/bn254", version = "=2.1.0" }
 solana-bpf-loader-program = { path = "../bpf_loader", version = "=2.1.0" }
 solana-cli-output = { path = "../../cli-output", version = "=2.1.0" }
 solana-compute-budget = { path = "../../compute-budget", version = "=2.1.0" }
