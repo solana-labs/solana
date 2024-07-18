@@ -8,7 +8,7 @@ use {
         signature::Signature,
         transaction::SanitizedTransaction,
     },
-    solana_transaction_status::{Reward, TransactionStatusMeta},
+    solana_transaction_status::{Reward, RewardsAndNumPartitions, TransactionStatusMeta},
     std::{any::Any, error, io},
     thiserror::Error,
 };
@@ -251,11 +251,27 @@ pub struct ReplicaBlockInfoV3<'a> {
     pub entry_count: u64,
 }
 
+/// Extending ReplicaBlockInfo by sending RewardsAndNumPartitions.
+#[derive(Clone, Debug)]
+#[repr(C)]
+pub struct ReplicaBlockInfoV4<'a> {
+    pub parent_slot: Slot,
+    pub parent_blockhash: &'a str,
+    pub slot: Slot,
+    pub blockhash: &'a str,
+    pub rewards: &'a RewardsAndNumPartitions,
+    pub block_time: Option<UnixTimestamp>,
+    pub block_height: Option<u64>,
+    pub executed_transaction_count: u64,
+    pub entry_count: u64,
+}
+
 #[repr(u32)]
 pub enum ReplicaBlockInfoVersions<'a> {
     V0_0_1(&'a ReplicaBlockInfo<'a>),
     V0_0_2(&'a ReplicaBlockInfoV2<'a>),
     V0_0_3(&'a ReplicaBlockInfoV3<'a>),
+    V0_0_4(&'a ReplicaBlockInfoV4<'a>),
 }
 
 /// Errors returned by plugin calls

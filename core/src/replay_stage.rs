@@ -3236,7 +3236,7 @@ impl ReplayStage {
                         &parent_blockhash.to_string(),
                         bank.slot(),
                         &bank.last_blockhash().to_string(),
-                        &bank.rewards,
+                        &bank.get_rewards_and_num_partitions(),
                         Some(bank.clock().unix_timestamp),
                         Some(bank.block_height()),
                         bank.executed_transaction_count(),

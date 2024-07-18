@@ -1,6 +1,6 @@
 use {
-    solana_sdk::{clock::UnixTimestamp, pubkey::Pubkey, reward_info::RewardInfo},
-    std::sync::{Arc, RwLock},
+    solana_runtime::bank::KeyedRewardsAndNumPartitions, solana_sdk::clock::UnixTimestamp,
+    std::sync::Arc,
 };
 
 /// Interface for notifying block metadata changes
@@ -13,7 +13,7 @@ pub trait BlockMetadataNotifier {
         parent_blockhash: &str,
         slot: u64,
         blockhash: &str,
-        rewards: &RwLock<Vec<(Pubkey, RewardInfo)>>,
+        rewards: &KeyedRewardsAndNumPartitions,
         block_time: Option<UnixTimestamp>,
         block_height: Option<u64>,
         executed_transaction_count: u64,

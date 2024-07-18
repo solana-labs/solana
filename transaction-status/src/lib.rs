@@ -628,6 +628,7 @@ pub struct Reward {
 
 pub type Rewards = Vec<Reward>;
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RewardsAndNumPartitions {
     pub rewards: Rewards,
     pub num_partitions: Option<u64>,
