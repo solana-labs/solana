@@ -3076,37 +3076,22 @@ impl ReplayStage {
                     }
                 }
 
-                if bank.collector_id() != my_pubkey {
-                    // If the block does not have at least DATA_SHREDS_PER_FEC_BLOCK shreds in the last FEC set,
-                    // mark it dead. No reason to perform this check on our leader block.
-                    if !blockstore
-                        .is_last_fec_set_full(bank.slot())
-                        .inspect_err(|e| {
-                            warn!(
-                                "Unable to determine if last fec set is full for slot {} {},
-                                marking as dead: {e:?}",
-                                bank.slot(),
-                                bank.hash()
-                            )
-                        })
-                        .unwrap_or(false)
-                    {
-                        // Update metric regardless of feature flag
-                        datapoint_warn!(
-                            "incomplete_final_fec_set",
-                            ("slot", bank_slot, i64),
-                            ("hash", bank.hash().to_string(), String)
-                        );
-                        if bank
-                            .feature_set
-                            .is_active(&solana_sdk::feature_set::vote_only_full_fec_sets::id())
-                        {
+                let _block_id = if bank.collector_id() != my_pubkey {
+                    // If the block does not have at least DATA_SHREDS_PER_FEC_BLOCK correctly retransmitted
+                    // shreds in the last FEC set, mark it dead. No reason to perform this check on our leader block.
+                    match blockstore.check_last_fec_set_and_get_block_id(
+                        bank.slot(),
+                        bank.hash(),
+                        &bank.feature_set,
+                    ) {
+                        Ok(block_id) => block_id,
+                        Err(result_err) => {
                             let root = bank_forks.read().unwrap().root();
                             Self::mark_dead_slot(
                                 blockstore,
                                 bank,
                                 root,
-                                &BlockstoreProcessorError::IncompleteFinalFecSet,
+                                &result_err,
                                 rpc_subscriptions,
                                 duplicate_slots_tracker,
                                 duplicate_confirmed_slots,
@@ -3120,7 +3105,9 @@ impl ReplayStage {
                             continue;
                         }
                     }
-                }
+                } else {
+                    None
+                };
 
                 let r_replay_stats = replay_stats.read().unwrap();
                 let replay_progress = bank_progress.replay_progress.clone();

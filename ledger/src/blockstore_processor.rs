@@ -768,6 +768,9 @@ pub enum BlockstoreProcessorError {
 
     #[error("incomplete final fec set")]
     IncompleteFinalFecSet,
+
+    #[error("invalid retransmitter signature final fec set")]
+    InvalidRetransmitterSignatureFinalFecSet,
 }
 
 /// Callback for accessing bank state after each slot is confirmed while
