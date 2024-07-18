@@ -266,6 +266,9 @@ async fn run_server(
         max_unstaked_connections,
         max_streams_per_ms,
     ));
+    stats
+        .quic_endpoints_count
+        .store(incoming.len(), Ordering::Relaxed);
     let staked_connection_table: Arc<Mutex<ConnectionTable>> =
         Arc::new(Mutex::new(ConnectionTable::new()));
     let (sender, receiver) = async_unbounded();
