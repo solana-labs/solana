@@ -5086,8 +5086,7 @@ name = "solana-inline-spl"
 version = "2.1.0"
 dependencies = [
  "bytemuck",
- "rustc_version",
- "solana-sdk",
+ "solana-program",
 ]
 
 [[package]]

@@ -6443,8 +6443,7 @@ name = "solana-inline-spl"
 version = "2.1.0"
 dependencies = [
  "bytemuck",
- "rustc_version 0.4.0",
- "solana-sdk",
+ "solana-program",
 ]
 
 [[package]]

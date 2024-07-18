@@ -382,7 +382,7 @@ solana-package-metadata-macro = { path = "sdk/package-metadata-macro", version =
 solana-perf = { path = "perf", version = "=2.1.0" }
 solana-poh = { path = "poh", version = "=2.1.0" }
 solana-poseidon = { path = "poseidon", version = "=2.1.0" }
-solana-program = { path = "sdk/program", version = "=2.1.0" }
+solana-program = { path = "sdk/program", version = "=2.1.0", default-features = false }
 solana-program-runtime = { path = "program-runtime", version = "=2.1.0" }
 solana-program-test = { path = "program-test", version = "=2.1.0" }
 solana-pubsub-client = { path = "pubsub-client", version = "=2.1.0" }
