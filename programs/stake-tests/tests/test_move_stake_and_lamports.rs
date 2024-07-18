@@ -10,7 +10,7 @@ use {
     solana_sdk::{
         account::Account as SolanaAccount,
         entrypoint::ProgramResult,
-        feature_set::move_stake_and_move_lamports_ixs,
+        feature_set::{move_stake_and_move_lamports_ixs, stake_raise_minimum_delegation_to_1_sol},
         instruction::Instruction,
         program_error::ProgramError,
         pubkey::Pubkey,
@@ -403,6 +403,7 @@ impl StakeLifecycle {
 }
 
 #[test_matrix(
+    [program_test(),  program_test_without_features(&[stake_raise_minimum_delegation_to_1_sol::id()])],
     [StakeLifecycle::Initialized, StakeLifecycle::Activating, StakeLifecycle::Active,
      StakeLifecycle::Deactivating, StakeLifecycle::Deactive],
     [StakeLifecycle::Initialized, StakeLifecycle::Activating, StakeLifecycle::Active,
@@ -412,12 +413,13 @@ impl StakeLifecycle {
 )]
 #[tokio::test]
 async fn test_move_stake(
+    program_test: ProgramTest,
     move_source_type: StakeLifecycle,
     move_dest_type: StakeLifecycle,
     full_move: bool,
     has_lockup: bool,
 ) {
-    let mut context = program_test().start_with_context().await;
+    let mut context = program_test.start_with_context().await;
     let accounts = Accounts::default();
     accounts.initialize(&mut context).await;
 
@@ -542,14 +544,32 @@ async fn test_move_stake(
         }
     }
 
-    // source has 2x minimum (always 2 sol because these tests dont have featuresets)
-    // so first for inactive accounts lets undershoot and fail for underfunded dest
-    if move_dest_type != StakeLifecycle::Active {
+    // the below checks are conceptually incoherent with a 1 lamport minimum
+    // the undershoot fails successfully (but because its a zero move, not because the destination ends underfunded)
+    // then the second one succeeds failedly (because its a full move, so the "underfunded" source is actually closed)
+    if minimum_delegation > 1 {
+        // source has 2x minimum (always 2 sol because these tests dont have featuresets)
+        // so first for inactive accounts lets undershoot and fail for underfunded dest
+        if move_dest_type != StakeLifecycle::Active {
+            let instruction = ixn::move_stake(
+                &move_source,
+                &move_dest,
+                &staker_keypair.pubkey(),
+                minimum_delegation - 1,
+            );
+
+            let e = process_instruction(&mut context, &instruction, &vec![&staker_keypair])
+                .await
+                .unwrap_err();
+            assert_eq!(e, ProgramError::InvalidArgument);
+        }
+
+        // now lets overshoot and fail for underfunded source
         let instruction = ixn::move_stake(
             &move_source,
             &move_dest,
             &staker_keypair.pubkey(),
-            minimum_delegation - 1,
+            minimum_delegation + 1,
         );
 
         let e = process_instruction(&mut context, &instruction, &vec![&staker_keypair])
@@ -557,19 +577,6 @@ async fn test_move_stake(
             .unwrap_err();
         assert_eq!(e, ProgramError::InvalidArgument);
     }
-
-    // now lets overshoot and fail for underfunded source
-    let instruction = ixn::move_stake(
-        &move_source,
-        &move_dest,
-        &staker_keypair.pubkey(),
-        minimum_delegation + 1,
-    );
-
-    let e = process_instruction(&mut context, &instruction, &vec![&staker_keypair])
-        .await
-        .unwrap_err();
-    assert_eq!(e, ProgramError::InvalidArgument);
 
     // now we do it juuust right
     let instruction = ixn::move_stake(
@@ -648,6 +655,7 @@ async fn test_move_stake(
 }
 
 #[test_matrix(
+    [program_test(),  program_test_without_features(&[stake_raise_minimum_delegation_to_1_sol::id()])],
     [StakeLifecycle::Initialized, StakeLifecycle::Activating, StakeLifecycle::Active,
      StakeLifecycle::Deactivating, StakeLifecycle::Deactive],
     [StakeLifecycle::Initialized, StakeLifecycle::Activating, StakeLifecycle::Active,
@@ -657,12 +665,13 @@ async fn test_move_stake(
 )]
 #[tokio::test]
 async fn test_move_lamports(
+    program_test: ProgramTest,
     move_source_type: StakeLifecycle,
     move_dest_type: StakeLifecycle,
     different_votes: bool,
     has_lockup: bool,
 ) {
-    let mut context = program_test().start_with_context().await;
+    let mut context = program_test.start_with_context().await;
     let accounts = Accounts::default();
     accounts.initialize(&mut context).await;
 
@@ -860,6 +869,7 @@ async fn test_move_lamports(
 }
 
 #[test_matrix(
+    [program_test(),  program_test_without_features(&[stake_raise_minimum_delegation_to_1_sol::id()])],
     [(StakeLifecycle::Active, StakeLifecycle::Uninitialized),
      (StakeLifecycle::Uninitialized, StakeLifecycle::Initialized),
      (StakeLifecycle::Uninitialized, StakeLifecycle::Uninitialized)],
@@ -867,10 +877,11 @@ async fn test_move_lamports(
 )]
 #[tokio::test]
 async fn test_move_uninitialized_fail(
+    program_test: ProgramTest,
     move_types: (StakeLifecycle, StakeLifecycle),
     move_lamports: bool,
 ) {
-    let mut context = program_test().start_with_context().await;
+    let mut context = program_test.start_with_context().await;
     let accounts = Accounts::default();
     accounts.initialize(&mut context).await;
 
@@ -931,12 +942,14 @@ async fn test_move_uninitialized_fail(
 }
 
 #[test_matrix(
+    [program_test(),  program_test_without_features(&[stake_raise_minimum_delegation_to_1_sol::id()])],
     [StakeLifecycle::Initialized, StakeLifecycle::Active, StakeLifecycle::Deactive],
     [StakeLifecycle::Initialized, StakeLifecycle::Activating, StakeLifecycle::Active, StakeLifecycle::Deactive],
     [false, true]
 )]
 #[tokio::test]
 async fn test_move_general_fail(
+    program_test: ProgramTest,
     move_source_type: StakeLifecycle,
     move_dest_type: StakeLifecycle,
     move_lamports: bool,
@@ -952,7 +965,7 @@ async fn test_move_general_fail(
         return;
     }
 
-    let mut context = program_test().start_with_context().await;
+    let mut context = program_test.start_with_context().await;
     let accounts = Accounts::default();
     accounts.initialize(&mut context).await;
 
@@ -1212,12 +1225,15 @@ async fn test_move_general_fail(
 // this test is only to be sure the feature gate is safe
 // once the feature has been activated, this can all be deleted
 #[test_matrix(
+    [program_test_without_features(&[move_stake_and_move_lamports_ixs::id()]),
+     program_test_without_features(&[move_stake_and_move_lamports_ixs::id(), stake_raise_minimum_delegation_to_1_sol::id()])],
     [StakeLifecycle::Initialized, StakeLifecycle::Active, StakeLifecycle::Deactive],
     [StakeLifecycle::Initialized, StakeLifecycle::Activating, StakeLifecycle::Active, StakeLifecycle::Deactive],
     [false, true]
 )]
 #[tokio::test]
 async fn test_move_feature_gate_fail(
+    program_test: ProgramTest,
     move_source_type: StakeLifecycle,
     move_dest_type: StakeLifecycle,
     move_lamports: bool,
@@ -1233,10 +1249,7 @@ async fn test_move_feature_gate_fail(
         return;
     }
 
-    let mut context = program_test_without_features(&[move_stake_and_move_lamports_ixs::id()])
-        .start_with_context()
-        .await;
-
+    let mut context = program_test.start_with_context().await;
     let accounts = Accounts::default();
     accounts.initialize(&mut context).await;
 
