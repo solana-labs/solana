@@ -2,7 +2,8 @@ use {
     crate::LEDGER_TOOL_DIRECTORY,
     clap::{value_t, value_t_or_exit, values_t, values_t_or_exit, Arg, ArgMatches},
     solana_accounts_db::{
-        accounts_db::{AccountsDb, AccountsDbConfig},
+        accounts_db::{AccountsDb, AccountsDbConfig, CreateAncientStorage},
+        accounts_file::StorageAccess,
         accounts_index::{AccountsIndexConfig, IndexLimitMb},
         partitioned_rewards::TestPartitionedEpochRewards,
         utils::create_and_canonicalize_directories,
@@ -107,6 +108,20 @@ pub fn accounts_db_args<'a, 'b>() -> Box<[Arg<'a, 'b>]> {
                 "AppendVecs that are older than (slots_per_epoch - SLOT-OFFSET) are squashed \
                  together.",
             )
+            .hidden(hidden_unless_forced()),
+        Arg::with_name("accounts_db_squash_storages_method")
+            .long("accounts-db-squash-storages-method")
+            .value_name("METHOD")
+            .takes_value(true)
+            .possible_values(&["pack", "append"])
+            .help("Squash multiple account storage files together using this method")
+            .hidden(hidden_unless_forced()),
+        Arg::with_name("accounts_db_access_storages_method")
+            .long("accounts-db-access-storages-method")
+            .value_name("METHOD")
+            .takes_value(true)
+            .possible_values(&["mmap", "file"])
+            .help("Access account storage using this method")
             .hidden(hidden_unless_forced()),
     ]
     .into_boxed_slice()
@@ -271,6 +286,29 @@ pub fn get_accounts_db_config(
         .pop()
         .unwrap();
 
+    let create_ancient_storage = arg_matches
+        .value_of("accounts_db_squash_storages_method")
+        .map(|method| match method {
+            "pack" => CreateAncientStorage::Pack,
+            "append" => CreateAncientStorage::Append,
+            _ => {
+                // clap will enforce one of the above values is given
+                unreachable!("invalid value given to accounts-db-squash-storages-method")
+            }
+        })
+        .unwrap_or_default();
+    let storage_access = arg_matches
+        .value_of("accounts_db_access_storages_method")
+        .map(|method| match method {
+            "mmap" => StorageAccess::Mmap,
+            "file" => StorageAccess::File,
+            _ => {
+                // clap will enforce one of the above values is given
+                unreachable!("invalid value given to accounts-db-access-storages-method")
+            }
+        })
+        .unwrap_or_default();
+
     AccountsDbConfig {
         index: Some(accounts_index_config),
         base_working_path: Some(ledger_tool_ledger_path),
@@ -282,6 +320,8 @@ pub fn get_accounts_db_config(
         test_partitioned_epoch_rewards,
         test_skip_rewrites_but_include_in_bank_hash: arg_matches
             .is_present("accounts_db_test_skip_rewrites"),
+        create_ancient_storage,
+        storage_access,
         ..AccountsDbConfig::default()
     }
 }
