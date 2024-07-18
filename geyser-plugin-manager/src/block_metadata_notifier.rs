@@ -37,21 +37,22 @@ impl BlockMetadataNotifier for BlockMetadataNotifierImpl {
         if plugin_manager.plugins.is_empty() {
             return;
         }
+
         let rewards = Self::build_rewards(rewards);
+        let block_info = Self::build_replica_block_info(
+            parent_slot,
+            parent_blockhash,
+            slot,
+            blockhash,
+            &rewards,
+            block_time,
+            block_height,
+            executed_transaction_count,
+            entry_count,
+        );
 
         for plugin in plugin_manager.plugins.iter() {
             let mut measure = Measure::start("geyser-plugin-update-slot");
-            let block_info = Self::build_replica_block_info(
-                parent_slot,
-                parent_blockhash,
-                slot,
-                blockhash,
-                &rewards,
-                block_time,
-                block_height,
-                executed_transaction_count,
-                entry_count,
-            );
             let block_info = ReplicaBlockInfoVersions::V0_0_4(&block_info);
             match plugin.notify_block_metadata(block_info) {
                 Err(err) => {
