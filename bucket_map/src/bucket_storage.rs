@@ -396,17 +396,16 @@ impl<O: BucketOccupied> BucketStorage<O> {
             .read(true)
             .write(true)
             .create(create)
-            .open(path.clone());
-        if let Err(e) = data {
+            .open(&path);
+        if let Err(err) = data {
             if !create {
                 // we can't load this file, so bail without error
                 return None;
             }
             panic!(
-                "Unable to create data file {:?} in current dir({:?}): {:?}",
-                path,
+                "Unable to create data file '{}' in current dir ({:?}): {err}",
+                path.as_ref().display(),
                 std::env::current_dir(),
-                e
             );
         }
         let mut data = data.unwrap();
@@ -427,15 +426,13 @@ impl<O: BucketOccupied> BucketStorage<O> {
                 .fetch_add(measure_flush.end_as_us(), Ordering::Relaxed);
         }
         let mut measure_mmap = Measure::start("measure_mmap");
-        let res = unsafe { MmapMut::map_mut(&data) };
-        if let Err(e) = res {
+        let mmap = unsafe { MmapMut::map_mut(&data) }.unwrap_or_else(|err| {
             panic!(
-                "Unable to mmap file {:?} in current dir({:?}): {:?}",
-                path,
+                "Unable to mmap file '{}' in current dir ({:?}): {err}",
+                path.as_ref().display(),
                 std::env::current_dir(),
-                e
             );
-        }
+        });
         measure_mmap.stop();
         stats
             .new_file_us
@@ -443,7 +440,7 @@ impl<O: BucketOccupied> BucketStorage<O> {
         stats
             .mmap_us
             .fetch_add(measure_mmap.as_us(), Ordering::Relaxed);
-        res.ok()
+        Some(mmap)
     }
 
     /// allocate a new memory mapped file of size `bytes` on one of `drives`
