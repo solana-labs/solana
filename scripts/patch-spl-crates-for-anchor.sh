@@ -70,7 +70,10 @@ patch_crates_io() {
     spl-memo = { path = "$spl_dir/memo/program" }
     spl-pod = { path = "$spl_dir/libraries/pod" }
     spl-token = { path = "$spl_dir/token/program" }
-    spl-token-2022 = { path = "$spl_dir/token/program-2022" }
+    # Avoid patching spl-token-2022 to avoid forcing anchor to use 4.0.1, which
+    # doesn't work with the monorepo forcing 4.0.0. Allow the patching again once
+    # the monorepo is on 4.0.1, or relax the dependency in the monorepo.
+    #spl-token-2022 = { path = "$spl_dir/token/program-2022" }
     spl-token-group-interface = { path = "$spl_dir/token-group/interface" }
     spl-token-metadata-interface = { path = "$spl_dir/token-metadata/interface" }
     spl-tlv-account-resolution = { path = "$spl_dir/libraries/tlv-account-resolution" }
