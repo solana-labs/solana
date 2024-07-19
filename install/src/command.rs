@@ -586,14 +586,6 @@ fn release_channel_download_url(release_channel: &str) -> String {
     )
 }
 
-fn release_channel_version_url(release_channel: &str) -> String {
-    format!(
-        "https://release.solana.com/{}/solana-release-{}.yml",
-        release_channel,
-        crate::build_env::TARGET
-    )
-}
-
 fn print_update_manifest(update_manifest: &UpdateManifest) {
     let when = Local
         .timestamp_opt(update_manifest.timestamp_secs as i64, 0)
@@ -1026,72 +1018,12 @@ pub fn init_or_update(config_file: &str, is_init: bool, check_only: bool) -> Res
                     }
                 }
             }
-            ExplicitRelease::Channel(release_channel) => {
-                let version_url = release_channel_version_url(release_channel);
-
-                let (_temp_dir, temp_file, _temp_archive_sha256) =
-                    download_to_temp(&version_url, None)
-                        .map_err(|err| format!("Unable to download {version_url}: {err}"))?;
-
-                let update_release_version = load_release_version(&temp_file)?;
-
-                let release_id = format!("{}-{}", release_channel, update_release_version.commit);
-                let release_dir = config.release_dir(&release_id);
-                let current_release_version_yml =
-                    release_dir.join("solana-release").join("version.yml");
-
-                let download_url = release_channel_download_url(release_channel);
-
-                if !current_release_version_yml.exists() {
-                    (
-                        format!(
-                            "{} commit {}",
-                            release_channel,
-                            &update_release_version.commit[0..7]
-                        ),
-                        Some((download_url, None)),
-                        release_dir,
-                    )
-                } else {
-                    let current_release_version =
-                        load_release_version(&current_release_version_yml)?;
-                    if update_release_version.commit == current_release_version.commit {
-                        if let Ok(active_release_version) =
-                            load_release_version(&config.active_release_dir().join("version.yml"))
-                        {
-                            if current_release_version.commit == active_release_version.commit {
-                                // Same version, no update required
-                                println!(
-                                    "Install is up to date. {} is the latest commit for {}",
-                                    &active_release_version.commit[0..7],
-                                    release_channel
-                                );
-                                return Ok(false);
-                            }
-                        }
-
-                        // Release already present in the cache
-                        (
-                            format!(
-                                "{} commit {}",
-                                release_channel,
-                                &update_release_version.commit[0..7]
-                            ),
-                            None,
-                            release_dir,
-                        )
-                    } else {
-                        (
-                            format!(
-                                "{} (from {})",
-                                &update_release_version.commit[0..7],
-                                &current_release_version.commit[0..7],
-                            ),
-                            Some((download_url, None)),
-                            release_dir,
-                        )
-                    }
-                }
+            ExplicitRelease::Channel(_) => {
+                return Err(
+                    "solana-install no longer supports installing by channel. Please specify \
+                        a release version as vX.Y.Z."
+                        .to_string()
+                )
             }
         }
     } else {
