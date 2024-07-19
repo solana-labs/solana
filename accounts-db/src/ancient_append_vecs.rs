@@ -168,8 +168,15 @@ impl AncientSlotInfos {
         // shrink enough slots to write 'percent_of_alive_shrunk_data'% of the total alive data
         // from slots that exceeded the shrink threshold.
         // The goal is to limit overall i/o in this pass while making progress.
+        // Simultaneously, we cannot allow the overall budget to be dominated by ancient storages that need to be shrunk.
+        // So, we have to limit how much of the total resulting budget can be allocated to re-packing/shrinking ancient storages.
         let threshold_bytes =
-            self.total_alive_bytes_shrink.0 * tuning.percent_of_alive_shrunk_data / 100;
+            (self.total_alive_bytes_shrink.0 * tuning.percent_of_alive_shrunk_data / 100).min(
+                u64::from(tuning.max_resulting_storages)
+                    * u64::from(tuning.ideal_storage_size)
+                    * tuning.percent_of_alive_shrunk_data
+                    / 100,
+            );
         for info_index in &self.shrink_indexes {
             let info = &mut self.all_infos[*info_index];
             if bytes_to_shrink_due_to_ratio.0 >= threshold_bytes {
