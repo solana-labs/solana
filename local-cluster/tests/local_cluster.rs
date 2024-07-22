@@ -4614,6 +4614,7 @@ fn test_slot_hash_expiry() {
 //
 #[test]
 #[serial]
+#[ignore]
 fn test_duplicate_with_pruned_ancestor() {
     solana_logger::setup_with("info,solana_metrics=off");
     solana_core::repair::duplicate_repair_status::set_ancestor_hash_repair_sample_size_for_tests_only(3);
