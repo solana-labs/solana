@@ -444,6 +444,16 @@ impl AccountsDb {
             return;
         }
 
+        // for the accounts which are one ref and can be put anywhere, we want to put the accounts from the LARGEST storages at the end.
+        // This causes us to keep the accounts we're re-packing from already existing ancient storages together with other normal one ref accounts.
+        // The alternative could cause us to mix newly ancient slots produced by flush (containing accounts touched more recently) with previously
+        // packed ancient storages which over time contained enough dead accounts that the storage needed to be shrunk by being re-packed.
+        // The end result of this sort should cause older, colder accounts (previously packed into large storages and then re-packed/shrunk) to
+        // be re-packed together with other older/colder accounts.
+        accounts_to_combine
+            .accounts_to_combine
+            .sort_unstable_by(|a, b| a.capacity.cmp(&b.capacity));
+
         // pack the accounts with 1 ref or refs > 1 but the slot we're packing is the highest alive slot for the pubkey.
         // Note the `chain` below combining the 2 types of refs.
         let pack = PackedAncientStorage::pack(
