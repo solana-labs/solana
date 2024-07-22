@@ -9,8 +9,8 @@ use {
 };
 
 impl SVMMessage for SanitizedTransaction {
-    fn num_signatures(&self) -> u64 {
-        SVMMessage::num_signatures(SanitizedTransaction::message(self))
+    fn num_total_signatures(&self) -> u64 {
+        SVMMessage::num_total_signatures(SanitizedTransaction::message(self))
     }
 
     fn num_write_locks(&self) -> u64 {
