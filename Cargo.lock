@@ -6464,6 +6464,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-lattice-hash"
+version = "2.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "blake3",
+ "bytemuck",
+ "criterion",
+ "rand 0.8.5",
+ "rand_chacha 0.3.1",
+]
+
+[[package]]
 name = "solana-ledger"
 version = "2.1.0"
 dependencies = [

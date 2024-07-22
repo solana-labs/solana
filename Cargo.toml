@@ -47,6 +47,7 @@ members = [
     "inline-spl",
     "install",
     "keygen",
+    "lattice-hash",
     "ledger",
     "ledger-tool",
     "local-cluster",

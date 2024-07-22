@@ -1,0 +1,22 @@
+[package]
+name = "solana-lattice-hash"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+base64 = { workspace = true }
+blake3 = { workspace = true }
+bytemuck = { workspace = true, features = ["must_cast"] }
+
+[dev-dependencies]
+criterion = { workspace = true }
+rand = { workspace = true }
+rand_chacha = { workspace = true }
+
+[[bench]]
+name = "bench_lt_hash"
+harness = false
