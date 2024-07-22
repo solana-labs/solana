@@ -12,7 +12,8 @@ crate::declare_id!("ComputeBudget111111111111111111111111111111");
 
 /// Compute Budget Instructions
 #[cfg_attr(feature = "frozen-abi", derive(AbiExample, AbiEnumVisitor))]
-#[derive(BorshDeserialize, BorshSerialize, Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "borsh", derive(BorshSerialize, BorshDeserialize))]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
 pub enum ComputeBudgetInstruction {
     Unused, // deprecated variant, reserved value.
     /// Request a specific transaction-wide program heap region size in bytes.
