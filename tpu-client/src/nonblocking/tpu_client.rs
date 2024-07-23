@@ -17,7 +17,8 @@ use {
     solana_pubsub_client::nonblocking::pubsub_client::{PubsubClient, PubsubClientError},
     solana_rpc_client::nonblocking::rpc_client::RpcClient,
     solana_rpc_client_api::{
-        client_error::{Error as ClientError, Result as ClientResult},
+        client_error::{Error as ClientError, ErrorKind, Result as ClientResult},
+        request::RpcError,
         response::{RpcContactInfo, SlotUpdate},
     },
     solana_sdk::{
@@ -503,39 +504,6 @@ where
         Self::new_with_connection_cache(rpc_client, websocket_url, config, connection_cache).await
     }
 
-    /// Try to create LeaderTpuService
-    /// Retries until successful or timeout is reached
-    async fn try_create_leader_tpu_service(
-        rpc_client: Arc<RpcClient>,
-        websocket_url: &str,
-        exit: Arc<AtomicBool>,
-        timeout_seconds: u64,
-    ) -> Result<LeaderTpuService> {
-        let start = tokio::time::Instant::now();
-        loop {
-            if start.elapsed().as_secs() > timeout_seconds {
-                return Err(TpuSenderError::Custom(format!(
-                    "Failed to create LeaderTpuService within {timeout_seconds}s timeout"
-                )));
-            }
-
-            match LeaderTpuService::new(
-                rpc_client.clone(),
-                websocket_url,
-                M::PROTOCOL,
-                exit.clone(),
-            )
-            .await
-            {
-                Ok(service) => return Ok(service),
-                Err(_) => {
-                    warn!("Failed to create TpuLeaderService. Will retry in 1 second");
-                    sleep(Duration::from_secs(1)).await;
-                }
-            }
-        }
-    }
-
     /// Create a new client that disconnects when dropped
     pub async fn new_with_connection_cache(
         rpc_client: Arc<RpcClient>,
@@ -543,15 +511,10 @@ where
         config: TpuClientConfig,
         connection_cache: Arc<ConnectionCache<P, M, C>>,
     ) -> Result<Self> {
-        const TPU_LEADER_SERVICE_CREATION_TIMEOUT: u64 = 20;
         let exit = Arc::new(AtomicBool::new(false));
-        let leader_tpu_service = Self::try_create_leader_tpu_service(
-            rpc_client.clone(),
-            websocket_url,
-            exit.clone(),
-            TPU_LEADER_SERVICE_CREATION_TIMEOUT,
-        )
-        .await?;
+        let leader_tpu_service =
+            LeaderTpuService::new(rpc_client.clone(), websocket_url, M::PROTOCOL, exit.clone())
+                .await?;
 
         Ok(Self {
             fanout_slots: config.fanout_slots.clamp(1, MAX_FANOUT_SLOTS),
@@ -760,9 +723,42 @@ impl LeaderTpuService {
 
         let recent_slots = RecentLeaderSlots::new(start_slot);
         let slots_in_epoch = rpc_client.get_epoch_info().await?.slots_in_epoch;
-        let leaders = rpc_client
-            .get_slot_leaders(start_slot, LeaderTpuCache::fanout(slots_in_epoch))
-            .await?;
+
+        // When a cluster is starting, we observe an invalid slot range failure that goes away after a
+        // retry. It seems as if the leader schedule is not available, but it should be. The logic
+        // below retries the RPC call in case of an invalid slot range error.
+        let tpu_leader_service_creation_timeout = Duration::from_secs(20);
+        let retry_interval = Duration::from_secs(1);
+        let leaders = timeout(tpu_leader_service_creation_timeout, async {
+            loop {
+                // TODO: The root cause appears to lie within the `rpc_client.get_slot_leaders()`.
+                // It might be worth debugging further and trying to understand why the RPC
+                // call fails. There may be a bug in the `get_slot_leaders()` logic or in the
+                // RPC implementation
+                match rpc_client
+                    .get_slot_leaders(start_slot, LeaderTpuCache::fanout(slots_in_epoch))
+                    .await
+                {
+                    Ok(leaders) => return Ok(leaders),
+                    Err(client_error) => {
+                        if is_invalid_slot_range_error(&client_error) {
+                            sleep(retry_interval).await;
+                            continue;
+                        } else {
+                            return Err(client_error);
+                        }
+                    }
+                }
+            }
+        })
+        .await
+        .map_err(|_| {
+            TpuSenderError::Custom(format!(
+                "Failed to get slot leaders connecting to: {}, timeout: {:?}. Invalid slot range",
+                websocket_url, tpu_leader_service_creation_timeout
+            ))
+        })??;
+
         let cluster_nodes = rpc_client.get_cluster_nodes().await?;
         let leader_tpu_cache = Arc::new(RwLock::new(LeaderTpuCache::new(
             start_slot,
@@ -959,4 +955,14 @@ async fn maybe_fetch_cache_info(
         maybe_epoch_info,
         maybe_slot_leaders,
     }
+}
+
+fn is_invalid_slot_range_error(client_error: &ClientError) -> bool {
+    if let ErrorKind::RpcError(RpcError::RpcResponseError { code, message, .. }) =
+        &client_error.kind
+    {
+        return *code == -32602
+            && message.contains("Invalid slot range: leader schedule for epoch");
+    }
+    false
 }
