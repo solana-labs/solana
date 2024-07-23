@@ -1589,7 +1589,7 @@ mod tests {
             &[0, 1, 2, 3],
             transaction_accounts.clone(),
             &[(1, false, true)],
-            Err(InstructionError::InvalidAccountOwner),
+            Err(InstructionError::UnsupportedProgramId),
         );
 
         // Error: Program is uninitialized

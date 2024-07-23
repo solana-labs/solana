@@ -3577,7 +3577,7 @@ mod tests {
         program_account = accounts.get(3).unwrap().clone();
         process_instruction(
             &loader_id,
-            &[0, 1],
+            &[1],
             &[],
             vec![
                 (programdata_address, programdata_account.clone()),

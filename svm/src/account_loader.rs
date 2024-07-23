@@ -299,7 +299,7 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
         .iter()
         .map(|instruction| {
             let mut account_indices = Vec::with_capacity(2);
-            let mut program_index = instruction.program_id_index as usize;
+            let program_index = instruction.program_id_index as usize;
             // This command may never return error, because the transaction is sanitized
             let (program_id, program_account) = accounts
                 .get(program_index)
@@ -323,15 +323,12 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
             if native_loader::check_id(owner_id) {
                 return Ok(account_indices);
             }
-            program_index = if let Some(owner_index) = accounts
+            if !accounts
                 .get(builtins_start_index..)
                 .ok_or(TransactionError::ProgramAccountNotFound)?
                 .iter()
-                .position(|(key, _)| key == owner_id)
+                .any(|(key, _)| key == owner_id)
             {
-                builtins_start_index.saturating_add(owner_index)
-            } else {
-                let owner_index = accounts.len();
                 if let Some(owner_account) = callbacks.get_account_shared_data(owner_id) {
                     if !native_loader::check_id(owner_account.owner())
                         || !owner_account.executable()
@@ -350,9 +347,7 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
                     error_metrics.account_not_found += 1;
                     return Err(TransactionError::ProgramAccountNotFound);
                 }
-                owner_index
-            };
-            account_indices.insert(0, program_index as IndexOfAccount);
+            }
             Ok(account_indices)
         })
         .collect::<Result<Vec<Vec<IndexOfAccount>>>>()?;
@@ -755,21 +750,8 @@ mod tests {
                 assert_eq!(loaded_transaction.accounts.len(), 4);
                 assert_eq!(loaded_transaction.accounts[0].1, accounts[0].1);
                 assert_eq!(loaded_transaction.program_indices.len(), 2);
-                assert_eq!(loaded_transaction.program_indices[0].len(), 1);
-                assert_eq!(loaded_transaction.program_indices[1].len(), 2);
-                for program_indices in loaded_transaction.program_indices.iter() {
-                    for (i, program_index) in program_indices.iter().enumerate() {
-                        // +1 to skip first not loader account
-                        assert_eq!(
-                            loaded_transaction.accounts[*program_index as usize].0,
-                            accounts[i + 1].0
-                        );
-                        assert_eq!(
-                            loaded_transaction.accounts[*program_index as usize].1,
-                            accounts[i + 1].1
-                        );
-                    }
-                }
+                assert_eq!(loaded_transaction.program_indices[0], &[1]);
+                assert_eq!(loaded_transaction.program_indices[1], &[2]);
             }
             Err(e) => panic!("{e}"),
         }
@@ -1625,7 +1607,7 @@ mod tests {
                         mock_bank.accounts_map[&key3.pubkey()].clone()
                     ),
                 ],
-                program_indices: vec![vec![2, 1]],
+                program_indices: vec![vec![1]],
                 fee_details: FeeDetails::default(),
                 rollback_accounts: RollbackAccounts::default(),
                 compute_budget_limits: ComputeBudgetLimits::default(),
@@ -1718,7 +1700,7 @@ mod tests {
                         mock_bank.accounts_map[&key3.pubkey()].clone()
                     ),
                 ],
-                program_indices: vec![vec![3, 1], vec![3, 1]],
+                program_indices: vec![vec![1], vec![1]],
                 fee_details: FeeDetails::default(),
                 rollback_accounts: RollbackAccounts::default(),
                 compute_budget_limits: ComputeBudgetLimits::default(),
@@ -1880,7 +1862,7 @@ mod tests {
                         mock_bank.accounts_map[&key3.pubkey()].clone()
                     ),
                 ],
-                program_indices: vec![vec![3, 1], vec![3, 1]],
+                program_indices: vec![vec![1], vec![1]],
                 fee_details: FeeDetails::default(),
                 rollback_accounts: RollbackAccounts::default(),
                 compute_budget_limits: ComputeBudgetLimits::default(),
