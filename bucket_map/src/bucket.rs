@@ -558,6 +558,10 @@ impl<'b, T: Clone + Copy + PartialEq + std::fmt::Debug + 'static> Bucket<T> {
                 if let Some(single_element) = data.next() {
                     OccupiedEnum::OneSlotInIndex(single_element)
                 } else {
+                    self.stats
+                        .index
+                        .index_uses_uncommon_slot_list_len_or_refcount
+                        .store(true, Ordering::Relaxed);
                     OccupiedEnum::ZeroSlots
                 },
             );
@@ -651,6 +655,10 @@ impl<'b, T: Clone + Copy + PartialEq + std::fmt::Debug + 'static> Bucket<T> {
                     &mut self.index,
                     OccupiedEnum::MultipleSlots(&multiple_slots),
                 );
+                self.stats
+                    .index
+                    .index_uses_uncommon_slot_list_len_or_refcount
+                    .store(true, Ordering::Relaxed);
                 success = true;
                 break;
             }
@@ -1234,9 +1242,11 @@ mod tests {
         // This causes it to be skipped.
         let entry = IndexEntryPlaceInBucket::new(ix);
         entry.init(&mut index, &(other.0));
+        entry.set_slot_count_enum_value(&mut index, OccupiedEnum::ZeroSlots);
         let entry = IndexEntryPlaceInBucket::new(ix + 1);
         // sets pubkey value and enum value of ZeroSlots. Leaving it at zero is illegal at startup, so we'll assert when we find this duplicate.
         entry.init(&mut index, &(raw[0].0));
+        entry.set_slot_count_enum_value(&mut index, OccupiedEnum::ZeroSlots);
 
         // since the same key is already in use with a different value, it is a duplicate.
         // But, it is a zero length entry. This is not supported at startup. Startup would have never generated a zero length occupied entry.

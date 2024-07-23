@@ -541,12 +541,15 @@ impl<O: BucketOccupied> BucketStorage<O> {
 mod test {
     use {
         super::*,
-        crate::{bucket_storage::BucketOccupied, index_entry::IndexBucket},
+        crate::{
+            bucket_storage::BucketOccupied,
+            index_entry::{BucketWithHeader, IndexBucket},
+        },
         tempfile::tempdir,
     };
 
     #[test]
-    fn test_bucket_storage() {
+    fn test_bucket_storage_index_bucket() {
         let tmpdir = tempdir().unwrap();
         let paths: Vec<PathBuf> = vec![tmpdir.path().to_path_buf()];
         assert!(!paths.is_empty());
@@ -557,7 +560,29 @@ mod test {
         let max_search = 1;
         let stats = Arc::default();
         let count = Arc::default();
+        // this uses `IndexBucket`. `IndexBucket` doesn't change state on `occupy()`
         let mut storage = BucketStorage::<IndexBucket<u64>>::new(
+            drives, num_elems, elem_size, max_search, stats, count,
+        )
+        .0;
+        let ix = 0;
+        assert!(storage.is_free(ix));
+        assert!(storage.occupy(ix, false).is_ok());
+    }
+
+    #[test]
+    fn test_bucket_storage_using_header() {
+        let tmpdir = tempdir().unwrap();
+        let paths: Vec<PathBuf> = vec![tmpdir.path().to_path_buf()];
+        assert!(!paths.is_empty());
+
+        let drives = Arc::new(paths);
+        let num_elems = 1;
+        let elem_size = std::mem::size_of::<crate::index_entry::IndexEntry<u64>>() as u64;
+        let max_search = 1;
+        let stats = Arc::default();
+        let count = Arc::default();
+        let mut storage = BucketStorage::<BucketWithHeader>::new(
             drives, num_elems, elem_size, max_search, stats, count,
         )
         .0;

@@ -469,6 +469,16 @@ impl BucketMapHolderStats {
                     i64
                 ),
                 (
+                    "index_exceptional_entry",
+                    disk.map(|disk| disk
+                        .stats
+                        .index
+                        .index_uses_uncommon_slot_list_len_or_refcount
+                        .load(Ordering::Relaxed))
+                        .unwrap_or_default(),
+                    i64
+                ),
+                (
                     "disk_index_data_file_size",
                     disk.map(|disk| disk.stats.data.total_file_size.load(Ordering::Relaxed))
                         .unwrap_or_default(),
