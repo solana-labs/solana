@@ -11,7 +11,7 @@ cluster by delegating stake.
 
 To interact with a Solana cluster, we will use its command-line interface, also
 known as the CLI. We use the command-line because it is the first place the
-Solana core team deploys new functionality. The command-line interface is not
+Anza core team deploys new functionality. The command-line interface is not
 necessarily the easiest to use, but it provides the most direct, flexible, and
 secure access to your Solana accounts.
 
