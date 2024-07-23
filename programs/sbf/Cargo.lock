@@ -6337,6 +6337,7 @@ dependencies = [
  "itertools 0.12.1",
  "log",
  "percentage",
+ "qualifier_attr",
  "rustc_version",
  "serde",
  "serde_derive",

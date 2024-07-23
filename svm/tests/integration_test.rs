@@ -1,7 +1,10 @@
 #![cfg(test)]
 
 use {
-    crate::{mock_bank::MockBankCallback, transaction_builder::SanitizedTransactionBuilder},
+    crate::{
+        mock_bank::{deploy_program, MockBankCallback},
+        transaction_builder::SanitizedTransactionBuilder,
+    },
     solana_bpf_loader_program::syscalls::{
         SyscallAbort, SyscallGetClockSysvar, SyscallInvokeSignedRust, SyscallLog, SyscallMemcpy,
         SyscallMemset, SyscallSetReturnData,
@@ -19,7 +22,7 @@ use {
     },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
-        bpf_loader_upgradeable::{self, UpgradeableLoaderState},
+        bpf_loader_upgradeable::{self},
         clock::{Clock, Epoch, Slot, UnixTimestamp},
         hash::Hash,
         instruction::AccountMeta,
@@ -40,9 +43,6 @@ use {
     std::{
         cmp::Ordering,
         collections::{HashMap, HashSet},
-        env,
-        fs::{self, File},
-        io::Read,
         sync::{Arc, RwLock},
         time::{SystemTime, UNIX_EPOCH},
     },
@@ -161,65 +161,9 @@ fn create_executable_environment(
     account_data.set_data(bincode::serialize(&clock).unwrap());
     mock_bank
         .account_shared_data
-        .borrow_mut()
+        .write()
+        .unwrap()
         .insert(Clock::id(), account_data);
-}
-
-fn load_program(name: String) -> Vec<u8> {
-    // Loading the program file
-    let mut dir = env::current_dir().unwrap();
-    dir.push("tests");
-    dir.push("example-programs");
-    dir.push(name.as_str());
-    let name = name.replace('-', "_");
-    dir.push(name + "_program.so");
-    let mut file = File::open(dir.clone()).expect("file not found");
-    let metadata = fs::metadata(dir).expect("Unable to read metadata");
-    let mut buffer = vec![0; metadata.len() as usize];
-    file.read_exact(&mut buffer).expect("Buffer overflow");
-    buffer
-}
-
-fn deploy_program(name: String, mock_bank: &mut MockBankCallback) -> Pubkey {
-    let program_account = Pubkey::new_unique();
-    let program_data_account = Pubkey::new_unique();
-    let state = UpgradeableLoaderState::Program {
-        programdata_address: program_data_account,
-    };
-
-    // The program account must have funds and hold the executable binary
-    let mut account_data = AccountSharedData::default();
-    account_data.set_data(bincode::serialize(&state).unwrap());
-    account_data.set_lamports(25);
-    account_data.set_owner(bpf_loader_upgradeable::id());
-    mock_bank
-        .account_shared_data
-        .borrow_mut()
-        .insert(program_account, account_data);
-
-    let mut account_data = AccountSharedData::default();
-    let state = UpgradeableLoaderState::ProgramData {
-        slot: DEPLOYMENT_SLOT,
-        upgrade_authority_address: None,
-    };
-    let mut header = bincode::serialize(&state).unwrap();
-    let mut complement = vec![
-        0;
-        std::cmp::max(
-            0,
-            UpgradeableLoaderState::size_of_programdata_metadata().saturating_sub(header.len())
-        )
-    ];
-    let mut buffer = load_program(name);
-    header.append(&mut complement);
-    header.append(&mut buffer);
-    account_data.set_data(header);
-    mock_bank
-        .account_shared_data
-        .borrow_mut()
-        .insert(program_data_account, account_data);
-
-    program_account
 }
 
 fn register_builtins(
@@ -261,7 +205,7 @@ fn prepare_transactions(
     let mut transaction_checks = Vec::new();
 
     // A transaction that works without any account
-    let hello_program = deploy_program("hello-solana".to_string(), mock_bank);
+    let hello_program = deploy_program("hello-solana".to_string(), DEPLOYMENT_SLOT, mock_bank);
     let fee_payer = Pubkey::new_unique();
     transaction_builder.create_instruction(hello_program, Vec::new(), HashMap::new(), Vec::new());
 
@@ -279,11 +223,13 @@ fn prepare_transactions(
     account_data.set_lamports(80000);
     mock_bank
         .account_shared_data
-        .borrow_mut()
+        .write()
+        .unwrap()
         .insert(fee_payer, account_data);
 
     // A simple funds transfer between accounts
-    let transfer_program_account = deploy_program("simple-transfer".to_string(), mock_bank);
+    let transfer_program_account =
+        deploy_program("simple-transfer".to_string(), DEPLOYMENT_SLOT, mock_bank);
     let sender = Pubkey::new_unique();
     let recipient = Pubkey::new_unique();
     let fee_payer = Pubkey::new_unique();
@@ -327,7 +273,8 @@ fn prepare_transactions(
     account_data.set_lamports(80000);
     mock_bank
         .account_shared_data
-        .borrow_mut()
+        .write()
+        .unwrap()
         .insert(fee_payer, account_data);
 
     // sender
@@ -335,7 +282,8 @@ fn prepare_transactions(
     account_data.set_lamports(900000);
     mock_bank
         .account_shared_data
-        .borrow_mut()
+        .write()
+        .unwrap()
         .insert(sender, account_data);
 
     // recipient
@@ -343,13 +291,14 @@ fn prepare_transactions(
     account_data.set_lamports(900000);
     mock_bank
         .account_shared_data
-        .borrow_mut()
+        .write()
+        .unwrap()
         .insert(recipient, account_data);
 
     // The system account is set in `create_executable_environment`
 
     // A program that utilizes a Sysvar
-    let program_account = deploy_program("clock-sysvar".to_string(), mock_bank);
+    let program_account = deploy_program("clock-sysvar".to_string(), DEPLOYMENT_SLOT, mock_bank);
     let fee_payer = Pubkey::new_unique();
     transaction_builder.create_instruction(program_account, Vec::new(), HashMap::new(), Vec::new());
 
@@ -366,7 +315,8 @@ fn prepare_transactions(
     account_data.set_lamports(80000);
     mock_bank
         .account_shared_data
-        .borrow_mut()
+        .write()
+        .unwrap()
         .insert(fee_payer, account_data);
 
     // A transaction that fails
@@ -411,7 +361,8 @@ fn prepare_transactions(
     account_data.set_lamports(80000);
     mock_bank
         .account_shared_data
-        .borrow_mut()
+        .write()
+        .unwrap()
         .insert(fee_payer, account_data);
 
     // Sender without enough funds
@@ -419,7 +370,8 @@ fn prepare_transactions(
     account_data.set_lamports(900000);
     mock_bank
         .account_shared_data
-        .borrow_mut()
+        .write()
+        .unwrap()
         .insert(sender, account_data);
 
     // recipient
@@ -427,7 +379,8 @@ fn prepare_transactions(
     account_data.set_lamports(900000);
     mock_bank
         .account_shared_data
-        .borrow_mut()
+        .write()
+        .unwrap()
         .insert(recipient, account_data);
 
     // A transaction whose verification has already failed

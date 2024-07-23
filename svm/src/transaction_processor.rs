@@ -1,3 +1,5 @@
+#[cfg(feature = "dev-context-only-utils")]
+use qualifier_attr::{field_qualifiers, qualifiers};
 use {
     crate::{
         account_loader::{
@@ -138,6 +140,10 @@ pub struct TransactionProcessingEnvironment<'a> {
 }
 
 #[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+#[cfg_attr(
+    feature = "dev-context-only-utils",
+    field_qualifiers(slot(pub), epoch(pub))
+)]
 pub struct TransactionBatchProcessor<FG: ForkGraph> {
     /// Bank slot (i.e. block)
     slot: Slot,
@@ -521,6 +527,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         result
     }
 
+    #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
     fn replenish_program_cache<CB: TransactionProcessingCallback>(
         &self,
         callback: &CB,
@@ -994,7 +1001,6 @@ mod tests {
         solana_sdk::{
             account::{create_account_shared_data_for_test, WritableAccount},
             bpf_loader,
-            bpf_loader_upgradeable::{self, UpgradeableLoaderState},
             compute_budget::ComputeBudgetInstruction,
             epoch_schedule::EpochSchedule,
             feature_set::FeatureSet,
@@ -1011,12 +1017,6 @@ mod tests {
             sysvar::{self, rent::Rent},
             transaction::{SanitizedTransaction, Transaction, TransactionError},
             transaction_context::TransactionContext,
-        },
-        std::{
-            env,
-            fs::{self, File},
-            io::Read,
-            thread,
         },
     };
 
@@ -1840,112 +1840,6 @@ mod tests {
             |_invoke_context, _param0, _param1, _param2, _param3, _param4| {},
         );
         assert_eq!(entry, Arc::new(program));
-    }
-
-    #[test]
-    fn fast_concur_test() {
-        let mut mock_bank = MockBankCallback::default();
-        let batch_processor = TransactionBatchProcessor::<TestForkGraph>::new(5, 5, HashSet::new());
-        let fork_graph = Arc::new(RwLock::new(TestForkGraph {}));
-        batch_processor.program_cache.write().unwrap().fork_graph =
-            Some(Arc::downgrade(&fork_graph));
-
-        let programs = vec![
-            deploy_program("hello-solana".to_string(), &mut mock_bank),
-            deploy_program("simple-transfer".to_string(), &mut mock_bank),
-            deploy_program("clock-sysvar".to_string(), &mut mock_bank),
-        ];
-
-        let account_maps: HashMap<Pubkey, u64> = programs
-            .iter()
-            .enumerate()
-            .map(|(idx, key)| (*key, idx as u64))
-            .collect();
-
-        for _ in 0..10 {
-            let ths: Vec<_> = (0..4)
-                .map(|_| {
-                    let local_bank = mock_bank.clone();
-                    let processor = TransactionBatchProcessor::new_from(
-                        &batch_processor,
-                        batch_processor.slot,
-                        batch_processor.epoch,
-                    );
-                    let maps = account_maps.clone();
-                    let programs = programs.clone();
-                    thread::spawn(move || {
-                        let result =
-                            processor.replenish_program_cache(&local_bank, &maps, false, true);
-                        for key in &programs {
-                            let cache_entry = result.find(key);
-                            assert!(matches!(
-                                cache_entry.unwrap().program,
-                                ProgramCacheEntryType::Loaded(_)
-                            ));
-                        }
-                    })
-                })
-                .collect();
-
-            for th in ths {
-                th.join().unwrap();
-            }
-        }
-    }
-
-    fn deploy_program(name: String, mock_bank: &mut MockBankCallback) -> Pubkey {
-        let program_account = Pubkey::new_unique();
-        let program_data_account = Pubkey::new_unique();
-        let state = UpgradeableLoaderState::Program {
-            programdata_address: program_data_account,
-        };
-
-        // The program account must have funds and hold the executable binary
-        let mut account_data = AccountSharedData::default();
-        account_data.set_data(bincode::serialize(&state).unwrap());
-        account_data.set_lamports(25);
-        account_data.set_owner(bpf_loader_upgradeable::id());
-        mock_bank
-            .account_shared_data
-            .write()
-            .unwrap()
-            .insert(program_account, account_data);
-
-        let mut account_data = AccountSharedData::default();
-        let state = UpgradeableLoaderState::ProgramData {
-            slot: 0,
-            upgrade_authority_address: None,
-        };
-        let mut header = bincode::serialize(&state).unwrap();
-        let mut complement = vec![
-            0;
-            std::cmp::max(
-                0,
-                UpgradeableLoaderState::size_of_programdata_metadata().saturating_sub(header.len())
-            )
-        ];
-
-        let mut dir = env::current_dir().unwrap();
-        dir.push("tests");
-        dir.push("example-programs");
-        dir.push(name.as_str());
-        let name = name.replace('-', "_");
-        dir.push(name + "_program.so");
-        let mut file = File::open(dir.clone()).expect("file not found");
-        let metadata = fs::metadata(dir).expect("Unable to read metadata");
-        let mut buffer = vec![0; metadata.len() as usize];
-        file.read_exact(&mut buffer).expect("Buffer overflow");
-
-        header.append(&mut complement);
-        header.append(&mut buffer);
-        account_data.set_data(header);
-        mock_bank
-            .account_shared_data
-            .write()
-            .unwrap()
-            .insert(program_data_account, account_data);
-
-        program_account
     }
 
     #[test]

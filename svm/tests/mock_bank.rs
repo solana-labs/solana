@@ -1,7 +1,8 @@
 use {
     solana_program_runtime::loaded_programs::{BlockRelation, ForkGraph},
     solana_sdk::{
-        account::{AccountSharedData, ReadableAccount},
+        account::{AccountSharedData, ReadableAccount, WritableAccount},
+        bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::Epoch,
         feature_set::FeatureSet,
         native_loader,
@@ -9,7 +10,14 @@ use {
         slot_hashes::Slot,
     },
     solana_svm::transaction_processing_callback::TransactionProcessingCallback,
-    std::{cell::RefCell, cmp::Ordering, collections::HashMap, sync::Arc},
+    std::{
+        cmp::Ordering,
+        collections::HashMap,
+        env,
+        fs::{self, File},
+        io::Read,
+        sync::{Arc, RwLock},
+    },
 };
 
 pub struct MockForkGraph {}
@@ -28,15 +36,15 @@ impl ForkGraph for MockForkGraph {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct MockBankCallback {
     pub feature_set: Arc<FeatureSet>,
-    pub account_shared_data: RefCell<HashMap<Pubkey, AccountSharedData>>,
+    pub account_shared_data: Arc<RwLock<HashMap<Pubkey, AccountSharedData>>>,
 }
 
 impl TransactionProcessingCallback for MockBankCallback {
     fn account_matches_owners(&self, account: &Pubkey, owners: &[Pubkey]) -> Option<usize> {
-        if let Some(data) = self.account_shared_data.borrow().get(account) {
+        if let Some(data) = self.account_shared_data.read().unwrap().get(account) {
             if data.lamports() == 0 {
                 None
             } else {
@@ -48,21 +56,91 @@ impl TransactionProcessingCallback for MockBankCallback {
     }
 
     fn get_account_shared_data(&self, pubkey: &Pubkey) -> Option<AccountSharedData> {
-        self.account_shared_data.borrow().get(pubkey).cloned()
+        self.account_shared_data
+            .read()
+            .unwrap()
+            .get(pubkey)
+            .cloned()
     }
 
     fn add_builtin_account(&self, name: &str, program_id: &Pubkey) {
         let account_data = native_loader::create_loadable_account_with_fields(name, (5000, 0));
 
         self.account_shared_data
-            .borrow_mut()
+            .write()
+            .unwrap()
             .insert(*program_id, account_data);
     }
 }
 
 impl MockBankCallback {
-    #[allow(dead_code)]
+    #[allow(unused)]
     pub fn override_feature_set(&mut self, new_set: FeatureSet) {
         self.feature_set = Arc::new(new_set)
     }
+}
+
+#[allow(unused)]
+fn load_program(name: String) -> Vec<u8> {
+    // Loading the program file
+    let mut dir = env::current_dir().unwrap();
+    dir.push("tests");
+    dir.push("example-programs");
+    dir.push(name.as_str());
+    let name = name.replace('-', "_");
+    dir.push(name + "_program.so");
+    let mut file = File::open(dir.clone()).expect("file not found");
+    let metadata = fs::metadata(dir).expect("Unable to read metadata");
+    let mut buffer = vec![0; metadata.len() as usize];
+    file.read_exact(&mut buffer).expect("Buffer overflow");
+    buffer
+}
+
+#[allow(unused)]
+pub fn deploy_program(
+    name: String,
+    deployment_slot: Slot,
+    mock_bank: &mut MockBankCallback,
+) -> Pubkey {
+    let program_account = Pubkey::new_unique();
+    let program_data_account = Pubkey::new_unique();
+    let state = UpgradeableLoaderState::Program {
+        programdata_address: program_data_account,
+    };
+
+    // The program account must have funds and hold the executable binary
+    let mut account_data = AccountSharedData::default();
+    account_data.set_data(bincode::serialize(&state).unwrap());
+    account_data.set_lamports(25);
+    account_data.set_owner(bpf_loader_upgradeable::id());
+    mock_bank
+        .account_shared_data
+        .write()
+        .unwrap()
+        .insert(program_account, account_data);
+
+    let mut account_data = AccountSharedData::default();
+    let state = UpgradeableLoaderState::ProgramData {
+        slot: deployment_slot,
+        upgrade_authority_address: None,
+    };
+    let mut header = bincode::serialize(&state).unwrap();
+    let mut complement = vec![
+        0;
+        std::cmp::max(
+            0,
+            UpgradeableLoaderState::size_of_programdata_metadata().saturating_sub(header.len())
+        )
+    ];
+    let mut buffer = load_program(name);
+    header.append(&mut complement);
+    header.append(&mut buffer);
+    account_data.set_data(header);
+    mock_bank
+        .account_shared_data
+        .write()
+        .unwrap()
+        .insert(program_data_account, account_data);
+
+    program_account
 }

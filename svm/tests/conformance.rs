@@ -197,7 +197,7 @@ fn run_fixture(fixture: InstrFixture, filename: OsString, execute_as_instr: bool
     let mut fee_payer = Pubkey::new_unique();
     let mut mock_bank = MockBankCallback::default();
     {
-        let mut account_data_map = mock_bank.account_shared_data.borrow_mut();
+        let mut account_data_map = mock_bank.account_shared_data.write().unwrap();
         for item in input.accounts {
             let pubkey = Pubkey::new_from_array(item.address.try_into().unwrap());
             let mut account_data = AccountSharedData::default();
