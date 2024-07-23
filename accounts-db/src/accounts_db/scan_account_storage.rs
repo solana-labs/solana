@@ -11,7 +11,7 @@ use {
     },
     rayon::prelude::*,
     solana_measure::{measure::Measure, measure_us},
-    solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey},
+    solana_sdk::{account::ReadableAccount as _, clock::Slot, hash::Hash, pubkey::Pubkey},
     std::{
         hash::{DefaultHasher, Hash as _, Hasher as _},
         ops::Range,
@@ -367,7 +367,7 @@ mod tests {
             append_vec::AppendVec,
             cache_hash_data::{CacheHashDataFile, DeletionPolicy as CacheHashDeletionPolicy},
         },
-        solana_sdk::account::{AccountSharedData, ReadableAccount as _},
+        solana_sdk::account::AccountSharedData,
         tempfile::TempDir,
         test_case::test_case,
     };

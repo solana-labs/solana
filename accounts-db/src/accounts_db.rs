@@ -1002,21 +1002,22 @@ impl<'a> LoadedAccount<'a> {
     pub fn data_len(&self) -> usize {
         self.data().len()
     }
+}
 
+impl<'a> ReadableAccount for LoadedAccount<'a> {
     fn lamports(&self) -> u64 {
         match self {
             LoadedAccount::Stored(stored_account_meta) => stored_account_meta.lamports(),
             LoadedAccount::Cached(cached_account) => cached_account.account.lamports(),
         }
     }
-
     fn data(&self) -> &[u8] {
         match self {
             LoadedAccount::Stored(stored_account_meta) => stored_account_meta.data(),
             LoadedAccount::Cached(cached_account) => cached_account.account.data(),
         }
     }
-    pub(crate) fn owner(&self) -> &Pubkey {
+    fn owner(&self) -> &Pubkey {
         match self {
             LoadedAccount::Stored(stored_account_meta) => stored_account_meta.owner(),
             LoadedAccount::Cached(cached_account) => cached_account.account.owner(),
@@ -1033,6 +1034,9 @@ impl<'a> LoadedAccount<'a> {
             LoadedAccount::Stored(stored_account_meta) => stored_account_meta.rent_epoch(),
             LoadedAccount::Cached(cached_account) => cached_account.account.rent_epoch(),
         }
+    }
+    fn to_account_shared_data(&self) -> AccountSharedData {
+        self.take_account()
     }
 }
 
