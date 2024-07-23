@@ -283,15 +283,15 @@ impl<O: BucketOccupied> BucketStorage<O> {
     /// 'is_resizing' false if caller is adding an item to the index (so increment count)
     pub fn occupy(&mut self, ix: u64, is_resizing: bool) -> Result<(), BucketStorageError> {
         debug_assert!(ix < self.capacity(), "occupy: bad index size");
-        let mut e = Err(BucketStorageError::AlreadyOccupied);
         //debug!("ALLOC {} {}", ix, uid);
         if self.try_lock(ix) {
-            e = Ok(());
             if !is_resizing {
                 self.count.fetch_add(1, Ordering::Relaxed);
             }
+            Ok(())
+        } else {
+            Err(BucketStorageError::AlreadyOccupied)
         }
-        e
     }
 
     pub fn free(&mut self, ix: u64) {
