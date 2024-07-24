@@ -5668,9 +5668,6 @@ dependencies = [
 [[package]]
 name = "solana-sanitize"
 version = "2.1.0"
-dependencies = [
- "thiserror",
-]
 
 [[package]]
 name = "solana-sbf-programs"

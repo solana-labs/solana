@@ -1,15 +1,24 @@
 //! A trait for sanitizing values and members of over the wire messages.
 
-use thiserror::Error;
+use {core::fmt, std::error::Error};
 
-#[derive(PartialEq, Debug, Error, Eq, Clone)]
+#[derive(PartialEq, Debug, Eq, Clone)]
 pub enum SanitizeError {
-    #[error("index out of bounds")]
     IndexOutOfBounds,
-    #[error("value out of bounds")]
     ValueOutOfBounds,
-    #[error("invalid value")]
     InvalidValue,
+}
+
+impl Error for SanitizeError {}
+
+impl fmt::Display for SanitizeError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            SanitizeError::IndexOutOfBounds => f.write_str("index out of bounds"),
+            SanitizeError::ValueOutOfBounds => f.write_str("value out of bounds"),
+            SanitizeError::InvalidValue => f.write_str("invalid value"),
+        }
+    }
 }
 
 /// A trait for sanitizing values and members of over-the-wire messages.
