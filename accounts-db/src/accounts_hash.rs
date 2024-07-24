@@ -205,6 +205,7 @@ pub struct HashStats {
     pub sum_ancient_scans_us: AtomicU64,
     pub count_ancient_scans: AtomicU64,
     pub pubkey_bin_search_us: AtomicU64,
+    pub num_zero_lamport_accounts: AtomicU64,
 }
 impl HashStats {
     pub fn calc_storage_size_quartiles(&mut self, storages: &[Arc<AccountStorageEntry>]) {
@@ -304,6 +305,11 @@ impl HashStats {
             (
                 "pubkey_bin_search_us",
                 self.pubkey_bin_search_us.load(Ordering::Relaxed),
+                i64
+            ),
+            (
+                "num_zero_lamport_accounts",
+                self.num_zero_lamport_accounts.load(Ordering::Relaxed),
                 i64
             ),
         );
@@ -1166,6 +1172,9 @@ impl<'a> AccountsHasher<'a> {
                     .expect("summing lamports cannot overflow");
                 hashes.write(&item.hash.0);
             } else {
+                stats
+                    .num_zero_lamport_accounts
+                    .fetch_add(1, Ordering::Relaxed);
                 // if lamports == 0, check if they should be included
                 if self.zero_lamport_accounts == ZeroLamportAccounts::Included {
                     // For incremental accounts hash, the hash of a zero lamport account is
