@@ -10,6 +10,7 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
+ahash = { workspace = true }
 bincode = { workspace = true }
 blake3 = { workspace = true }
 bv = { workspace = true, features = ["serde"] }
@@ -81,7 +82,11 @@ targets = ["x86_64-unknown-linux-gnu"]
 rustc_version = { workspace = true }
 
 [features]
-dev-context-only-utils = ["dep:qualifier_attr", "dep:solana-stake-program", "dep:solana-vote-program"]
+dev-context-only-utils = [
+    "dep:qualifier_attr",
+    "dep:solana-stake-program",
+    "dep:solana-vote-program",
+]
 frozen-abi = [
     "dep:solana-frozen-abi",
     "dep:solana-frozen-abi-macro",

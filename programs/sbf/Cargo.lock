@@ -4514,6 +4514,7 @@ dependencies = [
 name = "solana-accounts-db"
 version = "2.1.0"
 dependencies = [
+ "ahash 0.8.10",
  "bincode",
  "blake3",
  "bv",

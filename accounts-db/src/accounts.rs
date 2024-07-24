@@ -8,6 +8,7 @@ use {
         ancestors::Ancestors,
         storable_accounts::StorableAccounts,
     },
+    ahash::{AHashMap, AHashSet},
     dashmap::DashMap,
     log::*,
     solana_sdk::{
@@ -22,7 +23,7 @@ use {
     },
     std::{
         cmp::Reverse,
-        collections::{hash_map, BinaryHeap, HashMap, HashSet},
+        collections::{hash_map, BinaryHeap, HashSet},
         ops::RangeBounds,
         sync::{
             atomic::{AtomicUsize, Ordering},
@@ -35,8 +36,8 @@ pub type PubkeyAccountSlot = (Pubkey, AccountSharedData, Slot);
 
 #[derive(Debug, Default)]
 pub struct AccountLocks {
-    write_locks: HashSet<Pubkey>,
-    readonly_locks: HashMap<Pubkey, u64>,
+    write_locks: AHashSet<Pubkey>,
+    readonly_locks: AHashMap<Pubkey, u64>,
 }
 
 impl AccountLocks {

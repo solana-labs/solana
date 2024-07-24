@@ -5453,6 +5453,7 @@ dependencies = [
 name = "solana-accounts-db"
 version = "2.1.0"
 dependencies = [
+ "ahash 0.8.10",
  "assert_matches",
  "bincode",
  "blake3",
