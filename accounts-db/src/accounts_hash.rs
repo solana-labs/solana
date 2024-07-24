@@ -9,9 +9,10 @@ use {
     log::*,
     memmap2::MmapMut,
     rayon::prelude::*,
+    solana_lattice_hash::lt_hash::LtHash,
     solana_measure::{measure::Measure, measure_us},
     solana_sdk::{
-        hash::{Hash, Hasher},
+        hash::{Hash, Hasher, HASH_BYTES},
         pubkey::Pubkey,
         rent_collector::RentCollector,
         slot_history::Slot,
@@ -1244,6 +1245,18 @@ pub struct AccountHash(pub Hash);
 // Ensure the newtype wrapper never changes size from the underlying Hash
 // This also ensures there are no padding bytes, which is required to safely implement Pod
 const _: () = assert!(std::mem::size_of::<AccountHash>() == std::mem::size_of::<Hash>());
+
+/// The AccountHash for a zero-lamport account
+pub const ZERO_LAMPORT_ACCOUNT_HASH: AccountHash =
+    AccountHash(Hash::new_from_array([0; HASH_BYTES]));
+
+/// Lattice hash of an account
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct AccountLtHash(pub LtHash);
+
+/// The AccountLtHash for a zero-lamport account
+pub const ZERO_LAMPORT_ACCOUNT_LT_HASH: AccountLtHash =
+    AccountLtHash(LtHash([0; LtHash::NUM_ELEMENTS]));
 
 /// Hash of accounts
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]

@@ -5492,6 +5492,7 @@ dependencies = [
  "solana-frozen-abi",
  "solana-frozen-abi-macro",
  "solana-inline-spl",
+ "solana-lattice-hash",
  "solana-logger",
  "solana-measure",
  "solana-metrics",

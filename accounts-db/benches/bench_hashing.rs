@@ -24,7 +24,7 @@ const DATA_SIZES: [usize; 6] = [
 /// part of computing an account's hash.
 ///
 /// Ensure this constant stays in sync with the value of `META_SIZE` in
-/// AccountsDb::hash_account_data().
+/// AccountsDb::hash_account_helper().
 const META_SIZE: usize = 81;
 
 fn bench_hash_account(c: &mut Criterion) {
@@ -37,8 +37,11 @@ fn bench_hash_account(c: &mut Criterion) {
         let num_bytes = META_SIZE.checked_add(data_size).unwrap();
         group.throughput(Throughput::Bytes(num_bytes as u64));
         let account = AccountSharedData::new(lamports, data_size, &owner);
-        group.bench_function(BenchmarkId::new("data_size", data_size), |b| {
+        group.bench_function(BenchmarkId::new("blake3", data_size), |b| {
             b.iter(|| AccountsDb::hash_account(&account, &address));
+        });
+        group.bench_function(BenchmarkId::new("lattice", data_size), |b| {
+            b.iter(|| AccountsDb::lt_hash_account(&account, &address));
         });
     }
 }

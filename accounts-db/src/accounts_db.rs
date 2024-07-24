@@ -35,10 +35,11 @@ use {
             StorageAccess, ALIGN_BOUNDARY_OFFSET,
         },
         accounts_hash::{
-            AccountHash, AccountsDeltaHash, AccountsHash, AccountsHashKind, AccountsHasher,
-            CalcAccountsHashConfig, CalculateHashIntermediate, HashStats, IncrementalAccountsHash,
-            SerdeAccountsDeltaHash, SerdeAccountsHash, SerdeIncrementalAccountsHash,
-            ZeroLamportAccounts,
+            AccountHash, AccountLtHash, AccountsDeltaHash, AccountsHash, AccountsHashKind,
+            AccountsHasher, CalcAccountsHashConfig, CalculateHashIntermediate, HashStats,
+            IncrementalAccountsHash, SerdeAccountsDeltaHash, SerdeAccountsHash,
+            SerdeIncrementalAccountsHash, ZeroLamportAccounts, ZERO_LAMPORT_ACCOUNT_HASH,
+            ZERO_LAMPORT_ACCOUNT_LT_HASH,
         },
         accounts_index::{
             in_mem_accounts_index::StartupStats, AccountMapEntry, AccountSecondaryIndexes,
@@ -69,7 +70,6 @@ use {
         u64_align, utils,
         verify_accounts_hash_in_background::VerifyAccountsHashInBackground,
     },
-    blake3::traits::digest::Digest,
     crossbeam_channel::{unbounded, Receiver, Sender},
     dashmap::{DashMap, DashSet},
     log::*,
@@ -78,6 +78,7 @@ use {
     seqlock::SeqLock,
     serde::{Deserialize, Serialize},
     smallvec::SmallVec,
+    solana_lattice_hash::lt_hash::LtHash,
     solana_measure::{measure::Measure, measure_us},
     solana_nohash_hasher::{IntMap, IntSet},
     solana_rayon_threadlimit::get_thread_count,
@@ -6118,28 +6119,30 @@ impl AccountsDb {
         }
     }
 
-    pub fn hash_account<T: ReadableAccount>(account: &T, pubkey: &Pubkey) -> AccountHash {
-        Self::hash_account_data(
-            account.lamports(),
-            account.owner(),
-            account.executable(),
-            account.rent_epoch(),
-            account.data(),
-            pubkey,
-        )
+    /// Calculates the `AccountLtHash` of `account`
+    pub fn lt_hash_account(account: &impl ReadableAccount, pubkey: &Pubkey) -> AccountLtHash {
+        if account.lamports() == 0 {
+            return ZERO_LAMPORT_ACCOUNT_LT_HASH;
+        }
+
+        let hasher = Self::hash_account_helper(account, pubkey);
+        let lt_hash = LtHash::with(&hasher);
+        AccountLtHash(lt_hash)
     }
 
-    fn hash_account_data(
-        lamports: u64,
-        owner: &Pubkey,
-        executable: bool,
-        rent_epoch: Epoch,
-        data: &[u8],
-        pubkey: &Pubkey,
-    ) -> AccountHash {
-        if lamports == 0 {
-            return AccountHash(Hash::default());
+    /// Calculates the `AccountHash` of `account`
+    pub fn hash_account<T: ReadableAccount>(account: &T, pubkey: &Pubkey) -> AccountHash {
+        if account.lamports() == 0 {
+            return ZERO_LAMPORT_ACCOUNT_HASH;
         }
+
+        let hasher = Self::hash_account_helper(account, pubkey);
+        let hash = Hash::new_from_array(hasher.finalize().into());
+        AccountHash(hash)
+    }
+
+    /// Hashes `account` and returns the underlying Hasher
+    fn hash_account_helper(account: &impl ReadableAccount, pubkey: &Pubkey) -> blake3::Hasher {
         let mut hasher = blake3::Hasher::new();
 
         // allocate a buffer on the stack that's big enough
@@ -6150,9 +6153,10 @@ impl AccountsDb {
         let mut buffer = SmallVec::<[u8; BUFFER_SIZE]>::new();
 
         // collect lamports, rent_epoch into buffer to hash
-        buffer.extend_from_slice(&lamports.to_le_bytes());
-        buffer.extend_from_slice(&rent_epoch.to_le_bytes());
+        buffer.extend_from_slice(&account.lamports().to_le_bytes());
+        buffer.extend_from_slice(&account.rent_epoch().to_le_bytes());
 
+        let data = account.data();
         if data.len() > DATA_SIZE {
             // For larger accounts whose data can't fit into the buffer, update the hash now.
             hasher.update(&buffer);
@@ -6166,12 +6170,12 @@ impl AccountsDb {
         }
 
         // collect exec_flag, owner, pubkey into buffer to hash
-        buffer.push(executable.into());
-        buffer.extend_from_slice(owner.as_ref());
+        buffer.push(account.executable().into());
+        buffer.extend_from_slice(account.owner().as_ref());
         buffer.extend_from_slice(pubkey.as_ref());
         hasher.update(&buffer);
 
-        AccountHash(Hash::new_from_array(hasher.finalize().into()))
+        hasher
     }
 
     fn write_accounts_to_storage<'a>(
