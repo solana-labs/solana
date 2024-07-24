@@ -38,6 +38,9 @@ cargo_audit_ignores=(
   # Patches to address the advisory have been pulled into a fork of the repo.
   # See `[patch.crates-io.curve25519-dalek]` in Cargo.toml for more information
   --ignore RUSTSEC-2024-0344
+
+  # openssl
+  --ignore RUSTSEC-2024-0357
 )
 scripts/cargo-for-all-lock-files.sh audit "${cargo_audit_ignores[@]}" | $dep_tree_filter
 # we want the `cargo audit` exit code, not `$dep_tree_filter`'s
