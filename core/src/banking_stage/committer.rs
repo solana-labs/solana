@@ -27,7 +27,7 @@ use {
 pub enum CommitTransactionDetails {
     Committed {
         compute_units: u64,
-        loaded_accounts_data_size: usize,
+        loaded_accounts_data_size: u32,
     },
     NotCommitted,
 }

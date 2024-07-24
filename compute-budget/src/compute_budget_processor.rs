@@ -9,6 +9,7 @@ use {
         pubkey::Pubkey,
         transaction::TransactionError,
     },
+    std::num::NonZeroU32,
 };
 
 /// Roughly 0.5us/page, where page is 32K; given roughly 15CU/us, the
@@ -21,14 +22,15 @@ pub const MIN_HEAP_FRAME_BYTES: u32 = HEAP_LENGTH as u32;
 
 /// The total accounts data a transaction can load is limited to 64MiB to not break
 /// anyone in Mainnet-beta today. It can be set by set_loaded_accounts_data_size_limit instruction
-pub const MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES: u32 = 64 * 1024 * 1024;
+pub const MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES: NonZeroU32 =
+    unsafe { NonZeroU32::new_unchecked(64 * 1024 * 1024) };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ComputeBudgetLimits {
     pub updated_heap_bytes: u32,
     pub compute_unit_limit: u32,
     pub compute_unit_price: u64,
-    pub loaded_accounts_bytes: u32,
+    pub loaded_accounts_bytes: NonZeroU32,
 }
 
 impl Default for ComputeBudgetLimits {
@@ -51,9 +53,7 @@ impl From<ComputeBudgetLimits> for FeeBudgetLimits {
         let prioritization_fee = prioritization_fee_details.get_fee();
 
         FeeBudgetLimits {
-            // NOTE - usize::from(u32).unwrap() may fail if target is 16-bit and
-            // `loaded_accounts_bytes` is greater than u16::MAX. In that case, panic is proper.
-            loaded_accounts_data_size_limit: usize::try_from(val.loaded_accounts_bytes).unwrap(),
+            loaded_accounts_data_size_limit: val.loaded_accounts_bytes,
             heap_cost: DEFAULT_HEAP_COST,
             compute_unit_limit: u64::from(val.compute_unit_limit),
             prioritization_fee,
@@ -110,7 +110,10 @@ pub fn process_compute_budget_instructions<'a>(
                     if updated_loaded_accounts_data_size_limit.is_some() {
                         return Err(duplicate_instruction_error);
                     }
-                    updated_loaded_accounts_data_size_limit = Some(bytes);
+                    updated_loaded_accounts_data_size_limit = Some(
+                        NonZeroU32::new(bytes)
+                            .ok_or(TransactionError::InvalidLoadedAccountsDataSizeLimit)?,
+                    );
                 }
                 _ => return Err(invalid_instruction_data_error),
             }
@@ -407,7 +410,7 @@ mod tests {
         let data_size = 1;
         let expected_result = Ok(ComputeBudgetLimits {
             compute_unit_limit: DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT,
-            loaded_accounts_bytes: data_size,
+            loaded_accounts_bytes: NonZeroU32::new(data_size).unwrap(),
             ..ComputeBudgetLimits::default()
         });
 
@@ -421,7 +424,7 @@ mod tests {
 
         // Assert when set_loaded_accounts_data_size_limit presents, with greater than max value
         // budget is set to max data size
-        let data_size = MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES + 1;
+        let data_size = MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES.get() + 1;
         let expected_result = Ok(ComputeBudgetLimits {
             compute_unit_limit: DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT,
             loaded_accounts_bytes: MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES,
@@ -455,7 +458,7 @@ mod tests {
 
         // Assert when set_loaded_accounts_data_size_limit presents more than once,
         // return DuplicateInstruction
-        let data_size = MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES;
+        let data_size = MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES.get();
         let expected_result = Err(TransactionError::DuplicateInstruction(2));
 
         test!(

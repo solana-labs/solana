@@ -56,7 +56,7 @@ impl CostModel {
     pub fn calculate_cost_for_executed_transaction(
         transaction: &SanitizedTransaction,
         actual_programs_execution_cost: u64,
-        actual_loaded_accounts_data_size_bytes: usize,
+        actual_loaded_accounts_data_size_bytes: u32,
         feature_set: &FeatureSet,
     ) -> TransactionCost {
         if transaction.is_simple_vote_transaction() {
@@ -198,7 +198,7 @@ impl CostModel {
                 }
 
                 loaded_accounts_data_size_cost = Self::calculate_loaded_accounts_data_size_cost(
-                    usize::try_from(compute_budget_limits.loaded_accounts_bytes).unwrap(),
+                    compute_budget_limits.loaded_accounts_bytes.get(),
                     feature_set,
                 );
             }
@@ -227,7 +227,7 @@ impl CostModel {
     }
 
     pub fn calculate_loaded_accounts_data_size_cost(
-        loaded_accounts_data_size: usize,
+        loaded_accounts_data_size: u32,
         _feature_set: &FeatureSet,
     ) -> u64 {
         FeeStructure::calculate_memory_usage_cost(loaded_accounts_data_size, DEFAULT_HEAP_COST)
@@ -628,7 +628,7 @@ mod tests {
         const DEFAULT_PAGE_COST: u64 = 8;
         let expected_loaded_accounts_data_size_cost =
             solana_compute_budget::compute_budget_processor::MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES
-                as u64
+                .get() as u64
                 / ACCOUNT_DATA_COST_PAGE_SIZE
                 * DEFAULT_PAGE_COST;
 

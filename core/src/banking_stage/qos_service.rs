@@ -707,10 +707,10 @@ mod tests {
         // calculate their costs, apply to cost_tracker
         let transaction_count = 5;
         let keypair = Keypair::new();
-        let loaded_accounts_data_size: usize = 1_000_000;
+        let loaded_accounts_data_size: u32 = 1_000_000;
         let transaction = solana_sdk::transaction::Transaction::new_unsigned(solana_sdk::message::Message::new(
             &[
-                solana_sdk::compute_budget::ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(loaded_accounts_data_size as u32),
+                solana_sdk::compute_budget::ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(loaded_accounts_data_size),
                 solana_sdk::system_instruction::transfer(&keypair.pubkey(), &solana_sdk::pubkey::Pubkey::new_unique(), 1),
             ],
             Some(&keypair.pubkey()),
@@ -720,7 +720,7 @@ mod tests {
             .map(|_| transfer_tx.clone())
             .collect();
         let execute_units_adjustment: u64 = 10;
-        let loaded_accounts_data_size_adjustment: usize = 32000;
+        let loaded_accounts_data_size_adjustment: u32 = 32000;
         let loaded_accounts_data_size_cost_adjustment =
             CostModel::calculate_loaded_accounts_data_size_cost(
                 loaded_accounts_data_size_adjustment,
@@ -827,10 +827,10 @@ mod tests {
         // calculate their costs, apply to cost_tracker
         let transaction_count = 5;
         let keypair = Keypair::new();
-        let loaded_accounts_data_size: usize = 1_000_000;
+        let loaded_accounts_data_size: u32 = 1_000_000;
         let transaction = solana_sdk::transaction::Transaction::new_unsigned(solana_sdk::message::Message::new(
             &[
-                solana_sdk::compute_budget::ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(loaded_accounts_data_size as u32),
+                solana_sdk::compute_budget::ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(loaded_accounts_data_size),
                 solana_sdk::system_instruction::transfer(&keypair.pubkey(), &solana_sdk::pubkey::Pubkey::new_unique(), 1),
             ],
             Some(&keypair.pubkey()),
@@ -840,7 +840,7 @@ mod tests {
             .map(|_| transfer_tx.clone())
             .collect();
         let execute_units_adjustment: u64 = 10;
-        let loaded_accounts_data_size_adjustment: usize = 32000;
+        let loaded_accounts_data_size_adjustment: u32 = 32000;
         let loaded_accounts_data_size_cost_adjustment =
             CostModel::calculate_loaded_accounts_data_size_cost(
                 loaded_accounts_data_size_adjustment,

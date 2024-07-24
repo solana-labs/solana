@@ -26,7 +26,7 @@ pub struct TransactionResults {
 
 #[derive(Debug, Default, Clone)]
 pub struct TransactionLoadedAccountsStats {
-    pub loaded_accounts_data_size: usize,
+    pub loaded_accounts_data_size: u32,
     pub loaded_accounts_count: usize,
 }
 
