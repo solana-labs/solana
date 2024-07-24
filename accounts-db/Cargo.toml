@@ -99,3 +99,7 @@ harness = false
 [[bench]]
 name = "bench_serde"
 harness = false
+
+[[bench]]
+name = "bench_lock_accounts"
+harness = false
