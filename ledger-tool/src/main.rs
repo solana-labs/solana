@@ -990,6 +990,7 @@ fn main() {
         .subcommand(
             SubCommand::with_name("create-snapshot")
                 .about("Create a new ledger snapshot")
+                .arg(&os_memory_stats_reporting_arg)
                 .arg(&load_genesis_config_arg)
                 .args(&accounts_db_config_args)
                 .args(&snapshot_config_args)
@@ -1716,6 +1717,21 @@ fn main() {
                     }
                 }
                 ("create-snapshot", Some(arg_matches)) => {
+                    let exit_signal = Arc::new(AtomicBool::new(false));
+                    let system_monitor_service = arg_matches
+                        .is_present("os_memory_stats_reporting")
+                        .then(|| {
+                            SystemMonitorService::new(
+                                Arc::clone(&exit_signal),
+                                SystemMonitorStatsReportConfig {
+                                    report_os_memory_stats: true,
+                                    report_os_network_stats: false,
+                                    report_os_cpu_stats: false,
+                                    report_os_disk_stats: false,
+                                },
+                            )
+                        });
+
                     let is_incremental = arg_matches.is_present("incremental");
                     let is_minimized = arg_matches.is_present("minimized");
                     let output_directory = value_t!(arg_matches, "output_directory", PathBuf)
@@ -2249,6 +2265,11 @@ fn main() {
                         "Shred version: {}",
                         compute_shred_version(&genesis_config.hash(), Some(&bank.hard_forks()))
                     );
+
+                    if let Some(system_monitor_service) = system_monitor_service {
+                        exit_signal.store(true, Ordering::Relaxed);
+                        system_monitor_service.join().unwrap();
+                    }
                 }
                 ("accounts", Some(arg_matches)) => {
                     let process_options = parse_process_options(&ledger_path, arg_matches);
