@@ -17,7 +17,7 @@ use {
     },
     itertools::Itertools,
     min_max_heap::MinMaxHeap,
-    solana_measure::{measure, measure_us},
+    solana_measure::{measure_time, measure_us},
     solana_runtime::bank::Bank,
     solana_sdk::{
         clock::FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET, feature_set::FeatureSet, hash::Hash,
@@ -640,7 +640,7 @@ impl ThreadLocalUnprocessedPackets {
                             ): (
                                 (Vec<SanitizedTransaction>, Vec<usize>),
                                 _,
-                            ) = measure!(
+                            ) = measure_time!(
                                 self.sanitize_unforwarded_packets(
                                     &packets_to_forward,
                                     &bank,
@@ -653,7 +653,7 @@ impl ThreadLocalUnprocessedPackets {
                                 packet_conversion_time.as_us()
                             );
 
-                            let (forwardable_transaction_indexes, filter_packets_time) = measure!(
+                            let (forwardable_transaction_indexes, filter_packets_time) = measure_time!(
                                 Self::filter_invalid_transactions(
                                     &sanitized_transactions,
                                     &bank,

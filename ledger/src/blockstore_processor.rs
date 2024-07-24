@@ -27,7 +27,7 @@ use {
     solana_entry::entry::{
         self, create_ticks, Entry, EntrySlice, EntryType, EntryVerificationStatus, VerifyRecyclers,
     },
-    solana_measure::{measure, measure::Measure},
+    solana_measure::{measure::Measure, measure_time},
     solana_metrics::datapoint_error,
     solana_rayon_threadlimit::{get_max_thread_count, get_thread_count},
     solana_runtime::{
@@ -188,7 +188,7 @@ pub fn execute_batch(
     } = tx_results;
 
     let (check_block_cost_limits_result, check_block_cost_limits_time): (Result<()>, Measure) =
-        measure!(if bank
+        measure_time!(if bank
             .feature_set
             .is_active(&feature_set::apply_cost_tracker_during_replay::id())
         {
@@ -328,7 +328,7 @@ fn execute_batches_internal(
                 let transaction_count =
                     transaction_batch.batch.sanitized_transactions().len() as u64;
                 let mut timings = ExecuteTimings::default();
-                let (result, execute_batches_time): (Result<()>, Measure) = measure!(
+                let (result, execute_batches_time): (Result<()>, Measure) = measure_time!(
                     {
                         execute_batch(
                             transaction_batch,

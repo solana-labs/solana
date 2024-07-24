@@ -1,6 +1,6 @@
 /// Measure this expression
 ///
-/// Use `measure!()` when you have an expression that you want to measure.  `measure!()` will start
+/// Use `measure_time!()` when you have an expression that you want to measure.  `measure_time!()` will start
 /// a new [`Measure`], evaluate your expression, stop the [`Measure`], and then return the
 /// [`Measure`] object along with your expression's return value.
 ///
@@ -12,20 +12,20 @@
 ///
 /// ```
 /// // Measure functions
-/// # use solana_measure::{measure, measure_us};
+/// # use solana_measure::{measure_time, measure_us};
 /// # fn foo() {}
 /// # fn bar(x: i32) {}
 /// # fn add(x: i32, y: i32) -> i32 {x + y}
-/// let (result, measure) = measure!(foo(), "foo takes no parameters");
-/// let (result, measure) = measure!(bar(42), "bar takes one parameter");
-/// let (result, measure) = measure!(add(1, 2), "add takes two parameters and returns a value");
+/// let (result, measure) = measure_time!(foo(), "foo takes no parameters");
+/// let (result, measure) = measure_time!(bar(42), "bar takes one parameter");
+/// let (result, measure) = measure_time!(add(1, 2), "add takes two parameters and returns a value");
 /// let (result, measure_us) = measure_us!(add(1, 2));
 /// # assert_eq!(result, 1 + 2);
 /// ```
 ///
 /// ```
 /// // Measure methods
-/// # use solana_measure::{measure, measure_us};
+/// # use solana_measure::{measure_time, measure_us};
 /// # struct Foo {
 /// #     f: i32,
 /// # }
@@ -35,18 +35,18 @@
 /// #     }
 /// # }
 /// let foo = Foo { f: 42 };
-/// let (result, measure) = measure!(foo.frobnicate(2), "measure methods");
+/// let (result, measure) = measure_time!(foo.frobnicate(2), "measure methods");
 /// let (result, measure_us) = measure_us!(foo.frobnicate(2));
 /// # assert_eq!(result, 42 * 2);
 /// ```
 ///
 /// ```
 /// // Measure expression blocks
-/// # use solana_measure::measure;
+/// # use solana_measure::measure_time;
 /// # fn complex_calculation() -> i32 { 42 }
 /// # fn complex_transform(x: i32) -> i32 { x + 3 }
 /// # fn record_result(y: i32) {}
-/// let (result, measure) = measure!(
+/// let (result, measure) = measure_time!(
 ///     {
 ///         let x = complex_calculation();
 ///         # assert_eq!(x, 42);
@@ -62,13 +62,13 @@
 ///
 /// ```
 /// // The `name` parameter is optional
-/// # use solana_measure::{measure, measure_us};
+/// # use solana_measure::{measure_time, measure_us};
 /// # fn meow() {};
-/// let (result, measure) = measure!(meow());
+/// let (result, measure) = measure_time!(meow());
 /// let (result, measure_us) = measure_us!(meow());
 /// ```
 #[macro_export]
-macro_rules! measure {
+macro_rules! measure_time {
     ($val:expr, $name:tt $(,)?) => {{
         let mut measure = $crate::measure::Measure::start($name);
         let result = $val;
@@ -76,7 +76,7 @@ macro_rules! measure {
         (result, measure)
     }};
     ($val:expr) => {
-        measure!($val, "")
+        measure_time!($val, "")
     };
 }
 
@@ -114,7 +114,7 @@ mod tests {
     fn test_measure_macro() {
         // Ensure that the measurement side actually works
         {
-            let (_result, measure) = measure!(sleep(Duration::from_secs(1)), "test");
+            let (_result, measure) = measure_time!(sleep(Duration::from_secs(1)), "test");
             assert!(measure.as_s() >= 0.99f32 && measure.as_s() <= 1.01f32);
             assert!(measure.as_ms() >= 990 && measure.as_ms() <= 1_010);
             assert!(measure.as_us() >= 999_000 && measure.as_us() <= 1_010_000);
@@ -122,35 +122,35 @@ mod tests {
 
         // Ensure that the macro can be called with functions
         {
-            let (result, _measure) = measure!(my_multiply(3, 4), "test");
+            let (result, _measure) = measure_time!(my_multiply(3, 4), "test");
             assert_eq!(result, 3 * 4);
 
-            let (result, _measure) = measure!(square(5), "test");
+            let (result, _measure) = measure_time!(square(5), "test");
             assert_eq!(result, 5 * 5)
         }
 
         // Ensure that the macro can be called with methods
         {
             let some_struct = SomeStruct { x: 42 };
-            let (result, _measure) = measure!(some_struct.add_to(4), "test");
+            let (result, _measure) = measure_time!(some_struct.add_to(4), "test");
             assert_eq!(result, 42 + 4);
         }
 
         // Ensure that the macro can be called with blocks
         {
-            let (result, _measure) = measure!({ 1 + 2 }, "test");
+            let (result, _measure) = measure_time!({ 1 + 2 }, "test");
             assert_eq!(result, 3);
         }
 
         // Ensure that the macro can be called with a trailing comma
         {
-            let (result, _measure) = measure!(square(5), "test",);
+            let (result, _measure) = measure_time!(square(5), "test",);
             assert_eq!(result, 5 * 5)
         }
 
         // Ensure that the macro can be called without a name
         {
-            let (result, _measure) = measure!(square(5));
+            let (result, _measure) = measure_time!(square(5));
             assert_eq!(result, 5 * 5)
         }
     }

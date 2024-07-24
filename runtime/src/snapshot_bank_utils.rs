@@ -35,7 +35,7 @@ use {
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         utils::delete_contents_of_path,
     },
-    solana_measure::{measure, measure::Measure},
+    solana_measure::{measure::Measure, measure_time},
     solana_sdk::{
         clock::{Epoch, Slot},
         genesis_config::GenesisConfig,
@@ -369,7 +369,7 @@ pub fn bank_from_snapshot_dir(
         .map(|config| config.storage_access)
         .unwrap_or_default();
 
-    let (storage, measure_rebuild_storages) = measure!(
+    let (storage, measure_rebuild_storages) = measure_time!(
         rebuild_storages_from_snapshot_dir(
             bank_snapshot,
             account_paths,
@@ -386,7 +386,7 @@ pub fn bank_from_snapshot_dir(
         storage,
         next_append_vec_id,
     };
-    let (bank, measure_rebuild_bank) = measure!(
+    let (bank, measure_rebuild_bank) = measure_time!(
         rebuild_bank_from_snapshot(
             bank_snapshot,
             account_paths,

@@ -1,7 +1,7 @@
 use {
     lazy_static,
     log::*,
-    solana_measure::measure,
+    solana_measure::measure_time,
     std::{
         collections::HashSet,
         fs, io,
@@ -121,7 +121,7 @@ pub fn move_and_async_delete_path(path: impl AsRef<Path>) {
         .name("solDeletePath".to_string())
         .spawn(move || {
             trace!("background deleting {}...", path_delete.display());
-            let (result, measure_delete) = measure!(fs::remove_dir_all(&path_delete));
+            let (result, measure_delete) = measure_time!(fs::remove_dir_all(&path_delete));
             if let Err(err) = result {
                 panic!("Failed to async delete '{}': {err}", path_delete.display());
             }

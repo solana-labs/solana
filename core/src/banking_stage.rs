@@ -33,7 +33,7 @@ use {
     solana_client::connection_cache::ConnectionCache,
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::blockstore_processor::TransactionStatusSender,
-    solana_measure::{measure, measure_us},
+    solana_measure::{measure_time, measure_us},
     solana_perf::{data_budget::DataBudget, packet::PACKETS_PER_BATCH},
     solana_poh::poh_recorder::{PohRecorder, TransactionRecorder},
     solana_runtime::{
@@ -677,7 +677,7 @@ impl BankingStage {
             return;
         }
         let (decision, make_decision_time) =
-            measure!(decision_maker.make_consume_or_forward_decision());
+            measure_time!(decision_maker.make_consume_or_forward_decision());
         let metrics_action = slot_metrics_tracker.check_leader_slot_boundary(
             decision.bank_start(),
             Some(unprocessed_transaction_storage),
@@ -691,7 +691,7 @@ impl BankingStage {
                 // packet processing metrics from the next slot towards the metrics
                 // of the previous slot
                 slot_metrics_tracker.apply_action(metrics_action);
-                let (_, consume_buffered_packets_time) = measure!(
+                let (_, consume_buffered_packets_time) = measure_time!(
                     consumer.consume_buffered_packets(
                         &bank_start,
                         unprocessed_transaction_storage,
@@ -750,7 +750,7 @@ impl BankingStage {
             if !unprocessed_transaction_storage.is_empty()
                 || last_metrics_update.elapsed() >= SLOT_BOUNDARY_CHECK_PERIOD
             {
-                let (_, process_buffered_packets_time) = measure!(
+                let (_, process_buffered_packets_time) = measure_time!(
                     Self::process_buffered_packets(
                         decision_maker,
                         forwarder,

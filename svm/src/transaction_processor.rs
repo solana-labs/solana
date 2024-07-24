@@ -25,7 +25,7 @@ use {
     },
     solana_loader_v4_program::create_program_runtime_environment_v2,
     solana_log_collector::LogCollector,
-    solana_measure::{measure, measure::Measure},
+    solana_measure::{measure::Measure, measure_time},
     solana_program_runtime::{
         invoke_context::{EnvironmentConfig, InvokeContext},
         loaded_programs::{
@@ -240,7 +240,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         let mut error_metrics = TransactionErrorMetrics::default();
         let mut execute_timings = ExecuteTimings::default();
 
-        let (validation_results, validate_fees_time) = measure!(self.validate_fees(
+        let (validation_results, validate_fees_time) = measure_time!(self.validate_fees(
             callbacks,
             sanitized_txs,
             check_results,

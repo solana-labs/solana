@@ -2,7 +2,7 @@ use {
     crate::{bank::Bank, compute_budget_details::GetComputeBudgetDetails, prioritization_fee::*},
     crossbeam_channel::{unbounded, Receiver, Sender},
     log::*,
-    solana_measure::measure,
+    solana_measure::measure_time,
     solana_sdk::{
         clock::{BankId, Slot},
         pubkey::Pubkey,
@@ -193,7 +193,7 @@ impl PrioritizationFeeCache {
     /// transactions have both valid compute_budget_details and account_locks will be used to update
     /// fee_cache asynchronously.
     pub fn update<'a>(&self, bank: &Bank, txs: impl Iterator<Item = &'a SanitizedTransaction>) {
-        let (_, send_updates_time) = measure!(
+        let (_, send_updates_time) = measure_time!(
             {
                 for sanitized_transaction in txs {
                     // Vote transactions are not prioritized, therefore they are excluded from
@@ -270,7 +270,7 @@ impl PrioritizationFeeCache {
         writable_accounts: Vec<Pubkey>,
         metrics: &PrioritizationFeeCacheMetrics,
     ) {
-        let (_, entry_update_time) = measure!(
+        let (_, entry_update_time) = measure_time!(
             {
                 unfinalized
                     .entry(slot)
@@ -300,7 +300,7 @@ impl PrioritizationFeeCache {
         // prune cache by evicting write account entry from prioritization fee if its fee is less
         // or equal to block's minimum transaction fee, because they are irrelevant in calculating
         // block minimum fee.
-        let (slot_prioritization_fee, slot_finalize_time) = measure!(
+        let (slot_prioritization_fee, slot_finalize_time) = measure_time!(
             {
                 // remove unfinalized slots
                 *unfinalized = unfinalized
@@ -340,7 +340,7 @@ impl PrioritizationFeeCache {
 
         // Create new cache entry
         if let Some(slot_prioritization_fee) = slot_prioritization_fee {
-            let (_, cache_lock_time) = measure!(
+            let (_, cache_lock_time) = measure_time!(
                 {
                     let mut cache = cache.write().unwrap();
                     while cache.len() >= cache_max_size {

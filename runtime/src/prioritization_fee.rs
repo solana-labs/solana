@@ -1,5 +1,5 @@
 use {
-    solana_measure::measure,
+    solana_measure::measure_time,
     solana_sdk::{clock::Slot, pubkey::Pubkey, saturating_add_assign},
     std::collections::HashMap,
 };
@@ -166,7 +166,7 @@ impl Default for PrioritizationFee {
 impl PrioritizationFee {
     /// Update self for minimum transaction fee in the block and minimum fee for each writable account.
     pub fn update(&mut self, transaction_fee: u64, writable_accounts: Vec<Pubkey>) {
-        let (_, update_time) = measure!(
+        let (_, update_time) = measure_time!(
             {
                 if !self.is_finalized {
                     if transaction_fee < self.min_transaction_fee {

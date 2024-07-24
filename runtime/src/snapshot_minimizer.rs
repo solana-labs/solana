@@ -13,7 +13,7 @@ use {
         accounts_partition,
         storable_accounts::StorableAccountsBySlot,
     },
-    solana_measure::measure,
+    solana_measure::measure_time,
     solana_sdk::{
         account::ReadableAccount,
         account_utils::StateMut,
@@ -86,7 +86,7 @@ impl<'a> SnapshotMinimizer<'a> {
         F: Fn(&SnapshotMinimizer<'a>),
     {
         let initial_accounts_len = self.minimized_account_set.len();
-        let (_, measure) = measure!(add_accounts_fn(self), name);
+        let (_, measure) = measure_time!(add_accounts_fn(self), name);
         let total_accounts_len = self.minimized_account_set.len();
         let added_accounts = total_accounts_len - initial_accounts_len;
 
@@ -212,10 +212,10 @@ impl<'a> SnapshotMinimizer<'a> {
     /// Remove accounts not in `minimized_accoun_set` from accounts_db
     fn minimize_accounts_db(&self) {
         let (minimized_slot_set, minimized_slot_set_measure) =
-            measure!(self.get_minimized_slot_set(), "generate minimized slot set");
+            measure_time!(self.get_minimized_slot_set(), "generate minimized slot set");
         info!("{minimized_slot_set_measure}");
 
-        let ((dead_slots, dead_storages), process_snapshot_storages_measure) = measure!(
+        let ((dead_slots, dead_storages), process_snapshot_storages_measure) = measure_time!(
             self.process_snapshot_storages(minimized_slot_set),
             "process snapshot storages"
         );
@@ -227,10 +227,10 @@ impl<'a> SnapshotMinimizer<'a> {
             .store(false, Ordering::Relaxed);
 
         let (_, purge_dead_slots_measure) =
-            measure!(self.purge_dead_slots(dead_slots), "purge dead slots");
+            measure_time!(self.purge_dead_slots(dead_slots), "purge dead slots");
         info!("{purge_dead_slots_measure}");
 
-        let (_, drop_storages_measure) = measure!(drop(dead_storages), "drop storages");
+        let (_, drop_storages_measure) = measure_time!(drop(dead_storages), "drop storages");
         info!("{drop_storages_measure}");
 
         // Turn logging back on after minimization

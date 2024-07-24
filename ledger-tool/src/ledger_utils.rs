@@ -25,7 +25,7 @@ use {
         },
         use_snapshot_archives_at_startup::UseSnapshotArchivesAtStartup,
     },
-    solana_measure::measure,
+    solana_measure::measure_time,
     solana_rpc::transaction_status_service::TransactionStatusService,
     solana_runtime::{
         accounts_background_service::{
@@ -245,7 +245,7 @@ pub fn load_and_process_ledger(
     // From now on, use run/ paths in the same way as the previous account_paths.
     let account_paths = account_run_paths;
 
-    let (_, measure_clean_account_paths) = measure!(
+    let (_, measure_clean_account_paths) = measure_time!(
         account_paths.iter().for_each(|path| {
             if path.exists() {
                 info!("Cleaning contents of account path: {}", path.display());

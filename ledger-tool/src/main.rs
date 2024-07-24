@@ -42,7 +42,7 @@ use {
             ProcessSlotCallback, TransactionStatusMessage, TransactionStatusSender,
         },
     },
-    solana_measure::{measure, measure::Measure},
+    solana_measure::{measure::Measure, measure_time},
     solana_runtime::{
         bank::{
             bank_hash_details::{self, SlotDetails, TransactionDetails},
@@ -522,7 +522,7 @@ fn minimize_bank_for_snapshot(
     snapshot_slot: Slot,
     ending_slot: Slot,
 ) -> bool {
-    let ((transaction_account_set, possibly_incomplete), transaction_accounts_measure) = measure!(
+    let ((transaction_account_set, possibly_incomplete), transaction_accounts_measure) = measure_time!(
         blockstore.get_accounts_used_in_range(bank, snapshot_slot, ending_slot),
         "get transaction accounts"
     );
@@ -2294,7 +2294,7 @@ fn main() {
 
                     let accounts_streamer =
                         AccountsOutputStreamer::new(bank, output_format, config);
-                    let (_, scan_time) = measure!(
+                    let (_, scan_time) = measure_time!(
                         accounts_streamer
                             .output()
                             .map_err(|err| error!("Error while outputting accounts: {err}")),
