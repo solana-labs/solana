@@ -46,7 +46,7 @@ solana-quic-client = { workspace = true }
 solana-remote-wallet = { workspace = true, features = ["default"] }
 solana-rpc-client = { workspace = true, features = ["default"] }
 solana-rpc-client-api = { workspace = true }
-solana-rpc-client-nonce-utils = { workspace = true }
+solana-rpc-client-nonce-utils = { workspace = true, features = ["clap"] }
 solana-sdk = { workspace = true }
 solana-streamer = { workspace = true }
 solana-tps-client = { workspace = true }
