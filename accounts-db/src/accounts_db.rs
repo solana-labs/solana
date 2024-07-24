@@ -6798,12 +6798,8 @@ impl AccountsDb {
                                             let hash_is_missing =
                                                 loaded_hash == AccountHash(Hash::default());
                                             if hash_is_missing {
-                                                let computed_hash = Self::hash_account_data(
-                                                    loaded_account.lamports(),
-                                                    loaded_account.owner(),
-                                                    loaded_account.executable(),
-                                                    loaded_account.rent_epoch(),
-                                                    loaded_account.data(),
+                                                let computed_hash = Self::hash_account(
+                                                    &loaded_account,
                                                     loaded_account.pubkey(),
                                                 );
                                                 loaded_hash = computed_hash;
@@ -7497,14 +7493,7 @@ impl AccountsDb {
                 |accum: &DashMap<Pubkey, AccountHash>, loaded_account: &LoadedAccount, _data| {
                     let mut loaded_hash = loaded_account.loaded_hash();
                     if loaded_hash == AccountHash(Hash::default()) {
-                        loaded_hash = Self::hash_account_data(
-                            loaded_account.lamports(),
-                            loaded_account.owner(),
-                            loaded_account.executable(),
-                            loaded_account.rent_epoch(),
-                            loaded_account.data(),
-                            loaded_account.pubkey(),
-                        )
+                        loaded_hash = Self::hash_account(loaded_account, loaded_account.pubkey())
                     }
                     accum.insert(*loaded_account.pubkey(), loaded_hash);
                 },

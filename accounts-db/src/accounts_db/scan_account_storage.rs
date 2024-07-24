@@ -79,14 +79,7 @@ impl<'a> AppendVecScan for ScanState<'a> {
 
         let hash_is_missing = account_hash == AccountHash(Hash::default());
         if hash_is_missing {
-            let computed_hash = AccountsDb::hash_account_data(
-                loaded_account.lamports(),
-                loaded_account.owner(),
-                loaded_account.executable(),
-                loaded_account.rent_epoch(),
-                loaded_account.data(),
-                loaded_account.pubkey(),
-            );
+            let computed_hash = AccountsDb::hash_account(loaded_account, loaded_account.pubkey());
             account_hash = computed_hash;
         }
         let source_item = CalculateHashIntermediate {
