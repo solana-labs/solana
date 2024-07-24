@@ -121,7 +121,7 @@ impl LatestValidatorVotePacket {
 pub(crate) fn weighted_random_order_by_stake<'a>(
     bank: &Bank,
     pubkeys: impl Iterator<Item = &'a Pubkey>,
-) -> impl Iterator<Item = Pubkey> {
+) -> impl Iterator<Item = Pubkey> + 'static {
     // Efraimidis and Spirakis algo for weighted random sample without replacement
     let staked_nodes = bank.staked_nodes();
     let mut pubkey_with_weight: Vec<(f64, Pubkey)> = pubkeys
@@ -274,49 +274,51 @@ impl LatestUnprocessedVotes {
         bank: Arc<Bank>,
         forward_packet_batches_by_accounts: &mut ForwardPacketBatchesByAccounts,
     ) -> usize {
-        let mut continue_forwarding = true;
-        let pubkeys_by_stake = weighted_random_order_by_stake(
-            &bank,
-            self.latest_votes_per_pubkey.read().unwrap().keys(),
-        )
-        .collect_vec();
-        pubkeys_by_stake
-            .into_iter()
-            .filter(|&pubkey| {
-                if !continue_forwarding {
-                    return false;
-                }
-                if let Some(lock) = self.get_entry(pubkey) {
-                    let mut vote = lock.write().unwrap();
-                    if !vote.is_vote_taken() && !vote.is_forwarded() {
-                        let deserialized_vote_packet = vote.vote.as_ref().unwrap().clone();
-                        if let Some(sanitized_vote_transaction) = deserialized_vote_packet
-                            .build_sanitized_transaction(
-                                bank.vote_only_bank(),
-                                bank.as_ref(),
-                                bank.get_reserved_account_keys(),
-                            )
-                        {
-                            if forward_packet_batches_by_accounts.try_add_packet(
-                                &sanitized_vote_transaction,
-                                deserialized_vote_packet,
-                                &bank.feature_set,
-                            ) {
-                                vote.forwarded = true;
-                            } else {
-                                // To match behavior of regular transactions we stop
-                                // forwarding votes as soon as one fails
-                                continue_forwarding = false;
-                            }
-                            return true;
-                        } else {
-                            return false;
-                        }
-                    }
-                }
-                false
-            })
-            .count()
+        let pubkeys_by_stake = {
+            let binding = self.latest_votes_per_pubkey.read().unwrap();
+            weighted_random_order_by_stake(&bank, binding.keys())
+        };
+
+        let mut forwarded_count: usize = 0;
+        for pubkey in pubkeys_by_stake {
+            let Some(vote) = self.get_entry(pubkey) else {
+                continue;
+            };
+
+            let mut vote = vote.write().unwrap();
+            if vote.is_vote_taken() || vote.is_forwarded() {
+                continue;
+            }
+
+            let deserialized_vote_packet = vote.vote.as_ref().unwrap().clone();
+            let Some(sanitized_vote_transaction) = deserialized_vote_packet
+                .build_sanitized_transaction(
+                    bank.vote_only_bank(),
+                    bank.as_ref(),
+                    bank.get_reserved_account_keys(),
+                )
+            else {
+                continue;
+            };
+
+            let forwarding_successful = forward_packet_batches_by_accounts.try_add_packet(
+                &sanitized_vote_transaction,
+                deserialized_vote_packet,
+                &bank.feature_set,
+            );
+
+            if !forwarding_successful {
+                // To match behavior of regular transactions we stop forwarding votes as soon as one
+                // fails. We are assuming that failure (try_add_packet) means no more space
+                // available.
+                break;
+            }
+
+            vote.forwarded = true;
+            forwarded_count += 1;
+        }
+
+        forwarded_count
     }
 
     /// Drains all votes yet to be processed sorted by a weighted random ordering by stake
