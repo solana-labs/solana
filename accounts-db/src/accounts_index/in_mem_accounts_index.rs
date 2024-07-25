@@ -18,7 +18,7 @@ use {
         ops::{Bound, RangeBounds, RangeInclusive},
         sync::{
             atomic::{AtomicBool, AtomicU64, Ordering},
-            Arc, Mutex, RwLock, RwLockWriteGuard,
+            Arc, Mutex, RwLock,
         },
     },
 };
@@ -469,19 +469,19 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
         result
     }
 
-    /// call `user` with a write lock of the slot list.
-    /// Note that whether `user` modifies the slot list or not, the entry in the in-mem index will always
+    /// call `user_fn` with a write lock of the slot list.
+    /// Note that whether `user_fn` modifies the slot list or not, the entry in the in-mem index will always
     /// be marked as dirty. So, callers to this should ideally know they will be modifying the slot list.
     pub fn slot_list_mut<RT>(
         &self,
         pubkey: &Pubkey,
-        user: impl for<'a> FnOnce(&mut RwLockWriteGuard<'a, SlotList<T>>) -> RT,
+        user_fn: impl FnOnce(&mut SlotList<T>) -> RT,
     ) -> Option<RT> {
         self.get_internal_inner(pubkey, |entry| {
             (
                 true,
                 entry.map(|entry| {
-                    let result = user(&mut entry.slot_list.write().unwrap());
+                    let result = user_fn(&mut entry.slot_list.write().unwrap());
                     // note that to be safe here, we ALWAYS mark the entry as dirty
                     entry.set_dirty(true);
                     result

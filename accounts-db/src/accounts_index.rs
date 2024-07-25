@@ -35,7 +35,7 @@ use {
         path::PathBuf,
         sync::{
             atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
-            Arc, Mutex, OnceLock, RwLock, RwLockWriteGuard,
+            Arc, Mutex, OnceLock, RwLock,
         },
     },
     thiserror::Error,
@@ -1160,10 +1160,10 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
     fn slot_list_mut<RT>(
         &self,
         pubkey: &Pubkey,
-        user: impl for<'a> FnOnce(&mut RwLockWriteGuard<'a, SlotList<T>>) -> RT,
+        user_fn: impl FnOnce(&mut SlotList<T>) -> RT,
     ) -> Option<RT> {
         let read_lock = self.get_bin(pubkey);
-        read_lock.slot_list_mut(pubkey, user)
+        read_lock.slot_list_mut(pubkey, user_fn)
     }
 
     /// Remove keys from the account index if the key's slot list is empty.
