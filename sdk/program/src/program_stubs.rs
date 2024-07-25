@@ -8,6 +8,7 @@ use {
         program_error::UNSUPPORTED_SYSVAR, pubkey::Pubkey,
     },
     base64::{prelude::BASE64_STANDARD, Engine},
+    solana_program_memory::stubs,
     std::sync::{Arc, RwLock},
 };
 
@@ -21,7 +22,6 @@ pub fn set_syscall_stubs(syscall_stubs: Box<dyn SyscallStubs>) -> Box<dyn Syscal
     std::mem::replace(&mut SYSCALL_STUBS.write().unwrap(), syscall_stubs)
 }
 
-#[allow(clippy::arithmetic_side_effects)]
 pub trait SyscallStubs: Sync + Send {
     fn sol_log(&self, message: &str) {
         println!("{message}");
@@ -74,37 +74,19 @@ pub trait SyscallStubs: Sync + Send {
     }
     /// # Safety
     unsafe fn sol_memcpy(&self, dst: *mut u8, src: *const u8, n: usize) {
-        // cannot be overlapping
-        assert!(
-            is_nonoverlapping(src as usize, n, dst as usize, n),
-            "memcpy does not support overlapping regions"
-        );
-        std::ptr::copy_nonoverlapping(src, dst, n);
+        stubs::sol_memcpy(dst, src, n)
     }
     /// # Safety
     unsafe fn sol_memmove(&self, dst: *mut u8, src: *const u8, n: usize) {
-        std::ptr::copy(src, dst, n);
+        stubs::sol_memmove(dst, src, n)
     }
     /// # Safety
     unsafe fn sol_memcmp(&self, s1: *const u8, s2: *const u8, n: usize, result: *mut i32) {
-        let mut i = 0;
-        while i < n {
-            let a = *s1.add(i);
-            let b = *s2.add(i);
-            if a != b {
-                *result = a as i32 - b as i32;
-                return;
-            }
-            i += 1;
-        }
-        *result = 0
+        stubs::sol_memcmp(s1, s2, n, result)
     }
     /// # Safety
     unsafe fn sol_memset(&self, s: *mut u8, c: u8, n: usize) {
-        let s = std::slice::from_raw_parts_mut(s, n);
-        for val in s.iter_mut().take(n) {
-            *val = c;
-        }
+        stubs::sol_memset(s, c, n)
     }
     fn sol_get_return_data(&self) -> Option<(Pubkey, Vec<u8>)> {
         None
@@ -206,30 +188,6 @@ pub(crate) fn sol_get_epoch_stake(vote_address: *const u8) -> u64 {
         .sol_get_epoch_stake(vote_address)
 }
 
-pub(crate) fn sol_memcpy(dst: *mut u8, src: *const u8, n: usize) {
-    unsafe {
-        SYSCALL_STUBS.read().unwrap().sol_memcpy(dst, src, n);
-    }
-}
-
-pub(crate) fn sol_memmove(dst: *mut u8, src: *const u8, n: usize) {
-    unsafe {
-        SYSCALL_STUBS.read().unwrap().sol_memmove(dst, src, n);
-    }
-}
-
-pub(crate) fn sol_memcmp(s1: *const u8, s2: *const u8, n: usize, result: *mut i32) {
-    unsafe {
-        SYSCALL_STUBS.read().unwrap().sol_memcmp(s1, s2, n, result);
-    }
-}
-
-pub(crate) fn sol_memset(s: *mut u8, c: u8, n: usize) {
-    unsafe {
-        SYSCALL_STUBS.read().unwrap().sol_memset(s, c, n);
-    }
-}
-
 pub(crate) fn sol_get_return_data() -> Option<(Pubkey, Vec<u8>)> {
     SYSCALL_STUBS.read().unwrap().sol_get_return_data()
 }
@@ -258,41 +216,4 @@ pub(crate) fn sol_get_epoch_rewards_sysvar(var_addr: *mut u8) -> u64 {
         .read()
         .unwrap()
         .sol_get_epoch_rewards_sysvar(var_addr)
-}
-
-/// Check that two regions do not overlap.
-///
-/// Hidden to share with bpf_loader without being part of the API surface.
-#[doc(hidden)]
-pub fn is_nonoverlapping<N>(src: N, src_len: N, dst: N, dst_len: N) -> bool
-where
-    N: Ord + num_traits::SaturatingSub,
-{
-    // If the absolute distance between the ptrs is at least as big as the size of the other,
-    // they do not overlap.
-    if src > dst {
-        src.saturating_sub(&dst) >= dst_len
-    } else {
-        dst.saturating_sub(&src) >= src_len
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_is_nonoverlapping() {
-        for dst in 0..8 {
-            assert!(is_nonoverlapping(10, 3, dst, 3));
-        }
-        for dst in 8..13 {
-            assert!(!is_nonoverlapping(10, 3, dst, 3));
-        }
-        for dst in 13..20 {
-            assert!(is_nonoverlapping(10, 3, dst, 3));
-        }
-        assert!(is_nonoverlapping::<u8>(255, 3, 254, 1));
-        assert!(!is_nonoverlapping::<u8>(255, 2, 254, 3));
-    }
 }

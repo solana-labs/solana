@@ -2,6 +2,11 @@
 pub use solana_define_syscall::sys_hash;
 #[deprecated(
     since = "2.1.0",
+    note = "Use `solana_program_memory::syscalls` instead"
+)]
+pub use solana_program_memory::syscalls::{sol_memcmp_, sol_memcpy_, sol_memmove_, sol_memset_};
+#[deprecated(
+    since = "2.1.0",
     note = "Use `solana_secp256k1_recover::sol_secp256k1_recover` instead"
 )]
 pub use solana_secp256k1_recover::sol_secp256k1_recover;
@@ -22,10 +27,6 @@ define_syscall!(fn sol_try_find_program_address(seeds_addr: *const u8, seeds_len
 define_syscall!(fn sol_sha256(vals: *const u8, val_len: u64, hash_result: *mut u8) -> u64);
 define_syscall!(fn sol_keccak256(vals: *const u8, val_len: u64, hash_result: *mut u8) -> u64);
 define_syscall!(fn sol_blake3(vals: *const u8, val_len: u64, hash_result: *mut u8) -> u64);
-define_syscall!(fn sol_memcpy_(dst: *mut u8, src: *const u8, n: u64));
-define_syscall!(fn sol_memmove_(dst: *mut u8, src: *const u8, n: u64));
-define_syscall!(fn sol_memcmp_(s1: *const u8, s2: *const u8, n: u64, result: *mut i32));
-define_syscall!(fn sol_memset_(s: *mut u8, c: u8, n: u64));
 define_syscall!(fn sol_invoke_signed_c(instruction_addr: *const u8, account_infos_addr: *const u8, account_infos_len: u64, signers_seeds_addr: *const u8, signers_seeds_len: u64) -> u64);
 define_syscall!(fn sol_invoke_signed_rust(instruction_addr: *const u8, account_infos_addr: *const u8, account_infos_len: u64, signers_seeds_addr: *const u8, signers_seeds_len: u64) -> u64);
 define_syscall!(fn sol_set_return_data(data: *const u8, length: u64));

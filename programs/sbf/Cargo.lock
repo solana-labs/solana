@@ -4633,6 +4633,7 @@ dependencies = [
  "solana-log-collector",
  "solana-measure",
  "solana-poseidon",
+ "solana-program-memory",
  "solana-program-runtime",
  "solana-sdk",
  "solana-timings",
@@ -5308,12 +5309,21 @@ dependencies = [
  "solana-atomic-u64",
  "solana-decode-error",
  "solana-define-syscall",
+ "solana-program-memory",
  "solana-sanitize",
  "solana-sdk-macro",
  "solana-secp256k1-recover",
  "solana-short-vec",
  "thiserror",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "solana-program-memory"
+version = "2.1.0"
+dependencies = [
+ "num-traits",
+ "solana-define-syscall",
 ]
 
 [[package]]
@@ -6149,6 +6159,7 @@ dependencies = [
  "solana-bn254",
  "solana-decode-error",
  "solana-program",
+ "solana-program-memory",
  "solana-sanitize",
  "solana-sdk-macro",
  "solana-secp256k1-recover",

@@ -20,6 +20,7 @@ use {
     solana_compute_budget::compute_budget::ComputeBudget,
     solana_log_collector::{ic_logger_msg, ic_msg},
     solana_poseidon as poseidon,
+    solana_program_memory::is_nonoverlapping,
     solana_program_runtime::{invoke_context::InvokeContext, stable_log},
     solana_rbpf::{
         declare_builtin_function,
@@ -48,7 +49,6 @@ use {
         keccak, native_loader,
         precompiles::is_precompile,
         program::MAX_RETURN_DATA,
-        program_stubs::is_nonoverlapping,
         pubkey::{Pubkey, PubkeyError, MAX_SEEDS, MAX_SEED_LEN, PUBKEY_BYTES},
         secp256k1_recover::{
             Secp256k1RecoverError, SECP256K1_PUBLIC_KEY_LENGTH, SECP256K1_SIGNATURE_LENGTH,
