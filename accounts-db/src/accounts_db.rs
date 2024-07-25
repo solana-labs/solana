@@ -3204,7 +3204,7 @@ impl AccountsDb {
         self.report_store_stats();
 
         let mut key_timings = CleanKeyTimings::default();
-        let (mut pubkeys, min_dirty_slot) = self.construct_candidate_clean_keys(
+        let (mut candidates, min_dirty_slot) = self.construct_candidate_clean_keys(
             max_clean_root_inclusive,
             is_startup,
             last_full_snapshot_slot,
@@ -3214,14 +3214,14 @@ impl AccountsDb {
 
         let mut sort = Measure::start("sort");
         if is_startup {
-            pubkeys.par_sort_unstable();
+            candidates.par_sort_unstable();
         } else {
             self.thread_pool_clean
-                .install(|| pubkeys.par_sort_unstable());
+                .install(|| candidates.par_sort_unstable());
         }
         sort.stop();
 
-        let total_keys_count = pubkeys.len();
+        let num_candidates = candidates.len();
         let mut accounts_scan = Measure::start("accounts_scan");
         let uncleaned_roots = self.accounts_index.clone_uncleaned_roots();
         let found_not_zero_accum = AtomicU64::new(0);
@@ -3232,9 +3232,9 @@ impl AccountsDb {
         // parallel scan the index.
         let (mut purges_zero_lamports, purges_old_accounts) = {
             let do_clean_scan = || {
-                pubkeys
+                candidates
                     .par_chunks(4096)
-                    .map(|pubkeys: &[Pubkey]| {
+                    .map(|candidates: &[Pubkey]| {
                         let mut purges_zero_lamports = HashMap::new();
                         let mut purges_old_accounts = Vec::new();
                         let mut found_not_zero = 0;
@@ -3242,10 +3242,10 @@ impl AccountsDb {
                         let mut missing = 0;
                         let mut useful = 0;
                         self.accounts_index.scan(
-                            pubkeys.iter(),
-                            |pubkey, slots_refs, _entry| {
+                            candidates.iter(),
+                            |candidate, slot_list_and_ref_count, _entry| {
                                 let mut useless = true;
-                                if let Some((slot_list, ref_count)) = slots_refs {
+                                if let Some((slot_list, ref_count)) = slot_list_and_ref_count {
                                     // find the highest rooted slot in the slot list
                                     let index_in_slot_list = self.accounts_index.latest_slot(
                                         None,
@@ -3263,7 +3263,7 @@ impl AccountsDb {
                                                 // the latest one is zero lamports. we may be able to purge it.
                                                 // so, add to purges_zero_lamports
                                                 purges_zero_lamports.insert(
-                                                    *pubkey,
+                                                    *candidate,
                                                     (
                                                         // add all the rooted entries that contain this pubkey. we know the highest rooted entry is zero lamports
                                                         self.accounts_index.get_rooted_entries(
@@ -3284,7 +3284,7 @@ impl AccountsDb {
                                                 {
                                                     assert!(slot <= &max_clean_root_inclusive);
                                                 }
-                                                purges_old_accounts.push(*pubkey);
+                                                purges_old_accounts.push(*candidate);
                                                 useless = false;
                                             }
                                         }
@@ -3297,7 +3297,7 @@ impl AccountsDb {
                                             // touched in must be unrooted.
                                             not_found_on_fork += 1;
                                             useless = false;
-                                            purges_old_accounts.push(*pubkey);
+                                            purges_old_accounts.push(*candidate);
                                         }
                                     }
                                 } else {
@@ -3319,11 +3319,11 @@ impl AccountsDb {
                     })
                     .reduce(
                         || (HashMap::new(), Vec::new()),
-                        |mut m1, m2| {
+                        |mut a, b| {
                             // Collapse down the hashmaps/vecs into one.
-                            m1.0.extend(m2.0);
-                            m1.1.extend(m2.1);
-                            m1
+                            a.0.extend(b.0);
+                            a.1.extend(b.1);
+                            a
                         },
                     )
             };
@@ -3352,13 +3352,13 @@ impl AccountsDb {
         // Calculate store counts as if everything was purged
         // Then purge if we can
         let mut store_counts: HashMap<Slot, (usize, HashSet<Pubkey>)> = HashMap::new();
-        for (key, (account_infos, ref_count)) in purges_zero_lamports.iter_mut() {
-            if purged_account_slots.contains_key(key) {
-                *ref_count = self.accounts_index.ref_count_from_storage(key);
+        for (pubkey, (slot_list, ref_count)) in purges_zero_lamports.iter_mut() {
+            if purged_account_slots.contains_key(pubkey) {
+                *ref_count = self.accounts_index.ref_count_from_storage(pubkey);
             }
-            account_infos.retain(|(slot, account_info)| {
+            slot_list.retain(|(slot, account_info)| {
                 let was_slot_purged = purged_account_slots
-                    .get(key)
+                    .get(pubkey)
                     .map(|slots_removed| slots_removed.contains(slot))
                     .unwrap_or(false);
                 if was_slot_purged {
@@ -3377,14 +3377,14 @@ impl AccountsDb {
                 }
                 if let Some(store_count) = store_counts.get_mut(slot) {
                     store_count.0 -= 1;
-                    store_count.1.insert(*key);
+                    store_count.1.insert(*pubkey);
                 } else {
                     let mut key_set = HashSet::new();
-                    key_set.insert(*key);
+                    key_set.insert(*pubkey);
                     assert!(
                         !account_info.is_cached(),
                         "The Accounts Cache must be flushed first for this account info. pubkey: {}, slot: {}",
-                        *key,
+                        *pubkey,
                         *slot
                     );
                     let count = self
@@ -3486,7 +3486,7 @@ impl AccountsDb {
             ("dirty_pubkeys_count", key_timings.dirty_pubkeys_count, i64),
             ("sort_us", sort.as_us(), i64),
             ("useful_keys", useful_accum.load(Ordering::Relaxed), i64),
-            ("total_keys_count", total_keys_count, i64),
+            ("total_keys_count", num_candidates, i64),
             (
                 "scan_found_not_zero",
                 found_not_zero_accum.load(Ordering::Relaxed),
