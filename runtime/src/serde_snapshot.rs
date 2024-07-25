@@ -33,7 +33,7 @@ use {
     solana_measure::measure::Measure,
     solana_sdk::{
         clock::{Epoch, Slot, UnixTimestamp},
-        deserialize_utils::{default_on_eof, ignore_eof_error},
+        deserialize_utils::default_on_eof,
         epoch_schedule::EpochSchedule,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
         genesis_config::GenesisConfig,
@@ -382,6 +382,40 @@ where
     deserialize_from::<_, _>(stream)
 }
 
+/// Extra fields that are deserialized from the end of snapshots.
+///
+/// Note that this struct's fields should stay synced with the fields in
+/// ExtraFieldsToSerialize with the exception that new "extra fields" should be
+/// added to this struct a minor release before they are added to the serialize
+/// struct.
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+struct ExtraFieldsToDeserialize {
+    #[serde(deserialize_with = "default_on_eof")]
+    lamports_per_signature: u64,
+    #[serde(deserialize_with = "default_on_eof")]
+    incremental_snapshot_persistence: Option<BankIncrementalSnapshotPersistence>,
+    #[serde(deserialize_with = "default_on_eof")]
+    epoch_accounts_hash: Option<Hash>,
+    #[serde(deserialize_with = "default_on_eof")]
+    versioned_epoch_stakes: HashMap<u64, VersionedEpochStakes>,
+}
+
+/// Extra fields that are serialized at the end of snapshots.
+///
+/// Note that this struct's fields should stay synced with the fields in
+/// ExtraFieldsToDeserialize with the exception that new "extra fields" should
+/// be added to the deserialize struct a minor release before they are added to
+/// this one.
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+#[derive(Debug, Serialize, PartialEq)]
+pub struct ExtraFieldsToSerialize<'a> {
+    pub lamports_per_signature: u64,
+    pub incremental_snapshot_persistence: Option<&'a BankIncrementalSnapshotPersistence>,
+    pub epoch_accounts_hash: Option<EpochAccountsHash>,
+    // (v2.1) versioned_epoch_stakes
+}
+
 fn deserialize_bank_fields<R>(
     mut stream: &mut BufReader<R>,
 ) -> Result<
@@ -397,24 +431,26 @@ where
     let mut bank_fields: BankFieldsToDeserialize =
         deserialize_from::<_, DeserializableVersionedBank>(&mut stream)?.into();
     let accounts_db_fields = deserialize_accounts_db_fields(stream)?;
+    let extra_fields = deserialize_from(&mut stream)?;
+
     // Process extra fields
-    let lamports_per_signature = ignore_eof_error(deserialize_from(&mut stream))?;
+    let ExtraFieldsToDeserialize {
+        lamports_per_signature,
+        incremental_snapshot_persistence,
+        epoch_accounts_hash,
+        versioned_epoch_stakes,
+    } = extra_fields;
+
     bank_fields.fee_rate_governor = bank_fields
         .fee_rate_governor
         .clone_with_lamports_per_signature(lamports_per_signature);
-
-    let incremental_snapshot_persistence = ignore_eof_error(deserialize_from(&mut stream))?;
     bank_fields.incremental_snapshot_persistence = incremental_snapshot_persistence;
-
-    let epoch_accounts_hash = ignore_eof_error(deserialize_from(&mut stream))?;
     bank_fields.epoch_accounts_hash = epoch_accounts_hash;
 
     // If we deserialize the new epoch stakes, add all of the entries into the
     // other deserialized map which could still have old epoch stakes entries
-    let new_epoch_stakes: HashMap<u64, VersionedEpochStakes> =
-        ignore_eof_error(deserialize_from(&mut stream))?;
     bank_fields.epoch_stakes.extend(
-        new_epoch_stakes
+        versioned_epoch_stakes
             .into_iter()
             .map(|(epoch, versioned_epoch_stakes)| (epoch, versioned_epoch_stakes.into())),
     );
@@ -585,8 +621,7 @@ pub fn serialize_bank_snapshot_into<W>(
     accounts_delta_hash: AccountsDeltaHash,
     accounts_hash: AccountsHash,
     account_storage_entries: &[Vec<Arc<AccountStorageEntry>>],
-    incremental_snapshot_persistence: Option<&BankIncrementalSnapshotPersistence>,
-    epoch_accounts_hash: Option<EpochAccountsHash>,
+    extra_fields: ExtraFieldsToSerialize,
     write_version: StoredMetaWriteVersion,
 ) -> Result<(), Error>
 where
@@ -603,8 +638,7 @@ where
         accounts_delta_hash,
         accounts_hash,
         account_storage_entries,
-        incremental_snapshot_persistence,
-        epoch_accounts_hash,
+        extra_fields,
         write_version,
     )
 }
@@ -617,15 +651,13 @@ pub fn serialize_bank_snapshot_with<S>(
     accounts_delta_hash: AccountsDeltaHash,
     accounts_hash: AccountsHash,
     account_storage_entries: &[Vec<Arc<AccountStorageEntry>>],
-    incremental_snapshot_persistence: Option<&BankIncrementalSnapshotPersistence>,
-    epoch_accounts_hash: Option<EpochAccountsHash>,
+    extra_fields: ExtraFieldsToSerialize,
     write_version: StoredMetaWriteVersion,
 ) -> Result<S::Ok, S::Error>
 where
     S: serde::Serializer,
 {
     let slot = bank_fields.slot;
-    let lamports_per_signature = bank_fields.fee_rate_governor.lamports_per_signature;
     let serializable_bank = SerializableVersionedBank::from(bank_fields);
     let serializable_accounts_db = SerializableAccountsDb::<'_> {
         slot,
@@ -635,15 +667,7 @@ where
         accounts_hash,
         write_version,
     };
-
-    (
-        serializable_bank,
-        serializable_accounts_db,
-        lamports_per_signature,
-        incremental_snapshot_persistence,
-        epoch_accounts_hash,
-    )
-        .serialize(serializer)
+    (serializable_bank, serializable_accounts_db, extra_fields).serialize(serializer)
 }
 
 #[cfg(test)]

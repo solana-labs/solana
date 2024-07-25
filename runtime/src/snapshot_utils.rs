@@ -1,7 +1,9 @@
 use {
     crate::{
         bank::{BankFieldsToSerialize, BankSlotDelta},
-        serde_snapshot::{self, BankIncrementalSnapshotPersistence, SnapshotStreams},
+        serde_snapshot::{
+            self, BankIncrementalSnapshotPersistence, ExtraFieldsToSerialize, SnapshotStreams,
+        },
         snapshot_archive_info::{
             FullSnapshotArchiveInfo, IncrementalSnapshotArchiveInfo, SnapshotArchiveInfo,
             SnapshotArchiveInfoGetter,
@@ -875,6 +877,11 @@ fn serialize_snapshot(
         .map_err(AddBankSnapshotError::HardLinkStorages)?);
 
         let bank_snapshot_serializer = move |stream: &mut BufWriter<fs::File>| -> Result<()> {
+            let extra_fields = ExtraFieldsToSerialize {
+                lamports_per_signature: bank_fields.fee_rate_governor.lamports_per_signature,
+                incremental_snapshot_persistence: bank_incremental_snapshot_persistence,
+                epoch_accounts_hash,
+            };
             serde_snapshot::serialize_bank_snapshot_into(
                 stream,
                 bank_fields,
@@ -882,8 +889,7 @@ fn serialize_snapshot(
                 accounts_delta_hash,
                 accounts_hash,
                 &get_storages_to_serialize(snapshot_storages),
-                bank_incremental_snapshot_persistence,
-                epoch_accounts_hash,
+                extra_fields,
                 write_version,
             )?;
             Ok(())
