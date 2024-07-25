@@ -1,10 +1,5 @@
-#![feature(test)]
-#![allow(clippy::arithmetic_side_effects)]
-
-extern crate test;
-
 use {
-    criterion::{criterion_group, criterion_main, Criterion, Throughput},
+    criterion::{black_box, criterion_group, criterion_main, Criterion, Throughput},
     itertools::iproduct,
     solana_accounts_db::{accounts::Accounts, accounts_db::AccountsDb},
     solana_sdk::{
@@ -89,7 +84,7 @@ fn bench_entry_lock_accounts(c: &mut Criterion) {
             b.iter(|| {
                 for batch in &transaction_batches {
                     let results =
-                        accounts.lock_accounts(test::black_box(batch.iter()), MAX_TX_ACCOUNT_LOCKS);
+                        accounts.lock_accounts(black_box(batch.iter()), MAX_TX_ACCOUNT_LOCKS);
                     accounts.unlock_accounts(batch.iter().zip(&results));
                 }
             })
