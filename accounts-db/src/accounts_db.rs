@@ -3246,6 +3246,7 @@ impl AccountsDb {
                             |pubkey, slots_refs, _entry| {
                                 let mut useless = true;
                                 if let Some((slot_list, ref_count)) = slots_refs {
+                                    // find the highest rooted slot in the slot list
                                     let index_in_slot_list = self.accounts_index.latest_slot(
                                         None,
                                         slot_list,
@@ -3259,9 +3260,12 @@ impl AccountsDb {
                                                 &slot_list[index_in_slot_list];
                                             if account_info.is_zero_lamport() {
                                                 useless = false;
+                                                // the latest one is zero lamports. we may be able to purge it.
+                                                // so, add to purges_zero_lamports
                                                 purges_zero_lamports.insert(
                                                     *pubkey,
                                                     (
+                                                        // add all the rooted entries that contain this pubkey. we know the highest rooted entry is zero lamports
                                                         self.accounts_index.get_rooted_entries(
                                                             slot_list,
                                                             max_clean_root_inclusive,
@@ -3302,11 +3306,7 @@ impl AccountsDb {
                                 if !useless {
                                     useful += 1;
                                 }
-                                if useless {
-                                    AccountsIndexScanResult::OnlyKeepInMemoryIfDirty
-                                } else {
-                                    AccountsIndexScanResult::KeepInMemory
-                                }
+                                AccountsIndexScanResult::OnlyKeepInMemoryIfDirty
                             },
                             None,
                             false,
