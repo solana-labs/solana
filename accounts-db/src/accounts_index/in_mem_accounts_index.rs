@@ -469,6 +469,9 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
         result
     }
 
+    /// call `user` with a write lock of the slot list.
+    /// Note that whether `user` modifies the slot list or not, the entry in the in-mem index will always
+    /// be marked as dirty. So, callers to this should ideally know they will be modifying the slot list.
     pub fn slot_list_mut<RT>(
         &self,
         pubkey: &Pubkey,
@@ -479,6 +482,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
                 true,
                 entry.map(|entry| {
                     let result = user(&mut entry.slot_list.write().unwrap());
+                    // note that to be safe here, we ALWAYS mark the entry as dirty
                     entry.set_dirty(true);
                     result
                 }),
