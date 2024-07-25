@@ -6293,6 +6293,7 @@ dependencies = [
  "rand 0.8.5",
  "rustls",
  "smallvec",
+ "socket2 0.5.7",
  "solana-measure",
  "solana-metrics",
  "solana-perf",
