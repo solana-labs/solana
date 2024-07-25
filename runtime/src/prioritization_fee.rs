@@ -1,5 +1,5 @@
 use {
-    solana_measure::measure_time,
+    solana_measure::measure_us,
     solana_sdk::{clock::Slot, pubkey::Pubkey, saturating_add_assign},
     std::collections::HashMap,
 };
@@ -166,35 +166,31 @@ impl Default for PrioritizationFee {
 impl PrioritizationFee {
     /// Update self for minimum transaction fee in the block and minimum fee for each writable account.
     pub fn update(&mut self, transaction_fee: u64, writable_accounts: Vec<Pubkey>) {
-        let (_, update_time) = measure_time!(
-            {
-                if !self.is_finalized {
-                    if transaction_fee < self.min_transaction_fee {
-                        self.min_transaction_fee = transaction_fee;
-                    }
-
-                    for write_account in writable_accounts {
-                        self.min_writable_account_fees
-                            .entry(write_account)
-                            .and_modify(|write_lock_fee| {
-                                *write_lock_fee = std::cmp::min(*write_lock_fee, transaction_fee)
-                            })
-                            .or_insert(transaction_fee);
-                    }
-
-                    self.metrics
-                        .accumulate_total_prioritization_fee(transaction_fee);
-                    self.metrics.update_prioritization_fee(transaction_fee);
-                } else {
-                    self.metrics
-                        .increment_attempted_update_on_finalized_fee_count(1);
+        let (_, update_us) = measure_us!({
+            if !self.is_finalized {
+                if transaction_fee < self.min_transaction_fee {
+                    self.min_transaction_fee = transaction_fee;
                 }
-            },
-            "update_time",
-        );
 
-        self.metrics
-            .accumulate_total_update_elapsed_us(update_time.as_us());
+                for write_account in writable_accounts {
+                    self.min_writable_account_fees
+                        .entry(write_account)
+                        .and_modify(|write_lock_fee| {
+                            *write_lock_fee = std::cmp::min(*write_lock_fee, transaction_fee)
+                        })
+                        .or_insert(transaction_fee);
+                }
+
+                self.metrics
+                    .accumulate_total_prioritization_fee(transaction_fee);
+                self.metrics.update_prioritization_fee(transaction_fee);
+            } else {
+                self.metrics
+                    .increment_attempted_update_on_finalized_fee_count(1);
+            }
+        });
+
+        self.metrics.accumulate_total_update_elapsed_us(update_us);
     }
 
     /// Accounts that have minimum fees lesser or equal to the minimum fee in the block are redundant, they are

@@ -33,7 +33,7 @@ use {
     solana_client::connection_cache::ConnectionCache,
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::blockstore_processor::TransactionStatusSender,
-    solana_measure::{measure_time, measure_us},
+    solana_measure::measure_us,
     solana_perf::{data_budget::DataBudget, packet::PACKETS_PER_BATCH},
     solana_poh::poh_recorder::{PohRecorder, TransactionRecorder},
     solana_runtime::{
@@ -676,13 +676,13 @@ impl BankingStage {
         if unprocessed_transaction_storage.should_not_process() {
             return;
         }
-        let (decision, make_decision_time) =
-            measure_time!(decision_maker.make_consume_or_forward_decision());
+        let (decision, make_decision_us) =
+            measure_us!(decision_maker.make_consume_or_forward_decision());
         let metrics_action = slot_metrics_tracker.check_leader_slot_boundary(
             decision.bank_start(),
             Some(unprocessed_transaction_storage),
         );
-        slot_metrics_tracker.increment_make_decision_us(make_decision_time.as_us());
+        slot_metrics_tracker.increment_make_decision_us(make_decision_us);
 
         match decision {
             BufferedPacketsDecision::Consume(bank_start) => {
@@ -691,17 +691,15 @@ impl BankingStage {
                 // packet processing metrics from the next slot towards the metrics
                 // of the previous slot
                 slot_metrics_tracker.apply_action(metrics_action);
-                let (_, consume_buffered_packets_time) = measure_time!(
-                    consumer.consume_buffered_packets(
+                let (_, consume_buffered_packets_us) = measure_us!(consumer
+                    .consume_buffered_packets(
                         &bank_start,
                         unprocessed_transaction_storage,
                         banking_stage_stats,
                         slot_metrics_tracker,
-                    ),
-                    "consume_buffered_packets",
-                );
+                    ));
                 slot_metrics_tracker
-                    .increment_consume_buffered_packets_us(consume_buffered_packets_time.as_us());
+                    .increment_consume_buffered_packets_us(consume_buffered_packets_us);
             }
             BufferedPacketsDecision::Forward => {
                 let ((), forward_us) = measure_us!(forwarder.handle_forwarding(
@@ -750,20 +748,17 @@ impl BankingStage {
             if !unprocessed_transaction_storage.is_empty()
                 || last_metrics_update.elapsed() >= SLOT_BOUNDARY_CHECK_PERIOD
             {
-                let (_, process_buffered_packets_time) = measure_time!(
-                    Self::process_buffered_packets(
-                        decision_maker,
-                        forwarder,
-                        consumer,
-                        &mut unprocessed_transaction_storage,
-                        &banking_stage_stats,
-                        &mut slot_metrics_tracker,
-                        &mut tracer_packet_stats,
-                    ),
-                    "process_buffered_packets",
-                );
+                let (_, process_buffered_packets_us) = measure_us!(Self::process_buffered_packets(
+                    decision_maker,
+                    forwarder,
+                    consumer,
+                    &mut unprocessed_transaction_storage,
+                    &banking_stage_stats,
+                    &mut slot_metrics_tracker,
+                    &mut tracer_packet_stats,
+                ));
                 slot_metrics_tracker
-                    .increment_process_buffered_packets_us(process_buffered_packets_time.as_us());
+                    .increment_process_buffered_packets_us(process_buffered_packets_us);
                 last_metrics_update = Instant::now();
             }
 

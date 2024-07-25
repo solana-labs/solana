@@ -1355,74 +1355,60 @@ impl Bank {
     ) {
         let epoch = self.epoch();
         let slot = self.slot();
-        let (thread_pool, thread_pool_time) = measure_time!(
-            ThreadPoolBuilder::new()
-                .thread_name(|i| format!("solBnkNewEpch{i:02}"))
-                .build()
-                .expect("new rayon threadpool"),
-            "thread_pool_creation",
-        );
+        let (thread_pool, thread_pool_time_us) = measure_us!(ThreadPoolBuilder::new()
+            .thread_name(|i| format!("solBnkNewEpch{i:02}"))
+            .build()
+            .expect("new rayon threadpool"));
 
-        let (_, apply_feature_activations_time) = measure_time!(
-            self.apply_feature_activations(ApplyFeatureActivationsCaller::NewFromParent, false),
-            "apply_feature_activation",
+        let (_, apply_feature_activations_time_us) = measure_us!(
+            self.apply_feature_activations(ApplyFeatureActivationsCaller::NewFromParent, false)
         );
 
         // Add new entry to stakes.stake_history, set appropriate epoch and
         // update vote accounts with warmed up stakes before saving a
         // snapshot of stakes in epoch stakes
-        let (_, activate_epoch_time) = measure_time!(
-            self.stakes_cache.activate_epoch(
-                epoch,
-                &thread_pool,
-                self.new_warmup_cooldown_rate_epoch()
-            ),
-            "activate_epoch",
-        );
+        let (_, activate_epoch_time_us) = measure_us!(self.stakes_cache.activate_epoch(
+            epoch,
+            &thread_pool,
+            self.new_warmup_cooldown_rate_epoch()
+        ));
 
         // Save a snapshot of stakes for use in consensus and stake weighted networking
         let leader_schedule_epoch = self.epoch_schedule.get_leader_schedule_epoch(slot);
-        let (_, update_epoch_stakes_time) = measure_time!(
-            self.update_epoch_stakes(leader_schedule_epoch),
-            "update_epoch_stakes",
-        );
+        let (_, update_epoch_stakes_time_us) =
+            measure_us!(self.update_epoch_stakes(leader_schedule_epoch));
 
         let mut rewards_metrics = RewardsMetrics::default();
         // After saving a snapshot of stakes, apply stake rewards and commission
-        let (_, update_rewards_with_thread_pool_time) = measure_time!(
-            {
-                if self.is_partitioned_rewards_code_enabled() {
-                    self.begin_partitioned_rewards(
-                        reward_calc_tracer,
-                        &thread_pool,
-                        parent_epoch,
-                        parent_slot,
-                        parent_height,
-                        &mut rewards_metrics,
-                    );
-                } else {
-                    self.update_rewards_with_thread_pool(
-                        parent_epoch,
-                        reward_calc_tracer,
-                        &thread_pool,
-                        &mut rewards_metrics,
-                    )
-                }
-            },
-            "update_rewards_with_thread_pool",
-        );
+        let (_, update_rewards_with_thread_pool_time_us) =
+            measure_us!(if self.is_partitioned_rewards_code_enabled() {
+                self.begin_partitioned_rewards(
+                    reward_calc_tracer,
+                    &thread_pool,
+                    parent_epoch,
+                    parent_slot,
+                    parent_height,
+                    &mut rewards_metrics,
+                );
+            } else {
+                self.update_rewards_with_thread_pool(
+                    parent_epoch,
+                    reward_calc_tracer,
+                    &thread_pool,
+                    &mut rewards_metrics,
+                )
+            });
 
         report_new_epoch_metrics(
             epoch,
             slot,
             parent_slot,
             NewEpochTimings {
-                thread_pool_time_us: thread_pool_time.as_us(),
-                apply_feature_activations_time_us: apply_feature_activations_time.as_us(),
-                activate_epoch_time_us: activate_epoch_time.as_us(),
-                update_epoch_stakes_time_us: update_epoch_stakes_time.as_us(),
-                update_rewards_with_thread_pool_time_us: update_rewards_with_thread_pool_time
-                    .as_us(),
+                thread_pool_time_us,
+                apply_feature_activations_time_us,
+                activate_epoch_time_us,
+                update_epoch_stakes_time_us,
+                update_rewards_with_thread_pool_time_us,
             },
             rewards_metrics,
         );
@@ -2218,7 +2204,7 @@ impl Bank {
                 solana_stake_program::get_minimum_delegation(&self.feature_set)
                     .max(LAMPORTS_PER_SOL);
 
-            let (stake_delegations, filter_timer) = measure_time!(stakes
+            let (stake_delegations, filter_time_us) = measure_us!(stakes
                 .stake_delegations()
                 .iter()
                 .filter(|(_stake_pubkey, cached_stake_account)| {
@@ -2228,7 +2214,7 @@ impl Bank {
 
             datapoint_info!(
                 "stake_account_filter_time",
-                ("filter_time_us", filter_timer.as_us(), i64),
+                ("filter_time_us", filter_time_us, i64),
                 ("num_stake_delegations_before", num_stake_delegations, i64),
                 ("num_stake_delegations_after", stake_delegations.len(), i64)
             );
@@ -2409,13 +2395,13 @@ impl Bank {
                 invalid_vote_keys,
                 vote_accounts_cache_miss_count,
             },
-            measure,
-        ) = measure_time!({
+            load_vote_and_stake_accounts_us,
+        ) = measure_us!({
             self._load_vote_and_stake_accounts(thread_pool, reward_calc_tracer.as_ref())
         });
         metrics
             .load_vote_and_stake_accounts_us
-            .fetch_add(measure.as_us(), Relaxed);
+            .fetch_add(load_vote_and_stake_accounts_us, Relaxed);
         metrics.vote_accounts_cache_miss_count += vote_accounts_cache_miss_count;
         self.stakes_cache
             .handle_invalid_keys(invalid_vote_keys, self.slot());
@@ -2431,7 +2417,7 @@ impl Bank {
         metrics: &RewardsMetrics,
     ) -> Option<PointValue> {
         let new_warmup_cooldown_rate_epoch = self.new_warmup_cooldown_rate_epoch();
-        let (points, measure) = measure_time!(thread_pool.install(|| {
+        let (points, calculate_points_us) = measure_us!(thread_pool.install(|| {
             vote_with_stake_delegations_map
                 .par_iter()
                 .map(|entry| {
@@ -2458,7 +2444,7 @@ impl Bank {
         }));
         metrics
             .calculate_points_us
-            .fetch_add(measure.as_us(), Relaxed);
+            .fetch_add(calculate_points_us, Relaxed);
 
         (points > 0).then_some(PointValue { rewards, points })
     }
@@ -2500,7 +2486,7 @@ impl Bank {
             },
         );
 
-        let (stake_rewards, measure) = measure_time!(thread_pool.install(|| {
+        let (stake_rewards, redeem_rewards_us) = measure_us!(thread_pool.install(|| {
             stake_delegation_iterator
                 .filter_map(|(vote_pubkey, vote_state, (stake_pubkey, stake_account))| {
                     // curry closure to add the contextual stake_pubkey
@@ -2556,7 +2542,7 @@ impl Bank {
                 })
                 .collect()
         }));
-        metrics.redeem_rewards_us += measure.as_us();
+        metrics.redeem_rewards_us += redeem_rewards_us;
         (vote_account_rewards, stake_rewards)
     }
 
@@ -2591,7 +2577,7 @@ impl Bank {
         vote_account_rewards: VoteRewards,
         metrics: &RewardsMetrics,
     ) -> Vec<(Pubkey, RewardInfo)> {
-        let (vote_rewards, measure) = measure_time!(vote_account_rewards
+        let (vote_rewards, store_vote_accounts_us) = measure_us!(vote_account_rewards
             .into_iter()
             .filter_map(
                 |(
@@ -2627,7 +2613,7 @@ impl Bank {
 
         metrics
             .store_vote_accounts_us
-            .fetch_add(measure.as_us(), Relaxed);
+            .fetch_add(store_vote_accounts_us, Relaxed);
         vote_rewards
     }
 
@@ -4375,13 +4361,13 @@ impl Bank {
                 .test_skip_rewrites_but_include_in_bank_hash;
         let mut skipped_rewrites = Vec::default();
         for (pubkey, account, _loaded_slot) in accounts.iter_mut() {
-            let (rent_collected_info, measure) = measure_time!(collect_rent_from_account(
+            let (rent_collected_info, collect_rent_us) = measure_us!(collect_rent_from_account(
                 &self.feature_set,
                 &self.rent_collector,
                 pubkey,
                 account
             ));
-            time_collecting_rent_us += measure.as_us();
+            time_collecting_rent_us += collect_rent_us;
 
             // only store accounts where we collected rent
             // but get the hash for all these accounts even if collected rent is 0 (= not updated).
@@ -4434,9 +4420,9 @@ impl Bank {
         if !accounts_to_store.is_empty() {
             // TODO: Maybe do not call `store_accounts()` here.  Instead return `accounts_to_store`
             // and have `collect_rent_in_partition()` perform all the stores.
-            let (_, measure) =
-                measure_time!(self.store_accounts((self.slot(), &accounts_to_store[..],)));
-            time_storing_accounts_us += measure.as_us();
+            let (_, store_accounts_us) =
+                measure_us!(self.store_accounts((self.slot(), &accounts_to_store[..])));
+            time_storing_accounts_us += store_accounts_us;
         }
 
         CollectRentFromAccountsInfo {
@@ -5476,7 +5462,7 @@ impl Bank {
     /// If the epoch accounts hash should be included in this Bank, then fetch it.  If the EAH
     /// calculation has not completed yet, this fn will block until it does complete.
     fn wait_get_epoch_accounts_hash(&self) -> EpochAccountsHash {
-        let (epoch_accounts_hash, measure) = measure_time!(self
+        let (epoch_accounts_hash, waiting_time_us) = measure_us!(self
             .rc
             .accounts
             .accounts_db
@@ -5485,8 +5471,8 @@ impl Bank {
 
         datapoint_info!(
             "bank-wait_get_epoch_accounts_hash",
-            ("slot", self.slot() as i64, i64),
-            ("waiting-time-us", measure.as_us() as i64, i64),
+            ("slot", self.slot(), i64),
+            ("waiting-time-us", waiting_time_us, i64),
         );
         epoch_accounts_hash
     }
@@ -6608,7 +6594,7 @@ impl Bank {
             return None;
         }
 
-        let (epoch_accounts_hash, measure) = measure_time!(self
+        let (epoch_accounts_hash, waiting_time_us) = measure_us!(self
             .rc
             .accounts
             .accounts_db
@@ -6618,7 +6604,7 @@ impl Bank {
         datapoint_info!(
             "bank-get_epoch_accounts_hash_to_serialize",
             ("slot", self.slot(), i64),
-            ("waiting-time-us", measure.as_us(), i64),
+            ("waiting-time-us", waiting_time_us, i64),
         );
         Some(epoch_accounts_hash)
     }

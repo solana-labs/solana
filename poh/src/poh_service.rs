@@ -5,7 +5,7 @@ use {
     crossbeam_channel::Receiver,
     log::*,
     solana_entry::poh::Poh,
-    solana_measure::{measure::Measure, measure_time},
+    solana_measure::{measure::Measure, measure_us},
     solana_sdk::poh_config::PohConfig,
     std::{
         sync::{
@@ -261,9 +261,8 @@ impl PohService {
                         std::mem::take(&mut record.transactions),
                     );
                     // what do we do on failure here? Ignore for now.
-                    let (_send_res, send_record_result_time) =
-                        measure_time!(record.sender.send(res), "send_record_result");
-                    timing.total_send_record_result_us += send_record_result_time.as_us();
+                    let (_send_res, send_record_result_us) = measure_us!(record.sender.send(res));
+                    timing.total_send_record_result_us += send_record_result_us;
                     timing.num_hashes += 1; // note: may have also ticked inside record
 
                     let new_record_result = record_receiver.try_recv();

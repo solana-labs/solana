@@ -27,7 +27,7 @@ use {
     solana_entry::entry::{
         self, create_ticks, Entry, EntrySlice, EntryType, EntryVerificationStatus, VerifyRecyclers,
     },
-    solana_measure::{measure::Measure, measure_time},
+    solana_measure::{measure::Measure, measure_us},
     solana_metrics::datapoint_error,
     solana_rayon_threadlimit::{get_max_thread_count, get_thread_count},
     solana_runtime::{
@@ -187,24 +187,23 @@ pub fn execute_batch(
         ..
     } = tx_results;
 
-    let (check_block_cost_limits_result, check_block_cost_limits_time): (Result<()>, Measure) =
-        measure_time!(if bank
-            .feature_set
-            .is_active(&feature_set::apply_cost_tracker_during_replay::id())
-        {
-            check_block_cost_limits(
-                bank,
-                &loaded_accounts_stats,
-                &execution_results,
-                batch.sanitized_transactions(),
-            )
-        } else {
-            Ok(())
-        });
+    let (check_block_cost_limits_result, check_block_cost_limits_us) = measure_us!(if bank
+        .feature_set
+        .is_active(&feature_set::apply_cost_tracker_during_replay::id())
+    {
+        check_block_cost_limits(
+            bank,
+            &loaded_accounts_stats,
+            &execution_results,
+            batch.sanitized_transactions(),
+        )
+    } else {
+        Ok(())
+    });
 
     timings.saturating_add_in_place(
         ExecuteTimingType::CheckBlockLimitsUs,
-        check_block_cost_limits_time.as_us(),
+        check_block_cost_limits_us,
     );
     check_block_cost_limits_result?;
 
@@ -328,20 +327,15 @@ fn execute_batches_internal(
                 let transaction_count =
                     transaction_batch.batch.sanitized_transactions().len() as u64;
                 let mut timings = ExecuteTimings::default();
-                let (result, execute_batches_time): (Result<()>, Measure) = measure_time!(
-                    {
-                        execute_batch(
-                            transaction_batch,
-                            bank,
-                            transaction_status_sender,
-                            replay_vote_sender,
-                            &mut timings,
-                            log_messages_bytes_limit,
-                            prioritization_fee_cache,
-                        )
-                    },
-                    "execute_batch",
-                );
+                let (result, execute_batches_us) = measure_us!(execute_batch(
+                    transaction_batch,
+                    bank,
+                    transaction_status_sender,
+                    replay_vote_sender,
+                    &mut timings,
+                    log_messages_bytes_limit,
+                    prioritization_fee_cache,
+                ));
 
                 let thread_index = replay_tx_thread_pool.current_thread_index().unwrap();
                 execution_timings_per_thread
@@ -354,14 +348,14 @@ fn execute_batches_internal(
                             total_transactions_executed,
                             execute_timings: total_thread_execute_timings,
                         } = thread_execution_time;
-                        *total_thread_us += execute_batches_time.as_us();
+                        *total_thread_us += execute_batches_us;
                         *total_transactions_executed += transaction_count;
                         total_thread_execute_timings
                             .saturating_add_in_place(ExecuteTimingType::TotalBatchesLen, 1);
                         total_thread_execute_timings.accumulate(&timings);
                     })
                     .or_insert(ThreadExecuteTimings {
-                        total_thread_us: execute_batches_time.as_us(),
+                        total_thread_us: execute_batches_us,
                         total_transactions_executed: transaction_count,
                         execute_timings: timings,
                     });

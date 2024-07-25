@@ -25,7 +25,7 @@ use {
     },
     solana_loader_v4_program::create_program_runtime_environment_v2,
     solana_log_collector::LogCollector,
-    solana_measure::{measure::Measure, measure_time},
+    solana_measure::{measure::Measure, measure_us},
     solana_program_runtime::{
         invoke_context::{EnvironmentConfig, InvokeContext},
         loaded_programs::{
@@ -240,7 +240,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         let mut error_metrics = TransactionErrorMetrics::default();
         let mut execute_timings = ExecuteTimings::default();
 
-        let (validation_results, validate_fees_time) = measure_time!(self.validate_fees(
+        let (validation_results, validate_fees_us) = measure_us!(self.validate_fees(
             callbacks,
             sanitized_txs,
             check_results,
@@ -254,40 +254,41 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
             &mut error_metrics
         ));
 
-        let mut program_cache_time = Measure::start("program_cache");
-        let mut program_accounts_map = Self::filter_executable_program_accounts(
-            callbacks,
-            sanitized_txs,
-            &validation_results,
-            PROGRAM_OWNERS,
-        );
-        for builtin_program in self.builtin_program_ids.read().unwrap().iter() {
-            program_accounts_map.insert(*builtin_program, 0);
-        }
+        let (program_cache_for_tx_batch, program_cache_us) = measure_us!({
+            let mut program_accounts_map = Self::filter_executable_program_accounts(
+                callbacks,
+                sanitized_txs,
+                &validation_results,
+                PROGRAM_OWNERS,
+            );
+            for builtin_program in self.builtin_program_ids.read().unwrap().iter() {
+                program_accounts_map.insert(*builtin_program, 0);
+            }
 
-        let program_cache_for_tx_batch = Rc::new(RefCell::new(self.replenish_program_cache(
-            callbacks,
-            &program_accounts_map,
-            config.check_program_modification_slot,
-            config.limit_to_load_programs,
-        )));
+            let program_cache_for_tx_batch = Rc::new(RefCell::new(self.replenish_program_cache(
+                callbacks,
+                &program_accounts_map,
+                config.check_program_modification_slot,
+                config.limit_to_load_programs,
+            )));
 
-        if program_cache_for_tx_batch.borrow().hit_max_limit {
-            const ERROR: TransactionError = TransactionError::ProgramCacheHitMaxLimit;
-            let loaded_transactions = vec![Err(ERROR); sanitized_txs.len()];
-            let execution_results =
-                vec![TransactionExecutionResult::NotExecuted(ERROR); sanitized_txs.len()];
-            return LoadAndExecuteSanitizedTransactionsOutput {
-                error_metrics,
-                execute_timings,
-                execution_results,
-                loaded_transactions,
-            };
-        }
-        program_cache_time.stop();
+            if program_cache_for_tx_batch.borrow().hit_max_limit {
+                const ERROR: TransactionError = TransactionError::ProgramCacheHitMaxLimit;
+                let loaded_transactions = vec![Err(ERROR); sanitized_txs.len()];
+                let execution_results =
+                    vec![TransactionExecutionResult::NotExecuted(ERROR); sanitized_txs.len()];
+                return LoadAndExecuteSanitizedTransactionsOutput {
+                    error_metrics,
+                    execute_timings,
+                    execution_results,
+                    loaded_transactions,
+                };
+            }
 
-        let mut load_time = Measure::start("accounts_load");
-        let mut loaded_transactions = load_accounts(
+            program_cache_for_tx_batch
+        });
+
+        let (mut loaded_transactions, load_accounts_us) = measure_us!(load_accounts(
             callbacks,
             sanitized_txs,
             validation_results,
@@ -298,47 +299,43 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                 .rent_collector
                 .unwrap_or(&RentCollector::default()),
             &program_cache_for_tx_batch.borrow(),
-        );
-        load_time.stop();
+        ));
 
-        let mut execution_time = Measure::start("execution_time");
+        let (execution_results, execution_us): (Vec<TransactionExecutionResult>, u64) =
+            measure_us!(loaded_transactions
+                .iter_mut()
+                .zip(sanitized_txs.iter())
+                .map(|(load_result, tx)| match load_result {
+                    Err(e) => TransactionExecutionResult::NotExecuted(e.clone()),
+                    Ok(loaded_transaction) => {
+                        let result = self.execute_loaded_transaction(
+                            tx,
+                            loaded_transaction,
+                            &mut execute_timings,
+                            &mut error_metrics,
+                            &mut program_cache_for_tx_batch.borrow_mut(),
+                            environment,
+                            config,
+                        );
 
-        let execution_results: Vec<TransactionExecutionResult> = loaded_transactions
-            .iter_mut()
-            .zip(sanitized_txs.iter())
-            .map(|(load_result, tx)| match load_result {
-                Err(e) => TransactionExecutionResult::NotExecuted(e.clone()),
-                Ok(loaded_transaction) => {
-                    let result = self.execute_loaded_transaction(
-                        tx,
-                        loaded_transaction,
-                        &mut execute_timings,
-                        &mut error_metrics,
-                        &mut program_cache_for_tx_batch.borrow_mut(),
-                        environment,
-                        config,
-                    );
-
-                    if let TransactionExecutionResult::Executed {
-                        details,
-                        programs_modified_by_tx,
-                    } = &result
-                    {
-                        // Update batch specific cache of the loaded programs with the modifications
-                        // made by the transaction, if it executed successfully.
-                        if details.status.is_ok() {
-                            program_cache_for_tx_batch
-                                .borrow_mut()
-                                .merge(programs_modified_by_tx);
+                        if let TransactionExecutionResult::Executed {
+                            details,
+                            programs_modified_by_tx,
+                        } = &result
+                        {
+                            // Update batch specific cache of the loaded programs with the modifications
+                            // made by the transaction, if it executed successfully.
+                            if details.status.is_ok() {
+                                program_cache_for_tx_batch
+                                    .borrow_mut()
+                                    .merge(programs_modified_by_tx);
+                            }
                         }
+
+                        result
                     }
-
-                    result
-                }
-            })
-            .collect();
-
-        execution_time.stop();
+                })
+                .collect());
 
         // Skip eviction when there's no chance this particular tx batch has increased the size of
         // ProgramCache entries. Note that loaded_missing is deliberately defined, so that there's
@@ -359,22 +356,17 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
 
         debug!(
             "load: {}us execute: {}us txs_len={}",
-            load_time.as_us(),
-            execution_time.as_us(),
+            load_accounts_us,
+            execution_us,
             sanitized_txs.len(),
         );
 
-        execute_timings.saturating_add_in_place(
-            ExecuteTimingType::ValidateFeesUs,
-            validate_fees_time.as_us(),
-        );
-        execute_timings.saturating_add_in_place(
-            ExecuteTimingType::ProgramCacheUs,
-            program_cache_time.as_us(),
-        );
-        execute_timings.saturating_add_in_place(ExecuteTimingType::LoadUs, load_time.as_us());
         execute_timings
-            .saturating_add_in_place(ExecuteTimingType::ExecuteUs, execution_time.as_us());
+            .saturating_add_in_place(ExecuteTimingType::ValidateFeesUs, validate_fees_us);
+        execute_timings
+            .saturating_add_in_place(ExecuteTimingType::ProgramCacheUs, program_cache_us);
+        execute_timings.saturating_add_in_place(ExecuteTimingType::LoadUs, load_accounts_us);
+        execute_timings.saturating_add_in_place(ExecuteTimingType::ExecuteUs, execution_us);
 
         LoadAndExecuteSanitizedTransactionsOutput {
             error_metrics,
