@@ -15,8 +15,8 @@ use {
 /// Same as u16, but serialized with 1 to 3 bytes. If the value is above
 /// 0x7f, the top bit is set and the remaining value is stored in the next
 /// bytes. Each byte follows the same pattern until the 3rd byte. The 3rd
-/// byte, if needed, uses all 8 bits to store the last byte of the original
-/// value.
+/// byte may only have the 2 least-significant bits set, otherwise the encoded
+/// value will overflow the u16.
 #[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
 pub struct ShortU16(pub u16);
 
