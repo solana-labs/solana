@@ -37,7 +37,7 @@ pub const INSTRUCTION_DATA_BYTES_COST: u64 = 140 /*bytes per us*/ / COMPUTE_UNIT
 // Number of compute units for each built-in programs
 lazy_static! {
     /// Number of compute units for each built-in programs
-    pub static ref BUILT_IN_INSTRUCTION_COSTS: HashMap<Pubkey, u64> = [
+    pub static ref BUILTIN_INSTRUCTION_COSTS: HashMap<Pubkey, u64> = [
         (solana_stake_program::id(), solana_stake_program::stake_instruction::DEFAULT_COMPUTE_UNITS),
         (solana_config_program::id(), solana_config_program::config_processor::DEFAULT_COMPUTE_UNITS),
         (solana_vote_program::id(), solana_vote_program::vote_processor::DEFAULT_COMPUTE_UNITS),

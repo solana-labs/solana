@@ -160,7 +160,7 @@ impl CostModel {
 
         for (program_id, instruction) in transaction.message().program_instructions_iter() {
             let ix_execution_cost =
-                if let Some(builtin_cost) = BUILT_IN_INSTRUCTION_COSTS.get(program_id) {
+                if let Some(builtin_cost) = BUILTIN_INSTRUCTION_COSTS.get(program_id) {
                     *builtin_cost
                 } else {
                     has_user_space_instructions = true;
@@ -370,7 +370,7 @@ mod tests {
         );
 
         // expected cost for one system transfer instructions
-        let expected_execution_cost = BUILT_IN_INSTRUCTION_COSTS
+        let expected_execution_cost = BUILTIN_INSTRUCTION_COSTS
             .get(&system_program::id())
             .unwrap();
 
@@ -538,7 +538,7 @@ mod tests {
         debug!("many transfer transaction {:?}", tx);
 
         // expected cost for two system transfer instructions
-        let program_cost = BUILT_IN_INSTRUCTION_COSTS
+        let program_cost = BUILTIN_INSTRUCTION_COSTS
             .get(&system_program::id())
             .unwrap();
         let expected_cost = program_cost * 2;
@@ -622,7 +622,7 @@ mod tests {
         ));
 
         let expected_account_cost = WRITE_LOCK_UNITS * 2;
-        let expected_execution_cost = BUILT_IN_INSTRUCTION_COSTS
+        let expected_execution_cost = BUILTIN_INSTRUCTION_COSTS
             .get(&system_program::id())
             .unwrap();
         const DEFAULT_PAGE_COST: u64 = 8;
@@ -660,10 +660,10 @@ mod tests {
 
         let feature_set = FeatureSet::all_enabled();
         let expected_account_cost = WRITE_LOCK_UNITS * 2;
-        let expected_execution_cost = BUILT_IN_INSTRUCTION_COSTS
+        let expected_execution_cost = BUILTIN_INSTRUCTION_COSTS
             .get(&system_program::id())
             .unwrap()
-            + BUILT_IN_INSTRUCTION_COSTS
+            + BUILTIN_INSTRUCTION_COSTS
                 .get(&compute_budget::id())
                 .unwrap();
         let expected_loaded_accounts_data_size_cost = (data_limit as u64) / (32 * 1024) * 8;
@@ -693,7 +693,7 @@ mod tests {
                 start_hash,
             ));
         // transaction has one builtin instruction, and one bpf instruction, no ComputeBudget::compute_unit_limit
-        let expected_builtin_cost = *BUILT_IN_INSTRUCTION_COSTS
+        let expected_builtin_cost = *BUILTIN_INSTRUCTION_COSTS
             .get(&solana_system_program::id())
             .unwrap();
         let expected_bpf_cost = DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT;
@@ -722,10 +722,10 @@ mod tests {
                 start_hash,
             ));
         // transaction has one builtin instruction, and one ComputeBudget::compute_unit_limit
-        let expected_cost = *BUILT_IN_INSTRUCTION_COSTS
+        let expected_cost = *BUILTIN_INSTRUCTION_COSTS
             .get(&solana_system_program::id())
             .unwrap()
-            + BUILT_IN_INSTRUCTION_COSTS
+            + BUILTIN_INSTRUCTION_COSTS
                 .get(&compute_budget::id())
                 .unwrap();
 

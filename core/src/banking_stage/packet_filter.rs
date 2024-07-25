@@ -1,6 +1,6 @@
 use {
     super::immutable_deserialized_packet::ImmutableDeserializedPacket,
-    solana_cost_model::block_cost_limits::BUILT_IN_INSTRUCTION_COSTS,
+    solana_cost_model::block_cost_limits::BUILTIN_INSTRUCTION_COSTS,
     solana_sdk::{ed25519_program, saturating_add_assign, secp256k1_program},
     thiserror::Error,
 };
@@ -22,7 +22,7 @@ impl ImmutableDeserializedPacket {
     pub fn check_insufficent_compute_unit_limit(&self) -> Result<(), PacketFilterFailure> {
         let mut static_builtin_cost_sum: u64 = 0;
         for (program_id, _) in self.transaction().get_message().program_instructions_iter() {
-            if let Some(ix_cost) = BUILT_IN_INSTRUCTION_COSTS.get(program_id) {
+            if let Some(ix_cost) = BUILTIN_INSTRUCTION_COSTS.get(program_id) {
                 saturating_add_assign!(static_builtin_cost_sum, *ix_cost);
             }
         }
