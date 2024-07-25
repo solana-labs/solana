@@ -58,7 +58,6 @@ use {
     },
     byteorder::{ByteOrder, LittleEndian},
     dashmap::{DashMap, DashSet},
-    itertools::izip,
     log::*,
     rayon::{
         iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
@@ -158,7 +157,6 @@ use {
     solana_svm::{
         account_loader::{
             collect_rent_from_account, CheckedTransactionDetails, TransactionCheckResult,
-            TransactionLoadResult,
         },
         account_overrides::AccountOverrides,
         account_saver::collect_accounts_to_store,
@@ -324,7 +322,6 @@ impl BankRc {
 }
 
 pub struct LoadAndExecuteTransactionsOutput {
-    pub loaded_transactions: Vec<TransactionLoadResult>,
     // Vector of results indicating whether a transaction was executed or could not
     // be executed. Note executed transactions can still have failed!
     pub execution_results: Vec<TransactionExecutionResult>,
@@ -3313,7 +3310,6 @@ impl Bank {
         let mut timings = ExecuteTimings::default();
 
         let LoadAndExecuteTransactionsOutput {
-            loaded_transactions,
             mut execution_results,
             ..
         } = self.load_and_execute_transactions(
@@ -3338,19 +3334,6 @@ impl Bank {
             },
         );
 
-        let post_simulation_accounts = loaded_transactions
-            .into_iter()
-            .next()
-            .and_then(|loaded_transactions_res| loaded_transactions_res.ok())
-            .map(|loaded_transaction| {
-                loaded_transaction
-                    .accounts
-                    .into_iter()
-                    .take(number_of_accounts)
-                    .collect::<Vec<_>>()
-            })
-            .unwrap_or_default();
-
         let units_consumed =
             timings
                 .details
@@ -3370,14 +3353,25 @@ impl Bank {
                     TransactionError::InvalidProgramForExecution,
                 ));
         let flattened_result = execution_result.flattened_result();
-        let (logs, return_data, inner_instructions) = match execution_result {
-            TransactionExecutionResult::Executed { details, .. } => (
-                details.log_messages,
-                details.return_data,
-                details.inner_instructions,
-            ),
-            TransactionExecutionResult::NotExecuted(_) => (None, None, None),
-        };
+        let (post_simulation_accounts, logs, return_data, inner_instructions) =
+            match execution_result {
+                TransactionExecutionResult::Executed(executed_tx) => {
+                    let details = executed_tx.execution_details;
+                    let post_simulation_accounts = executed_tx
+                        .loaded_transaction
+                        .accounts
+                        .into_iter()
+                        .take(number_of_accounts)
+                        .collect::<Vec<_>>();
+                    (
+                        post_simulation_accounts,
+                        details.log_messages,
+                        details.return_data,
+                        details.inner_instructions,
+                    )
+                }
+                TransactionExecutionResult::NotExecuted(_) => (vec![], None, None, None),
+            };
         let logs = logs.unwrap_or_default();
 
         TransactionSimulationResult {
@@ -3780,7 +3774,6 @@ impl Bank {
         }
 
         LoadAndExecuteTransactionsOutput {
-            loaded_transactions: sanitized_output.loaded_transactions,
             execution_results: sanitized_output.execution_results,
             retryable_transaction_indexes,
             executed_transactions_count,
@@ -3865,8 +3858,8 @@ impl Bank {
         let results = execution_results
             .iter()
             .map(|execution_result| match execution_result {
-                TransactionExecutionResult::Executed { details, .. } => {
-                    fees += details.fee_details.total_fee();
+                TransactionExecutionResult::Executed(executed_tx) => {
+                    fees += executed_tx.loaded_transaction.fee_details.total_fee();
                     Ok(())
                 }
                 TransactionExecutionResult::NotExecuted(err) => Err(err.clone()),
@@ -3887,8 +3880,8 @@ impl Bank {
         let results = execution_results
             .iter()
             .map(|execution_result| match execution_result {
-                TransactionExecutionResult::Executed { details, .. } => {
-                    accumulated_fee_details.accumulate(&details.fee_details);
+                TransactionExecutionResult::Executed(executed_tx) => {
+                    accumulated_fee_details.accumulate(&executed_tx.loaded_transaction.fee_details);
                     Ok(())
                 }
                 TransactionExecutionResult::NotExecuted(err) => Err(err.clone()),
@@ -3905,8 +3898,7 @@ impl Bank {
     pub fn commit_transactions(
         &self,
         sanitized_txs: &[SanitizedTransaction],
-        loaded_txs: &mut [TransactionLoadResult],
-        execution_results: Vec<TransactionExecutionResult>,
+        mut execution_results: Vec<TransactionExecutionResult>,
         last_blockhash: Hash,
         lamports_per_signature: u64,
         counts: ExecutedTransactionCounts,
@@ -3948,8 +3940,7 @@ impl Bank {
             let durable_nonce = DurableNonce::from_blockhash(&last_blockhash);
             let (accounts_to_store, transactions) = collect_accounts_to_store(
                 sanitized_txs,
-                &execution_results,
-                loaded_txs,
+                &mut execution_results,
                 &durable_nonce,
                 lamports_per_signature,
             );
@@ -3957,12 +3948,12 @@ impl Bank {
                 .accounts
                 .store_cached((self.slot(), accounts_to_store.as_slice()), &transactions);
         }
-        let rent_debits = self.collect_rent(&execution_results, loaded_txs);
+        let rent_debits = self.collect_rent(&mut execution_results);
 
         // Cached vote and stake accounts are synchronized with accounts-db
         // after each transaction.
         let mut update_stakes_cache_time = Measure::start("update_stakes_cache_time");
-        self.update_stakes_cache(sanitized_txs, &execution_results, loaded_txs);
+        self.update_stakes_cache(sanitized_txs, &execution_results);
         update_stakes_cache_time.stop();
 
         // once committed there is no way to unroll
@@ -3977,12 +3968,9 @@ impl Bank {
             Measure::start("store_executors_which_were_deployed_time");
         let mut cache = None;
         for execution_result in &execution_results {
-            if let TransactionExecutionResult::Executed {
-                details,
-                programs_modified_by_tx,
-            } = execution_result
-            {
-                if details.status.is_ok() && !programs_modified_by_tx.is_empty() {
+            if let TransactionExecutionResult::Executed(executed_tx) = execution_result {
+                let programs_modified_by_tx = &executed_tx.programs_modified_by_tx;
+                if executed_tx.was_successful() && !programs_modified_by_tx.is_empty() {
                     cache
                         .get_or_insert_with(|| {
                             self.transaction_processor.program_cache.write().unwrap()
@@ -4030,7 +4018,7 @@ impl Bank {
             update_transaction_statuses_time.as_us(),
         );
 
-        let loaded_accounts_stats = Self::collect_loaded_accounts_stats(loaded_txs);
+        let loaded_accounts_stats = Self::collect_loaded_accounts_stats(&execution_results);
         assert_eq!(
             loaded_accounts_stats.len(),
             execution_results.len(),
@@ -4046,38 +4034,40 @@ impl Bank {
     }
 
     fn collect_loaded_accounts_stats(
-        loaded_txs: &[TransactionLoadResult],
+        execution_results: &[TransactionExecutionResult],
     ) -> Vec<Result<TransactionLoadedAccountsStats>> {
-        loaded_txs
+        execution_results
             .iter()
-            .map(|load_result| match load_result {
-                Ok(loaded_tx) => Ok(TransactionLoadedAccountsStats {
-                    loaded_accounts_data_size: loaded_tx.loaded_accounts_data_size,
-                    loaded_accounts_count: loaded_tx.accounts.len(),
-                }),
-                Err(err) => Err(err.clone()),
+            .map(|execution_result| match execution_result {
+                TransactionExecutionResult::Executed(executed_tx) => {
+                    let loaded_tx = &executed_tx.loaded_transaction;
+                    Ok(TransactionLoadedAccountsStats {
+                        loaded_accounts_data_size: loaded_tx.loaded_accounts_data_size,
+                        loaded_accounts_count: loaded_tx.accounts.len(),
+                    })
+                }
+                TransactionExecutionResult::NotExecuted(err) => Err(err.clone()),
             })
             .collect()
     }
 
     fn collect_rent(
         &self,
-        execution_results: &[TransactionExecutionResult],
-        loaded_txs: &mut [TransactionLoadResult],
+        execution_results: &mut [TransactionExecutionResult],
     ) -> Vec<RentDebits> {
         let mut collected_rent: u64 = 0;
-        let rent_debits: Vec<_> = loaded_txs
+
+        let rent_debits: Vec<_> = execution_results
             .iter_mut()
-            .zip(execution_results)
-            .map(|(load_result, execution_result)| {
-                if let (Ok(loaded_transaction), true) =
-                    (load_result, execution_result.was_executed_successfully())
+            .map(|execution_result| match execution_result {
+                TransactionExecutionResult::Executed(executed_tx)
+                    if executed_tx.was_successful() =>
                 {
+                    let loaded_transaction = &mut executed_tx.loaded_transaction;
                     collected_rent += loaded_transaction.rent;
                     mem::take(&mut loaded_transaction.rent_debits)
-                } else {
-                    RentDebits::default()
                 }
+                _ => RentDebits::default(),
             })
             .collect();
         self.collected_rent.fetch_add(collected_rent, Relaxed);
@@ -4750,7 +4740,6 @@ impl Bank {
         };
 
         let LoadAndExecuteTransactionsOutput {
-            mut loaded_transactions,
             execution_results,
             executed_transactions_count,
             executed_non_vote_transactions_count,
@@ -4776,7 +4765,6 @@ impl Bank {
             self.last_blockhash_and_lamports_per_signature();
         let results = self.commit_transactions(
             batch.sanitized_transactions(),
-            &mut loaded_transactions,
             execution_results,
             last_blockhash,
             lamports_per_signature,
@@ -6035,18 +6023,21 @@ impl Bank {
         &self,
         txs: &[SanitizedTransaction],
         execution_results: &[TransactionExecutionResult],
-        loaded_txs: &[TransactionLoadResult],
     ) {
         debug_assert_eq!(txs.len(), execution_results.len());
-        debug_assert_eq!(txs.len(), loaded_txs.len());
         let new_warmup_cooldown_rate_epoch = self.new_warmup_cooldown_rate_epoch();
-        izip!(txs, execution_results, loaded_txs)
-            .filter(|(_, execution_result, _)| execution_result.was_executed_successfully())
-            .flat_map(|(tx, _, load_result)| {
-                load_result.iter().flat_map(|loaded_transaction| {
-                    let num_account_keys = tx.message().account_keys().len();
-                    loaded_transaction.accounts.iter().take(num_account_keys)
-                })
+        txs.iter()
+            .zip(execution_results)
+            .filter_map(|(tx, execution_result)| {
+                execution_result
+                    .executed_transaction()
+                    .map(|executed_tx| (tx, executed_tx))
+            })
+            .filter(|(_, executed_tx)| executed_tx.was_successful())
+            .flat_map(|(tx, executed_tx)| {
+                let num_account_keys = tx.message().account_keys().len();
+                let loaded_tx = &executed_tx.loaded_transaction;
+                loaded_tx.accounts.iter().take(num_account_keys)
             })
             .for_each(|(pubkey, account)| {
                 // note that this could get timed to: self.rc.accounts.accounts_db.stats.stakes_cache_check_and_store_us,

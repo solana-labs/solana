@@ -94,14 +94,13 @@ impl TransactionStatusService {
                     rent_debits,
                     transaction_indexes,
                 ) {
-                    if let Some(details) = execution_result {
+                    if let Some((details, fee_details)) = execution_result {
                         let TransactionExecutionDetails {
                             status,
                             log_messages,
                             inner_instructions,
                             return_data,
                             executed_units,
-                            fee_details,
                             ..
                         } = details;
                         let tx_account_locks = transaction.get_account_locks_unchecked();
@@ -325,15 +324,17 @@ pub(crate) mod tests {
         let mut rent_debits = RentDebits::default();
         rent_debits.insert(&pubkey, 123, 456);
 
-        let transaction_result = Some(TransactionExecutionDetails {
-            status: Ok(()),
-            log_messages: None,
-            inner_instructions: None,
-            fee_details: FeeDetails::default(),
-            return_data: None,
-            executed_units: 0,
-            accounts_data_len_delta: 0,
-        });
+        let transaction_result = Some((
+            TransactionExecutionDetails {
+                status: Ok(()),
+                log_messages: None,
+                inner_instructions: None,
+                return_data: None,
+                executed_units: 0,
+                accounts_data_len_delta: 0,
+            },
+            FeeDetails::default(),
+        ));
 
         let balances = TransactionBalancesSet {
             pre_balances: vec![vec![123456]],

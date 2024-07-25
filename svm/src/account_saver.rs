@@ -1,7 +1,7 @@
 use {
     crate::{
-        account_loader::TransactionLoadResult, nonce_info::NonceInfo,
-        rollback_accounts::RollbackAccounts, transaction_results::TransactionExecutionResult,
+        nonce_info::NonceInfo, rollback_accounts::RollbackAccounts,
+        transaction_results::TransactionExecutionResult,
     },
     solana_sdk::{
         account::AccountSharedData,
@@ -18,27 +18,25 @@ use {
 
 pub fn collect_accounts_to_store<'a>(
     txs: &'a [SanitizedTransaction],
-    execution_results: &'a [TransactionExecutionResult],
-    load_results: &'a mut [TransactionLoadResult],
+    execution_results: &'a mut [TransactionExecutionResult],
     durable_nonce: &DurableNonce,
     lamports_per_signature: u64,
 ) -> (
     Vec<(&'a Pubkey, &'a AccountSharedData)>,
     Vec<Option<&'a SanitizedTransaction>>,
 ) {
-    let mut accounts = Vec::with_capacity(load_results.len());
-    let mut transactions = Vec::with_capacity(load_results.len());
-    for (i, (tx_load_result, tx)) in load_results.iter_mut().zip(txs).enumerate() {
-        let Ok(loaded_transaction) = tx_load_result else {
-            // Don't store any accounts if tx failed to load
+    // TODO: calculate a better initial capacity for these vectors. The current
+    // usage of the length of execution results is far from accurate.
+    let mut accounts = Vec::with_capacity(execution_results.len());
+    let mut transactions = Vec::with_capacity(execution_results.len());
+    for (execution_result, tx) in execution_results.iter_mut().zip(txs) {
+        let Some(executed_tx) = execution_result.executed_transaction_mut() else {
+            // Don't store any accounts if tx wasn't executed
             continue;
         };
 
-        let execution_status = match &execution_results[i] {
-            TransactionExecutionResult::Executed { details, .. } => &details.status,
-            // Don't store any accounts if tx wasn't executed
-            TransactionExecutionResult::NotExecuted(_) => continue,
-        };
+        let loaded_transaction = &mut executed_tx.loaded_transaction;
+        let execution_status = &executed_tx.execution_details.status;
 
         // Accounts that are invoked and also not passed as an instruction
         // account to a program don't need to be stored because it's assumed
@@ -139,8 +137,9 @@ mod tests {
     use {
         super::*,
         crate::{
-            account_loader::LoadedTransaction, nonce_info::NoncePartial,
-            transaction_results::TransactionExecutionDetails,
+            account_loader::LoadedTransaction,
+            nonce_info::NoncePartial,
+            transaction_results::{ExecutedTransaction, TransactionExecutionDetails},
         },
         solana_compute_budget::compute_budget_processor::ComputeBudgetLimits,
         solana_sdk::{
@@ -172,19 +171,22 @@ mod tests {
         ))
     }
 
-    fn new_execution_result(status: Result<()>) -> TransactionExecutionResult {
-        TransactionExecutionResult::Executed {
-            details: TransactionExecutionDetails {
+    fn new_execution_result(
+        status: Result<()>,
+        loaded_transaction: LoadedTransaction,
+    ) -> TransactionExecutionResult {
+        TransactionExecutionResult::Executed(Box::new(ExecutedTransaction {
+            execution_details: TransactionExecutionDetails {
                 status,
                 log_messages: None,
                 inner_instructions: None,
-                fee_details: FeeDetails::default(),
                 return_data: None,
                 executed_units: 0,
                 accounts_data_len_delta: 0,
             },
+            loaded_transaction,
             programs_modified_by_tx: HashMap::new(),
-        }
+        }))
     }
 
     #[test]
@@ -226,7 +228,7 @@ mod tests {
         ];
         let tx1 = new_sanitized_tx(&[&keypair1], message, Hash::default());
 
-        let loaded0 = Ok(LoadedTransaction {
+        let loaded0 = LoadedTransaction {
             accounts: transaction_accounts0,
             program_indices: vec![],
             fee_details: FeeDetails::default(),
@@ -235,9 +237,9 @@ mod tests {
             rent: 0,
             rent_debits: RentDebits::default(),
             loaded_accounts_data_size: 0,
-        });
+        };
 
-        let loaded1 = Ok(LoadedTransaction {
+        let loaded1 = LoadedTransaction {
             accounts: transaction_accounts1,
             program_indices: vec![],
             fee_details: FeeDetails::default(),
@@ -246,19 +248,15 @@ mod tests {
             rent: 0,
             rent_debits: RentDebits::default(),
             loaded_accounts_data_size: 0,
-        });
-
-        let mut loaded = vec![loaded0, loaded1];
+        };
 
         let txs = vec![tx0.clone(), tx1.clone()];
-        let execution_results = vec![new_execution_result(Ok(())); 2];
-        let (collected_accounts, transactions) = collect_accounts_to_store(
-            &txs,
-            &execution_results,
-            loaded.as_mut_slice(),
-            &DurableNonce::default(),
-            0,
-        );
+        let mut execution_results = vec![
+            new_execution_result(Ok(()), loaded0),
+            new_execution_result(Ok(()), loaded1),
+        ];
+        let (collected_accounts, transactions) =
+            collect_accounts_to_store(&txs, &mut execution_results, &DurableNonce::default(), 0);
         assert_eq!(collected_accounts.len(), 2);
         assert!(collected_accounts
             .iter()
@@ -443,7 +441,7 @@ mod tests {
         let from_account_pre = AccountSharedData::new(4242, 0, &Pubkey::default());
 
         let nonce = NoncePartial::new(nonce_address, nonce_account_pre.clone());
-        let loaded = Ok(LoadedTransaction {
+        let loaded = LoadedTransaction {
             accounts: transaction_accounts,
             program_indices: vec![],
             fee_details: FeeDetails::default(),
@@ -455,22 +453,19 @@ mod tests {
             rent: 0,
             rent_debits: RentDebits::default(),
             loaded_accounts_data_size: 0,
-        });
-
-        let mut loaded = vec![loaded];
+        };
 
         let durable_nonce = DurableNonce::from_blockhash(&Hash::new_unique());
         let txs = vec![tx];
-        let execution_results = vec![new_execution_result(Err(
-            TransactionError::InstructionError(1, InstructionError::InvalidArgument),
-        ))];
-        let (collected_accounts, _) = collect_accounts_to_store(
-            &txs,
-            &execution_results,
-            loaded.as_mut_slice(),
-            &durable_nonce,
-            0,
-        );
+        let mut execution_results = vec![new_execution_result(
+            Err(TransactionError::InstructionError(
+                1,
+                InstructionError::InvalidArgument,
+            )),
+            loaded,
+        )];
+        let (collected_accounts, _) =
+            collect_accounts_to_store(&txs, &mut execution_results, &durable_nonce, 0);
         assert_eq!(collected_accounts.len(), 2);
         assert_eq!(
             collected_accounts
@@ -543,7 +538,7 @@ mod tests {
             AccountSharedData::new_data(42, &nonce_state, &system_program::id()).unwrap();
 
         let nonce = NoncePartial::new(nonce_address, nonce_account_pre.clone());
-        let loaded = Ok(LoadedTransaction {
+        let loaded = LoadedTransaction {
             accounts: transaction_accounts,
             program_indices: vec![],
             fee_details: FeeDetails::default(),
@@ -554,22 +549,19 @@ mod tests {
             rent: 0,
             rent_debits: RentDebits::default(),
             loaded_accounts_data_size: 0,
-        });
-
-        let mut loaded = vec![loaded];
+        };
 
         let durable_nonce = DurableNonce::from_blockhash(&Hash::new_unique());
         let txs = vec![tx];
-        let execution_results = vec![new_execution_result(Err(
-            TransactionError::InstructionError(1, InstructionError::InvalidArgument),
-        ))];
-        let (collected_accounts, _) = collect_accounts_to_store(
-            &txs,
-            &execution_results,
-            loaded.as_mut_slice(),
-            &durable_nonce,
-            0,
-        );
+        let mut execution_results = vec![new_execution_result(
+            Err(TransactionError::InstructionError(
+                1,
+                InstructionError::InvalidArgument,
+            )),
+            loaded,
+        )];
+        let (collected_accounts, _) =
+            collect_accounts_to_store(&txs, &mut execution_results, &durable_nonce, 0);
         assert_eq!(collected_accounts.len(), 1);
         let collected_nonce_account = collected_accounts
             .iter()

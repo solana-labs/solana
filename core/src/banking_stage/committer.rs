@@ -13,10 +13,7 @@ use {
         vote_sender_types::ReplayVoteSender,
     },
     solana_sdk::{hash::Hash, pubkey::Pubkey, saturating_add_assign},
-    solana_svm::{
-        account_loader::TransactionLoadResult,
-        transaction_results::{TransactionExecutionResult, TransactionResults},
-    },
+    solana_svm::transaction_results::{TransactionExecutionResult, TransactionResults},
     solana_transaction_status::{
         token_balances::TransactionTokenBalancesSet, TransactionTokenBalance,
     },
@@ -67,7 +64,6 @@ impl Committer {
     pub(super) fn commit_transactions(
         &self,
         batch: &TransactionBatch,
-        loaded_transactions: &mut [TransactionLoadResult],
         execution_results: Vec<TransactionExecutionResult>,
         last_blockhash: Hash,
         lamports_per_signature: u64,
@@ -88,7 +84,6 @@ impl Committer {
 
         let (tx_results, commit_time_us) = measure_us!(bank.commit_transactions(
             batch.sanitized_transactions(),
-            loaded_transactions,
             execution_results,
             last_blockhash,
             lamports_per_signature,

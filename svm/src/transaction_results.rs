@@ -5,10 +5,10 @@
 )]
 pub use solana_sdk::inner_instruction::{InnerInstruction, InnerInstructionsList};
 use {
+    crate::account_loader::LoadedTransaction,
     serde::{Deserialize, Serialize},
     solana_program_runtime::loaded_programs::ProgramCacheEntry,
     solana_sdk::{
-        fee::FeeDetails,
         pubkey::Pubkey,
         rent_debits::RentDebits,
         transaction::{self, TransactionError},
@@ -42,39 +42,57 @@ pub struct TransactionLoadedAccountsStats {
 /// make such checks hard to do incorrectly.
 #[derive(Debug, Clone)]
 pub enum TransactionExecutionResult {
-    Executed {
-        details: TransactionExecutionDetails,
-        programs_modified_by_tx: HashMap<Pubkey, Arc<ProgramCacheEntry>>,
-    },
+    Executed(Box<ExecutedTransaction>),
     NotExecuted(TransactionError),
+}
+
+#[derive(Debug, Clone)]
+pub struct ExecutedTransaction {
+    pub loaded_transaction: LoadedTransaction,
+    pub execution_details: TransactionExecutionDetails,
+    pub programs_modified_by_tx: HashMap<Pubkey, Arc<ProgramCacheEntry>>,
+}
+
+impl ExecutedTransaction {
+    pub fn was_successful(&self) -> bool {
+        self.execution_details.status.is_ok()
+    }
 }
 
 impl TransactionExecutionResult {
     pub fn was_executed_successfully(&self) -> bool {
-        match self {
-            Self::Executed { details, .. } => details.status.is_ok(),
-            Self::NotExecuted { .. } => false,
-        }
+        self.executed_transaction()
+            .map(|executed_tx| executed_tx.was_successful())
+            .unwrap_or(false)
     }
 
     pub fn was_executed(&self) -> bool {
-        match self {
-            Self::Executed { .. } => true,
-            Self::NotExecuted(_) => false,
-        }
+        self.executed_transaction().is_some()
     }
 
     pub fn details(&self) -> Option<&TransactionExecutionDetails> {
-        match self {
-            Self::Executed { details, .. } => Some(details),
-            Self::NotExecuted(_) => None,
-        }
+        self.executed_transaction()
+            .map(|executed_tx| &executed_tx.execution_details)
     }
 
     pub fn flattened_result(&self) -> transaction::Result<()> {
         match self {
-            Self::Executed { details, .. } => details.status.clone(),
+            Self::Executed(executed_tx) => executed_tx.execution_details.status.clone(),
             Self::NotExecuted(err) => Err(err.clone()),
+        }
+    }
+
+    pub fn executed_transaction(&self) -> Option<&ExecutedTransaction> {
+        match self {
+            Self::Executed(executed_tx) => Some(executed_tx.as_ref()),
+            Self::NotExecuted { .. } => None,
+        }
+    }
+
+    pub fn executed_transaction_mut(&mut self) -> Option<&mut ExecutedTransaction> {
+        match self {
+            Self::Executed(executed_tx) => Some(executed_tx.as_mut()),
+            Self::NotExecuted { .. } => None,
         }
     }
 }
@@ -84,7 +102,6 @@ pub struct TransactionExecutionDetails {
     pub status: transaction::Result<()>,
     pub log_messages: Option<Vec<String>>,
     pub inner_instructions: Option<InnerInstructionsList>,
-    pub fee_details: FeeDetails,
     pub return_data: Option<TransactionReturnData>,
     pub executed_units: u64,
     /// The change in accounts data len for this transaction.

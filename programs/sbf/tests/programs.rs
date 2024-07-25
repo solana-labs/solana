@@ -175,16 +175,16 @@ fn execute_transactions(
             post_token_balances,
         )| {
             match execution_result {
-                TransactionExecutionResult::Executed { details, .. } => {
+                TransactionExecutionResult::Executed(executed_tx) => {
+                    let fee_details = executed_tx.loaded_transaction.fee_details;
                     let TransactionExecutionDetails {
                         status,
                         log_messages,
                         inner_instructions,
-                        fee_details,
                         return_data,
                         executed_units,
                         ..
-                    } = details;
+                    } = executed_tx.execution_details;
 
                     let inner_instructions = inner_instructions.map(|inner_instructions| {
                         map_inner_instructions(inner_instructions).collect()

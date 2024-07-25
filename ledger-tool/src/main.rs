@@ -2905,6 +2905,7 @@ fn record_transactions(
                         .collect();
 
                     let is_simple_vote_tx = tx.is_simple_vote_transaction();
+                    let execution_results = execution_results.map(|(details, _)| details);
 
                     TransactionDetails {
                         accounts,

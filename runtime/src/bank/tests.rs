@@ -100,7 +100,10 @@ use {
         transaction_context::TransactionAccount,
     },
     solana_stake_program::stake_state::{self, StakeStateV2},
-    solana_svm::nonce_info::NoncePartial,
+    solana_svm::{
+        account_loader::LoadedTransaction, nonce_info::NoncePartial,
+        transaction_results::ExecutedTransaction,
+    },
     solana_timings::ExecuteTimings,
     solana_vote_program::{
         vote_instruction,
@@ -229,18 +232,21 @@ fn test_race_register_tick_freeze() {
 }
 
 fn new_execution_result(status: Result<()>, fee_details: FeeDetails) -> TransactionExecutionResult {
-    TransactionExecutionResult::Executed {
-        details: TransactionExecutionDetails {
+    TransactionExecutionResult::Executed(Box::new(ExecutedTransaction {
+        loaded_transaction: LoadedTransaction {
+            fee_details,
+            ..LoadedTransaction::default()
+        },
+        execution_details: TransactionExecutionDetails {
             status,
             log_messages: None,
             inner_instructions: None,
-            fee_details,
             return_data: None,
             executed_units: 0,
             accounts_data_len_delta: 0,
         },
         programs_modified_by_tx: HashMap::new(),
-    }
+    }))
 }
 
 impl Bank {
@@ -5876,18 +5882,15 @@ fn test_pre_post_transaction_balances() {
 
     // Failed transactions still produce balance sets
     // This is an InstructionError - fees charged
-    assert_matches!(
-        transaction_results.execution_results[2],
-        TransactionExecutionResult::Executed {
-            details: TransactionExecutionDetails {
-                status: Err(TransactionError::InstructionError(
-                    0,
-                    InstructionError::Custom(1),
-                )),
-                ..
-            },
-            ..
-        }
+    let executed_tx = transaction_results.execution_results[2]
+        .executed_transaction()
+        .unwrap();
+    assert_eq!(
+        executed_tx.execution_details.status,
+        Err(TransactionError::InstructionError(
+            0,
+            InstructionError::Custom(1),
+        )),
     );
     assert_eq!(
         transaction_balances_set.pre_balances[2],

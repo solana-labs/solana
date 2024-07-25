@@ -344,9 +344,11 @@ fn run_fixture(fixture: InstrFixture, filename: OsString, execute_as_instr: bool
         return;
     }
 
-    let execution_details = result.execution_results[0].details().unwrap();
+    let executed_tx = result.execution_results[0].executed_transaction().unwrap();
+    let execution_details = &executed_tx.execution_details;
+    let loaded_accounts = &executed_tx.loaded_transaction.accounts;
     verify_accounts_and_data(
-        &result.loaded_transactions[0].as_ref().unwrap().accounts,
+        loaded_accounts,
         output,
         execution_details.executed_units,
         input.cu_avail,

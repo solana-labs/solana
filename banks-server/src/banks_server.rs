@@ -354,7 +354,8 @@ impl Banks for BanksServer {
                 result: Err(error),
                 metadata: None,
             },
-            TransactionExecutionResult::Executed { details, .. } => {
+            TransactionExecutionResult::Executed(executed_tx) => {
+                let details = executed_tx.execution_details;
                 BanksTransactionResultWithMetadata {
                     result: details.status,
                     metadata: Some(TransactionMetadata {

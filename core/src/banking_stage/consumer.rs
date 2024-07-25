@@ -606,7 +606,6 @@ impl Consumer {
         execute_and_commit_timings.load_execute_us = load_execute_us;
 
         let LoadAndExecuteTransactionsOutput {
-            mut loaded_transactions,
             execution_results,
             mut retryable_transaction_indexes,
             executed_transactions_count,
@@ -681,7 +680,6 @@ impl Consumer {
         let (commit_time_us, commit_transaction_statuses) = if executed_transactions_count != 0 {
             self.committer.commit_transactions(
                 batch,
-                &mut loaded_transactions,
                 execution_results,
                 last_blockhash,
                 lamports_per_signature,

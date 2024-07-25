@@ -209,8 +209,6 @@ The output of the transaction batch processor's
 - `execution_results`: Vector of results indicating whether a transaction was
   executed or could not be executed. Note executed transactions can still have
   failed!
-- `loaded_transactions`: Vector of loaded transactions from transactions that
-  were processed.
 
 # Functional Model
 
@@ -231,12 +229,6 @@ In bank context `load_and_execute_sanitized_transactions` is called from
 `simulate_transaction` where a single transaction is executed, and
 from `load_execute_and_commit_transactions` which receives a batch of
 transactions from its caller.
-
-Multiple results of `load_and_execute_sanitized_transactions` are aggregated in
-the struct `LoadAndExecuteSanitizedTransactionsOutput`
- - `LoadAndExecuteSanitizedTransactionsOutput` contains
-  - vector of `TransactionLoadResult`
-  - vector of `TransactionExecutionResult`
 
 Steps of `load_and_execute_sanitized_transactions`
 

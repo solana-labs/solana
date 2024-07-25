@@ -430,39 +430,32 @@ fn svm_integration() {
     );
 
     assert_eq!(result.execution_results.len(), 5);
-    assert!(result.execution_results[0]
-        .details()
-        .unwrap()
-        .status
-        .is_ok());
-    let logs = result.execution_results[0]
-        .details()
-        .unwrap()
+
+    let executed_tx_0 = result.execution_results[0].executed_transaction().unwrap();
+    assert!(executed_tx_0.was_successful());
+    let logs = executed_tx_0
+        .execution_details
         .log_messages
         .as_ref()
         .unwrap();
     assert!(logs.contains(&"Program log: Hello, Solana!".to_string()));
 
-    assert!(result.execution_results[1]
-        .details()
-        .unwrap()
-        .status
-        .is_ok());
+    let executed_tx_1 = result.execution_results[1].executed_transaction().unwrap();
+    assert!(executed_tx_1.was_successful());
 
     // The SVM does not commit the account changes in MockBank
     let recipient_key = transactions[1].message().account_keys()[2];
-    let recipient_data = result.loaded_transactions[1]
-        .as_ref()
-        .unwrap()
+    let recipient_data = executed_tx_1
+        .loaded_transaction
         .accounts
         .iter()
         .find(|key| key.0 == recipient_key)
         .unwrap();
     assert_eq!(recipient_data.1.lamports(), 900010);
 
-    let return_data = result.execution_results[2]
-        .details()
-        .unwrap()
+    let executed_tx_2 = result.execution_results[2].executed_transaction().unwrap();
+    let return_data = executed_tx_2
+        .execution_details
         .return_data
         .as_ref()
         .unwrap();
@@ -471,14 +464,10 @@ fn svm_integration() {
     let clock_info: Clock = bincode::deserialize(clock_data.data()).unwrap();
     assert_eq!(clock_info.unix_timestamp, time);
 
-    assert!(result.execution_results[3]
-        .details()
-        .unwrap()
-        .status
-        .is_err());
-    assert!(result.execution_results[3]
-        .details()
-        .unwrap()
+    let executed_tx_3 = result.execution_results[3].executed_transaction().unwrap();
+    assert!(executed_tx_3.execution_details.status.is_err());
+    assert!(executed_tx_3
+        .execution_details
         .log_messages
         .as_ref()
         .unwrap()
