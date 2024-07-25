@@ -568,7 +568,6 @@ impl PartialEq for Bank {
             accounts_data_size_initial: _,
             accounts_data_size_delta_on_chain: _,
             accounts_data_size_delta_off_chain: _,
-            incremental_snapshot_persistence: _,
             epoch_reward_status: _,
             transaction_processor: _,
             check_program_modification_slot: _,
@@ -835,8 +834,6 @@ pub struct Bank {
     /// the account hash of the accounts that would have been rewritten as bank hash expects.
     skipped_rewrites: Mutex<HashMap<Pubkey, AccountHash>>,
 
-    pub incremental_snapshot_persistence: Option<BankIncrementalSnapshotPersistence>,
-
     epoch_reward_status: EpochRewardStatus,
 
     transaction_processor: TransactionBatchProcessor<BankForks>,
@@ -911,7 +908,6 @@ impl Bank {
     fn default_with_accounts(accounts: Accounts) -> Self {
         let mut bank = Self {
             skipped_rewrites: Mutex::default(),
-            incremental_snapshot_persistence: None,
             rc: BankRc::new(accounts),
             status_cache: Arc::<RwLock<BankStatusCache>>::default(),
             blockhash_queue: RwLock::<BlockhashQueue>::default(),
@@ -1146,7 +1142,6 @@ impl Bank {
         let accounts_data_size_initial = parent.load_accounts_data_size();
         let mut new = Self {
             skipped_rewrites: Mutex::default(),
-            incremental_snapshot_persistence: None,
             rc,
             status_cache,
             slot,
@@ -1547,7 +1542,6 @@ impl Bank {
         let stakes_accounts_load_duration = now.elapsed();
         let mut bank = Self {
             skipped_rewrites: Mutex::default(),
-            incremental_snapshot_persistence: fields.incremental_snapshot_persistence,
             rc: bank_rc,
             status_cache: Arc::<RwLock<BankStatusCache>>::default(),
             blockhash_queue: RwLock::new(fields.blockhash_queue),

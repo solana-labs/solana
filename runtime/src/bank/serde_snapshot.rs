@@ -229,10 +229,6 @@ mod tests {
             assert_eq!(dbank.get_incremental_accounts_hash(), None);
         }
         assert_eq!(
-            dbank.incremental_snapshot_persistence,
-            expected_incremental_snapshot_persistence,
-        );
-        assert_eq!(
             dbank.get_epoch_accounts_hash_to_serialize(),
             expected_epoch_accounts_hash,
         );
