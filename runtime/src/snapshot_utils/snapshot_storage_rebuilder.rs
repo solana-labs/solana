@@ -338,7 +338,7 @@ impl SnapshotStorageRebuilder {
                     )?,
                 };
 
-                Ok((storage_entry.append_vec_id(), storage_entry))
+                Ok((storage_entry.id(), storage_entry))
             })
             .collect::<Result<HashMap<AccountsFileId, Arc<AccountStorageEntry>>, SnapshotError>>(
             )?;

@@ -2104,11 +2104,11 @@ pub mod tests {
             assert_eq!(
                 shrinks_in_progress
                     .iter()
-                    .map(|(_, shrink_in_progress)| shrink_in_progress.old_storage().append_vec_id())
+                    .map(|(_, shrink_in_progress)| shrink_in_progress.old_storage().id())
                     .collect::<Vec<_>>(),
                 storages
                     .iter()
-                    .map(|storage| storage.append_vec_id())
+                    .map(|storage| storage.id())
                     .collect::<Vec<_>>()
             );
             // assert that we wrote the 2_ref account to the newly shrunk append vec
@@ -2325,7 +2325,7 @@ pub mod tests {
 
                 let map = |info: &SlotInfo| {
                     (
-                        info.storage.append_vec_id(),
+                        info.storage.id(),
                         info.slot,
                         info.capacity,
                         info.alive_bytes,
@@ -2466,7 +2466,7 @@ pub mod tests {
     }
 
     fn assert_storage_info(info: &SlotInfo, storage: &AccountStorageEntry, should_shrink: bool) {
-        assert_eq!(storage.append_vec_id(), info.storage.append_vec_id());
+        assert_eq!(storage.id(), info.storage.id());
         assert_eq!(storage.slot(), info.slot);
         assert_eq!(storage.capacity(), info.capacity);
         assert_eq!(storage.alive_bytes(), info.alive_bytes as usize);
@@ -3298,8 +3298,8 @@ pub mod tests {
                             assert_eq!(1, one.len());
                             assert_eq!(target_slot, one.first().unwrap().0);
                             assert_eq!(
-                                one.first().unwrap().1.old_storage().append_vec_id(),
-                                storages[combine_into].append_vec_id()
+                                one.first().unwrap().1.old_storage().id(),
+                                storages[combine_into].id()
                             );
                             // make sure the single new append vec contains all the same accounts
                             let mut two = Vec::default();

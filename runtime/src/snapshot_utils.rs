@@ -1043,10 +1043,8 @@ fn archive_snapshot(
                 .map_err(E::ArchiveSnapshotsDir)?;
 
             for storage in snapshot_storages {
-                let path_in_archive = Path::new(ACCOUNTS_DIR).join(AccountsFile::file_name(
-                    storage.slot(),
-                    storage.append_vec_id(),
-                ));
+                let path_in_archive = Path::new(ACCOUNTS_DIR)
+                    .join(AccountsFile::file_name(storage.slot(), storage.id()));
                 match storage.accounts.internals_for_archive() {
                     InternalsForArchive::Mmap(data) => {
                         let mut header = tar::Header::new_gnu();
@@ -1479,7 +1477,7 @@ pub fn hard_link_storages_to_snapshot(
         )?;
         // The appendvec could be recycled, so its filename may not be consistent to the slot and id.
         // Use the storage slot and id to compose a consistent file name for the hard-link file.
-        let hardlink_filename = AccountsFile::file_name(storage.slot(), storage.append_vec_id());
+        let hardlink_filename = AccountsFile::file_name(storage.slot(), storage.id());
         let hard_link_path = snapshot_hardlink_dir.join(hardlink_filename);
         fs::hard_link(storage_path, &hard_link_path).map_err(|err| {
             HardLinkStoragesToSnapshotError::HardLinkStorage(
