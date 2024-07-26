@@ -113,7 +113,6 @@ use {
     tempfile::TempDir,
 };
 
-const PAGE_SIZE: u64 = 4 * 1024;
 // when the accounts write cache exceeds this many bytes, we will flush it
 // this can be specified on the command line, too (--accounts-db-cache-limit-mb)
 const WRITE_CACHE_LIMIT_BYTES_DEFAULT: u64 = 15_000_000_000;
@@ -121,7 +120,7 @@ const SCAN_SLOT_PAR_ITER_THRESHOLD: usize = 4000;
 
 const UNREF_ACCOUNTS_BATCH_SIZE: usize = 10_000;
 
-pub const DEFAULT_FILE_SIZE: u64 = PAGE_SIZE * 1024;
+pub const DEFAULT_FILE_SIZE: u64 = 4 * 1024 * 1024;
 pub const DEFAULT_NUM_THREADS: u32 = 8;
 pub const DEFAULT_NUM_DIRS: u32 = 4;
 
@@ -3966,18 +3965,16 @@ impl AccountsDb {
 
         let alive_total_bytes = alive_accounts.alive_bytes();
 
-        let aligned_total_bytes: u64 = Self::page_align(alive_total_bytes as u64);
-
         stats
             .accounts_removed
             .fetch_add(len - alive_accounts.len(), Ordering::Relaxed);
         stats.bytes_removed.fetch_add(
-            capacity.saturating_sub(aligned_total_bytes),
+            capacity.saturating_sub(alive_total_bytes as u64),
             Ordering::Relaxed,
         );
         stats
             .bytes_written
-            .fetch_add(aligned_total_bytes, Ordering::Relaxed);
+            .fetch_add(alive_total_bytes as u64, Ordering::Relaxed);
 
         ShrinkCollect {
             slot,
@@ -4235,10 +4232,9 @@ impl AccountsDb {
         }
     }
 
-    /// return a store that can contain 'aligned_total' bytes
-    pub fn get_store_for_shrink(&self, slot: Slot, aligned_total: u64) -> ShrinkInProgress<'_> {
-        let shrunken_store =
-            self.create_store(slot, aligned_total, "shrink", self.shrink_paths.as_slice());
+    /// return a store that can contain 'size' bytes
+    pub fn get_store_for_shrink(&self, slot: Slot, size: u64) -> ShrinkInProgress<'_> {
+        let shrunken_store = self.create_store(slot, size, "shrink", self.shrink_paths.as_slice());
         self.storage.shrinking_in_progress(slot, shrunken_store)
     }
 
@@ -4298,10 +4294,10 @@ impl AccountsDb {
                 continue;
             };
             candidates_count += 1;
-            total_alive_bytes += Self::page_align(store.alive_bytes() as u64);
+            let alive_bytes = store.alive_bytes();
+            total_alive_bytes += alive_bytes as u64;
             total_bytes += store.capacity();
-            let alive_ratio =
-                Self::page_align(store.alive_bytes() as u64) as f64 / store.capacity() as f64;
+            let alive_ratio = alive_bytes as f64 / store.capacity() as f64;
             store_usage.push(StoreUsageInfo {
                 slot: *slot,
                 alive_ratio,
@@ -4338,7 +4334,7 @@ impl AccountsDb {
                 }
             } else {
                 let current_store_size = store.capacity();
-                let after_shrink_size = Self::page_align(store.alive_bytes() as u64);
+                let after_shrink_size = store.alive_bytes() as u64;
                 let bytes_saved = current_store_size.saturating_sub(after_shrink_size);
                 total_bytes -= bytes_saved;
                 shrink_slots.insert(usage.slot, Arc::clone(store));
@@ -5688,10 +5684,6 @@ impl AccountsDb {
         store
     }
 
-    pub fn page_align(size: u64) -> u64 {
-        (size + (PAGE_SIZE - 1)) & !(PAGE_SIZE - 1)
-    }
-
     fn has_space_available(&self, slot: Slot, size: u64) -> bool {
         let store = self.storage.get_slot_storage_entry(slot).unwrap();
         if store.status() == AccountStorageStatus::Available
@@ -6693,7 +6685,7 @@ impl AccountsDb {
 
             oldest_slot = std::cmp::min(oldest_slot, slot);
 
-            total_alive_bytes += Self::page_align(store.alive_bytes() as u64);
+            total_alive_bytes += store.alive_bytes();
             total_bytes += store.capacity();
         }
         info!(
@@ -7729,7 +7721,7 @@ impl AccountsDb {
     }
 
     fn should_not_shrink(alive_bytes: u64, total_bytes: u64) -> bool {
-        alive_bytes + PAGE_SIZE > total_bytes
+        alive_bytes >= total_bytes
     }
 
     fn is_shrinking_productive(slot: Slot, store: &AccountStorageEntry) -> bool {
@@ -7766,11 +7758,10 @@ impl AccountsDb {
         };
         match self.shrink_ratio {
             AccountShrinkThreshold::TotalSpace { shrink_ratio: _ } => {
-                Self::page_align(store.alive_bytes() as u64) < total_bytes
+                (store.alive_bytes() as u64) < total_bytes
             }
             AccountShrinkThreshold::IndividualStore { shrink_ratio } => {
-                (Self::page_align(store.alive_bytes() as u64) as f64 / total_bytes as f64)
-                    < shrink_ratio
+                (store.alive_bytes() as f64 / total_bytes as f64) < shrink_ratio
             }
         }
     }
@@ -9400,11 +9391,17 @@ pub mod test_utils {
             .get_slot_storage_entry(slot)
             .is_none()
         {
-            let bytes_required = num * aligned_stored_size(data_size);
+            // Some callers relied on old behavior where the the file size was rounded up to the
+            // next page size because they append to the storage file after it was written.
+            // This behavior is not supported by a normal running validator.  Since this function
+            // is only called by tests/benches, add some extra capacity to the file to not break
+            // the tests/benches.  Those tests/benches should be updated though!  Bypassing the
+            // write cache in general is not supported.
+            let bytes_required = num * aligned_stored_size(data_size) + 4096;
             // allocate an append vec for this slot that can hold all the test accounts. This prevents us from creating more than 1 append vec for this slot.
             _ = accounts.accounts_db.create_and_insert_store(
                 slot,
-                AccountsDb::page_align(bytes_required as u64),
+                bytes_required as u64,
                 "create_test_accounts",
             );
         }
@@ -12140,72 +12137,59 @@ pub mod tests {
         let db = AccountsDb::new_single_for_tests();
 
         let common_store_path = Path::new("");
-        let slot_id_1 = 12;
-        let store_file_size = 2 * PAGE_SIZE;
+        let store_file_size = 100;
 
-        let store1_id = 22;
+        let store1_slot = 11;
         let store1 = Arc::new(AccountStorageEntry::new(
             common_store_path,
-            slot_id_1,
-            store1_id,
+            store1_slot,
+            store1_slot as AccountsFileId,
             store_file_size,
             AccountsFileProvider::AppendVec,
         ));
+        db.storage.insert(store1_slot, Arc::clone(&store1));
         store1.alive_bytes.store(0, Ordering::Release);
+        candidates.insert(store1_slot);
 
-        candidates.insert(slot_id_1);
-
-        let slot_id_2 = 13;
-
-        let store2_id = 44;
+        let store2_slot = 22;
         let store2 = Arc::new(AccountStorageEntry::new(
             common_store_path,
-            slot_id_2,
-            store2_id,
+            store2_slot,
+            store2_slot as AccountsFileId,
             store_file_size,
             AccountsFileProvider::AppendVec,
         ));
-
-        // The store2's alive_ratio is 0.5: as its page aligned alive size is 1 page.
-        let store2_alive_bytes = (PAGE_SIZE - 1) as usize;
+        db.storage.insert(store2_slot, Arc::clone(&store2));
         store2
             .alive_bytes
-            .store(store2_alive_bytes, Ordering::Release);
-        candidates.insert(slot_id_2);
+            .store(store_file_size as usize / 2, Ordering::Release);
+        candidates.insert(store2_slot);
 
-        let slot_id_3 = 14;
-        let store3_id = 55;
-        let entry3 = Arc::new(AccountStorageEntry::new(
+        let store3_slot = 33;
+        let store3 = Arc::new(AccountStorageEntry::new(
             common_store_path,
-            slot_id_3,
-            store3_id,
+            store3_slot,
+            store3_slot as AccountsFileId,
             store_file_size,
             AccountsFileProvider::AppendVec,
         ));
-
-        db.storage.insert(slot_id_1, Arc::clone(&store1));
-        db.storage.insert(slot_id_2, Arc::clone(&store2));
-        db.storage.insert(slot_id_3, Arc::clone(&entry3));
-
-        // The store3's alive ratio is 1.0 as its page-aligned alive size is 2 pages
-        let store3_alive_bytes = (PAGE_SIZE + 1) as usize;
-        entry3
+        db.storage.insert(store3_slot, Arc::clone(&store3));
+        store3
             .alive_bytes
-            .store(store3_alive_bytes, Ordering::Release);
-
-        candidates.insert(slot_id_3);
+            .store(store_file_size as usize, Ordering::Release);
+        candidates.insert(store3_slot);
 
         // Set the target alive ratio to 0.6 so that we can just get rid of store1, the remaining two stores
-        // alive ratio can be > the target ratio: the actual ratio is 0.75 because of 3 alive pages / 4 total pages.
+        // alive ratio can be > the target ratio: the actual ratio is 0.75 because of 150 alive bytes / 200 total bytes.
         // The target ratio is also set to larger than store2's alive ratio: 0.5 so that it would be added
         // to the candidates list for next round.
         let target_alive_ratio = 0.6;
         let (selected_candidates, next_candidates) =
             db.select_candidates_by_total_usage(&candidates, target_alive_ratio, None);
         assert_eq!(1, selected_candidates.len());
-        assert!(selected_candidates.contains(&slot_id_1));
+        assert!(selected_candidates.contains(&store1_slot));
         assert_eq!(1, next_candidates.len());
-        assert!(next_candidates.contains(&slot_id_2));
+        assert!(next_candidates.contains(&store2_slot));
     }
 
     #[test]
@@ -12216,64 +12200,55 @@ pub mod tests {
         let mut candidates = ShrinkCandidates::default();
 
         let common_store_path = Path::new("");
-        let slot_id_1 = 12;
-        let store_file_size = 2 * PAGE_SIZE;
+        let store_file_size = 100;
 
-        let store1_id = 22;
+        let store1_slot = 11;
         let store1 = Arc::new(AccountStorageEntry::new(
             common_store_path,
-            slot_id_1,
-            store1_id,
+            store1_slot,
+            store1_slot as AccountsFileId,
             store_file_size,
             AccountsFileProvider::AppendVec,
         ));
+        db.storage.insert(store1_slot, Arc::clone(&store1));
         store1.alive_bytes.store(0, Ordering::Release);
-        db.storage.insert(slot_id_1, Arc::clone(&store1));
-        candidates.insert(slot_id_1);
+        candidates.insert(store1_slot);
 
-        let slot_id_2 = 13;
-        let store2_id = 44;
+        let store2_slot = 22;
         let store2 = Arc::new(AccountStorageEntry::new(
             common_store_path,
-            slot_id_2,
-            store2_id,
+            store2_slot,
+            store2_slot as AccountsFileId,
             store_file_size,
             AccountsFileProvider::AppendVec,
         ));
-        db.storage.insert(slot_id_2, Arc::clone(&store2));
-
-        // The store2's alive_ratio is 0.5: as its page aligned alive size is 1 page.
-        let store2_alive_bytes = (PAGE_SIZE - 1) as usize;
+        db.storage.insert(store2_slot, Arc::clone(&store2));
         store2
             .alive_bytes
-            .store(store2_alive_bytes, Ordering::Release);
-        candidates.insert(slot_id_2);
+            .store(store_file_size as usize / 2, Ordering::Release);
+        candidates.insert(store2_slot);
 
-        let slot_id_3 = 14;
-        let store3_id = 55;
-        let entry3 = Arc::new(AccountStorageEntry::new(
+        let store3_slot = 33;
+        let store3 = Arc::new(AccountStorageEntry::new(
             common_store_path,
-            slot_id_3,
-            store3_id,
+            store3_slot,
+            store3_slot as AccountsFileId,
             store_file_size,
             AccountsFileProvider::AppendVec,
         ));
-
-        // The store3's alive ratio is 1.0 as its page-aligned alive size is 2 pages
-        let store3_alive_bytes = (PAGE_SIZE + 1) as usize;
-        entry3
+        db.storage.insert(store3_slot, Arc::clone(&store3));
+        store3
             .alive_bytes
-            .store(store3_alive_bytes, Ordering::Release);
-
-        candidates.insert(slot_id_3);
+            .store(store_file_size as usize, Ordering::Release);
+        candidates.insert(store3_slot);
 
         // Set the target ratio to default (0.8), both store1 and store2 must be selected and store3 is ignored.
         let target_alive_ratio = DEFAULT_ACCOUNTS_SHRINK_RATIO;
         let (selected_candidates, next_candidates) =
             db.select_candidates_by_total_usage(&candidates, target_alive_ratio, None);
         assert_eq!(2, selected_candidates.len());
-        assert!(selected_candidates.contains(&slot_id_1));
-        assert!(selected_candidates.contains(&slot_id_2));
+        assert!(selected_candidates.contains(&store1_slot));
+        assert!(selected_candidates.contains(&store2_slot));
         assert_eq!(0, next_candidates.len());
     }
 
@@ -12284,48 +12259,38 @@ pub mod tests {
         let db = AccountsDb::new_single_for_tests();
         let mut candidates = ShrinkCandidates::default();
 
-        let slot1 = 12;
         let common_store_path = Path::new("");
+        let store_file_size = 100;
 
-        let store_file_size = 4 * PAGE_SIZE;
-        let store1_id = 22;
+        let store1_slot = 11;
         let store1 = Arc::new(AccountStorageEntry::new(
             common_store_path,
-            slot1,
-            store1_id,
+            store1_slot,
+            store1_slot as AccountsFileId,
             store_file_size,
             AccountsFileProvider::AppendVec,
         ));
-
-        // store1 has 1 page-aligned alive bytes, its alive ratio is 1/4: 0.25
-        let store1_alive_bytes = (PAGE_SIZE - 1) as usize;
+        db.storage.insert(store1_slot, Arc::clone(&store1));
         store1
             .alive_bytes
-            .store(store1_alive_bytes, Ordering::Release);
+            .store(store_file_size as usize / 4, Ordering::Release);
+        candidates.insert(store1_slot);
 
-        candidates.insert(slot1);
-        db.storage.insert(slot1, Arc::clone(&store1));
-
-        let store2_id = 44;
-        let slot2 = 44;
+        let store2_slot = 22;
         let store2 = Arc::new(AccountStorageEntry::new(
             common_store_path,
-            slot2,
-            store2_id,
+            store2_slot,
+            store2_slot as AccountsFileId,
             store_file_size,
             AccountsFileProvider::AppendVec,
         ));
-
-        // store2 has 2 page-aligned bytes, its alive ratio is 2/4: 0.5
-        let store2_alive_bytes = (PAGE_SIZE + 1) as usize;
+        db.storage.insert(store2_slot, Arc::clone(&store2));
         store2
             .alive_bytes
-            .store(store2_alive_bytes, Ordering::Release);
+            .store(store_file_size as usize / 2, Ordering::Release);
+        candidates.insert(store2_slot);
 
-        candidates.insert(slot2);
-        db.storage.insert(slot2, Arc::clone(&store2));
-
-        for newest_ancient_slot in [None, Some(slot1), Some(slot2)] {
+        for newest_ancient_slot in [None, Some(store1_slot), Some(store2_slot)] {
             // Set the target ratio to default (0.8), both stores from the two different slots must be selected.
             let target_alive_ratio = DEFAULT_ACCOUNTS_SHRINK_RATIO;
             let (selected_candidates, next_candidates) = db.select_candidates_by_total_usage(
@@ -12334,9 +12299,9 @@ pub mod tests {
                 newest_ancient_slot.map(|newest_ancient_slot| newest_ancient_slot + 1),
             );
             assert_eq!(
-                if newest_ancient_slot == Some(slot1) {
+                if newest_ancient_slot == Some(store1_slot) {
                     1
-                } else if newest_ancient_slot == Some(slot2) {
+                } else if newest_ancient_slot == Some(store2_slot) {
                     0
                 } else {
                     2
@@ -12345,11 +12310,11 @@ pub mod tests {
             );
             assert_eq!(
                 newest_ancient_slot.is_none(),
-                selected_candidates.contains(&slot1)
+                selected_candidates.contains(&store1_slot)
             );
 
-            if newest_ancient_slot != Some(slot2) {
-                assert!(selected_candidates.contains(&slot2));
+            if newest_ancient_slot != Some(store2_slot) {
+                assert!(selected_candidates.contains(&store2_slot));
             }
             assert_eq!(0, next_candidates.len());
         }
@@ -14388,26 +14353,34 @@ pub mod tests {
     #[test]
     fn test_shrink_productive() {
         solana_logger::setup();
-        let s1 =
-            AccountStorageEntry::new(Path::new("."), 0, 0, 1024, AccountsFileProvider::AppendVec);
-        let store = Arc::new(s1);
-        assert!(!AccountsDb::is_shrinking_productive(0, &store));
+        let path = Path::new("");
+        let file_size = 100;
+        let slot = 11;
 
-        let s1 = AccountStorageEntry::new(
-            Path::new("."),
-            0,
-            0,
-            PAGE_SIZE * 4,
+        let store = Arc::new(AccountStorageEntry::new(
+            path,
+            slot,
+            slot as AccountsFileId,
+            file_size,
             AccountsFileProvider::AppendVec,
-        );
-        let store = Arc::new(s1);
-        store.add_account((3 * PAGE_SIZE as usize) - 1);
-        store.add_account(10);
-        store.remove_accounts(10, false, 1);
-        assert!(AccountsDb::is_shrinking_productive(0, &store));
+        ));
+        store.add_account(file_size as usize);
+        assert!(!AccountsDb::is_shrinking_productive(slot, &store));
 
-        store.add_account(PAGE_SIZE as usize);
-        assert!(!AccountsDb::is_shrinking_productive(0, &store));
+        let store = Arc::new(AccountStorageEntry::new(
+            path,
+            slot,
+            slot as AccountsFileId,
+            file_size,
+            AccountsFileProvider::AppendVec,
+        ));
+        store.add_account(file_size as usize / 2);
+        store.add_account(file_size as usize / 4);
+        store.remove_accounts(file_size as usize / 4, false, 1);
+        assert!(AccountsDb::is_shrinking_productive(slot, &store));
+
+        store.add_account(file_size as usize / 2);
+        assert!(!AccountsDb::is_shrinking_productive(slot, &store));
     }
 
     #[test]
@@ -14416,7 +14389,7 @@ pub mod tests {
 
         let mut accounts = AccountsDb::new_single_for_tests();
         let common_store_path = Path::new("");
-        let store_file_size = 2 * PAGE_SIZE;
+        let store_file_size = 100_000;
         let entry = Arc::new(AccountStorageEntry::new(
             common_store_path,
             0,
@@ -14435,14 +14408,24 @@ pub mod tests {
                 panic!("Expect the default to be TotalSpace")
             }
         }
-        entry.alive_bytes.store(3000, Ordering::Release);
+
+        entry
+            .alive_bytes
+            .store(store_file_size as usize - 1, Ordering::Release);
         assert!(accounts.is_candidate_for_shrink(&entry));
-        entry.alive_bytes.store(5000, Ordering::Release);
+        entry
+            .alive_bytes
+            .store(store_file_size as usize, Ordering::Release);
         assert!(!accounts.is_candidate_for_shrink(&entry));
-        accounts.shrink_ratio = AccountShrinkThreshold::TotalSpace { shrink_ratio: 0.3 };
-        entry.alive_bytes.store(3000, Ordering::Release);
+
+        let shrink_ratio = 0.3;
+        let file_size_shrink_limit = (store_file_size as f64 * shrink_ratio) as usize;
+        entry
+            .alive_bytes
+            .store(file_size_shrink_limit + 1, Ordering::Release);
+        accounts.shrink_ratio = AccountShrinkThreshold::TotalSpace { shrink_ratio };
         assert!(accounts.is_candidate_for_shrink(&entry));
-        accounts.shrink_ratio = AccountShrinkThreshold::IndividualStore { shrink_ratio: 0.3 };
+        accounts.shrink_ratio = AccountShrinkThreshold::IndividualStore { shrink_ratio };
         assert!(!accounts.is_candidate_for_shrink(&entry));
     }
 
@@ -16764,7 +16747,7 @@ pub mod tests {
     fn test_handle_dropped_roots_for_ancient_assert() {
         solana_logger::setup();
         let common_store_path = Path::new("");
-        let store_file_size = 2 * PAGE_SIZE;
+        let store_file_size = 10_000;
         let entry = Arc::new(AccountStorageEntry::new(
             common_store_path,
             0,

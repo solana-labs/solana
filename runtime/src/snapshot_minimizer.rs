@@ -342,10 +342,12 @@ impl<'a> SnapshotMinimizer<'a> {
             .collect();
         let _ = self.accounts_db().purge_keys_exact(purge_pubkeys.iter());
 
-        let aligned_total: u64 = AccountsDb::page_align(total_bytes as u64);
         let mut shrink_in_progress = None;
-        if aligned_total > 0 {
-            shrink_in_progress = Some(self.accounts_db().get_store_for_shrink(slot, aligned_total));
+        if total_bytes > 0 {
+            shrink_in_progress = Some(
+                self.accounts_db()
+                    .get_store_for_shrink(slot, total_bytes as u64),
+            );
             let new_storage = shrink_in_progress.as_ref().unwrap().new_storage();
 
             let accounts = [(slot, &keep_accounts[..])];
