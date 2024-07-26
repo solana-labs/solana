@@ -2220,4 +2220,47 @@ pub mod test {
             compute_receive_window_ratio_for_staked_node(max_stake, min_stake, max_stake + 10);
         assert_eq!(ratio, max_ratio);
     }
+
+    #[tokio::test]
+    async fn test_throttling_check_no_packet_drop() {
+        solana_logger::setup_with_default_filter();
+
+        let (server_handle, exit, receiver, tpu_address, stats) = setup_quic_server(None, 1);
+
+        let client_connection = make_client_endpoint(&tpu_address, None).await;
+
+        // unstaked connection can handle up to 100tps, so we should send in ~1s.
+        let expected_num_txs = 100;
+        let start_time = tokio::time::Instant::now();
+        for i in 0..expected_num_txs {
+            let mut send_stream = client_connection.open_uni().await.unwrap();
+            let data = format!("{i}").into_bytes();
+            send_stream.write_all(&data).await.unwrap();
+            send_stream.finish().await.unwrap();
+        }
+        let elapsed_sending: f64 = start_time.elapsed().as_secs_f64();
+        info!("Elapsed sending: {elapsed_sending}");
+
+        // check that delivered all of them
+        let start_time = tokio::time::Instant::now();
+        let mut num_txs_received = 0;
+        while num_txs_received < expected_num_txs && start_time.elapsed() < Duration::from_secs(2) {
+            if let Ok(packets) = receiver.try_recv() {
+                num_txs_received += packets.len();
+            } else {
+                sleep(Duration::from_millis(100)).await;
+            }
+        }
+        assert_eq!(expected_num_txs, num_txs_received);
+
+        // stop it
+        exit.store(true, Ordering::Relaxed);
+        server_handle.await.unwrap();
+
+        assert_eq!(
+            stats.total_new_streams.load(Ordering::Relaxed),
+            expected_num_txs
+        );
+        assert!(stats.throttled_unstaked_streams.load(Ordering::Relaxed) > 0);
+    }
 }
