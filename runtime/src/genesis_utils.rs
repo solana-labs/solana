@@ -1,8 +1,9 @@
 use {
+    log::*,
     solana_sdk::{
         account::{Account, AccountSharedData},
         feature::{self, Feature},
-        feature_set::FeatureSet,
+        feature_set::{FeatureSet, FEATURE_NAMES},
         fee_calculator::FeeRateGovernor,
         genesis_config::{ClusterType, GenesisConfig},
         native_token::sol_to_lamports,
@@ -197,6 +198,23 @@ pub fn activate_all_features(genesis_config: &mut GenesisConfig) {
     // Activate all features at genesis in development mode
     for feature_id in FeatureSet::default().inactive {
         activate_feature(genesis_config, feature_id);
+    }
+}
+
+pub fn deactivate_features(
+    genesis_config: &mut GenesisConfig,
+    features_to_deactivate: &Vec<Pubkey>,
+) {
+    // Remove all features in `features_to_skip` from genesis
+    for deactivate_feature_pk in features_to_deactivate {
+        if FEATURE_NAMES.contains_key(deactivate_feature_pk) {
+            genesis_config.accounts.remove(deactivate_feature_pk);
+        } else {
+            warn!(
+                "Feature {:?} set for deactivation is not a known Feature public key",
+                deactivate_feature_pk
+            );
+        }
     }
 }
 

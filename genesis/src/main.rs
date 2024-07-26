@@ -11,7 +11,7 @@ use {
             cluster_type_of, pubkey_of, pubkeys_of, unix_timestamp_from_rfc3339_datetime,
         },
         input_validators::{
-            is_pubkey_or_keypair, is_rfc3339_datetime, is_slot, is_valid_percentage,
+            is_pubkey, is_pubkey_or_keypair, is_rfc3339_datetime, is_slot, is_valid_percentage,
         },
     },
     solana_entry::poh::compute_hashes_per_tick,
@@ -364,6 +364,15 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 ),
         )
         .arg(
+            Arg::with_name("deactivate_feature")
+                .long("deactivate-feature")
+                .takes_value(true)
+                .value_name("FEATURE_PUBKEY")
+                .validator(is_pubkey)
+                .multiple(true)
+                .help("Deactivate this feature in genesis. Compatible with --cluster-type development"),
+        )
+        .arg(
             Arg::with_name("max_genesis_archive_unpacked_size")
                 .long("max-genesis-archive-unpacked-size")
                 .value_name("NUMBER")
@@ -470,6 +479,14 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     };
 
     let cluster_type = cluster_type_of(&matches, "cluster_type").unwrap();
+
+    // Get the features to deactivate if provided
+    let features_to_deactivate = pubkeys_of(&matches, "deactivate_feature").unwrap_or_default();
+
+    if cluster_type != ClusterType::Development && !features_to_deactivate.is_empty() {
+        eprintln!("Error: The --deativate-feature argument cannot be used with --cluster-type={cluster_type:?}");
+        std::process::exit(1);
+    }
 
     match matches.value_of("hashes_per_tick").unwrap() {
         "auto" => match cluster_type {
@@ -580,6 +597,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     solana_stake_program::add_genesis_accounts(&mut genesis_config);
     if genesis_config.cluster_type == ClusterType::Development {
         solana_runtime::genesis_utils::activate_all_features(&mut genesis_config);
+        if !features_to_deactivate.is_empty() {
+            solana_runtime::genesis_utils::deactivate_features(
+                &mut genesis_config,
+                &features_to_deactivate,
+            );
+        }
     }
 
     if let Some(files) = matches.values_of("primordial_accounts_file") {
