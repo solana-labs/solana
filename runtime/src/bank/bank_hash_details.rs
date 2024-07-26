@@ -69,6 +69,7 @@ impl BankHashDetails {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, Default)]
 pub struct TransactionDetails {
+    pub signature: String,
     pub index: usize,
     pub accounts: Vec<String>,
     pub instructions: Vec<UiInstruction>,

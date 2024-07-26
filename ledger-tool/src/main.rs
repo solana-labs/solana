@@ -2908,6 +2908,7 @@ fn record_transactions(
                     let execution_results = execution_results.map(|(details, _)| details);
 
                     TransactionDetails {
+                        signature: tx.signature().to_string(),
                         accounts,
                         instructions,
                         is_simple_vote_tx,
