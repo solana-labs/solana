@@ -39,8 +39,7 @@ pub struct FeeDetails {
 }
 
 impl FeeDetails {
-    #[cfg(feature = "dev-context-only-utils")]
-    pub fn new_for_tests(
+    pub fn new(
         transaction_fee: u64,
         prioritization_fee: u64,
         remove_rounding_in_fee_calculation: bool,
@@ -126,6 +125,10 @@ impl FeeStructure {
 
     /// Calculate fee for `SanitizedMessage`
     #[cfg(not(target_os = "solana"))]
+    #[deprecated(
+        since = "2.1.0",
+        note = "Please use `solana_fee::calculate_fee` instead."
+    )]
     pub fn calculate_fee(
         &self,
         message: &SanitizedMessage,
@@ -134,6 +137,7 @@ impl FeeStructure {
         include_loaded_account_data_size_in_fee: bool,
         remove_rounding_in_fee_calculation: bool,
     ) -> u64 {
+        #[allow(deprecated)]
         self.calculate_fee_details(
             message,
             lamports_per_signature,
@@ -146,6 +150,10 @@ impl FeeStructure {
 
     /// Calculate fee details for `SanitizedMessage`
     #[cfg(not(target_os = "solana"))]
+    #[deprecated(
+        since = "2.1.0",
+        note = "Please use `solana_fee::calculate_fee_details` instead."
+    )]
     pub fn calculate_fee_details(
         &self,
         message: &SanitizedMessage,

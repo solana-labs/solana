@@ -4835,6 +4835,7 @@ dependencies = [
  "solana-connection-cache",
  "solana-cost-model",
  "solana-entry",
+ "solana-fee",
  "solana-geyser-plugin-manager",
  "solana-gossip",
  "solana-ledger",
@@ -4968,6 +4969,14 @@ dependencies = [
  "spl-memo",
  "thiserror",
  "tokio",
+]
+
+[[package]]
+name = "solana-fee"
+version = "2.1.0"
+dependencies = [
+ "solana-sdk",
+ "solana-svm-transaction",
 ]
 
 [[package]]
@@ -5620,6 +5629,7 @@ dependencies = [
  "solana-compute-budget-program",
  "solana-config-program",
  "solana-cost-model",
+ "solana-fee",
  "solana-inline-spl",
  "solana-loader-v4-program",
  "solana-measure",
@@ -5671,6 +5681,7 @@ dependencies = [
  "solana-bpf-loader-program",
  "solana-cli-output",
  "solana-compute-budget",
+ "solana-fee",
  "solana-ledger",
  "solana-log-collector",
  "solana-logger",
@@ -6328,6 +6339,7 @@ dependencies = [
  "serde_derive",
  "solana-bpf-loader-program",
  "solana-compute-budget",
+ "solana-fee",
  "solana-loader-v4-program",
  "solana-log-collector",
  "solana-measure",
@@ -6338,6 +6350,13 @@ dependencies = [
  "solana-timings",
  "solana-type-overrides",
  "solana-vote",
+]
+
+[[package]]
+name = "solana-svm-transaction"
+version = "2.1.0"
+dependencies = [
+ "solana-sdk",
 ]
 
 [[package]]

@@ -4,10 +4,7 @@ use {
     log::{debug, warn},
     solana_sdk::{
         account::{ReadableAccount, WritableAccount},
-        feature_set::{
-            include_loaded_accounts_data_size_in_fee_calculation,
-            remove_rounding_in_fee_calculation, reward_full_priority_fee,
-        },
+        feature_set::{remove_rounding_in_fee_calculation, reward_full_priority_fee},
         fee::FeeBudgetLimits,
         pubkey::Pubkey,
         reward_info::RewardInfo,
@@ -85,12 +82,11 @@ impl Bank {
         transaction: &SanitizedTransaction,
         fee_budget_limits: &FeeBudgetLimits,
     ) -> u64 {
-        let fee_details = self.fee_structure().calculate_fee_details(
-            transaction.message(),
-            self.get_lamports_per_signature(),
-            fee_budget_limits,
-            self.feature_set
-                .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
+        let fee_details = solana_fee::calculate_fee_details(
+            transaction,
+            self.get_lamports_per_signature() == 0,
+            self.fee_structure().lamports_per_signature,
+            fee_budget_limits.prioritization_fee,
             self.feature_set
                 .is_active(&remove_rounding_in_fee_calculation::id()),
         );

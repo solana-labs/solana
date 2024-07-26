@@ -6101,6 +6101,7 @@ dependencies = [
  "solana-core",
  "solana-cost-model",
  "solana-entry",
+ "solana-fee",
  "solana-frozen-abi",
  "solana-frozen-abi-macro",
  "solana-geyser-plugin-manager",
@@ -6295,6 +6296,14 @@ dependencies = [
  "spl-memo",
  "thiserror",
  "tokio",
+]
+
+[[package]]
+name = "solana-fee"
+version = "2.1.0"
+dependencies = [
+ "solana-sdk",
+ "solana-svm-transaction",
 ]
 
 [[package]]
@@ -7249,6 +7258,7 @@ dependencies = [
  "solana-compute-budget-program",
  "solana-config-program",
  "solana-cost-model",
+ "solana-fee",
  "solana-frozen-abi",
  "solana-frozen-abi-macro",
  "solana-inline-spl",
@@ -7576,6 +7586,7 @@ dependencies = [
  "solana-bpf-loader-program",
  "solana-compute-budget",
  "solana-compute-budget-program",
+ "solana-fee",
  "solana-frozen-abi",
  "solana-frozen-abi-macro",
  "solana-loader-v4-program",

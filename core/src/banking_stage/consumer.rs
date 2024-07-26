@@ -24,6 +24,7 @@ use {
     solana_sdk::{
         clock::{Slot, FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET, MAX_PROCESSING_AGE},
         feature_set,
+        fee::FeeBudgetLimits,
         message::SanitizedMessage,
         saturating_add_assign,
         timing::timestamp,
@@ -739,15 +740,14 @@ impl Consumer {
         error_counters: &mut TransactionErrorMetrics,
     ) -> Result<(), TransactionError> {
         let fee_payer = message.fee_payer();
-        let budget_limits =
-            process_compute_budget_instructions(message.program_instructions_iter())?.into();
-        let fee = bank.fee_structure().calculate_fee(
+        let fee_budget_limits = FeeBudgetLimits::from(process_compute_budget_instructions(
+            message.program_instructions_iter(),
+        )?);
+        let fee = solana_fee::calculate_fee(
             message,
-            bank.get_lamports_per_signature(),
-            &budget_limits,
-            bank.feature_set.is_active(
-                &feature_set::include_loaded_accounts_data_size_in_fee_calculation::id(),
-            ),
+            bank.get_lamports_per_signature() == 0,
+            bank.fee_structure().lamports_per_signature,
+            fee_budget_limits.prioritization_fee,
             bank.feature_set
                 .is_active(&feature_set::remove_rounding_in_fee_calculation::id()),
         );

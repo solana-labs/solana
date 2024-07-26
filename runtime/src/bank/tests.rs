@@ -2872,7 +2872,7 @@ fn test_filter_program_errors_and_collect_fee() {
     bank.deactivate_feature(&feature_set::reward_full_priority_fee::id());
 
     let tx_fee = 42;
-    let fee_details = FeeDetails::new_for_tests(tx_fee, 0, false);
+    let fee_details = FeeDetails::new(tx_fee, 0, false);
     let results = vec![
         new_execution_result(Ok(()), fee_details),
         new_execution_result(
@@ -2905,7 +2905,7 @@ fn test_filter_program_errors_and_collect_priority_fee() {
     bank.deactivate_feature(&feature_set::reward_full_priority_fee::id());
 
     let priority_fee = 42;
-    let fee_details: FeeDetails = FeeDetails::new_for_tests(0, priority_fee, false);
+    let fee_details: FeeDetails = FeeDetails::new(0, priority_fee, false);
     let results = vec![
         new_execution_result(Ok(()), fee_details),
         new_execution_result(
@@ -10028,11 +10028,17 @@ fn calculate_test_fee(
     lamports_per_signature: u64,
     fee_structure: &FeeStructure,
 ) -> u64 {
-    let budget_limits = process_compute_budget_instructions(message.program_instructions_iter())
-        .unwrap_or_default()
-        .into();
-
-    fee_structure.calculate_fee(message, lamports_per_signature, &budget_limits, false, true)
+    let fee_budget_limits = FeeBudgetLimits::from(
+        process_compute_budget_instructions(message.program_instructions_iter())
+            .unwrap_or_default(),
+    );
+    solana_fee::calculate_fee(
+        message,
+        lamports_per_signature == 0,
+        fee_structure.lamports_per_signature,
+        fee_budget_limits.prioritization_fee,
+        true,
+    )
 }
 
 #[test]
@@ -12870,7 +12876,7 @@ fn test_filter_program_errors_and_collect_fee_details() {
     let initial_payer_balance = 7_000;
     let tx_fee = 5000;
     let priority_fee = 1000;
-    let tx_fee_details = FeeDetails::new_for_tests(tx_fee, priority_fee, false);
+    let tx_fee_details = FeeDetails::new(tx_fee, priority_fee, false);
     let expected_collected_fee_details = CollectorFeeDetails {
         transaction_fee: 2 * tx_fee,
         priority_fee: 2 * priority_fee,

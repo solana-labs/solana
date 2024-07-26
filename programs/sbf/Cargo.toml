@@ -22,8 +22,8 @@ net2 = "0.2.37"
 num-derive = "0.4.2"
 num-traits = "0.2"
 rand = "0.8"
-serde = "1.0.112" # must match the serde_derive version, see https://github.com/serde-rs/serde/issues/2584#issuecomment-1685252251
-serde_derive = "1.0.112" # must match the serde version, see https://github.com/serde-rs/serde/issues/2584#issuecomment-1685252251
+serde = "1.0.112"                                                                             # must match the serde_derive version, see https://github.com/serde-rs/serde/issues/2584#issuecomment-1685252251
+serde_derive = "1.0.112"                                                                      # must match the serde version, see https://github.com/serde-rs/serde/issues/2584#issuecomment-1685252251
 serde_json = "1.0.56"
 solana-account-decoder = { path = "../../account-decoder", version = "=2.1.0" }
 solana-accounts-db = { path = "../../accounts-db", version = "=2.1.0" }
@@ -33,6 +33,7 @@ solana-cli-output = { path = "../../cli-output", version = "=2.1.0" }
 solana-compute-budget = { path = "../../compute-budget", version = "=2.1.0" }
 solana-curve25519 = { path = "../../curves/curve25519", version = "=2.1.0" }
 solana-decode-error = { path = "../../sdk/decode-error", version = "=2.1.0" }
+solana-fee = { path = "../../fee", version = "=2.1.0" }
 solana-ledger = { path = "../../ledger", version = "=2.1.0" }
 solana-log-collector = { path = "../../log-collector", version = "=2.1.0" }
 solana-logger = { path = "../../logger", version = "=2.1.0" }
@@ -99,6 +100,7 @@ solana-accounts-db = { workspace = true }
 solana-bpf-loader-program = { workspace = true }
 solana-cli-output = { workspace = true }
 solana-compute-budget = { workspace = true }
+solana-fee = { workspace = true }
 solana-ledger = { workspace = true }
 solana-log-collector = { workspace = true }
 solana-logger = { workspace = true }
