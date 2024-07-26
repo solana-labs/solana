@@ -446,7 +446,7 @@ impl SchedulerController {
                 },
                 true,
             ),
-            BufferedPacketsDecision::Forward => (MAX_PACKET_RECEIVE_TIME, false),
+            BufferedPacketsDecision::Forward => (MAX_PACKET_RECEIVE_TIME, self.forwarder.is_some()),
             BufferedPacketsDecision::ForwardAndHold | BufferedPacketsDecision::Hold => {
                 (MAX_PACKET_RECEIVE_TIME, true)
             }
