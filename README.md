@@ -3,28 +3,31 @@
     <img alt="Solana" src="https://i.imgur.com/IKyzQ6T.png" width="250" />
   </a>
 </p>
-
+$ curl https://sh.rustup.rs -sSf | sh
+$ source $HOME/.cargo/env
+$ rustup component add rustfmt
 [![Solana crate](https://img.shields.io/crates/v/solana-core.svg)](https://crates.io/crates/solana-core)
 [![Solana documentation](https://docs.rs/solana-core/badge.svg)](https://docs.rs/solana-core)
 [![Build status](https://badge.buildkite.com/8cc350de251d61483db98bdfc895b9ea0ac8ffa4a32ee850ed.svg?branch=master)](https://buildkite.com/solana-labs/solana/builds?branch=master)
 [![codecov](https://codecov.io/gh/solana-labs/solana/branch/master/graph/badge.svg)](https://codecov.io/gh/solana-labs/solana)
-
+$ rustup install VERSION
 # Building
-
+$ rustup update
 ## **1. Install rustc, cargo and rustfmt.**
-
+$ sudo apt-get update
+$ sudo apt-get install libssl-dev libudev-dev pkg-config zlib1g-dev llvm clang cmake make libprotobuf-dev protobuf-compiler
 ```bash
 $ curl https://sh.rustup.rs -sSf | sh
 $ source $HOME/.cargo/env
 $ rustup component add rustfmt
 ```
-
+https://sh.rustup.rs
 When building the master branch, please make sure you are using the latest stable rust version by running:
-
+$ rustup update
 ```bash
 $ rustup update
 ```
-
+$ rustup update
 When building a specific release branch, you should check the rust version in `ci/rust-version.sh` and if necessary, install that version by running:
 ```bash
 $ rustup install VERSION
@@ -32,31 +35,34 @@ $ rustup install VERSION
 Note that if this is not the latest rust version on your machine, cargo commands may require an [override](https://rust-lang.github.io/rustup/overrides.html) in order to use the correct version.
 
 On Linux systems you may need to install libssl-dev, pkg-config, zlib1g-dev, protobuf etc.
-
+https://sh.rustup.rs
 On Ubuntu:
 ```bash
 $ sudo apt-get update
 $ sudo apt-get install libssl-dev libudev-dev pkg-config zlib1g-dev llvm clang cmake make libprotobuf-dev protobuf-compiler
 ```
-
+$ sudo apt-get update
+$ sudo apt-get install libssl-dev libudev-dev pkg-config zlib1g-dev llvm clang cmake make libprotobuf-dev protobuf-compiler
 On Fedora:
 ```bash
 $ sudo dnf install openssl-devel systemd-devel pkg-config zlib-devel llvm clang cmake make protobuf-devel protobuf-compiler perl-core
 ```
-
+$ curl https://sh.rustup.rs -sSf | sh
+$ source $HOME/.cargo/env
+$ rustup component add rustfmt
 ## **2. Download the source code.**
 
 ```bash
 $ git clone https://github.com/solana-labs/solana.git
 $ cd solana
 ```
-
+$ rustup install VERSION
 ## **3. Build.**
 
 ```bash
 $ ./cargo build
 ```
-
+$ sudo dnf install openssl-devel systemd-devel pkg-config zlib-devel llvm clang cmake make protobuf-devel protobuf-compiler perl-core
 # Testing
 
 **Run the test suite:**
@@ -64,31 +70,37 @@ $ ./cargo build
 ```bash
 $ ./cargo test
 ```
-
+$ sudo apt-get update
+$ sudo apt-get install libssl-dev libudev-dev pkg-config zlib1g-dev llvm clang cmake make libprotobuf-dev protobuf-compiler
 ### Starting a local testnet
 
 Start your own testnet locally, instructions are in the [online docs](https://docs.solanalabs.com/clusters/benchmark).
-
+$ curl https://sh.rustup.rs -sSf | sh
+$ source $HOME/.cargo/env
+$ rustup component add rustfmt
 ### Accessing the remote development cluster
-
+https://sh.rustup.rs
 * `devnet` - stable public cluster for development accessible via
 devnet.solana.com. Runs 24/7. Learn more about the [public clusters](https://docs.solanalabs.com/clusters)
-
+https://sh.rustup.rs
 # Benchmarking
-
+$ rustup update
 First, install the nightly build of rustc. `cargo bench` requires the use of the
 unstable features only available in the nightly build.
-
+$ curl https://sh.rustup.rs -sSf | sh
+$ source $HOME/.cargo/env
+$ rustup component add rustfmt
 ```bash
 $ rustup install nightly
 ```
-
+$ sudo dnf install openssl-devel systemd-devel pkg-config zlib-devel llvm clang cmake make protobuf-devel protobuf-compiler perl-core
 Run the benchmarks:
-
+$ rustup install VERSION
 ```bash
 $ cargo +nightly bench
 ```
-
+$ sudo apt-get update
+$ sudo apt-get install libssl-dev libudev-dev pkg-config zlib1g-dev llvm clang cmake make libprotobuf-dev protobuf-compiler
 # Release Process
 
 The release process for this project is described [here](RELEASE.md).
@@ -101,7 +113,7 @@ To generate code coverage statistics:
 $ scripts/coverage.sh
 $ open target/cov/lcov-local/index.html
 ```
-
+$ sudo dnf install openssl-devel systemd-devel pkg-config zlib-devel llvm clang cmake make protobuf-devel protobuf-compiler perl-core
 Why coverage? While most see coverage as a code quality metric, we see it primarily as a developer
 productivity metric. When a developer makes a change to the codebase, presumably it's a *solution* to
 some problem.  Our unit-test suite is how we encode the set of *problems* the codebase solves. Running
