@@ -75,8 +75,8 @@ impl TpuInfo for ClusterTpuInfo {
     ) -> Vec<(&SocketAddr, Slot)> {
         let recorder = self.poh_recorder.read().unwrap();
         let leaders: Vec<_> = (0..max_count)
+            .rev()
             .filter_map(|future_slot| {
-                let future_slot = max_count.wrapping_sub(future_slot);
                 NUM_CONSECUTIVE_LEADER_SLOTS
                     .checked_mul(future_slot)
                     .and_then(|slots_in_the_future| {
@@ -208,6 +208,10 @@ mod test {
             leader_info.get_leader_tpus(1, Protocol::UDP),
             vec![&recent_peers.get(&first_leader).unwrap().0]
         );
+        assert_eq!(
+            leader_info.get_leader_tpus_with_slots(1, Protocol::UDP),
+            vec![(&recent_peers.get(&first_leader).unwrap().0, 0)]
+        );
 
         let second_leader = solana_ledger::leader_schedule_utils::slot_leader_at(
             slot + NUM_CONSECUTIVE_LEADER_SLOTS,
@@ -222,6 +226,13 @@ mod test {
         assert_eq!(
             leader_info.get_leader_tpus(2, Protocol::UDP),
             expected_leader_sockets
+        );
+        assert_eq!(
+            leader_info.get_leader_tpus_with_slots(2, Protocol::UDP),
+            expected_leader_sockets
+                .into_iter()
+                .zip([0, 4])
+                .collect::<Vec<_>>()
         );
 
         let third_leader = solana_ledger::leader_schedule_utils::slot_leader_at(
@@ -239,9 +250,24 @@ mod test {
             leader_info.get_leader_tpus(3, Protocol::UDP),
             expected_leader_sockets
         );
+        // Only 2 leader tpus are returned always... so [0, 4, 8] isn't right here.
+        // This assumption is safe. After all, leader schedule generation must be deterministic.
+        assert_eq!(
+            leader_info.get_leader_tpus_with_slots(3, Protocol::UDP),
+            expected_leader_sockets
+                .into_iter()
+                .zip([0, 4])
+                .collect::<Vec<_>>()
+        );
 
         for x in 4..8 {
             assert!(leader_info.get_leader_tpus(x, Protocol::UDP).len() <= recent_peers.len());
+            assert!(
+                leader_info
+                    .get_leader_tpus_with_slots(x, Protocol::UDP)
+                    .len()
+                    <= recent_peers.len()
+            );
         }
     }
 }
