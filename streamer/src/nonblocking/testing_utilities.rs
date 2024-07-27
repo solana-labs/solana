@@ -54,7 +54,7 @@ pub fn get_client_config(keypair: &Keypair) -> ClientConfig {
         .with_safe_defaults()
         .with_custom_certificate_verifier(SkipServerVerification::new())
         .with_client_auth_cert(vec![cert], key)
-        .expect("Failed to use client certificate");
+        .expect("Provided key should be correctly set.");
 
     crypto.enable_early_data = true;
     crypto.alpn_protocols = vec![ALPN_TPU_PROTOCOL_ID.to_vec()];
@@ -70,16 +70,45 @@ pub fn get_client_config(keypair: &Keypair) -> ClientConfig {
     config
 }
 
+#[derive(Debug, Clone)]
+pub struct TestServerConfig {
+    pub max_connections_per_peer: usize,
+    pub max_staked_connections: usize,
+    pub max_unstaked_connections: usize,
+    pub max_streams_per_ms: u64,
+    pub max_connections_per_ipaddr_per_minute: u64,
+}
+
+impl Default for TestServerConfig {
+    fn default() -> Self {
+        Self {
+            max_connections_per_peer: 1,
+            max_staked_connections: MAX_STAKED_CONNECTIONS,
+            max_unstaked_connections: MAX_UNSTAKED_CONNECTIONS,
+            max_streams_per_ms: DEFAULT_MAX_STREAMS_PER_MS,
+            max_connections_per_ipaddr_per_minute: DEFAULT_MAX_CONNECTIONS_PER_IPADDR_PER_MINUTE,
+        }
+    }
+}
+
+pub struct SpawnTestServerResult {
+    pub join_handle: JoinHandle<()>,
+    pub exit: Arc<AtomicBool>,
+    pub receiver: crossbeam_channel::Receiver<PacketBatch>,
+    pub server_address: SocketAddr,
+    pub stats: Arc<StreamerStats>,
+}
+
 pub fn setup_quic_server(
     option_staked_nodes: Option<StakedNodes>,
-    max_connections_per_peer: usize,
-) -> (
-    JoinHandle<()>,
-    Arc<AtomicBool>,
-    crossbeam_channel::Receiver<PacketBatch>,
-    SocketAddr,
-    Arc<StreamerStats>,
-) {
+    TestServerConfig {
+        max_connections_per_peer,
+        max_staked_connections,
+        max_unstaked_connections,
+        max_streams_per_ms,
+        max_connections_per_ipaddr_per_minute,
+    }: TestServerConfig,
+) -> SpawnTestServerResult {
     let sockets = {
         #[cfg(not(target_os = "windows"))]
         {
@@ -116,7 +145,7 @@ pub fn setup_quic_server(
     let SpawnNonBlockingServerResult {
         endpoints: _,
         stats,
-        thread: t,
+        thread: handle,
         max_concurrent_connections: _,
     } = spawn_server_multi(
         "quic_streamer_test",
@@ -126,15 +155,21 @@ pub fn setup_quic_server(
         exit.clone(),
         max_connections_per_peer,
         staked_nodes,
-        MAX_STAKED_CONNECTIONS,
-        MAX_UNSTAKED_CONNECTIONS,
-        DEFAULT_MAX_STREAMS_PER_MS,
-        DEFAULT_MAX_CONNECTIONS_PER_IPADDR_PER_MINUTE,
+        max_staked_connections,
+        max_unstaked_connections,
+        max_streams_per_ms,
+        max_connections_per_ipaddr_per_minute,
         Duration::from_secs(2),
         DEFAULT_TPU_COALESCE,
     )
     .unwrap();
-    (t, exit, receiver, server_address, stats)
+    SpawnTestServerResult {
+        join_handle: handle,
+        exit,
+        receiver,
+        server_address,
+        stats,
+    }
 }
 
 pub async fn make_client_endpoint(
@@ -155,7 +190,7 @@ pub async fn make_client_endpoint(
     ));
     endpoint
         .connect(*addr, "localhost")
-        .expect("Failed in connecting")
+        .expect("Endpoint configuration should be correct")
         .await
-        .expect("Failed in waiting")
+        .expect("Test server should be already listening on 'localhost'")
 }
