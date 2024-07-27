@@ -2290,9 +2290,15 @@ pub mod test {
     async fn test_throttling_check_no_packet_drop() {
         solana_logger::setup_with_default_filter();
 
-        let (server_handle, exit, receiver, tpu_address, stats) = setup_quic_server(None, 1);
+        let SpawnTestServerResult {
+            join_handle,
+            exit,
+            receiver,
+            server_address,
+            stats,
+        } = setup_quic_server(None, TestServerConfig::default());
 
-        let client_connection = make_client_endpoint(&tpu_address, None).await;
+        let client_connection = make_client_endpoint(&server_address, None).await;
 
         // unstaked connection can handle up to 100tps, so we should send in ~1s.
         let expected_num_txs = 100;
@@ -2320,7 +2326,7 @@ pub mod test {
 
         // stop it
         exit.store(true, Ordering::Relaxed);
-        server_handle.await.unwrap();
+        join_handle.await.unwrap();
 
         assert_eq!(
             stats.total_new_streams.load(Ordering::Relaxed),
