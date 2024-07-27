@@ -90,6 +90,14 @@ impl RollbackAccounts {
             Self::SameNonceAndFeePayer { nonce } => nonce.account(),
         }
     }
+
+    /// Number of accounts tracked for rollback
+    pub fn count(&self) -> usize {
+        match self {
+            Self::FeePayerOnly { .. } | Self::SameNonceAndFeePayer { .. } => 1,
+            Self::SeparateNonceAndFeePayer { .. } => 2,
+        }
+    }
 }
 
 #[cfg(test)]

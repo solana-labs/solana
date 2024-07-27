@@ -16,6 +16,30 @@ use {
     },
 };
 
+// Used to approximate how many accounts will be calculated for storage so that
+// vectors are allocated with an appropriate capacity. Doesn't account for some
+// optimization edge cases where some write locked accounts have skip storage.
+fn max_number_of_accounts_to_collect(
+    txs: &[SanitizedTransaction],
+    execution_results: &[TransactionExecutionResult],
+) -> usize {
+    execution_results
+        .iter()
+        .zip(txs)
+        .filter_map(|(execution_result, tx)| {
+            execution_result
+                .executed_transaction()
+                .map(|executed_tx| (executed_tx, tx))
+        })
+        .map(
+            |(executed_tx, tx)| match executed_tx.execution_details.status {
+                Ok(_) => tx.message().num_write_locks() as usize,
+                Err(_) => executed_tx.loaded_transaction.rollback_accounts.count(),
+            },
+        )
+        .sum()
+}
+
 pub fn collect_accounts_to_store<'a>(
     txs: &'a [SanitizedTransaction],
     execution_results: &'a mut [TransactionExecutionResult],
@@ -25,10 +49,9 @@ pub fn collect_accounts_to_store<'a>(
     Vec<(&'a Pubkey, &'a AccountSharedData)>,
     Vec<Option<&'a SanitizedTransaction>>,
 ) {
-    // TODO: calculate a better initial capacity for these vectors. The current
-    // usage of the length of execution results is far from accurate.
-    let mut accounts = Vec::with_capacity(execution_results.len());
-    let mut transactions = Vec::with_capacity(execution_results.len());
+    let collect_capacity = max_number_of_accounts_to_collect(txs, execution_results);
+    let mut accounts = Vec::with_capacity(collect_capacity);
+    let mut transactions = Vec::with_capacity(collect_capacity);
     for (execution_result, tx) in execution_results.iter_mut().zip(txs) {
         let Some(executed_tx) = execution_result.executed_transaction_mut() else {
             // Don't store any accounts if tx wasn't executed
@@ -255,6 +278,8 @@ mod tests {
             new_execution_result(Ok(()), loaded0),
             new_execution_result(Ok(()), loaded1),
         ];
+        let max_collected_accounts = max_number_of_accounts_to_collect(&txs, &execution_results);
+        assert_eq!(max_collected_accounts, 2);
         let (collected_accounts, transactions) =
             collect_accounts_to_store(&txs, &mut execution_results, &DurableNonce::default(), 0);
         assert_eq!(collected_accounts.len(), 2);
@@ -464,6 +489,8 @@ mod tests {
             )),
             loaded,
         )];
+        let max_collected_accounts = max_number_of_accounts_to_collect(&txs, &execution_results);
+        assert_eq!(max_collected_accounts, 2);
         let (collected_accounts, _) =
             collect_accounts_to_store(&txs, &mut execution_results, &durable_nonce, 0);
         assert_eq!(collected_accounts.len(), 2);
@@ -560,6 +587,8 @@ mod tests {
             )),
             loaded,
         )];
+        let max_collected_accounts = max_number_of_accounts_to_collect(&txs, &execution_results);
+        assert_eq!(max_collected_accounts, 1);
         let (collected_accounts, _) =
             collect_accounts_to_store(&txs, &mut execution_results, &durable_nonce, 0);
         assert_eq!(collected_accounts.len(), 1);
