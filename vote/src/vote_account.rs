@@ -11,6 +11,7 @@ use {
         cmp::Ordering,
         collections::{hash_map::Entry, HashMap},
         iter::FromIterator,
+        mem,
         sync::{Arc, OnceLock},
     },
     thiserror::Error,
@@ -81,8 +82,8 @@ impl VoteAccount {
     }
 
     /// VoteState.node_pubkey of this vote-account.
-    pub fn node_pubkey(&self) -> Option<Pubkey> {
-        Some(self.vote_state().ok()?.node_pubkey)
+    pub fn node_pubkey(&self) -> Option<&Pubkey> {
+        self.vote_state().ok().map(|s| &s.node_pubkey)
     }
 }
 
@@ -103,7 +104,7 @@ impl VoteAccounts {
                         .values()
                         .filter(|(stake, _)| *stake != 0u64)
                         .filter_map(|(stake, vote_account)| {
-                            Some((vote_account.node_pubkey()?, stake))
+                            Some((*vote_account.node_pubkey()?, stake))
                         })
                         .into_grouping_map()
                         .aggregate(|acc, _node_pubkey, stake| {
@@ -144,11 +145,44 @@ impl VoteAccounts {
         Some(vote_account)
     }
 
-    pub fn insert(&mut self, pubkey: Pubkey, (stake, vote_account): (u64, VoteAccount)) {
-        self.add_node_stake(stake, &vote_account);
+    pub fn insert(
+        &mut self,
+        pubkey: Pubkey,
+        new_vote_account: VoteAccount,
+        calculate_stake: impl FnOnce() -> u64,
+    ) -> Option<VoteAccount> {
         let vote_accounts = Arc::make_mut(&mut self.vote_accounts);
-        if let Some((stake, vote_account)) = vote_accounts.insert(pubkey, (stake, vote_account)) {
-            self.sub_node_stake(stake, &vote_account);
+        match vote_accounts.entry(pubkey) {
+            Entry::Occupied(mut entry) => {
+                // This is an upsert, we need to update the vote state and move the stake if needed.
+                let (stake, old_vote_account) = entry.get_mut();
+
+                if let Some(staked_nodes) = self.staked_nodes.get_mut() {
+                    let old_node_pubkey = old_vote_account.node_pubkey();
+                    let new_node_pubkey = new_vote_account.node_pubkey();
+                    if new_node_pubkey != old_node_pubkey {
+                        // The node keys have changed, we move the stake from the old node to the
+                        // new one
+                        Self::do_sub_node_stake(staked_nodes, *stake, old_node_pubkey);
+                        Self::do_add_node_stake(staked_nodes, *stake, new_node_pubkey.copied());
+                    }
+                }
+
+                // Update the vote state
+                Some(mem::replace(old_vote_account, new_vote_account))
+            }
+            Entry::Vacant(entry) => {
+                // This is a new vote account. We don't know the stake yet, so we need to compute it.
+                let (stake, vote_account) = entry.insert((calculate_stake(), new_vote_account));
+                if let Some(staked_nodes) = self.staked_nodes.get_mut() {
+                    Self::do_add_node_stake(
+                        staked_nodes,
+                        *stake,
+                        vote_account.node_pubkey().copied(),
+                    );
+                }
+                None
+            }
         }
     }
 
@@ -182,37 +216,58 @@ impl VoteAccounts {
     }
 
     fn add_node_stake(&mut self, stake: u64, vote_account: &VoteAccount) {
-        if stake == 0u64 {
-            return;
-        }
         let Some(staked_nodes) = self.staked_nodes.get_mut() else {
             return;
         };
-        if let Some(node_pubkey) = vote_account.node_pubkey() {
+
+        VoteAccounts::do_add_node_stake(staked_nodes, stake, vote_account.node_pubkey().copied());
+    }
+
+    fn do_add_node_stake(
+        staked_nodes: &mut Arc<HashMap<Pubkey, u64>>,
+        stake: u64,
+        node_pubkey: Option<Pubkey>,
+    ) {
+        if stake == 0u64 {
+            return;
+        }
+
+        node_pubkey.map(|node_pubkey| {
             Arc::make_mut(staked_nodes)
                 .entry(node_pubkey)
                 .and_modify(|s| *s += stake)
-                .or_insert(stake);
-        }
+                .or_insert(stake)
+        });
     }
 
     fn sub_node_stake(&mut self, stake: u64, vote_account: &VoteAccount) {
-        if stake == 0u64 {
-            return;
-        }
         let Some(staked_nodes) = self.staked_nodes.get_mut() else {
             return;
         };
-        if let Some(node_pubkey) = vote_account.node_pubkey() {
-            let Entry::Occupied(mut entry) = Arc::make_mut(staked_nodes).entry(node_pubkey) else {
-                panic!("this should not happen!");
-            };
-            match entry.get().cmp(&stake) {
+
+        VoteAccounts::do_sub_node_stake(staked_nodes, stake, vote_account.node_pubkey());
+    }
+
+    fn do_sub_node_stake(
+        staked_nodes: &mut Arc<HashMap<Pubkey, u64>>,
+        stake: u64,
+        node_pubkey: Option<&Pubkey>,
+    ) {
+        if stake == 0u64 {
+            return;
+        }
+
+        if let Some(node_pubkey) = node_pubkey {
+            let staked_nodes = Arc::make_mut(staked_nodes);
+            let current_stake = staked_nodes
+                .get_mut(node_pubkey)
+                .expect("this should not happen");
+            match (*current_stake).cmp(&stake) {
                 Ordering::Less => panic!("subtraction value exceeds node's stake"),
                 Ordering::Equal => {
-                    entry.remove_entry();
+                    staked_nodes.remove(node_pubkey);
                 }
-                Ordering::Greater => *entry.get_mut() -= stake,
+                Ordering::Greater => *current_stake -= stake,
             }
         }
     }
@@ -388,7 +443,7 @@ mod tests {
         {
             if let Some(node_pubkey) = vote_account.node_pubkey() {
                 staked_nodes
-                    .entry(node_pubkey)
+                    .entry(*node_pubkey)
                     .and_modify(|s| *s += *stake)
                     .or_insert(*stake);
             }
@@ -488,7 +543,7 @@ mod tests {
         let mut vote_accounts = VoteAccounts::default();
         // Add vote accounts.
         for (k, (pubkey, (stake, vote_account))) in accounts.iter().enumerate() {
-            vote_accounts.insert(*pubkey, (*stake, vote_account.clone()));
+            vote_accounts.insert(*pubkey, vote_account.clone(), || *stake);
             if (k + 1) % 128 == 0 {
                 assert_eq!(
                     staked_nodes(&accounts[..k + 1]),
@@ -532,6 +587,90 @@ mod tests {
         assert!(vote_accounts.staked_nodes.get().unwrap().is_empty());
     }
 
+    #[test]
+    fn test_staked_nodes_update() {
+        let mut vote_accounts = VoteAccounts::default();
+
+        let mut rng = rand::thread_rng();
+        let pubkey = Pubkey::new_unique();
+        let node_pubkey = Pubkey::new_unique();
+        let (account1, _) = new_rand_vote_account(&mut rng, Some(node_pubkey));
+        let vote_account1 = VoteAccount::try_from(account1).unwrap();
+
+        // first insert
+        let ret = vote_accounts.insert(pubkey, vote_account1.clone(), || 42);
+        assert_eq!(ret, None);
+        assert_eq!(vote_accounts.get_delegated_stake(&pubkey), 42);
+        assert_eq!(vote_accounts.staked_nodes().get(&node_pubkey), Some(&42));
+
+        // update with unchanged state
+        let ret = vote_accounts.insert(pubkey, vote_account1.clone(), || {
+            panic!("should not be called")
+        });
+        assert_eq!(ret, Some(vote_account1.clone()));
+        assert_eq!(vote_accounts.get(&pubkey), Some(&vote_account1));
+        // stake is unchanged
+        assert_eq!(vote_accounts.get_delegated_stake(&pubkey), 42);
+        assert_eq!(vote_accounts.staked_nodes().get(&node_pubkey), Some(&42));
+
+        // update with changed state, same node pubkey
+        let (account2, _) = new_rand_vote_account(&mut rng, Some(node_pubkey));
+        let vote_account2 = VoteAccount::try_from(account2).unwrap();
+        let ret = vote_accounts.insert(pubkey, vote_account2.clone(), || {
+            panic!("should not be called")
+        });
+        assert_eq!(ret, Some(vote_account1.clone()));
+        assert_eq!(vote_accounts.get(&pubkey), Some(&vote_account2));
+        // stake is unchanged
+        assert_eq!(vote_accounts.get_delegated_stake(&pubkey), 42);
+        assert_eq!(vote_accounts.staked_nodes().get(&node_pubkey), Some(&42));
+
+        // update with new node pubkey, stake must be moved
+        let new_node_pubkey = Pubkey::new_unique();
+        let (account3, _) = new_rand_vote_account(&mut rng, Some(new_node_pubkey));
+        let vote_account3 = VoteAccount::try_from(account3).unwrap();
+        let ret = vote_accounts.insert(pubkey, vote_account3.clone(), || {
+            panic!("should not be called")
+        });
+        assert_eq!(ret, Some(vote_account2.clone()));
+        assert_eq!(vote_accounts.staked_nodes().get(&node_pubkey), None);
+        assert_eq!(
+            vote_accounts.staked_nodes().get(&new_node_pubkey),
+            Some(&42)
+        );
+    }
+
+    #[test]
+    fn test_staked_nodes_zero_stake() {
+        let mut vote_accounts = VoteAccounts::default();
+
+        let mut rng = rand::thread_rng();
+        let pubkey = Pubkey::new_unique();
+        let node_pubkey = Pubkey::new_unique();
+        let (account1, _) = new_rand_vote_account(&mut rng, Some(node_pubkey));
+        let vote_account1 = VoteAccount::try_from(account1).unwrap();
+
+        // we call this here to initialize VoteAccounts::staked_nodes which is a OnceLock
+        assert!(vote_accounts.staked_nodes().is_empty());
+        let ret = vote_accounts.insert(pubkey, vote_account1.clone(), || 0);
+        assert_eq!(ret, None);
+        assert_eq!(vote_accounts.get_delegated_stake(&pubkey), 0);
+        // ensure that we didn't add a 0 stake entry to staked_nodes
+        assert_eq!(vote_accounts.staked_nodes().get(&node_pubkey), None);
+
+        // update with new node pubkey, stake is 0 and should remain 0
+        let new_node_pubkey = Pubkey::new_unique();
+        let (account2, _) = new_rand_vote_account(&mut rng, Some(new_node_pubkey));
+        let vote_account2 = VoteAccount::try_from(account2).unwrap();
+        let ret = vote_accounts.insert(pubkey, vote_account2.clone(), || {
+            panic!("should not be called")
+        });
+        assert_eq!(ret, Some(vote_account1));
+        assert_eq!(vote_accounts.get_delegated_stake(&pubkey), 0);
+        assert_eq!(vote_accounts.staked_nodes().get(&node_pubkey), None);
+        assert_eq!(vote_accounts.staked_nodes().get(&new_node_pubkey), None);
+    }
+
     // Asserts that returned staked-nodes are copy-on-write references.
     #[test]
     fn test_staked_nodes_cow() {
@@ -540,20 +679,20 @@ mod tests {
         // Add vote accounts.
         let mut vote_accounts = VoteAccounts::default();
         for (pubkey, (stake, vote_account)) in (&mut accounts).take(1024) {
-            vote_accounts.insert(pubkey, (stake, vote_account));
+            vote_accounts.insert(pubkey, vote_account, || stake);
         }
         let staked_nodes = vote_accounts.staked_nodes();
         let (pubkey, (more_stake, vote_account)) =
             accounts.find(|(_, (stake, _))| *stake != 0).unwrap();
-        let node_pubkey = vote_account.node_pubkey().unwrap();
-        vote_accounts.insert(pubkey, (more_stake, vote_account));
+        let node_pubkey = *vote_account.node_pubkey().unwrap();
+        vote_accounts.insert(pubkey, vote_account, || more_stake);
         assert_ne!(staked_nodes, vote_accounts.staked_nodes());
         assert_eq!(
             vote_accounts.staked_nodes()[&node_pubkey],
             more_stake + staked_nodes.get(&node_pubkey).copied().unwrap_or_default()
         );
         for (pubkey, stake) in vote_accounts.staked_nodes().iter() {
-            if *pubkey != node_pubkey {
+            if pubkey != &node_pubkey {
                 assert_eq!(*stake, staked_nodes[pubkey]);
             } else {
                 assert_eq!(
@@ -572,7 +711,7 @@ mod tests {
         // Add vote accounts.
         let mut vote_accounts = VoteAccounts::default();
         for (pubkey, (stake, vote_account)) in (&mut accounts).take(1024) {
-            vote_accounts.insert(pubkey, (stake, vote_account));
+            vote_accounts.insert(pubkey, vote_account, || stake);
         }
         let vote_accounts_hashmap = Arc::<VoteAccountsHashMap>::from(&vote_accounts);
         assert_eq!(vote_accounts_hashmap, vote_accounts.vote_accounts);
@@ -582,7 +721,7 @@ mod tests {
         ));
         let (pubkey, (more_stake, vote_account)) =
             accounts.find(|(_, (stake, _))| *stake != 0).unwrap();
-        vote_accounts.insert(pubkey, (more_stake, vote_account.clone()));
+        vote_accounts.insert(pubkey, vote_account.clone(), || more_stake);
         assert!(!Arc::ptr_eq(
             &vote_accounts_hashmap,
             &vote_accounts.vote_accounts

@@ -223,7 +223,7 @@ impl Bank {
                     None
                 } else {
                     total_staked += *staked;
-                    Some((account.node_pubkey()?, *staked))
+                    Some((*account.node_pubkey()?, *staked))
                 }
             })
             .collect::<Vec<(Pubkey, u64)>>();
