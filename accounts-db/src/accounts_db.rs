@@ -2749,13 +2749,12 @@ impl AccountsDb {
         // do not match the criteria of deleting all appendvecs which contain them
         // then increment their storage count.
         let mut already_counted = IntSet::default();
-        for (pubkey, (account_infos, ref_count_from_storage)) in purges.iter() {
+        for (pubkey, (slot_list, ref_count)) in purges.iter() {
             let mut failed_slot = None;
-            let all_stores_being_deleted =
-                account_infos.len() as RefCount == *ref_count_from_storage;
+            let all_stores_being_deleted = slot_list.len() as RefCount == *ref_count;
             if all_stores_being_deleted {
                 let mut delete = true;
-                for (slot, _account_info) in account_infos {
+                for (slot, _account_info) in slot_list {
                     if let Some(count) = store_counts.get(slot).map(|s| s.0) {
                         debug!(
                             "calc_delete_dependencies()
@@ -2782,19 +2781,19 @@ impl AccountsDb {
                 debug!(
                     "calc_delete_dependencies(),
                     pubkey: {},
-                    account_infos: {:?},
-                    account_infos_len: {},
-                    ref_count_from_storage: {}",
+                    slot_list: {:?},
+                    slot_list_len: {},
+                    ref_count: {}",
                     pubkey,
-                    account_infos,
-                    account_infos.len(),
-                    ref_count_from_storage,
+                    slot_list,
+                    slot_list.len(),
+                    ref_count,
                 );
             }
 
             // increment store_counts to non-zero for all stores that can not be deleted.
             let mut pending_stores = IntSet::default();
-            for (slot, _account_info) in account_infos {
+            for (slot, _account_info) in slot_list {
                 if !already_counted.contains(slot) {
                     pending_stores.insert(*slot);
                 }
@@ -2805,7 +2804,7 @@ impl AccountsDb {
                     if let Some(failed_slot) = failed_slot.take() {
                         info!("calc_delete_dependencies, oldest slot is not able to be deleted because of {pubkey} in slot {failed_slot}");
                     } else {
-                        info!("calc_delete_dependencies, oldest slot is not able to be deleted because of {pubkey}, account infos len: {}, ref count: {ref_count_from_storage}", account_infos.len());
+                        info!("calc_delete_dependencies, oldest slot is not able to be deleted because of {pubkey}, slot list len: {}, ref count: {ref_count}", slot_list.len());
                     }
                 }
 
