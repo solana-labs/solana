@@ -188,7 +188,7 @@ Replace `apt` with your distribution's package manager (e.g., `yum`, `dnf`,
 
 #### For macOS:
 
-Install Homebrew (if not already installed), check "Install Hombrew" at
+Install Homebrew (if not already installed), check "Install Homebrew" at
 [https://brew.sh/](https://brew.sh/), which recommends the following command:
 
 ```bash
