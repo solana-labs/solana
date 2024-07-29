@@ -365,7 +365,7 @@ pub fn load_and_process_ledger(
         exit.clone(),
         abs_request_handler,
         process_options.accounts_db_test_hash_calculation,
-        None,
+        starting_snapshot_hashes.map(|x| x.full.0 .0),
     );
 
     let enable_rpc_transaction_history = arg_matches.is_present("enable_rpc_transaction_history");
