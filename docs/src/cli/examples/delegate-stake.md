@@ -7,7 +7,7 @@ sidebar_label: Staking
 After you have [received SOL](./transfer-tokens.md), you might consider putting it
 to use by delegating _stake_ to a validator. Stake is what we call tokens in a
 _stake account_. Solana weights validator votes by the amount of stake delegated
-to them, which gives those validators more influence in determining then next
+to them, which gives those validators more influence in determining the next
 valid block of transactions in the blockchain. Solana then generates new SOL
 periodically to reward stakers and validators. You earn more rewards the more
 stake you delegate.
