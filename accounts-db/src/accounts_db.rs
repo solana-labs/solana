@@ -4050,12 +4050,18 @@ impl AccountsDb {
         let shrink_collect =
             self.shrink_collect::<AliveAccounts<'_>>(store, &unique_accounts, &self.shrink_stats);
 
-        // This shouldn't happen if alive_bytes/approx_stored_count are accurate
+        // This shouldn't happen if alive_bytes/approx_stored_count are accurate.
+        // However, it is possible that the remaining alive bytes could be 0. In that case, the whole slot should be marked dead by clean.
         if Self::should_not_shrink(
             shrink_collect.alive_total_bytes as u64,
             shrink_collect.capacity,
-        ) {
-            warn!(
+        ) || shrink_collect.alive_total_bytes == 0
+        {
+            if shrink_collect.alive_total_bytes == 0 {
+                // clean needs to take care of this dead slot
+                self.accounts_index.add_uncleaned_roots([slot]);
+            }
+            info!(
                 "Unexpected shrink for slot {} alive {} capacity {}, \
                 likely caused by a bug for calculating alive bytes.",
                 slot, shrink_collect.alive_total_bytes, shrink_collect.capacity
@@ -4103,39 +4109,36 @@ impl AccountsDb {
 
         let mut stats_sub = ShrinkStatsSub::default();
         let mut rewrite_elapsed = Measure::start("rewrite_elapsed");
-        if shrink_collect.alive_total_bytes > 0 {
-            let (shrink_in_progress, time_us) = measure_us!(
-                self.get_store_for_shrink(slot, shrink_collect.alive_total_bytes as u64)
-            );
-            stats_sub.create_and_insert_store_elapsed_us = Saturating(time_us);
+        let (shrink_in_progress, time_us) =
+            measure_us!(self.get_store_for_shrink(slot, shrink_collect.alive_total_bytes as u64));
+        stats_sub.create_and_insert_store_elapsed_us = Saturating(time_us);
 
-            // here, we're writing back alive_accounts. That should be an atomic operation
-            // without use of rather wide locks in this whole function, because we're
-            // mutating rooted slots; There should be no writers to them.
-            let accounts = [(slot, &shrink_collect.alive_accounts.alive_accounts()[..])];
-            let storable_accounts = StorableAccountsBySlot::new(slot, &accounts, self);
-            stats_sub.store_accounts_timing =
-                self.store_accounts_frozen(storable_accounts, shrink_in_progress.new_storage());
+        // here, we're writing back alive_accounts. That should be an atomic operation
+        // without use of rather wide locks in this whole function, because we're
+        // mutating rooted slots; There should be no writers to them.
+        let accounts = [(slot, &shrink_collect.alive_accounts.alive_accounts()[..])];
+        let storable_accounts = StorableAccountsBySlot::new(slot, &accounts, self);
+        stats_sub.store_accounts_timing =
+            self.store_accounts_frozen(storable_accounts, shrink_in_progress.new_storage());
 
-            rewrite_elapsed.stop();
-            stats_sub.rewrite_elapsed_us = Saturating(rewrite_elapsed.as_us());
+        rewrite_elapsed.stop();
+        stats_sub.rewrite_elapsed_us = Saturating(rewrite_elapsed.as_us());
 
-            // `store_accounts_frozen()` above may have purged accounts from some
-            // other storage entries (the ones that were just overwritten by this
-            // new storage entry). This means some of those stores might have caused
-            // this slot to be read to `self.shrink_candidate_slots`, so delete
-            // those here
-            self.shrink_candidate_slots.lock().unwrap().remove(&slot);
+        // `store_accounts_frozen()` above may have purged accounts from some
+        // other storage entries (the ones that were just overwritten by this
+        // new storage entry). This means some of those stores might have caused
+        // this slot to be read to `self.shrink_candidate_slots`, so delete
+        // those here
+        self.shrink_candidate_slots.lock().unwrap().remove(&slot);
 
-            self.remove_old_stores_shrink(
-                &shrink_collect,
-                &self.shrink_stats,
-                Some(shrink_in_progress),
-                false,
-            );
+        self.remove_old_stores_shrink(
+            &shrink_collect,
+            &self.shrink_stats,
+            Some(shrink_in_progress),
+            false,
+        );
 
-            self.reopen_storage_as_readonly_shrinking_in_progress_ok(slot);
-        }
+        self.reopen_storage_as_readonly_shrinking_in_progress_ok(slot);
 
         Self::update_shrink_stats(&self.shrink_stats, stats_sub, true);
         self.shrink_stats.report();
