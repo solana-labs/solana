@@ -8,12 +8,12 @@ sidebar_position: 1
 There are multiple ways to install the Solana tools on your computer depending
 on your preferred workflow:
 
-- [Use Solana's Install Tool (Simplest option)](#use-solanas-install-tool)
+- [Use the Solana Install Tool (Simplest option)](#use-solanas-install-tool)
 - [Download Prebuilt Binaries](#download-prebuilt-binaries)
 - [Build from Source](#build-from-source)
 - [Use Homebrew](#use-homebrew)
 
-## Use Solana's Install Tool
+## Use The Solana Install Tool
 
 ### MacOS & Linux
 

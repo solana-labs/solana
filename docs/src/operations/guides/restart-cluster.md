@@ -8,13 +8,13 @@ pagination_label: "Validator Guides: Restart a Cluster"
 
 ### Step 1. Identify the latest optimistically confirmed slot for the cluster
 
-In Solana 1.14 or greater, run the following command to output the latest
+In Agave 1.14 or greater, run the following command to output the latest
 optimistically confirmed slot your validator observed:
 ```bash
 agave-ledger-tool -l ledger latest-optimistic-slots
 ```
 
-In Solana 1.13 or less, the latest optimistically confirmed can be found by looking for the more recent occurrence of
+In Agave 1.13 or less, the latest optimistically confirmed can be found by looking for the more recent occurrence of
 [this](https://github.com/solana-labs/solana/blob/0264147d42d506fb888f5c4c021a998e231a3e74/core/src/optimistic_confirmation_verifier.rs#L71)
 metrics datapoint.
 

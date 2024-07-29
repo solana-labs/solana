@@ -1,6 +1,6 @@
 ---
-title: Setup a Solana RPC Node
-sidebar_label: Setup an RPC Node
+title: Setup an Agave RPC Node
+sidebar_label: Setup an Agave RPC Node
 sidebar_position: 6
 ---
 

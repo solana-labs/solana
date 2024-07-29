@@ -1,5 +1,5 @@
 ---
-title: Solana Validator Requirements
+title: Agave Validator Requirements
 sidebar_position: 3
 sidebar_label: Requirements
 pagination_label: Requirements to Operate a Validator
@@ -7,7 +7,7 @@ pagination_label: Requirements to Operate a Validator
 
 ## Minimum SOL requirements
 
-There is no strict minimum amount of SOL required to run a validator on Solana.
+There is no strict minimum amount of SOL required to run an Agave validator on Solana.
 
 However in order to participate in consensus, a vote account is required which
 has a rent-exempt reserve of 0.02685864 SOL. Voting also requires sending a vote
@@ -30,14 +30,14 @@ The hardware recommendations below are provided as a guide.  Operators are encou
 
 ## Virtual machines on Cloud Platforms
 
-Running a solana node in the cloud requires significantly greater
+Running an Agave node in the cloud requires significantly greater
 operational expertise to achieve stability and performance. Do not
 expect to find sympathetic voices should you chose this route and
 find yourself in need of support.
 
 ## Docker
 
-Running validator for live clusters (including mainnet-beta) inside Docker is
+Running an Agave validator for live clusters (including mainnet-beta) inside Docker is
 not recommended and generally not supported. This is due to concerns of general
 Docker's containerization overhead and resultant performance degradation unless
 specially configured.
@@ -48,7 +48,7 @@ releases at [solanalabs/solana](https://hub.docker.com/r/solanalabs/solana).
 ## Software
 
 - We build and run on Ubuntu 20.04.
-- See [Installing Solana CLI](../cli/install.md) for the current Solana software release.
+- See [Installing Solana CLI](../cli/install.md) for the current Solana CLI software release.
 
 Prebuilt binaries are available for Linux x86_64 on CPUs supporting AVX2 \(Ubuntu 20.04 recommended\).
 MacOS or WSL users may build from source.

@@ -1,5 +1,5 @@
 ---
-title: Solana Validator Operations Best Practices
+title: Agave Validator Operations Best Practices
 sidebar_label: General Operations
 pagination_label: "Best Practices: Validator Operations"
 ---
@@ -72,7 +72,7 @@ process.
 
 ### Building From Source
 
-It is a best practice to always build your Solana binaries from source. If you
+It is a best practice to always build your Agave binaries from source. If you
 build from source, you are certain that the code you are building has not been
 tampered with before the binary was created. You may also be able to optimize
 your `agave-validator` binary to your specific hardware.
@@ -88,7 +88,7 @@ If you are not comfortable building from source, or you need to quickly install
 a new version to test something out, you could instead try using the
 `agave-install` command.
 
-Assuming you want to install Solana version `1.14.17`, you would execute the
+Assuming you want to install Agave version `1.14.17`, you would execute the
 following:
 
 ```

@@ -1,6 +1,6 @@
 ---
-title: Setup a Solana Validator
-sidebar_label: Setup a Validator
+title: Setup an Agave Validator
+sidebar_label: Setup an Agave Validator
 sidebar_position: 5
 ---
 
@@ -383,7 +383,7 @@ su - sol
 
 ## Install The Solana CLI on Remote Machine
 
-Your remote machine will need the Solana cli installed to run the validator
+Your remote machine will need the Solana CLI installed to run the Agave validator
 software. For simplicity, install the cli with user `sol`. Refer again to
 [Solana's Install Tool](../cli/install.md#use-solanas-install-tool) or
 [build from source](../cli/install.md#build-from-source). It is best for

@@ -1,5 +1,5 @@
 ---
-title: Solana Validator Security Best Practices
+title: Agave Validator Security Best Practices
 sidebar_label: Security
 pagination_label: "Best Practices: Validator Security"
 ---

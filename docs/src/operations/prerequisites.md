@@ -1,11 +1,11 @@
 ---
-title: Solana Validator Prerequisites
+title: Agave Validator Prerequisites
 sidebar_position: 2
 sidebar_label: Prerequisites
 pagination_label: Prerequisites to run a Validator
 ---
 
-Operating a Solana validator is an interesting and rewarding task. Generally speaking, it requires someone with a technical background but also involves community engagement and marketing.
+Operating an Agave validator is an interesting and rewarding task. Generally speaking, it requires someone with a technical background but also involves community engagement and marketing.
 
 ## How to be a good Validator Operator
 

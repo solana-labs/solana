@@ -1,5 +1,5 @@
 ---
-title: Solana Validator Monitoring Best Practices
+title: Agave Validator Monitoring Best Practices
 sidebar_label: Monitoring
 pagination_label: "Best Practices: Validator Monitoring"
 ---
