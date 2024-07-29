@@ -665,9 +665,11 @@ fn main() {
     let matches = App::new(crate_name!())
         .about(crate_description!())
         .version(solana_version::version!())
-        .setting(AppSettings::InferSubcommands)
+        .global_setting(AppSettings::ColoredHelp)
+        .global_setting(AppSettings::InferSubcommands)
+        .global_setting(AppSettings::UnifiedHelpMessage)
+        .global_setting(AppSettings::VersionlessSubcommands)
         .setting(AppSettings::SubcommandRequiredElseHelp)
-        .setting(AppSettings::VersionlessSubcommands)
         .arg(
             Arg::with_name("ledger_path")
                 .short("l")
