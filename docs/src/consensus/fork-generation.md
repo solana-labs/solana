@@ -110,7 +110,7 @@ so a validator observing `E3` and `E3'` can slash L3 and safely choose `x` for
 that slot. Once a validator commits to a fork, other forks can be discarded
 below that tick count. For any slot, validators need only consider a single "has
 entries" chain or a "ticks only" chain to be proposed by a leader. But multiple
-virtual entries may overlap as they link back to the a previous slot.
+virtual entries may overlap as they link back to the previous slot.
 
 #### Time Division
 
