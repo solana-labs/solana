@@ -2,7 +2,7 @@
 title: What is a Validator?
 ---
 
-A validator is a computer that helps to run the Solana network. Each validator executes a program that keeps track of all accounts on the Solana cluster and validates transactions being added to the network. Without validators, Solana would not be able to function.
+A validator is a computer that helps to run the Solana network. Each validator executes a program that keeps track of all accounts on the Solana cluster and validates transactions being added to the network. Without validators, Solana would not be able to function. Agave is one of several possible validator clients operators can use to help run the Solana network.
 
 The more independent entities that run validators, the less vulnerable the cluster is to an attack or catastrophe that affects the cluster.
 
@@ -14,7 +14,7 @@ By becoming a validator, you are helping to grow the network. You are also learn
 
 Before we discuss validators in more detail, it's useful to make some distinctions. Using the same validator software, you have the option of running a voting/consensus node or choosing to instead run an RPC node. An RPC node helps Solana devs and others interact with the blockchain but for performance reasons should not vote. We go into more detail on RPC nodes in the next section, [what is an rpc node](./what-is-an-rpc-node.md).
 
-For this document, when a validator is mentioned, we are talking about a voting/consensus node. Now, to better understand what your validator is doing, it would help to understand how the Solana network functions in more depth.
+For this document, when a validator is mentioned, we are talking about a voting/consensus node. Now, to better understand what your validator is doing, it would help to understand how the Solana network functions in more depth. This documentation specifically focuses on the Agave client.
 
 ## Proof Of Stake
 
