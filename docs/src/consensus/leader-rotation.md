@@ -38,7 +38,7 @@ In this unstable scenario, multiple valid leader schedules exist.
 - A leader schedule is generated for every fork whose direct parent is in the previous epoch.
 - The leader schedule is valid after the start of the next epoch for descendant forks until it is updated.
 
-Each partition's schedule will diverge after the partition lasts more than an epoch. For this reason, the epoch duration should be selected to be much much larger then slot time and the expected length for a fork to be committed to root.
+Each partition's schedule will diverge after the partition lasts more than an epoch. For this reason, the epoch duration should be selected to be much larger then slot time and the expected length for a fork to be committed to root.
 
 After observing the cluster for a sufficient amount of time, the leader schedule offset can be selected based on the median partition duration and its standard deviation. For example, an offset longer then the median partition duration plus six standard deviations would reduce the likelihood of an inconsistent ledger schedule in the cluster to 1 in 1 million.
 
