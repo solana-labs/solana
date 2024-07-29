@@ -3,6 +3,10 @@ title: Validator Frequently Asked Questions
 sidebar_label: Frequently Asked Questions
 ---
 
+### What is Agave? How is it different from other possible Solana validators?
+
+Solana is an open source, decentralized, proof-of-stake blockchain. It is therefore possible for multiple distinct teams to fork and maintain their own validator software. The original Solana validator was maintained by Solana Labs. A new organization, Anza, was formed in 2024 consisting of former Solana Labs core engineering members. Anza forked the Solana validator and renamed it to Agave (this project). Agave is the version of the original Solana validator maintained by the team at Anza. As of the writing of this FAQ, Agave is the most popular validator client for the Solana network, but it is likely in the future there may be several validators running in parallel to help support the network. We recommend checking the community and doing research before making a selection.
+
 ### What is a validator?
 
 A validator is a computer that runs a software program to verify transactions that are added to the Solana blockchain.  A validator can be a voting validator or a non voting validator. To learn more, see [what is a validator](./what-is-a-validator.md).
