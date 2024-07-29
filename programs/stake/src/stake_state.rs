@@ -15,7 +15,7 @@ use {
         account::{AccountSharedData, ReadableAccount},
         account_utils::StateMut,
         clock::{Clock, Epoch},
-        feature_set::{self, FeatureSet},
+        feature_set::FeatureSet,
         instruction::{checked_add, InstructionError},
         pubkey::Pubkey,
         rent::Rent,
@@ -94,25 +94,11 @@ fn redelegate_stake(
     let new_rate_activation_epoch = new_warmup_cooldown_rate_epoch(invoke_context);
     // If stake is currently active:
     if stake.stake(clock.epoch, stake_history, new_rate_activation_epoch) != 0 {
-        let stake_lamports_ok = if invoke_context
-            .get_feature_set()
-            .is_active(&feature_set::stake_redelegate_instruction::id())
-        {
-            // When a stake account is redelegated, the delegated lamports from the source stake
-            // account are transferred to a new stake account. Do not permit the deactivation of
-            // the source stake account to be rescinded, by more generally requiring the delegation
-            // be configured with the expected amount of stake lamports before rescinding.
-            stake_lamports >= stake.delegation.stake
-        } else {
-            true
-        };
-
         // If pubkey of new voter is the same as current,
         // and we are scheduled to start deactivating this epoch,
         // we rescind deactivation
         if stake.delegation.voter_pubkey == *voter_pubkey
             && clock.epoch == stake.delegation.deactivation_epoch
-            && stake_lamports_ok
         {
             stake.delegation.deactivation_epoch = u64::MAX;
             return Ok(());
@@ -375,56 +361,15 @@ pub fn delegate(
     }
 }
 
-fn deactivate_stake(
-    invoke_context: &InvokeContext,
-    stake: &mut Stake,
-    stake_flags: &mut StakeFlags,
-    epoch: Epoch,
-) -> Result<(), InstructionError> {
-    if invoke_context
-        .get_feature_set()
-        .is_active(&feature_set::stake_redelegate_instruction::id())
-    {
-        if stake_flags.contains(StakeFlags::MUST_FULLY_ACTIVATE_BEFORE_DEACTIVATION_IS_PERMITTED) {
-            let stake_history = invoke_context.get_sysvar_cache().get_stake_history()?;
-            // when MUST_FULLY_ACTIVATE_BEFORE_DEACTIVATION_IS_PERMITTED flag is set on stake_flags,
-            // deactivation is only permitted when the stake delegation activating amount is zero.
-            let status = stake.delegation.stake_activating_and_deactivating(
-                epoch,
-                stake_history.as_ref(),
-                new_warmup_cooldown_rate_epoch(invoke_context),
-            );
-            if status.activating != 0 {
-                Err(InstructionError::from(
-                    StakeError::RedelegatedStakeMustFullyActivateBeforeDeactivationIsPermitted,
-                ))
-            } else {
-                stake.deactivate(epoch)?;
-                // After deactivation, need to clear `MustFullyActivateBeforeDeactivationIsPermitted` flag if any.
-                // So that future activation and deactivation are not subject to that restriction.
-                stake_flags
-                    .remove(StakeFlags::MUST_FULLY_ACTIVATE_BEFORE_DEACTIVATION_IS_PERMITTED);
-                Ok(())
-            }
-        } else {
-            stake.deactivate(epoch)?;
-            Ok(())
-        }
-    } else {
-        stake.deactivate(epoch)?;
-        Ok(())
-    }
-}
-
 pub fn deactivate(
-    invoke_context: &InvokeContext,
+    _invoke_context: &InvokeContext,
     stake_account: &mut BorrowedAccount,
     clock: &Clock,
     signers: &HashSet<Pubkey>,
 ) -> Result<(), InstructionError> {
-    if let StakeStateV2::Stake(meta, mut stake, mut stake_flags) = stake_account.get_state()? {
+    if let StakeStateV2::Stake(meta, mut stake, stake_flags) = stake_account.get_state()? {
         meta.authorized.check(signers, StakeAuthorize::Staker)?;
-        deactivate_stake(invoke_context, &mut stake, &mut stake_flags, clock.epoch)?;
+        stake.deactivate(clock.epoch)?;
         stake_account.set_state(&StakeStateV2::Stake(meta, stake, stake_flags))
     } else {
         Err(InstructionError::InvalidAccountData)
@@ -669,123 +614,6 @@ pub fn merge(
     Ok(())
 }
 
-pub fn redelegate(
-    invoke_context: &InvokeContext,
-    transaction_context: &TransactionContext,
-    instruction_context: &InstructionContext,
-    stake_account: &mut BorrowedAccount,
-    uninitialized_stake_account_index: IndexOfAccount,
-    vote_account_index: IndexOfAccount,
-    signers: &HashSet<Pubkey>,
-) -> Result<(), InstructionError> {
-    let clock = invoke_context.get_sysvar_cache().get_clock()?;
-
-    // ensure `uninitialized_stake_account_index` is in the uninitialized state
-    let mut uninitialized_stake_account = instruction_context
-        .try_borrow_instruction_account(transaction_context, uninitialized_stake_account_index)?;
-    if *uninitialized_stake_account.get_owner() != id() {
-        ic_msg!(
-            invoke_context,
-            "expected uninitialized stake account owner to be {}, not {}",
-            id(),
-            *uninitialized_stake_account.get_owner()
-        );
-        return Err(InstructionError::IncorrectProgramId);
-    }
-    if uninitialized_stake_account.get_data().len() != StakeStateV2::size_of() {
-        ic_msg!(
-            invoke_context,
-            "expected uninitialized stake account data len to be {}, not {}",
-            StakeStateV2::size_of(),
-            uninitialized_stake_account.get_data().len()
-        );
-        return Err(InstructionError::InvalidAccountData);
-    }
-    if !matches!(
-        uninitialized_stake_account.get_state()?,
-        StakeStateV2::Uninitialized
-    ) {
-        ic_msg!(
-            invoke_context,
-            "expected uninitialized stake account to be uninitialized",
-        );
-        return Err(InstructionError::AccountAlreadyInitialized);
-    }
-
-    // validate the provided vote account
-    let vote_account = instruction_context
-        .try_borrow_instruction_account(transaction_context, vote_account_index)?;
-    if *vote_account.get_owner() != solana_vote_program::id() {
-        ic_msg!(
-            invoke_context,
-            "expected vote account owner to be {}, not {}",
-            solana_vote_program::id(),
-            *vote_account.get_owner()
-        );
-        return Err(InstructionError::IncorrectProgramId);
-    }
-    let vote_pubkey = *vote_account.get_key();
-    let vote_state = vote_account.get_state::<VoteStateVersions>()?;
-
-    let (stake_meta, effective_stake) =
-        if let StakeStateV2::Stake(meta, stake, _stake_flags) = stake_account.get_state()? {
-            let status = get_stake_status(invoke_context, &stake, &clock)?;
-            if status.effective == 0 || status.activating != 0 || status.deactivating != 0 {
-                ic_msg!(invoke_context, "stake is not active");
-                return Err(StakeError::RedelegateTransientOrInactiveStake.into());
-            }
-
-            // Deny redelegating to the same vote account. This is nonsensical and could be used to
-            // grief the global stake warm-up/cool-down rate
-            if stake.delegation.voter_pubkey == vote_pubkey {
-                ic_msg!(
-                    invoke_context,
-                    "redelegating to the same vote account not permitted"
-                );
-                return Err(StakeError::RedelegateToSameVoteAccount.into());
-            }
-
-            (meta, status.effective)
-        } else {
-            ic_msg!(invoke_context, "invalid stake account data",);
-            return Err(InstructionError::InvalidAccountData);
-        };
-
-    // deactivate `stake_account`
-    //
-    // Note: This function also ensures `signers` contains the `StakeAuthorize::Staker`
-    deactivate(invoke_context, stake_account, &clock, signers)?;
-
-    // transfer the effective stake to the uninitialized stake account
-    stake_account.checked_sub_lamports(effective_stake)?;
-    uninitialized_stake_account.checked_add_lamports(effective_stake)?;
-
-    // initialize and schedule `uninitialized_stake_account` for activation
-    let sysvar_cache = invoke_context.get_sysvar_cache();
-    let rent = sysvar_cache.get_rent()?;
-    let mut uninitialized_stake_meta = stake_meta;
-    uninitialized_stake_meta.rent_exempt_reserve =
-        rent.minimum_balance(uninitialized_stake_account.get_data().len());
-
-    let ValidatedDelegatedInfo { stake_amount } = validate_delegated_amount(
-        &uninitialized_stake_account,
-        &uninitialized_stake_meta,
-        invoke_context.get_feature_set(),
-    )?;
-    uninitialized_stake_account.set_state(&StakeStateV2::Stake(
-        uninitialized_stake_meta,
-        new_stake(
-            stake_amount,
-            &vote_pubkey,
-            &vote_state.convert_to_current(),
-            clock.epoch,
-        ),
-        StakeFlags::MUST_FULLY_ACTIVATE_BEFORE_DEACTIVATION_IS_PERMITTED,
-    ))?;
-
-    Ok(())
-}
-
 pub fn move_stake(
     invoke_context: &InvokeContext,
     transaction_context: &TransactionContext,
@@ -862,8 +690,6 @@ pub fn move_stake(
                 source_stake.credits_observed,
             )?;
 
-            // StakeFlags::empty() is valid here because the only existing stake flag,
-            // MUST_FULLY_ACTIVATE_BEFORE_DEACTIVATION_IS_PERMITTED, does not apply to active stakes
             destination_account.set_state(&StakeStateV2::Stake(
                 destination_meta,
                 destination_stake,
@@ -881,8 +707,6 @@ pub fn move_stake(
             let mut destination_stake = source_stake;
             destination_stake.delegation.stake = lamports;
 
-            // StakeFlags::empty() is valid here because the only existing stake flag,
-            // MUST_FULLY_ACTIVATE_BEFORE_DEACTIVATION_IS_PERMITTED, is cleared when a stake is activated
             destination_account.set_state(&StakeStateV2::Stake(
                 destination_meta,
                 destination_stake,
@@ -899,8 +723,6 @@ pub fn move_stake(
     } else {
         source_stake.delegation.stake = source_final_stake;
 
-        // StakeFlags::empty() is valid here because the only existing stake flag,
-        // MUST_FULLY_ACTIVATE_BEFORE_DEACTIVATION_IS_PERMITTED, does not apply to active stakes
         source_account.set_state(&StakeStateV2::Stake(
             source_meta,
             source_stake,
@@ -1079,7 +901,6 @@ pub fn withdraw(
 }
 
 pub(crate) fn deactivate_delinquent(
-    invoke_context: &InvokeContext,
     transaction_context: &TransactionContext,
     instruction_context: &InstructionContext,
     stake_account: &mut BorrowedAccount,
@@ -1113,7 +934,7 @@ pub(crate) fn deactivate_delinquent(
         return Err(StakeError::InsufficientReferenceVotes.into());
     }
 
-    if let StakeStateV2::Stake(meta, mut stake, mut stake_flags) = stake_account.get_state()? {
+    if let StakeStateV2::Stake(meta, mut stake, stake_flags) = stake_account.get_state()? {
         if stake.delegation.voter_pubkey != *delinquent_vote_account_pubkey {
             return Err(StakeError::VoteAddressMismatch.into());
         }
@@ -1121,7 +942,7 @@ pub(crate) fn deactivate_delinquent(
         // Deactivate the stake account if its delegated vote account has never voted or has not
         // voted in the last `MINIMUM_DELINQUENT_EPOCHS_FOR_DEACTIVATION`
         if eligible_for_deactivate_delinquent(&delinquent_vote_state.epoch_credits, current_epoch) {
-            deactivate_stake(invoke_context, &mut stake, &mut stake_flags, current_epoch)?;
+            stake.deactivate(current_epoch)?;
             stake_account.set_state(&StakeStateV2::Stake(meta, stake, stake_flags))
         } else {
             Err(StakeError::MinimumDelinquentEpochsForDeactivationNotMet.into())

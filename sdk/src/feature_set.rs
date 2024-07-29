@@ -282,10 +282,6 @@ pub mod stake_deactivate_delinquent_instruction {
     solana_sdk::declare_id!("437r62HoAdUb63amq3D7ENnBLDhHT2xY8eFkLJYVKK4x");
 }
 
-pub mod stake_redelegate_instruction {
-    solana_sdk::declare_id!("2KKG3C6RBnxQo9jVVrbzsoSh41TDXLK7gBc9gduyxSzW");
-}
-
 pub mod vote_withdraw_authority_may_change_authorized_voter {
     solana_sdk::declare_id!("AVZS3ZsN4gi6Rkx2QUibYuSJG3S6QHib7xCYhG6vGJxU");
 }
@@ -950,7 +946,6 @@ lazy_static! {
         (nonce_must_be_authorized::id(), "nonce must be authorized"),
         (nonce_must_be_advanceable::id(), "durable nonces must be advanceable"),
         (vote_authorize_with_seed::id(), "An instruction you can use to change a vote accounts authority when the current authority is a derived key #25860"),
-        (stake_redelegate_instruction::id(), "enable the redelegate stake instruction #26294"),
         (preserve_rent_epoch_for_rent_exempt_accounts::id(), "preserve rent epoch for rent exempt accounts #26479"),
         (enable_bpf_loader_extend_program_ix::id(), "enable bpf upgradeable loader ExtendProgram instruction #25234"),
         (skip_rent_rewrites::id(), "skip rewriting rent exempt accounts during rent collection #26491"),

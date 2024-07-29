@@ -18,6 +18,8 @@ Release channels have their own copy of this changelog:
   * SDK:
     * `cargo-build-sbf` and `cargo-build-bpf` have been deprecated for two years and have now been definitely removed.
        Use `cargo-build-sbf` and `cargo-test-sbf` instead.
+  * Stake:
+    * removed the unreleased `redelegate` instruction processor and CLI commands (#2213)
 * Changes
   * SDK: removed the `respan` macro. This was marked as "internal use only" and was no longer used internally.
 

@@ -1071,6 +1071,7 @@ mod test {
             },
             lockup: Lockup::default(),
         }));
+        #[allow(deprecated)]
         check_borsh_serialization(StakeStateV2::Stake(
             Meta {
                 rent_exempt_reserve: 1,
@@ -1152,6 +1153,7 @@ mod test {
             assert_eq!(bincode_serialized[FLAG_OFFSET], expected);
             assert_eq!(borsh_serialized[FLAG_OFFSET], expected);
         };
+        #[allow(deprecated)]
         check_flag(
             StakeFlags::MUST_FULLY_ACTIVATE_BEFORE_DEACTIVATION_IS_PERMITTED,
             1,

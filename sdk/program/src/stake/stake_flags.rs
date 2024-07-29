@@ -65,6 +65,10 @@ impl borsh0_10::ser::BorshSerialize for StakeFlags {
 /// Currently, only bit 1 is used. The other 7 bits are reserved for future usage.
 impl StakeFlags {
     ///  Stake must be fully activated before deactivation is allowed (bit 1).
+    #[deprecated(
+        since = "2.1.0",
+        note = "This flag will be removed because it was only used for `redelegate`, which will not be enabled."
+    )]
     pub const MUST_FULLY_ACTIVATE_BEFORE_DEACTIVATION_IS_PERMITTED: Self =
         Self { bits: 0b0000_0001 };
 
@@ -102,6 +106,7 @@ mod test {
     use super::*;
 
     #[test]
+    #[allow(deprecated)]
     fn test_stake_flags() {
         let mut f = StakeFlags::empty();
         assert!(!f.contains(StakeFlags::MUST_FULLY_ACTIVATE_BEFORE_DEACTIVATION_IS_PERMITTED));

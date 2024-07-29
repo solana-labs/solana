@@ -229,7 +229,6 @@ pub enum CliCommand {
         nonce_authority: SignerIndex,
         memo: Option<String>,
         fee_payer: SignerIndex,
-        redelegation_stake_account: Option<SignerIndex>,
         compute_unit_price: Option<u64>,
     },
     SplitStake {
@@ -718,8 +717,10 @@ pub fn parse_command(
         ("delegate-stake", Some(matches)) => {
             parse_stake_delegate_stake(matches, default_signer, wallet_manager)
         }
-        ("redelegate-stake", Some(matches)) => {
-            parse_stake_delegate_stake(matches, default_signer, wallet_manager)
+        ("redelegate-stake", _) => {
+            Err(CliError::CommandNotRecognized(
+                "`redelegate-stake` no longer exists and will be completely removed in a future release".to_string(),
+            ))
         }
         ("withdraw-stake", Some(matches)) => {
             parse_stake_withdraw_stake(matches, default_signer, wallet_manager)
@@ -1242,7 +1243,6 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             nonce_authority,
             memo,
             fee_payer,
-            redelegation_stake_account,
             compute_unit_price,
         } => process_delegate_stake(
             &rpc_client,
@@ -1258,7 +1258,6 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             *nonce_authority,
             memo.as_ref(),
             *fee_payer,
-            *redelegation_stake_account,
             *compute_unit_price,
         ),
         CliCommand::SplitStake {
