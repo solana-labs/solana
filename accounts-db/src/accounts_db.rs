@@ -4872,6 +4872,25 @@ impl AccountsDb {
             slots.retain(|slot| slot < &newest_slot_skip_shrink_inclusive);
         }
 
+        // if we are restoring from incremental + full snapshot, then we cannot clean past last_full_snapshot_slot.
+        // If we were to clean past that, then we could mark accounts prior to last_full_snapshot_slot as dead.
+        // If we mark accounts prior to last_full_snapshot_slot as dead, then we could shrink those accounts away.
+        // If we shrink accounts away, then when we run the full hash of all accounts calculation up to last_full_snapshot_slot,
+        // then we will get the wrong answer, because some accounts may be GONE from the slot range up to last_full_snapshot_slot.
+        // So, we can only clean UP TO and including last_full_snapshot_slot.
+        // As long as we don't mark anything as dead at slots > last_full_snapshot_slot, then shrink will have nothing to do for
+        // slots > last_full_snapshot_slot.
+        let maybe_clean = || {
+            if self.dirty_stores.len() > DIRTY_STORES_CLEANING_THRESHOLD {
+                self.clean_accounts(
+                    last_full_snapshot_slot,
+                    is_startup,
+                    last_full_snapshot_slot,
+                    epoch_schedule,
+                );
+            }
+        };
+
         if is_startup {
             let threads = num_cpus::get();
             let inner_chunk_size = std::cmp::max(OUTER_CHUNK_SIZE / threads, 1);
@@ -4881,16 +4900,12 @@ impl AccountsDb {
                         self.shrink_slot_forced(*slot);
                     }
                 });
-                if self.dirty_stores.len() > DIRTY_STORES_CLEANING_THRESHOLD {
-                    self.clean_accounts(None, is_startup, last_full_snapshot_slot, epoch_schedule);
-                }
+                maybe_clean();
             });
         } else {
             for slot in slots {
                 self.shrink_slot_forced(slot);
-                if self.dirty_stores.len() > DIRTY_STORES_CLEANING_THRESHOLD {
-                    self.clean_accounts(None, is_startup, last_full_snapshot_slot, epoch_schedule);
-                }
+                maybe_clean();
             }
         }
     }
