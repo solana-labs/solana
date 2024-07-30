@@ -666,6 +666,8 @@ pub struct AccountsIndex<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> {
     /// when a scan's accumulated data exceeds this limit, abort the scan
     pub scan_results_limit_bytes: Option<usize>,
 
+    pub purge_older_root_entries_one_slot_list: AtomicUsize,
+
     /// # roots added since last check
     pub roots_added: AtomicUsize,
     /// # roots removed since last check
@@ -690,6 +692,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
             .and_then(|config| config.scan_results_limit_bytes);
         let (account_maps, bin_calculator, storage) = Self::allocate_accounts_index(config, exit);
         Self {
+            purge_older_root_entries_one_slot_list: AtomicUsize::default(),
             account_maps,
             bin_calculator,
             program_id_index: SecondaryIndex::<RwLockSecondaryIndexEntry>::new(
@@ -1817,6 +1820,10 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         reclaims: &mut SlotList<T>,
         max_clean_root_inclusive: Option<Slot>,
     ) {
+        if slot_list.len() <= 1 {
+            self.purge_older_root_entries_one_slot_list
+                .fetch_add(1, Ordering::Relaxed);
+        }
         let newest_root_in_slot_list;
         let max_clean_root_inclusive = {
             let roots_tracker = &self.roots_tracker.read().unwrap();

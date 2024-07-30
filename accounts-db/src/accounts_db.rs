@@ -1937,6 +1937,7 @@ struct CleanAccountsStats {
     remove_dead_accounts_remove_us: AtomicU64,
     remove_dead_accounts_shrink_us: AtomicU64,
     clean_stored_dead_slots_us: AtomicU64,
+    uncleaned_roots_slot_list_1: AtomicU64,
 }
 
 impl CleanAccountsStats {
@@ -3282,8 +3283,15 @@ impl AccountsDb {
                                                 {
                                                     assert!(slot <= &max_clean_root_inclusive);
                                                 }
-                                                purges_old_accounts.push(*candidate);
-                                                useless = false;
+                                                if slot_list.len() > 1 {
+                                                    // no need to purge old accounts if there is only 1 slot in the slot list
+                                                    purges_old_accounts.push(*candidate);
+                                                    useless = false;
+                                                } else {
+                                                    self.clean_accounts_stats
+                                                        .uncleaned_roots_slot_list_1
+                                                        .fetch_add(1, Ordering::Relaxed);
+                                                }
                                             }
                                         }
                                         None => {
@@ -3498,6 +3506,13 @@ impl AccountsDb {
             ("scan_missing", missing_accum.load(Ordering::Relaxed), i64),
             ("uncleaned_roots_len", uncleaned_roots.len(), i64),
             (
+                "uncleaned_roots_slot_list_1",
+                self.clean_accounts_stats
+                    .uncleaned_roots_slot_list_1
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
                 "clean_old_root_us",
                 self.clean_accounts_stats
                     .clean_old_root_us
@@ -3542,6 +3557,13 @@ impl AccountsDb {
             (
                 "roots_added",
                 self.accounts_index.roots_added.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "purge_older_root_entries_one_slot_list",
+                self.accounts_index
+                    .purge_older_root_entries_one_slot_list
+                    .swap(0, Ordering::Relaxed),
                 i64
             ),
             (
