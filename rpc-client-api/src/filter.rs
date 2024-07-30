@@ -121,9 +121,10 @@ impl<'de> Deserialize<'de> for MemcmpEncodedBytes {
 
         let memcmp_encoded_bytes = match data.bytes {
             DataType::Encoded(bytes) => match data.encoding.unwrap_or(RpcMemcmpEncoding::Base58) {
-                RpcMemcmpEncoding::Base58 => MemcmpEncodedBytes::Base58(bytes),
+                RpcMemcmpEncoding::Base58 | RpcMemcmpEncoding::Bytes => {
+                    MemcmpEncodedBytes::Base58(bytes)
+                }
                 RpcMemcmpEncoding::Base64 => MemcmpEncodedBytes::Base64(bytes),
-                _ => unreachable!(),
             },
             DataType::Raw(bytes) => MemcmpEncodedBytes::Bytes(bytes),
         };
@@ -334,10 +335,14 @@ mod tests {
         formatcp!(r#"{{"bytes":"{BASE58_STR}","offset":{OFFSET},"encoding":"base58"}}"#);
     const BASE64_FILTER: &str =
         formatcp!(r#"{{"bytes":"{BASE64_STR}","offset":{OFFSET},"encoding":"base64"}}"#);
+    const MISMATCHED_BASE64_FILTER: &str =
+        formatcp!(r#"{{"bytes":[0, 1, 2, 3],"offset":{OFFSET},"encoding":"base64"}}"#);
     const BYTES_FILTER: &str =
         formatcp!(r#"{{"bytes":[0, 1, 2, 3],"offset":{OFFSET},"encoding":null}}"#);
     const BYTES_FILTER_WITH_ENCODING: &str =
         formatcp!(r#"{{"bytes":[0, 1, 2, 3],"offset":{OFFSET},"encoding":"bytes"}}"#);
+    const MISMATCHED_BYTES_FILTER_WITH_ENCODING: &str =
+        formatcp!(r#"{{"bytes":"{BASE58_STR}","offset":{OFFSET},"encoding":"bytes"}}"#);
 
     #[test]
     fn test_filter_deserialize() {
@@ -391,6 +396,26 @@ mod tests {
             Memcmp {
                 offset: OFFSET,
                 bytes: MemcmpEncodedBytes::Bytes(BYTES.to_vec()),
+            }
+        );
+
+        // Mismatched input
+        let base64_filter: Memcmp = serde_json::from_str(MISMATCHED_BASE64_FILTER).unwrap();
+        assert_eq!(
+            base64_filter,
+            Memcmp {
+                offset: OFFSET,
+                bytes: MemcmpEncodedBytes::Bytes(BYTES.to_vec()),
+            }
+        );
+
+        let bytes_filter: Memcmp =
+            serde_json::from_str(MISMATCHED_BYTES_FILTER_WITH_ENCODING).unwrap();
+        assert_eq!(
+            bytes_filter,
+            Memcmp {
+                offset: OFFSET,
+                bytes: MemcmpEncodedBytes::Base58(BASE58_STR.to_string()),
             }
         );
     }
