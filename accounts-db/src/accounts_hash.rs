@@ -207,6 +207,7 @@ pub struct HashStats {
     pub count_ancient_scans: AtomicU64,
     pub pubkey_bin_search_us: AtomicU64,
     pub num_zero_lamport_accounts: AtomicU64,
+    pub num_zero_lamport_accounts_ancient: Arc<AtomicU64>,
 }
 impl HashStats {
     pub fn calc_storage_size_quartiles(&mut self, storages: &[Arc<AccountStorageEntry>]) {
@@ -311,6 +312,12 @@ impl HashStats {
             (
                 "num_zero_lamport_accounts",
                 self.num_zero_lamport_accounts.load(Ordering::Relaxed),
+                i64
+            ),
+            (
+                "num_zero_lamport_accounts_ancient",
+                self.num_zero_lamport_accounts_ancient
+                    .load(Ordering::Relaxed),
                 i64
             ),
         );
