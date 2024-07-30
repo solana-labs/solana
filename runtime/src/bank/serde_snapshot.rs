@@ -19,7 +19,7 @@ mod tests {
                 create_tmp_accounts_dir_for_tests, get_storages_to_serialize, ArchiveFormat,
                 StorageAndNextAccountsFileId,
             },
-            stakes::Stakes,
+            stakes::{Stakes, StakesEnum},
         },
         solana_accounts_db::{
             account_storage::{AccountStorageMap, AccountStorageReference},
@@ -37,8 +37,8 @@ mod tests {
             pubkey::Pubkey, stake::state::Stake,
         },
         std::{
-            collections::HashMap,
             io::{BufReader, BufWriter, Cursor},
+            mem,
             ops::RangeFull,
             path::Path,
             sync::{atomic::Ordering, Arc},
@@ -124,7 +124,7 @@ mod tests {
         } else {
             0
         } + 2;
-        let bank2 = Bank::new_from_parent(bank0, &Pubkey::default(), bank2_slot);
+        let mut bank2 = Bank::new_from_parent(bank0, &Pubkey::default(), bank2_slot);
 
         // Test new account
         let key2 = Pubkey::new_unique();
@@ -158,25 +158,59 @@ mod tests {
             epoch_accounts_hash
         });
 
+        // Only if a bank was recently recreated from a snapshot will it have an epoch stakes entry
+        // of type "delegations" which cannot be serialized into the versioned epoch stakes map. Simulate
+        // this condition by replacing the epoch 0 stakes map of stake accounts with an epoch stakes map
+        // of delegations.
+        {
+            assert_eq!(bank2.epoch_stakes.len(), 2);
+            assert!(bank2
+                .epoch_stakes
+                .values()
+                .all(|epoch_stakes| matches!(epoch_stakes.stakes(), &StakesEnum::Accounts(_))));
+
+            let StakesEnum::Accounts(stake_accounts) =
+                bank2.epoch_stakes.remove(&0).unwrap().stakes().clone()
+            else {
+                panic!("expected the epoch 0 stakes entry to have stake accounts");
+            };
+
+            bank2.epoch_stakes.insert(
+                0,
+                EpochStakes::new(Arc::new(StakesEnum::Delegations(stake_accounts.into())), 0),
+            );
+        }
+
         let mut buf = Vec::new();
         let cursor = Cursor::new(&mut buf);
         let mut writer = BufWriter::new(cursor);
-        serde_snapshot::serialize_bank_snapshot_into(
-            &mut writer,
-            bank2.get_fields_to_serialize(),
-            accounts_db.get_bank_hash_stats(bank2_slot).unwrap(),
-            accounts_db.get_accounts_delta_hash(bank2_slot).unwrap(),
-            expected_accounts_hash,
-            &get_storages_to_serialize(&bank2.get_snapshot_storages(None)),
-            ExtraFieldsToSerialize {
-                lamports_per_signature: bank2.fee_rate_governor.lamports_per_signature,
-                incremental_snapshot_persistence: expected_incremental_snapshot_persistence
-                    .as_ref(),
-                epoch_accounts_hash: expected_epoch_accounts_hash,
-            },
-            accounts_db.write_version.load(Ordering::Acquire),
-        )
-        .unwrap();
+        {
+            let mut bank_fields = bank2.get_fields_to_serialize();
+            // Ensure that epoch_stakes and versioned_epoch_stakes are each
+            // serialized with at least one entry to verify that epoch stakes
+            // entries are combined correctly during deserialization
+            assert!(!bank_fields.epoch_stakes.is_empty());
+            assert!(!bank_fields.versioned_epoch_stakes.is_empty());
+
+            let versioned_epoch_stakes = mem::take(&mut bank_fields.versioned_epoch_stakes);
+            serde_snapshot::serialize_bank_snapshot_into(
+                &mut writer,
+                bank_fields,
+                accounts_db.get_bank_hash_stats(bank2_slot).unwrap(),
+                accounts_db.get_accounts_delta_hash(bank2_slot).unwrap(),
+                expected_accounts_hash,
+                &get_storages_to_serialize(&bank2.get_snapshot_storages(None)),
+                ExtraFieldsToSerialize {
+                    lamports_per_signature: bank2.fee_rate_governor.lamports_per_signature,
+                    incremental_snapshot_persistence: expected_incremental_snapshot_persistence
+                        .as_ref(),
+                    epoch_accounts_hash: expected_epoch_accounts_hash,
+                    versioned_epoch_stakes,
+                },
+                accounts_db.write_version.load(Ordering::Acquire),
+            )
+            .unwrap();
+        }
         drop(writer);
 
         // Now deserialize the serialized bank and ensure it matches the original bank
@@ -235,6 +269,7 @@ mod tests {
             dbank.get_epoch_accounts_hash_to_serialize(),
             expected_epoch_accounts_hash,
         );
+
         assert_eq!(dbank, bank2);
     }
 
@@ -265,6 +300,19 @@ mod tests {
 
         // Set extra fields
         bank.fee_rate_governor.lamports_per_signature = 7000;
+        // Note that epoch_stakes already has two epoch stakes entries for epochs 0 and 1
+        // which will also be serialized to the versioned epoch stakes extra field. Those
+        // entries are of type Stakes<StakeAccount> so add a new entry for Stakes<Stake>.
+        bank.epoch_stakes.insert(
+            42,
+            EpochStakes::from(VersionedEpochStakes::Current {
+                stakes: Stakes::<Stake>::default(),
+                total_stake: 42,
+                node_id_to_vote_accounts: Arc::<NodeIdToVoteAccounts>::default(),
+                epoch_authorized_voters: Arc::<EpochAuthorizedVoters>::default(),
+            }),
+        );
+        assert_eq!(bank.epoch_stakes.len(), 3);
 
         // Serialize
         let snapshot_storages = bank.get_snapshot_storages(None);
@@ -277,18 +325,6 @@ mod tests {
             &get_storages_to_serialize(&snapshot_storages),
         )
         .unwrap();
-
-        let mut new_epoch_stakes: HashMap<u64, VersionedEpochStakes> = HashMap::new();
-        new_epoch_stakes.insert(
-            42,
-            VersionedEpochStakes::Current {
-                stakes: Stakes::<Stake>::default(),
-                total_stake: 42,
-                node_id_to_vote_accounts: Arc::<NodeIdToVoteAccounts>::default(),
-                epoch_authorized_voters: Arc::<EpochAuthorizedVoters>::default(),
-            },
-        );
-        bincode::serialize_into(&mut writer, &new_epoch_stakes).unwrap();
 
         // Deserialize
         let rdr = Cursor::new(&buf[..]);
@@ -323,13 +359,7 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(
-            dbank.epoch_stakes(42),
-            Some(&EpochStakes::from(
-                new_epoch_stakes.get(&42).unwrap().clone()
-            ))
-        );
-
+        assert_eq!(bank.epoch_stakes, dbank.epoch_stakes);
         assert_eq!(
             bank.fee_rate_governor.lamports_per_signature,
             dbank.fee_rate_governor.lamports_per_signature
@@ -505,7 +535,7 @@ mod tests {
         #[cfg_attr(
             feature = "frozen-abi",
             derive(AbiExample),
-            frozen_abi(digest = "AMm4uzGQ6E7fj8MkDjUtFR7kYAjtUyWddXAPLjwaqKqV")
+            frozen_abi(digest = "CeNFPePrUfgJT2GNr7zYfMQVuJwGyU46bz1Skq7hAPht")
         )]
         #[derive(Serialize)]
         pub struct BankAbiTestWrapper {
@@ -530,9 +560,11 @@ mod tests {
                 incremental_capitalization: u64::default(),
             };
 
+            let mut bank_fields = bank.get_fields_to_serialize();
+            let versioned_epoch_stakes = std::mem::take(&mut bank_fields.versioned_epoch_stakes);
             serde_snapshot::serialize_bank_snapshot_with(
                 serializer,
-                bank.get_fields_to_serialize(),
+                bank_fields,
                 BankHashStats::default(),
                 AccountsDeltaHash(Hash::new_unique()),
                 AccountsHash(Hash::new_unique()),
@@ -541,6 +573,7 @@ mod tests {
                     lamports_per_signature: bank.fee_rate_governor.lamports_per_signature,
                     incremental_snapshot_persistence: Some(&incremental_snapshot_persistence),
                     epoch_accounts_hash: Some(EpochAccountsHash::new(Hash::new_unique())),
+                    versioned_epoch_stakes,
                 },
                 StoredMetaWriteVersion::default(),
             )

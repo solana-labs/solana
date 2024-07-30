@@ -529,6 +529,23 @@ impl From<Stakes<StakeAccount>> for Stakes<Delegation> {
     }
 }
 
+impl From<Stakes<StakeAccount>> for Stakes<Stake> {
+    fn from(stakes: Stakes<StakeAccount>) -> Self {
+        let stake_delegations = stakes
+            .stake_delegations
+            .into_iter()
+            .map(|(pubkey, stake_account)| (pubkey, stake_account.stake()))
+            .collect();
+        Self {
+            vote_accounts: stakes.vote_accounts,
+            stake_delegations,
+            unused: stakes.unused,
+            epoch: stakes.epoch,
+            stake_history: stakes.stake_history,
+        }
+    }
+}
+
 impl From<Stakes<Stake>> for Stakes<Delegation> {
     fn from(stakes: Stakes<Stake>) -> Self {
         let stake_delegations = stakes

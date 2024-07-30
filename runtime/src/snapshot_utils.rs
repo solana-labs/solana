@@ -42,6 +42,7 @@ use {
         collections::{HashMap, HashSet},
         fmt, fs,
         io::{BufReader, BufWriter, Error as IoError, Read, Result as IoResult, Seek, Write},
+        mem,
         num::NonZeroUsize,
         ops::RangeInclusive,
         path::{Path, PathBuf},
@@ -826,7 +827,7 @@ fn serialize_snapshot(
     snapshot_version: SnapshotVersion,
     snapshot_storages: &[Arc<AccountStorageEntry>],
     slot_deltas: &[BankSlotDelta],
-    bank_fields: BankFieldsToSerialize,
+    mut bank_fields: BankFieldsToSerialize,
     bank_hash_stats: BankHashStats,
     accounts_delta_hash: AccountsDeltaHash,
     accounts_hash: AccountsHash,
@@ -877,10 +878,12 @@ fn serialize_snapshot(
         .map_err(AddBankSnapshotError::HardLinkStorages)?);
 
         let bank_snapshot_serializer = move |stream: &mut BufWriter<fs::File>| -> Result<()> {
+            let versioned_epoch_stakes = mem::take(&mut bank_fields.versioned_epoch_stakes);
             let extra_fields = ExtraFieldsToSerialize {
                 lamports_per_signature: bank_fields.fee_rate_governor.lamports_per_signature,
                 incremental_snapshot_persistence: bank_incremental_snapshot_persistence,
                 epoch_accounts_hash,
+                versioned_epoch_stakes,
             };
             serde_snapshot::serialize_bank_snapshot_into(
                 stream,

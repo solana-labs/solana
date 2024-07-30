@@ -124,8 +124,9 @@ impl EpochStakes {
     }
 }
 
+#[cfg_attr(feature = "frozen-abi", derive(AbiExample, AbiEnumVisitor))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub(crate) enum VersionedEpochStakes {
+pub enum VersionedEpochStakes {
     Current {
         stakes: Stakes<Stake>,
         total_stake: u64,
@@ -152,11 +153,76 @@ impl From<VersionedEpochStakes> for EpochStakes {
     }
 }
 
+/// Only the `StakesEnum::Delegations` variant is unable to be serialized as a
+/// `StakesEnum::Stakes` variant, so leave those entries and split off the other
+/// epoch stakes enum variants into a new map which will be serialized into the
+/// new `versioned_epoch_stakes` snapshot field.  After a cluster transitions to
+/// serializing epoch stakes in the new format, `StakesEnum::Delegations`
+/// variants for recent epochs will no longer be created and can be deprecated.
+pub(crate) fn split_epoch_stakes(
+    bank_epoch_stakes: HashMap<Epoch, EpochStakes>,
+) -> (
+    HashMap<Epoch, EpochStakes>,
+    HashMap<Epoch, VersionedEpochStakes>,
+) {
+    let mut old_epoch_stakes = HashMap::new();
+    let mut versioned_epoch_stakes = HashMap::new();
+    for (epoch, epoch_stakes) in bank_epoch_stakes.into_iter() {
+        let EpochStakes {
+            stakes,
+            total_stake,
+            node_id_to_vote_accounts,
+            epoch_authorized_voters,
+        } = epoch_stakes;
+        match stakes.as_ref() {
+            StakesEnum::Delegations(_) => {
+                old_epoch_stakes.insert(
+                    epoch,
+                    EpochStakes {
+                        stakes: stakes.clone(),
+                        total_stake,
+                        node_id_to_vote_accounts,
+                        epoch_authorized_voters,
+                    },
+                );
+            }
+            StakesEnum::Accounts(stakes) => {
+                versioned_epoch_stakes.insert(
+                    epoch,
+                    VersionedEpochStakes::Current {
+                        stakes: Stakes::<Stake>::from(stakes.clone()),
+                        total_stake,
+                        node_id_to_vote_accounts,
+                        epoch_authorized_voters,
+                    },
+                );
+            }
+            StakesEnum::Stakes(stakes) => {
+                versioned_epoch_stakes.insert(
+                    epoch,
+                    VersionedEpochStakes::Current {
+                        stakes: stakes.clone(),
+                        total_stake,
+                        node_id_to_vote_accounts,
+                        epoch_authorized_voters,
+                    },
+                );
+            }
+        }
+    }
+    (old_epoch_stakes, versioned_epoch_stakes)
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use {
-        super::*, solana_sdk::account::AccountSharedData, solana_vote::vote_account::VoteAccount,
-        solana_vote_program::vote_state::create_account_with_authorized, std::iter,
+        super::*,
+        crate::{stake_account::StakeAccount, stakes::StakesCache},
+        solana_sdk::{account::AccountSharedData, rent::Rent},
+        solana_stake_program::stake_state::{self, Delegation},
+        solana_vote::vote_account::VoteAccount,
+        solana_vote_program::vote_state::{self, create_account_with_authorized},
+        std::iter,
     };
 
     struct VoteAccountInfo {
@@ -255,5 +321,168 @@ pub(crate) mod tests {
             total_stake,
             vote_accounts_map.len() as u64 * num_vote_accounts_per_node as u64 * 100
         );
+    }
+
+    fn create_test_stakes() -> Stakes<StakeAccount<Delegation>> {
+        let stakes_cache = StakesCache::new(Stakes::default());
+
+        let vote_pubkey = Pubkey::new_unique();
+        let vote_account = vote_state::create_account_with_authorized(
+            &Pubkey::new_unique(),
+            &Pubkey::new_unique(),
+            &Pubkey::new_unique(),
+            0,
+            1,
+        );
+
+        let stake = 1_000_000_000;
+        let stake_pubkey = Pubkey::new_unique();
+        let stake_account = stake_state::create_account(
+            &Pubkey::new_unique(),
+            &vote_pubkey,
+            &vote_account,
+            &Rent::default(),
+            stake,
+        );
+
+        stakes_cache.check_and_store(&vote_pubkey, &vote_account, None);
+        stakes_cache.check_and_store(&stake_pubkey, &stake_account, None);
+
+        let stakes = Stakes::clone(&stakes_cache.stakes());
+
+        stakes
+    }
+
+    #[test]
+    fn test_split_epoch_stakes_empty() {
+        let bank_epoch_stakes = HashMap::new();
+        let (old, versioned) = split_epoch_stakes(bank_epoch_stakes);
+        assert!(old.is_empty());
+        assert!(versioned.is_empty());
+    }
+
+    #[test]
+    fn test_split_epoch_stakes_delegations() {
+        let mut bank_epoch_stakes = HashMap::new();
+        let epoch = 0;
+        let stakes = Arc::new(StakesEnum::Delegations(create_test_stakes().into()));
+        let epoch_stakes = EpochStakes {
+            stakes,
+            total_stake: 100,
+            node_id_to_vote_accounts: Arc::new(HashMap::new()),
+            epoch_authorized_voters: Arc::new(HashMap::new()),
+        };
+        bank_epoch_stakes.insert(epoch, epoch_stakes.clone());
+
+        let (old, versioned) = split_epoch_stakes(bank_epoch_stakes);
+
+        assert_eq!(old.len(), 1);
+        assert_eq!(old.get(&epoch), Some(&epoch_stakes));
+        assert!(versioned.is_empty());
+    }
+
+    #[test]
+    fn test_split_epoch_stakes_accounts() {
+        let mut bank_epoch_stakes = HashMap::new();
+        let epoch = 0;
+        let test_stakes = create_test_stakes();
+        let stakes = Arc::new(StakesEnum::Accounts(test_stakes.clone()));
+        let epoch_stakes = EpochStakes {
+            stakes,
+            total_stake: 100,
+            node_id_to_vote_accounts: Arc::new(HashMap::new()),
+            epoch_authorized_voters: Arc::new(HashMap::new()),
+        };
+        bank_epoch_stakes.insert(epoch, epoch_stakes.clone());
+
+        let (old, versioned) = split_epoch_stakes(bank_epoch_stakes);
+
+        assert!(old.is_empty());
+        assert_eq!(versioned.len(), 1);
+        assert_eq!(
+            versioned.get(&epoch),
+            Some(&VersionedEpochStakes::Current {
+                stakes: Stakes::<Stake>::from(test_stakes),
+                total_stake: epoch_stakes.total_stake,
+                node_id_to_vote_accounts: epoch_stakes.node_id_to_vote_accounts,
+                epoch_authorized_voters: epoch_stakes.epoch_authorized_voters,
+            })
+        );
+    }
+
+    #[test]
+    fn test_split_epoch_stakes_stakes() {
+        let mut bank_epoch_stakes = HashMap::new();
+        let epoch = 0;
+        let test_stakes: Stakes<Stake> = create_test_stakes().into();
+        let stakes = Arc::new(StakesEnum::Stakes(test_stakes.clone()));
+        let epoch_stakes = EpochStakes {
+            stakes,
+            total_stake: 100,
+            node_id_to_vote_accounts: Arc::new(HashMap::new()),
+            epoch_authorized_voters: Arc::new(HashMap::new()),
+        };
+        bank_epoch_stakes.insert(epoch, epoch_stakes.clone());
+
+        let (old, versioned) = split_epoch_stakes(bank_epoch_stakes);
+
+        assert!(old.is_empty());
+        assert_eq!(versioned.len(), 1);
+        assert_eq!(
+            versioned.get(&epoch),
+            Some(&VersionedEpochStakes::Current {
+                stakes: test_stakes,
+                total_stake: epoch_stakes.total_stake,
+                node_id_to_vote_accounts: epoch_stakes.node_id_to_vote_accounts,
+                epoch_authorized_voters: epoch_stakes.epoch_authorized_voters,
+            })
+        );
+    }
+
+    #[test]
+    fn test_split_epoch_stakes_mixed() {
+        let mut bank_epoch_stakes = HashMap::new();
+
+        // Delegations
+        let epoch1 = 0;
+        let stakes1 = Arc::new(StakesEnum::Delegations(Stakes::default()));
+        let epoch_stakes1 = EpochStakes {
+            stakes: stakes1,
+            total_stake: 100,
+            node_id_to_vote_accounts: Arc::new(HashMap::new()),
+            epoch_authorized_voters: Arc::new(HashMap::new()),
+        };
+        bank_epoch_stakes.insert(epoch1, epoch_stakes1);
+
+        // Accounts
+        let epoch2 = 1;
+        let stakes2 = Arc::new(StakesEnum::Accounts(Stakes::default()));
+        let epoch_stakes2 = EpochStakes {
+            stakes: stakes2,
+            total_stake: 200,
+            node_id_to_vote_accounts: Arc::new(HashMap::new()),
+            epoch_authorized_voters: Arc::new(HashMap::new()),
+        };
+        bank_epoch_stakes.insert(epoch2, epoch_stakes2);
+
+        // Stakes
+        let epoch3 = 2;
+        let stakes3 = Arc::new(StakesEnum::Stakes(Stakes::default()));
+        let epoch_stakes3 = EpochStakes {
+            stakes: stakes3,
+            total_stake: 300,
+            node_id_to_vote_accounts: Arc::new(HashMap::new()),
+            epoch_authorized_voters: Arc::new(HashMap::new()),
+        };
+        bank_epoch_stakes.insert(epoch3, epoch_stakes3);
+
+        let (old, versioned) = split_epoch_stakes(bank_epoch_stakes);
+
+        assert_eq!(old.len(), 1);
+        assert!(old.contains_key(&epoch1));
+
+        assert_eq!(versioned.len(), 2);
+        assert!(versioned.contains_key(&epoch2));
+        assert!(versioned.contains_key(&epoch3));
     }
 }

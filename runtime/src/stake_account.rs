@@ -6,7 +6,7 @@ use {
         account_utils::StateMut,
         instruction::InstructionError,
         pubkey::Pubkey,
-        stake::state::{Delegation, StakeStateV2},
+        stake::state::{Delegation, Stake, StakeStateV2},
     },
     std::marker::PhantomData,
     thiserror::Error,
@@ -52,6 +52,13 @@ impl StakeAccount<Delegation> {
         // Safe to unwrap here because StakeAccount<Delegation> will always
         // only wrap a stake-state which is a delegation.
         self.stake_state.delegation().unwrap()
+    }
+
+    #[inline]
+    pub(crate) fn stake(&self) -> Stake {
+        // Safe to unwrap here because StakeAccount<Delegation> will always
+        // only wrap a stake-state.
+        self.stake_state.stake().unwrap()
     }
 }
 

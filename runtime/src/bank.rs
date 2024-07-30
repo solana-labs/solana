@@ -41,7 +41,7 @@ use {
             partitioned_epoch_rewards::{EpochRewardStatus, StakeRewards, VoteRewardsAccounts},
         },
         bank_forks::BankForks,
-        epoch_stakes::{EpochStakes, NodeVoteAccounts},
+        epoch_stakes::{split_epoch_stakes, EpochStakes, NodeVoteAccounts, VersionedEpochStakes},
         installed_scheduler_pool::{BankWithScheduler, InstalledSchedulerRwLock},
         runtime_config::RuntimeConfig,
         serde_snapshot::BankIncrementalSnapshotPersistence,
@@ -499,6 +499,7 @@ pub struct BankFieldsToSerialize {
     pub epoch_stakes: HashMap<Epoch, EpochStakes>,
     pub is_delta: bool,
     pub accounts_data_len: u64,
+    pub versioned_epoch_stakes: HashMap<u64, VersionedEpochStakes>,
 }
 
 // Can't derive PartialEq because RwLock doesn't implement PartialEq
@@ -642,6 +643,7 @@ impl BankFieldsToSerialize {
             epoch_stakes: HashMap::default(),
             is_delta: bool::default(),
             accounts_data_len: u64::default(),
+            versioned_epoch_stakes: HashMap::default(),
         }
     }
 }
@@ -1655,6 +1657,7 @@ impl Bank {
 
     /// Return subset of bank fields representing serializable state
     pub(crate) fn get_fields_to_serialize(&self) -> BankFieldsToSerialize {
+        let (epoch_stakes, versioned_epoch_stakes) = split_epoch_stakes(self.epoch_stakes.clone());
         BankFieldsToSerialize {
             blockhash_queue: self.blockhash_queue.read().unwrap().clone(),
             ancestors: AncestorsForSerialization::from(&self.ancestors),
@@ -1683,9 +1686,10 @@ impl Bank {
             epoch_schedule: self.epoch_schedule.clone(),
             inflation: *self.inflation.read().unwrap(),
             stakes: StakesEnum::from(self.stakes_cache.stakes().clone()),
-            epoch_stakes: self.epoch_stakes.clone(),
+            epoch_stakes,
             is_delta: self.is_delta.load(Relaxed),
             accounts_data_len: self.load_accounts_data_size(),
+            versioned_epoch_stakes,
         }
     }
 
