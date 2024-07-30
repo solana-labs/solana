@@ -280,11 +280,10 @@ impl From<RpcMemcmp> for Memcmp {
             | (RpcMemcmpEncoding::Base58, DataType::Encoded(string)) => {
                 MemcmpEncodedBytes::Base58(string)
             }
-            (RpcMemcmpEncoding::Binary, DataType::Raw(vector)) => MemcmpEncodedBytes::Bytes(vector),
             (RpcMemcmpEncoding::Base64, DataType::Encoded(string)) => {
                 MemcmpEncodedBytes::Base64(string)
             }
-            _ => unreachable!(),
+            (_, DataType::Raw(vector)) => MemcmpEncodedBytes::Bytes(vector),
         };
         Memcmp {
             offset: memcmp.offset,
