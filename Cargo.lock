@@ -7584,6 +7584,7 @@ dependencies = [
  "rustc_version 0.4.0",
  "serde",
  "serde_derive",
+ "shuttle",
  "solana-bpf-loader-program",
  "solana-compute-budget",
  "solana-compute-budget-program",
@@ -8147,6 +8148,7 @@ dependencies = [
  "rand 0.8.5",
  "rustc-demangle",
  "scroll",
+ "shuttle",
  "thiserror",
  "winapi 0.3.9",
 ]

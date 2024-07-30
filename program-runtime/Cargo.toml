@@ -57,4 +57,4 @@ frozen-abi = [
     "solana-compute-budget/frozen-abi",
     "solana-sdk/frozen-abi",
 ]
-shuttle-test = ["solana-type-overrides/shuttle-test"]
+shuttle-test = ["solana-type-overrides/shuttle-test", "solana_rbpf/shuttle-test"]

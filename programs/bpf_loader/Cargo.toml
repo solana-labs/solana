@@ -48,4 +48,5 @@ targets = ["x86_64-unknown-linux-gnu"]
 shuttle-test = [
     "solana-type-overrides/shuttle-test",
     "solana-program-runtime/shuttle-test",
+    "solana_rbpf/shuttle-test"
 ]

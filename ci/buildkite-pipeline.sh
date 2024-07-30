@@ -234,6 +234,19 @@ EOF
       "Stable-SBF skipped as no relevant files were modified"
   fi
 
+   # Shuttle tests
+  if affects \
+             .rs$ \
+             Cargo.lock$ \
+             Cargo.toml$ \
+             ^ci/rust-version.sh \
+      ; then
+    command_step shuttle "ci/docker-run-default-image.sh ci/test-shuttle.sh" 10
+  else
+    annotate --style info \
+      "test-shuttle skipped as no relevant files were modified"
+  fi
+
   # Downstream backwards compatibility
   if affects \
              .rs$ \

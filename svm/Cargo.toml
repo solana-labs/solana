@@ -42,6 +42,7 @@ lazy_static = { workspace = true }
 libsecp256k1 = { workspace = true }
 prost = { workspace = true }
 rand = { workspace = true }
+shuttle = { workspace = true }
 solana-bpf-loader-program = { workspace = true }
 solana-compute-budget-program = { workspace = true }
 solana-logger = { workspace = true }

@@ -29,4 +29,4 @@ name = "solana_loader_v4_program"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [features]
-shuttle-test = ["solana-type-overrides/shuttle-test", "solana-program-runtime/shuttle-test"]
+shuttle-test = ["solana-type-overrides/shuttle-test", "solana-program-runtime/shuttle-test", "solana_rbpf/shuttle-test"]

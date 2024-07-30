@@ -10,13 +10,13 @@ use {
         slot_hashes::Slot,
     },
     solana_svm::transaction_processing_callback::TransactionProcessingCallback,
+    solana_type_overrides::sync::{Arc, RwLock},
     std::{
         cmp::Ordering,
         collections::HashMap,
         env,
         fs::{self, File},
         io::Read,
-        sync::{Arc, RwLock},
     },
 };
 
