@@ -50,6 +50,7 @@ pub enum ExecuteTimingType {
     ExecuteUs,
     StoreUs,
     UpdateStakesCacheUs,
+    UpdateExecutorsUs,
     NumExecuteBatches,
     CollectLogsUs,
     TotalBatchesLen,
@@ -148,6 +149,11 @@ eager_macro_rules! { $eager_1
 
                     .metrics
                     .index(ExecuteTimingType::UpdateStakesCacheUs),
+                i64
+            ),
+            (
+                "execute_accessories_update_executors_us",
+                *$self.metrics.index(ExecuteTimingType::UpdateExecutorsUs),
                 i64
             ),
             (
@@ -260,11 +266,6 @@ eager_macro_rules! { $eager_1
                 i64
             ),
             (
-                "execute_accessories_update_executors_us",
-                $self.execute_accessories.update_executors_us,
-                i64
-            ),
-            (
                 "execute_accessories_process_instructions_total_us",
                 $self
                     .execute_accessories
@@ -351,7 +352,6 @@ pub struct ExecuteAccessoryTimings {
     pub feature_set_clone_us: u64,
     pub get_executors_us: u64,
     pub process_message_us: u64,
-    pub update_executors_us: u64,
     pub process_instructions: ExecuteProcessInstructionTimings,
 }
 
@@ -360,7 +360,6 @@ impl ExecuteAccessoryTimings {
         saturating_add_assign!(self.feature_set_clone_us, other.feature_set_clone_us);
         saturating_add_assign!(self.get_executors_us, other.get_executors_us);
         saturating_add_assign!(self.process_message_us, other.process_message_us);
-        saturating_add_assign!(self.update_executors_us, other.update_executors_us);
         self.process_instructions
             .accumulate(&other.process_instructions);
     }
