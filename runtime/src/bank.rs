@@ -5903,6 +5903,8 @@ impl Bank {
                     true,
                     Some(last_full_snapshot_slot),
                     self.epoch_schedule(),
+                    // we cannot allow the snapshot slot to be shrunk
+                    Some(self.slot()),
                 );
                 info!("Shrinking... Done.");
             } else {

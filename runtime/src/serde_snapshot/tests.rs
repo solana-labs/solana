@@ -823,7 +823,7 @@ mod serde_snapshot_tests {
                 pubkey_count,
                 accounts.all_account_count_in_accounts_file(shrink_slot)
             );
-            accounts.shrink_all_slots(*startup, None, &EpochSchedule::default());
+            accounts.shrink_all_slots(*startup, None, &EpochSchedule::default(), None);
             assert_eq!(
                 pubkey_count_after_shrink,
                 accounts.all_account_count_in_accounts_file(shrink_slot)
@@ -851,7 +851,7 @@ mod serde_snapshot_tests {
                 .unwrap();
 
             // repeating should be no-op
-            accounts.shrink_all_slots(*startup, None, &epoch_schedule);
+            accounts.shrink_all_slots(*startup, None, &epoch_schedule, None);
             assert_eq!(
                 pubkey_count_after_shrink,
                 accounts.all_account_count_in_accounts_file(shrink_slot)

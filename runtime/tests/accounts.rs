@@ -40,7 +40,7 @@ fn test_shrink_and_clean() {
             if exit_for_shrink.load(Ordering::Relaxed) {
                 break;
             }
-            accounts_for_shrink.shrink_all_slots(false, None, &EpochSchedule::default());
+            accounts_for_shrink.shrink_all_slots(false, None, &EpochSchedule::default(), None);
         });
 
         let mut alive_accounts = vec![];
