@@ -19,7 +19,7 @@ use {
     serde_json::json,
     solana_clap_utils::{
         input_parsers::pubkey_of,
-        input_validators::{is_slot, is_valid_pubkey},
+        input_validators::{is_parsable, is_slot, is_valid_pubkey},
     },
     solana_cli_output::{
         display::println_transaction, CliBlock, CliTransaction, CliTransactionConfirmation,
@@ -173,11 +173,80 @@ async fn entries(
     Ok(())
 }
 
-struct ShredConfig {
-    shred_version: u16,
+enum ShredPohGenerationMode {
+    AllowMockPoh(MockPohConfig),
+    RequireEntryData,
+}
+
+struct MockPohConfig {
     num_hashes_per_tick: u64,
     num_ticks_per_slot: u64,
+}
+
+struct ShredConfig {
+    shred_version: u16,
+    poh_generation_mode: ShredPohGenerationMode,
+}
+
+fn get_shred_config_from_ledger(
+    arg_matches: &ArgMatches,
+    ledger_path: &Path,
+    blockstore: Arc<Blockstore>,
     allow_mock_poh: bool,
+    starting_slot: Slot,
+    ending_slot: Slot,
+) -> ShredConfig {
+    let process_options = parse_process_options(ledger_path, arg_matches);
+    let genesis_config = open_genesis_config_by(ledger_path, arg_matches);
+    let LoadAndProcessLedgerOutput { bank_forks, .. } = load_and_process_ledger_or_exit(
+        arg_matches,
+        &genesis_config,
+        blockstore.clone(),
+        process_options,
+        None,
+    );
+
+    let bank = bank_forks.read().unwrap().working_bank();
+    let shred_version = compute_shred_version(&genesis_config.hash(), Some(&bank.hard_forks()));
+    // If mock PoH is allowed, ensure that the requested slots are in
+    // the same epoch as the working bank. This will ensure the values
+    // extracted from the Bank are accurate for the slot range
+    if allow_mock_poh {
+        let working_bank_epoch = bank.epoch();
+        let epoch_schedule = bank.epoch_schedule();
+        let starting_epoch = epoch_schedule.get_epoch(starting_slot);
+        let ending_epoch = epoch_schedule.get_epoch(ending_slot);
+        if starting_epoch != ending_epoch {
+            eprintln!(
+                "The specified --starting-slot and --ending-slot must be in the\
+                same epoch. --starting-slot {starting_slot} is in epoch {starting_epoch},\
+                but --ending-slot {ending_slot} is in epoch {ending_epoch}."
+            );
+            exit(1);
+        }
+        if starting_epoch != working_bank_epoch {
+            eprintln!(
+                "The range of slots between --starting-slot and --ending-slot are in a \
+                different epoch than the working bank. The specified range is in epoch \
+                {starting_epoch}, but the working bank is in {working_bank_epoch}."
+            );
+            exit(1);
+        }
+
+        let mock_poh_config = MockPohConfig {
+            num_hashes_per_tick: bank.hashes_per_tick().unwrap_or(0),
+            num_ticks_per_slot: bank.ticks_per_slot(),
+        };
+        ShredConfig {
+            shred_version,
+            poh_generation_mode: ShredPohGenerationMode::AllowMockPoh(mock_poh_config),
+        }
+    } else {
+        ShredConfig {
+            shred_version,
+            poh_generation_mode: ShredPohGenerationMode::RequireEntryData,
+        }
+    }
 }
 
 async fn shreds(
@@ -205,34 +274,13 @@ async fn shreds(
     // shreds being signed with the "dummy" keyapir can still be inserted and
     // later read/replayed/etc
     let keypair = keypair_from_seed(&[0; 64])?;
-    let ShredConfig {
-        shred_version,
-        num_hashes_per_tick,
-        num_ticks_per_slot,
-        allow_mock_poh,
-    } = shred_config;
 
     for slot in slots.iter() {
         let block = bigtable.get_confirmed_block(*slot).await?;
-        let entry_summaries = match bigtable.get_entries(*slot).await {
-            Ok(summaries) => Some(summaries),
-            Err(err) => {
-                let err_msg = format!("Failed to get PoH entries for {slot}: {err}");
-
-                if allow_mock_poh {
-                    warn!("{err_msg}. Will create mock PoH entries instead.");
-                } else {
-                    return Err(format!(
-                        "{err_msg}. Try passing --allow-mock-poh to allow \
-                        creation of shreds with mocked PoH entries"
-                    ))?;
-                }
-                None
-            }
-        };
+        let entry_summaries = bigtable.get_entries(*slot).await;
 
         let entries = match entry_summaries {
-            Some(entry_summaries) => entry_summaries
+            Ok(entry_summaries) => entry_summaries
                 .enumerate()
                 .map(|(i, entry_summary)| {
                     let num_hashes = entry_summary.num_hashes;
@@ -263,7 +311,25 @@ async fn shreds(
                     })
                 })
                 .collect::<Result<Vec<Entry>, std::string::String>>()?,
-            None => {
+            Err(err) => {
+                let err_msg = format!("Failed to get PoH entries for {slot}: {err}");
+                let (num_hashes_per_tick, num_ticks_per_slot) =
+                    match shred_config.poh_generation_mode {
+                        ShredPohGenerationMode::RequireEntryData => {
+                            return Err(format!(
+                                "{err_msg}. Try passing --allow-mock-poh to allow creation of \
+                                 shreds with mocked PoH entries"
+                            ))?;
+                        }
+                        ShredPohGenerationMode::AllowMockPoh(ref mock_poh_config) => {
+                            warn!("{err_msg}. Will create mock PoH entries instead.");
+                            (
+                                mock_poh_config.num_hashes_per_tick,
+                                mock_poh_config.num_ticks_per_slot,
+                            )
+                        }
+                    };
+
                 let num_total_ticks = ((slot - block.parent_slot) * num_ticks_per_slot) as usize;
                 let num_total_entries = num_total_ticks + block.transactions.len();
                 let mut entries = Vec::with_capacity(num_total_entries);
@@ -320,7 +386,7 @@ async fn shreds(
             }
         };
 
-        let shredder = Shredder::new(*slot, block.parent_slot, 0, shred_version)?;
+        let shredder = Shredder::new(*slot, block.parent_slot, 0, shred_config.shred_version)?;
         let (data_shreds, _coding_shreds) = shredder.entries_to_shreds(
             &keypair,
             &entries,
@@ -1058,6 +1124,17 @@ impl BigTableSubCommand for App<'_, '_> {
                                     the shredded block(s) to be replayable if PoH verification is \
                                     disabled.",
                                 ),
+                        )
+                        .arg(
+                            Arg::with_name("shred_version")
+                                .long("shred-version")
+                                .validator(is_parsable::<u16>)
+                                .takes_value(true)
+                                .conflicts_with("allow_mock_poh")
+                                .help(
+                                    "The version to encode in created shreds. Specifying this \
+                                    value will avoid determining the value from a rebuilt Bank.",
+                                ),
                         ),
                 )
                 .subcommand(
@@ -1365,59 +1442,29 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
                 exit(1);
             }
             let allow_mock_poh = arg_matches.is_present("allow_mock_poh");
+            let shred_version = value_t!(arg_matches, "shred_version", u16).ok();
 
             let ledger_path = canonicalize_ledger_path(ledger_path);
-            let process_options = parse_process_options(&ledger_path, arg_matches);
-            let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
             let blockstore = Arc::new(crate::open_blockstore(
                 &ledger_path,
                 arg_matches,
                 AccessType::Primary,
             ));
-            let LoadAndProcessLedgerOutput { bank_forks, .. } = load_and_process_ledger_or_exit(
-                arg_matches,
-                &genesis_config,
-                blockstore.clone(),
-                process_options,
-                None,
-            );
 
-            let bank = bank_forks.read().unwrap().working_bank();
-            // If mock PoH is allowed, ensure that the requested slots are in
-            // the same epoch as the working bank. This will ensure the values
-            // extracted from the Bank are accurate for the slot range
-            if allow_mock_poh {
-                let working_bank_epoch = bank.epoch();
-                let epoch_schedule = bank.epoch_schedule();
-                let starting_epoch = epoch_schedule.get_epoch(starting_slot);
-                let ending_epoch = epoch_schedule.get_epoch(ending_slot);
-                if starting_epoch != ending_epoch {
-                    eprintln!(
-                        "The specified --starting-slot and --ending-slot must be in the\
-                        same epoch. --starting-slot {starting_slot} is in epoch {starting_epoch},\
-                        but --ending-slot {ending_slot} is in epoch {ending_epoch}."
-                    );
-                    exit(1);
+            let shred_config = if let Some(shred_version) = shred_version {
+                ShredConfig {
+                    shred_version,
+                    poh_generation_mode: ShredPohGenerationMode::RequireEntryData,
                 }
-                if starting_epoch != working_bank_epoch {
-                    eprintln!(
-                        "The range of slots between --starting-slot and --ending-slot are in a \
-                        different epoch than the working bank. The specified range is in epoch \
-                        {starting_epoch}, but the working bank is in {working_bank_epoch}."
-                    );
-                    exit(1);
-                }
-            }
-
-            let shred_version =
-                compute_shred_version(&genesis_config.hash(), Some(&bank.hard_forks()));
-            let num_hashes_per_tick = bank.hashes_per_tick().unwrap_or(0);
-            let num_ticks_per_slot = bank.ticks_per_slot();
-            let shred_config = ShredConfig {
-                shred_version,
-                num_hashes_per_tick,
-                num_ticks_per_slot,
-                allow_mock_poh,
+            } else {
+                get_shred_config_from_ledger(
+                    arg_matches,
+                    &ledger_path,
+                    blockstore.clone(),
+                    allow_mock_poh,
+                    starting_slot,
+                    ending_slot,
+                )
             };
 
             let config = solana_storage_bigtable::LedgerStorageConfig {
