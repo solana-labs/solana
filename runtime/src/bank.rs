@@ -159,15 +159,15 @@ use {
         account_overrides::AccountOverrides,
         account_saver::collect_accounts_to_store,
         nonce_info::NoncePartial,
+        transaction_commit_result::{CommittedTransaction, TransactionCommitResult},
         transaction_error_metrics::TransactionErrorMetrics,
+        transaction_execution_result::{
+            TransactionExecutionDetails, TransactionExecutionResult, TransactionLoadedAccountsStats,
+        },
         transaction_processing_callback::TransactionProcessingCallback,
         transaction_processor::{
             ExecutionRecordingConfig, TransactionBatchProcessor, TransactionLogMessages,
             TransactionProcessingConfig, TransactionProcessingEnvironment,
-        },
-        transaction_results::{
-            TransactionExecutionDetails, TransactionExecutionResult,
-            TransactionLoadedAccountsStats, TransactionResults,
         },
     },
     solana_timings::{ExecuteTimingType, ExecuteTimings},
@@ -177,7 +177,7 @@ use {
         borrow::Cow,
         collections::{HashMap, HashSet},
         convert::TryFrom,
-        fmt, mem,
+        fmt,
         ops::{AddAssign, RangeFull, RangeInclusive},
         path::PathBuf,
         slice,
@@ -3856,47 +3856,41 @@ impl Bank {
     fn filter_program_errors_and_collect_fee(
         &self,
         execution_results: &[TransactionExecutionResult],
-    ) -> Vec<Result<()>> {
+    ) {
         let mut fees = 0;
 
-        let results = execution_results
+        execution_results
             .iter()
-            .map(|execution_result| match execution_result {
+            .for_each(|execution_result| match execution_result {
                 TransactionExecutionResult::Executed(executed_tx) => {
                     fees += executed_tx.loaded_transaction.fee_details.total_fee();
-                    Ok(())
                 }
-                TransactionExecutionResult::NotExecuted(err) => Err(err.clone()),
-            })
-            .collect();
+                TransactionExecutionResult::NotExecuted(_) => {}
+            });
 
         self.collector_fees.fetch_add(fees, Relaxed);
-        results
     }
 
     // Note: this function is not yet used; next PR will call it behind a feature gate
     fn filter_program_errors_and_collect_fee_details(
         &self,
         execution_results: &[TransactionExecutionResult],
-    ) -> Vec<Result<()>> {
+    ) {
         let mut accumulated_fee_details = FeeDetails::default();
 
-        let results = execution_results
+        execution_results
             .iter()
-            .map(|execution_result| match execution_result {
+            .for_each(|execution_result| match execution_result {
                 TransactionExecutionResult::Executed(executed_tx) => {
                     accumulated_fee_details.accumulate(&executed_tx.loaded_transaction.fee_details);
-                    Ok(())
                 }
-                TransactionExecutionResult::NotExecuted(err) => Err(err.clone()),
-            })
-            .collect();
+                TransactionExecutionResult::NotExecuted(_) => {}
+            });
 
         self.collector_fee_details
             .write()
             .unwrap()
             .accumulate(&accumulated_fee_details);
-        results
     }
 
     pub fn commit_transactions(
@@ -3907,7 +3901,7 @@ impl Bank {
         lamports_per_signature: u64,
         counts: ExecutedTransactionCounts,
         timings: &mut ExecuteTimings,
-    ) -> TransactionResults {
+    ) -> Vec<TransactionCommitResult> {
         assert!(
             !self.freeze_started(),
             "commit_transactions() working on a bank that is already frozen or is undergoing freezing!"
@@ -3952,7 +3946,7 @@ impl Bank {
                 .store_cached((self.slot(), accounts_to_store.as_slice()), &transactions);
         });
 
-        let rent_debits = self.collect_rent(&mut execution_results);
+        self.collect_rent(&execution_results);
 
         // Cached vote and stake accounts are synchronized with accounts-db
         // after each transaction.
@@ -3990,19 +3984,11 @@ impl Bank {
         let ((), update_transaction_statuses_us) =
             measure_us!(self.update_transaction_statuses(sanitized_txs, &execution_results));
 
-        let fee_collection_results = if self.feature_set.is_active(&reward_full_priority_fee::id())
-        {
+        if self.feature_set.is_active(&reward_full_priority_fee::id()) {
             self.filter_program_errors_and_collect_fee_details(&execution_results)
         } else {
             self.filter_program_errors_and_collect_fee(&execution_results)
         };
-
-        let loaded_accounts_stats = Self::collect_loaded_accounts_stats(&execution_results);
-        assert_eq!(
-            loaded_accounts_stats.len(),
-            execution_results.len(),
-            "loaded_account_stats and execution_results are not the same size"
-        );
 
         timings.saturating_add_in_place(ExecuteTimingType::StoreUs, store_accounts_us);
         timings.saturating_add_in_place(
@@ -4015,53 +4001,49 @@ impl Bank {
             update_transaction_statuses_us,
         );
 
-        TransactionResults {
-            fee_collection_results,
-            loaded_accounts_stats,
-            execution_results,
-            rent_debits,
-        }
+        Self::create_commit_results(execution_results)
     }
 
-    fn collect_loaded_accounts_stats(
-        execution_results: &[TransactionExecutionResult],
-    ) -> Vec<Result<TransactionLoadedAccountsStats>> {
+    fn create_commit_results(
+        execution_results: Vec<TransactionExecutionResult>,
+    ) -> Vec<TransactionCommitResult> {
         execution_results
-            .iter()
+            .into_iter()
             .map(|execution_result| match execution_result {
                 TransactionExecutionResult::Executed(executed_tx) => {
                     let loaded_tx = &executed_tx.loaded_transaction;
-                    Ok(TransactionLoadedAccountsStats {
+                    let loaded_account_stats = TransactionLoadedAccountsStats {
                         loaded_accounts_data_size: loaded_tx.loaded_accounts_data_size,
                         loaded_accounts_count: loaded_tx.accounts.len(),
+                    };
+
+                    // Rent is only collected for successfully executed transactions
+                    let rent_debits = if executed_tx.was_successful() {
+                        executed_tx.loaded_transaction.rent_debits
+                    } else {
+                        RentDebits::default()
+                    };
+
+                    Ok(CommittedTransaction {
+                        loaded_account_stats,
+                        execution_details: executed_tx.execution_details,
+                        fee_details: executed_tx.loaded_transaction.fee_details,
+                        rent_debits,
                     })
                 }
-                TransactionExecutionResult::NotExecuted(err) => Err(err.clone()),
+                TransactionExecutionResult::NotExecuted(err) => Err(err),
             })
             .collect()
     }
 
-    fn collect_rent(
-        &self,
-        execution_results: &mut [TransactionExecutionResult],
-    ) -> Vec<RentDebits> {
-        let mut collected_rent: u64 = 0;
-
-        let rent_debits: Vec<_> = execution_results
-            .iter_mut()
-            .map(|execution_result| match execution_result {
-                TransactionExecutionResult::Executed(executed_tx)
-                    if executed_tx.was_successful() =>
-                {
-                    let loaded_transaction = &mut executed_tx.loaded_transaction;
-                    collected_rent += loaded_transaction.rent;
-                    mem::take(&mut loaded_transaction.rent_debits)
-                }
-                _ => RentDebits::default(),
-            })
-            .collect();
+    fn collect_rent(&self, execution_results: &[TransactionExecutionResult]) {
+        let collected_rent = execution_results
+            .iter()
+            .filter_map(|executed_result| executed_result.executed_transaction())
+            .filter(|executed_tx| executed_tx.was_successful())
+            .map(|executed_tx| executed_tx.loaded_transaction.rent)
+            .sum();
         self.collected_rent.fetch_add(collected_rent, Relaxed);
-        rent_debits
     }
 
     fn run_incinerator(&self) {
@@ -4722,7 +4704,7 @@ impl Bank {
         recording_config: ExecutionRecordingConfig,
         timings: &mut ExecuteTimings,
         log_messages_bytes_limit: Option<usize>,
-    ) -> (TransactionResults, TransactionBalancesSet) {
+    ) -> (Vec<TransactionCommitResult>, TransactionBalancesSet) {
         let pre_balances = if collect_balances {
             self.collect_balances(batch)
         } else {
@@ -4753,7 +4735,7 @@ impl Bank {
 
         let (last_blockhash, lamports_per_signature) =
             self.last_blockhash_and_lamports_per_signature();
-        let results = self.commit_transactions(
+        let commit_results = self.commit_transactions(
             batch.sanitized_transactions(),
             execution_results,
             last_blockhash,
@@ -4774,7 +4756,7 @@ impl Bank {
             vec![]
         };
         (
-            results,
+            commit_results,
             TransactionBalancesSet::new(pre_balances, post_balances),
         )
     }
@@ -4790,24 +4772,14 @@ impl Bank {
 
     /// Process a Transaction and store metadata. This is used for tests and the banks services. It
     /// replicates the vector Bank::process_transaction method with metadata recording enabled.
-    #[must_use]
     pub fn process_transaction_with_metadata(
         &self,
         tx: impl Into<VersionedTransaction>,
-    ) -> TransactionExecutionResult {
+    ) -> Result<TransactionExecutionDetails> {
         let txs = vec![tx.into()];
-        let batch = match self.prepare_entry_batch(txs) {
-            Ok(batch) => batch,
-            Err(err) => return TransactionExecutionResult::NotExecuted(err),
-        };
+        let batch = self.prepare_entry_batch(txs)?;
 
-        let (
-            TransactionResults {
-                mut execution_results,
-                ..
-            },
-            ..,
-        ) = self.load_execute_and_commit_transactions(
+        let (mut commit_results, ..) = self.load_execute_and_commit_transactions(
             &batch,
             MAX_PROCESSING_AGE,
             false, // collect_balances
@@ -4820,7 +4792,8 @@ impl Bank {
             Some(1000 * 1000),
         );
 
-        execution_results.remove(0)
+        let committed_tx = commit_results.remove(0)?;
+        Ok(committed_tx.execution_details)
     }
 
     /// Process multiple transaction in a single batch. This is used for benches and unit tests.
@@ -4856,7 +4829,9 @@ impl Bank {
             None,
         )
         .0
-        .fee_collection_results
+        .into_iter()
+        .map(|commit_result| commit_result.map(|_| ()))
+        .collect()
     }
 
     /// Create, sign, and process a Transaction from `keypair` to `to` of

@@ -13,10 +13,10 @@ use {
         rollback_accounts::RollbackAccounts,
         transaction_account_state_info::TransactionAccountStateInfo,
         transaction_error_metrics::TransactionErrorMetrics,
-        transaction_processing_callback::TransactionProcessingCallback,
-        transaction_results::{
+        transaction_execution_result::{
             ExecutedTransaction, TransactionExecutionDetails, TransactionExecutionResult,
         },
+        transaction_processing_callback::TransactionProcessingCallback,
     },
     log::debug,
     percentage::Percentage,

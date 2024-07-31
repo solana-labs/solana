@@ -18,7 +18,7 @@ use {
         hash::Hash,
         pubkey::Pubkey,
     },
-    solana_svm::transaction_results::TransactionExecutionDetails,
+    solana_svm::transaction_execution_result::TransactionExecutionDetails,
     solana_transaction_status::UiInstruction,
     std::str::FromStr,
 };

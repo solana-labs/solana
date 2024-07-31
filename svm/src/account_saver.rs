@@ -1,7 +1,7 @@
 use {
     crate::{
         nonce_info::NonceInfo, rollback_accounts::RollbackAccounts,
-        transaction_results::TransactionExecutionResult,
+        transaction_execution_result::TransactionExecutionResult,
     },
     solana_sdk::{
         account::AccountSharedData,
@@ -162,7 +162,7 @@ mod tests {
         crate::{
             account_loader::LoadedTransaction,
             nonce_info::NoncePartial,
-            transaction_results::{ExecutedTransaction, TransactionExecutionDetails},
+            transaction_execution_result::{ExecutedTransaction, TransactionExecutionDetails},
         },
         solana_compute_budget::compute_budget_processor::ComputeBudgetLimits,
         solana_sdk::{

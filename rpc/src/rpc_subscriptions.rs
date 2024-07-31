@@ -3000,7 +3000,7 @@ pub(crate) mod tests {
             .get(0)
             .unwrap()
             .process_transaction_with_metadata(tx.clone())
-            .was_executed());
+            .is_ok());
 
         subscriptions.notify_subscribers(CommitmentSlots::new_from_slot(0));
 

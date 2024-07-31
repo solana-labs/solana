@@ -1,6 +1,10 @@
 use {
-    crate::vote_sender_types::ReplayVoteSender, solana_sdk::transaction::SanitizedTransaction,
-    solana_svm::transaction_results::TransactionResults, solana_vote::vote_parser,
+    crate::vote_sender_types::ReplayVoteSender,
+    solana_sdk::transaction::SanitizedTransaction,
+    solana_svm::transaction_commit_result::{
+        TransactionCommitResult, TransactionCommitResultExtensions,
+    },
+    solana_vote::vote_parser,
 };
 #[cfg(feature = "dev-context-only-utils")]
 use {
@@ -37,18 +41,15 @@ pub fn setup_bank_and_vote_pubkeys_for_tests(
 
 pub fn find_and_send_votes(
     sanitized_txs: &[SanitizedTransaction],
-    tx_results: &TransactionResults,
+    commit_results: &[TransactionCommitResult],
     vote_sender: Option<&ReplayVoteSender>,
 ) {
-    let TransactionResults {
-        execution_results, ..
-    } = tx_results;
     if let Some(vote_sender) = vote_sender {
         sanitized_txs
             .iter()
-            .zip(execution_results.iter())
-            .for_each(|(tx, result)| {
-                if tx.is_simple_vote_transaction() && result.was_executed_successfully() {
+            .zip(commit_results.iter())
+            .for_each(|(tx, commit_result)| {
+                if tx.is_simple_vote_transaction() && commit_result.was_executed_successfully() {
                     if let Some(parsed_vote) = vote_parser::parse_sanitized_vote_transaction(tx) {
                         if parsed_vote.1.last_voted_slot().is_some() {
                             let _ = vote_sender.send(parsed_vote);

@@ -63,11 +63,9 @@ use {
         transaction::{SanitizedTransaction, Transaction, TransactionError, VersionedTransaction},
     },
     solana_svm::{
+        transaction_commit_result::CommittedTransaction,
+        transaction_execution_result::{InnerInstruction, TransactionExecutionDetails},
         transaction_processor::ExecutionRecordingConfig,
-        transaction_results::{
-            InnerInstruction, TransactionExecutionDetails, TransactionExecutionResult,
-            TransactionResults,
-        },
     },
     solana_timings::ExecuteTimings,
     solana_transaction_status::{
@@ -93,10 +91,9 @@ fn process_transaction_and_record_inner(
     Vec<Vec<InnerInstruction>>,
     Vec<String>,
 ) {
-    let signature = tx.signatures.first().unwrap().clone();
     let txs = vec![tx];
     let tx_batch = bank.prepare_batch_for_tests(txs);
-    let mut results = bank
+    let mut commit_results = bank
         .load_execute_and_commit_transactions(
             &tx_batch,
             MAX_PROCESSING_AGE,
@@ -110,23 +107,15 @@ fn process_transaction_and_record_inner(
             None,
         )
         .0;
-    let result = results
-        .fee_collection_results
-        .swap_remove(0)
-        .and_then(|_| bank.get_signature_status(&signature).unwrap());
-    let execution_details = results
-        .execution_results
-        .swap_remove(0)
-        .details()
-        .expect("tx should be executed")
-        .clone();
-    let inner_instructions = execution_details
-        .inner_instructions
-        .expect("cpi recording should be enabled");
-    let log_messages = execution_details
-        .log_messages
-        .expect("log recording should be enabled");
-    (result, inner_instructions, log_messages)
+    let TransactionExecutionDetails {
+        inner_instructions,
+        log_messages,
+        status,
+        ..
+    } = commit_results.swap_remove(0).unwrap().execution_details;
+    let inner_instructions = inner_instructions.expect("cpi recording should be enabled");
+    let log_messages = log_messages.expect("log recording should be enabled");
+    (status, inner_instructions, log_messages)
 }
 
 #[cfg(feature = "sbf_rust")]
@@ -139,9 +128,7 @@ fn execute_transactions(
     let mut mint_decimals = HashMap::new();
     let tx_pre_token_balances = collect_token_balances(&bank, &batch, &mut mint_decimals);
     let (
-        TransactionResults {
-            execution_results, ..
-        },
+        commit_results,
         TransactionBalancesSet {
             pre_balances,
             post_balances,
@@ -159,7 +146,7 @@ fn execute_transactions(
 
     izip!(
         txs.iter(),
-        execution_results.into_iter(),
+        commit_results.into_iter(),
         pre_balances.into_iter(),
         post_balances.into_iter(),
         tx_pre_token_balances.into_iter(),
@@ -168,56 +155,56 @@ fn execute_transactions(
     .map(
         |(
             tx,
-            execution_result,
+            commit_result,
             pre_balances,
             post_balances,
             pre_token_balances,
             post_token_balances,
         )| {
-            match execution_result {
-                TransactionExecutionResult::Executed(executed_tx) => {
-                    let fee_details = executed_tx.loaded_transaction.fee_details;
-                    let TransactionExecutionDetails {
-                        status,
-                        log_messages,
-                        inner_instructions,
-                        return_data,
-                        executed_units,
-                        ..
-                    } = executed_tx.execution_details;
+            commit_result.map(|committed_tx| {
+                let CommittedTransaction {
+                    fee_details,
+                    execution_details:
+                        TransactionExecutionDetails {
+                            status,
+                            log_messages,
+                            inner_instructions,
+                            return_data,
+                            executed_units,
+                            ..
+                        },
+                    ..
+                } = committed_tx;
 
-                    let inner_instructions = inner_instructions.map(|inner_instructions| {
-                        map_inner_instructions(inner_instructions).collect()
-                    });
+                let inner_instructions = inner_instructions
+                    .map(|inner_instructions| map_inner_instructions(inner_instructions).collect());
 
-                    let tx_status_meta = TransactionStatusMeta {
-                        status,
-                        fee: fee_details.total_fee(),
-                        pre_balances,
-                        post_balances,
-                        pre_token_balances: Some(pre_token_balances),
-                        post_token_balances: Some(post_token_balances),
-                        inner_instructions,
-                        log_messages,
-                        rewards: None,
-                        loaded_addresses: LoadedAddresses::default(),
-                        return_data,
-                        compute_units_consumed: Some(executed_units),
-                    };
+                let tx_status_meta = TransactionStatusMeta {
+                    status,
+                    fee: fee_details.total_fee(),
+                    pre_balances,
+                    post_balances,
+                    pre_token_balances: Some(pre_token_balances),
+                    post_token_balances: Some(post_token_balances),
+                    inner_instructions,
+                    log_messages,
+                    rewards: None,
+                    loaded_addresses: LoadedAddresses::default(),
+                    return_data,
+                    compute_units_consumed: Some(executed_units),
+                };
 
-                    Ok(ConfirmedTransactionWithStatusMeta {
-                        slot: bank.slot(),
-                        tx_with_meta: TransactionWithStatusMeta::Complete(
-                            VersionedTransactionWithStatusMeta {
-                                transaction: VersionedTransaction::from(tx.clone()),
-                                meta: tx_status_meta,
-                            },
-                        ),
-                        block_time: None,
-                    })
+                ConfirmedTransactionWithStatusMeta {
+                    slot: bank.slot(),
+                    tx_with_meta: TransactionWithStatusMeta::Complete(
+                        VersionedTransactionWithStatusMeta {
+                            transaction: VersionedTransaction::from(tx.clone()),
+                            meta: tx_status_meta,
+                        },
+                    ),
+                    block_time: None,
                 }
-                TransactionExecutionResult::NotExecuted(err) => Err(err.clone()),
-            }
+            })
         },
     )
     .collect()

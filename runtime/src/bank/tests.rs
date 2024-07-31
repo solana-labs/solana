@@ -102,7 +102,8 @@ use {
     solana_stake_program::stake_state::{self, StakeStateV2},
     solana_svm::{
         account_loader::LoadedTransaction, nonce_info::NoncePartial,
-        transaction_results::ExecutedTransaction,
+        transaction_commit_result::TransactionCommitResultExtensions,
+        transaction_execution_result::ExecutedTransaction,
     },
     solana_timings::ExecuteTimings,
     solana_vote_program::{
@@ -2873,7 +2874,7 @@ fn test_filter_program_errors_and_collect_fee() {
 
     let tx_fee = 42;
     let fee_details = FeeDetails::new(tx_fee, 0, false);
-    let results = vec![
+    let execution_results = vec![
         new_execution_result(Ok(()), fee_details),
         new_execution_result(
             Err(TransactionError::InstructionError(
@@ -2885,14 +2886,12 @@ fn test_filter_program_errors_and_collect_fee() {
     ];
     let initial_balance = bank.get_balance(&leader);
 
-    let results = bank.filter_program_errors_and_collect_fee(&results);
+    bank.filter_program_errors_and_collect_fee(&execution_results);
     bank.freeze();
     assert_eq!(
         bank.get_balance(&leader),
         initial_balance + bank.fee_rate_governor.burn(tx_fee * 2).0
     );
-    assert_eq!(results[0], Ok(()));
-    assert_eq!(results[1], Ok(()));
 }
 
 #[test]
@@ -2906,7 +2905,7 @@ fn test_filter_program_errors_and_collect_priority_fee() {
 
     let priority_fee = 42;
     let fee_details: FeeDetails = FeeDetails::new(0, priority_fee, false);
-    let results = vec![
+    let execution_results = vec![
         new_execution_result(Ok(()), fee_details),
         new_execution_result(
             Err(TransactionError::InstructionError(
@@ -2918,14 +2917,12 @@ fn test_filter_program_errors_and_collect_priority_fee() {
     ];
     let initial_balance = bank.get_balance(&leader);
 
-    let results = bank.filter_program_errors_and_collect_fee(&results);
+    bank.filter_program_errors_and_collect_fee(&execution_results);
     bank.freeze();
     assert_eq!(
         bank.get_balance(&leader),
         initial_balance + bank.fee_rate_governor.burn(priority_fee * 2).0
     );
-    assert_eq!(results[0], Ok(()));
-    assert_eq!(results[1], Ok(()));
 }
 
 #[test]
@@ -3048,7 +3045,7 @@ fn test_interleaving_locks() {
     let pay_alice = vec![tx1];
 
     let lock_result = bank.prepare_batch_for_tests(pay_alice);
-    let results_alice = bank
+    let commit_results = bank
         .load_execute_and_commit_transactions(
             &lock_result,
             MAX_PROCESSING_AGE,
@@ -3057,9 +3054,8 @@ fn test_interleaving_locks() {
             &mut ExecuteTimings::default(),
             None,
         )
-        .0
-        .fee_collection_results;
-    assert_eq!(results_alice[0], Ok(()));
+        .0;
+    assert!(commit_results[0].is_ok());
 
     // try executing an interleaved transfer twice
     assert_eq!(
@@ -5848,20 +5844,19 @@ fn test_pre_post_transaction_balances() {
     let txs = vec![tx0, tx1, tx2];
 
     let lock_result = bank0.prepare_batch_for_tests(txs);
-    let (transaction_results, transaction_balances_set) = bank0
-        .load_execute_and_commit_transactions(
-            &lock_result,
-            MAX_PROCESSING_AGE,
-            true,
-            ExecutionRecordingConfig::new_single_setting(false),
-            &mut ExecuteTimings::default(),
-            None,
-        );
+    let (commit_results, transaction_balances_set) = bank0.load_execute_and_commit_transactions(
+        &lock_result,
+        MAX_PROCESSING_AGE,
+        true,
+        ExecutionRecordingConfig::new_single_setting(false),
+        &mut ExecuteTimings::default(),
+        None,
+    );
 
     assert_eq!(transaction_balances_set.pre_balances.len(), 3);
     assert_eq!(transaction_balances_set.post_balances.len(), 3);
 
-    assert!(transaction_results.execution_results[0].was_executed_successfully());
+    assert!(commit_results[0].was_executed_successfully());
     assert_eq!(
         transaction_balances_set.pre_balances[0],
         vec![908_000, 911_000, 1]
@@ -5873,20 +5868,14 @@ fn test_pre_post_transaction_balances() {
 
     // Failed transactions still produce balance sets
     // This is a TransactionError - not possible to charge fees
-    assert_matches!(
-        transaction_results.execution_results[1],
-        TransactionExecutionResult::NotExecuted(TransactionError::AccountNotFound)
-    );
+    assert_matches!(commit_results[1], Err(TransactionError::AccountNotFound));
     assert_eq!(transaction_balances_set.pre_balances[1], vec![0, 0, 1]);
     assert_eq!(transaction_balances_set.post_balances[1], vec![0, 0, 1]);
 
     // Failed transactions still produce balance sets
     // This is an InstructionError - fees charged
-    let executed_tx = transaction_results.execution_results[2]
-        .executed_transaction()
-        .unwrap();
     assert_eq!(
-        executed_tx.execution_details.status,
+        commit_results[2].transaction_result(),
         Err(TransactionError::InstructionError(
             0,
             InstructionError::Custom(1),
@@ -9223,7 +9212,7 @@ fn test_tx_log_order() {
     let txs = vec![tx0, tx1, tx2];
     let batch = bank.prepare_batch_for_tests(txs);
 
-    let execution_results = bank
+    let commit_results = bank
         .load_execute_and_commit_transactions(
             &batch,
             MAX_PROCESSING_AGE,
@@ -9236,28 +9225,29 @@ fn test_tx_log_order() {
             &mut ExecuteTimings::default(),
             None,
         )
-        .0
-        .execution_results;
+        .0;
 
-    assert_eq!(execution_results.len(), 3);
+    assert_eq!(commit_results.len(), 3);
 
-    assert!(execution_results[0].details().is_some());
-    assert!(execution_results[0]
-        .details()
+    assert!(commit_results[0].is_ok());
+    assert!(commit_results[0]
+        .as_ref()
         .unwrap()
+        .execution_details
         .log_messages
         .as_ref()
         .unwrap()[1]
         .contains(&"success".to_string()));
-    assert!(execution_results[1].details().is_some());
-    assert!(execution_results[1]
-        .details()
+    assert!(commit_results[1].is_ok());
+    assert!(commit_results[1]
+        .as_ref()
         .unwrap()
+        .execution_details
         .log_messages
         .as_ref()
         .unwrap()[2]
         .contains(&"failed".to_string()));
-    assert!(!execution_results[2].was_executed());
+    assert!(commit_results[2].is_err());
 
     let stored_logs = &bank.transaction_log_collector.read().unwrap().logs;
     let success_log_info = stored_logs
@@ -9332,7 +9322,7 @@ fn test_tx_return_data() {
             blockhash,
         )];
         let batch = bank.prepare_batch_for_tests(txs);
-        let return_data = bank
+        let commit_results = bank
             .load_execute_and_commit_transactions(
                 &batch,
                 MAX_PROCESSING_AGE,
@@ -9345,10 +9335,11 @@ fn test_tx_return_data() {
                 &mut ExecuteTimings::default(),
                 None,
             )
-            .0
-            .execution_results[0]
-            .details()
+            .0;
+        let return_data = commit_results[0]
+            .as_ref()
             .unwrap()
+            .execution_details
             .return_data
             .clone();
         if let Some(index) = index {
@@ -9361,6 +9352,71 @@ fn test_tx_return_data() {
         } else {
             assert!(return_data.is_none());
         }
+    }
+}
+
+#[test]
+fn test_load_and_execute_commit_transactions_rent_debits() {
+    let (mut genesis_config, mint_keypair) = create_genesis_config(sol_to_lamports(1.));
+    genesis_config.rent = Rent::default();
+    let (bank, _bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
+    let bank = Bank::new_from_parent(
+        bank,
+        &Pubkey::new_unique(),
+        genesis_config.epoch_schedule.get_first_slot_in_epoch(1),
+    );
+    let amount = genesis_config.rent.minimum_balance(0);
+
+    // Make sure that rent debits are tracked for successful transactions
+    {
+        let alice = Keypair::new();
+        test_utils::deposit(&bank, &alice.pubkey(), amount - 1).unwrap();
+        let tx = system_transaction::transfer(
+            &mint_keypair,
+            &alice.pubkey(),
+            amount,
+            genesis_config.hash(),
+        );
+
+        let batch = bank.prepare_batch_for_tests(vec![tx]);
+        let commit_result = bank
+            .load_execute_and_commit_transactions(
+                &batch,
+                MAX_PROCESSING_AGE,
+                false,
+                ExecutionRecordingConfig::new_single_setting(false),
+                &mut ExecuteTimings::default(),
+                None,
+            )
+            .0
+            .remove(0);
+        assert!(commit_result.is_ok());
+        assert!(commit_result.was_executed_successfully());
+        assert!(!commit_result.ok().unwrap().rent_debits.is_empty());
+    }
+
+    // Make sure that rent debits are ignored for failed transactions
+    {
+        let bob = Keypair::new();
+        test_utils::deposit(&bank, &bob.pubkey(), amount - 1).unwrap();
+        let tx =
+            system_transaction::transfer(&mint_keypair, &bob.pubkey(), 1, genesis_config.hash());
+
+        let batch = bank.prepare_batch_for_tests(vec![tx]);
+        let commit_result = bank
+            .load_execute_and_commit_transactions(
+                &batch,
+                MAX_PROCESSING_AGE,
+                false,
+                ExecutionRecordingConfig::new_single_setting(false),
+                &mut ExecuteTimings::default(),
+                None,
+            )
+            .0
+            .remove(0);
+        assert!(commit_result.is_ok());
+        assert!(!commit_result.was_executed_successfully());
+        assert!(commit_result.ok().unwrap().rent_debits.is_empty());
     }
 }
 
@@ -12882,8 +12938,6 @@ fn test_filter_program_errors_and_collect_fee_details() {
         priority_fee: 2 * priority_fee,
     };
 
-    let expected_collect_results = vec![Err(TransactionError::AccountNotFound), Ok(()), Ok(())];
-
     let GenesisConfigInfo {
         genesis_config,
         mint_keypair,
@@ -12903,7 +12957,7 @@ fn test_filter_program_errors_and_collect_fee_details() {
         ),
     ];
 
-    let results = bank.filter_program_errors_and_collect_fee_details(&results);
+    bank.filter_program_errors_and_collect_fee_details(&results);
 
     assert_eq!(
         expected_collected_fee_details,
@@ -12913,7 +12967,6 @@ fn test_filter_program_errors_and_collect_fee_details() {
         initial_payer_balance,
         bank.get_balance(&mint_keypair.pubkey())
     );
-    assert_eq!(expected_collect_results, results);
 }
 
 #[test]

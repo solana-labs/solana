@@ -685,14 +685,14 @@ fn record_transactions(
         if let TransactionStatusMessage::Batch(batch) = tsm {
             let slot = batch.bank.slot();
 
-            assert_eq!(batch.transactions.len(), batch.execution_results.len());
+            assert_eq!(batch.transactions.len(), batch.commit_results.len());
 
             let transactions: Vec<_> = batch
                 .transactions
                 .iter()
-                .zip(batch.execution_results)
+                .zip(batch.commit_results)
                 .zip(batch.transaction_indexes)
-                .map(|((tx, execution_results), index)| {
+                .map(|((tx, commit_result), index)| {
                     let message = tx.message();
 
                     let accounts: Vec<String> = message
@@ -708,7 +708,9 @@ fn record_transactions(
                         .collect();
 
                     let is_simple_vote_tx = tx.is_simple_vote_transaction();
-                    let execution_results = execution_results.map(|(details, _)| details);
+                    let execution_results = commit_result
+                        .ok()
+                        .map(|committed_tx| committed_tx.execution_details);
 
                     TransactionDetails {
                         signature: tx.signature().to_string(),

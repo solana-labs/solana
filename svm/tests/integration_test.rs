@@ -33,12 +33,12 @@ use {
     },
     solana_svm::{
         account_loader::{CheckedTransactionDetails, TransactionCheckResult},
+        transaction_execution_result::TransactionExecutionResult,
         transaction_processing_callback::TransactionProcessingCallback,
         transaction_processor::{
             ExecutionRecordingConfig, TransactionBatchProcessor, TransactionProcessingConfig,
             TransactionProcessingEnvironment,
         },
-        transaction_results::TransactionExecutionResult,
     },
     std::{
         cmp::Ordering,
