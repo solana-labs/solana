@@ -530,6 +530,7 @@ pub mod sysvar;
 pub mod vote;
 pub mod wasm;
 
+pub use solana_msg::msg;
 #[deprecated(since = "2.1.0", note = "Use `solana-program-memory` crate instead")]
 pub use solana_program_memory as program_memory;
 #[deprecated(since = "2.1.0", note = "Use `solana-sanitize` crate instead")]

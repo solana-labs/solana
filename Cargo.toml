@@ -105,6 +105,7 @@ members = [
     "sdk/decode-error",
     "sdk/gen-headers",
     "sdk/macro",
+    "sdk/msg",
     "sdk/package-metadata-macro",
     "sdk/program",
     "sdk/program-memory",
@@ -380,6 +381,7 @@ solana-logger = { path = "logger", version = "=2.1.0" }
 solana-measure = { path = "measure", version = "=2.1.0" }
 solana-merkle-tree = { path = "merkle-tree", version = "=2.1.0" }
 solana-metrics = { path = "metrics", version = "=2.1.0" }
+solana-msg = { path = "sdk/msg", version = "=2.1.0" }
 solana-net-utils = { path = "net-utils", version = "=2.1.0" }
 solana-nohash-hasher = "0.2.1"
 solana-notifier = { path = "notifier", version = "=2.1.0" }

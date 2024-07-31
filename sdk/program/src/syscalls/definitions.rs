@@ -1,5 +1,7 @@
 #[cfg(target_feature = "static-syscalls")]
 pub use solana_define_syscall::sys_hash;
+#[deprecated(since = "2.1.0", note = "Use `solana-msg::sol_log` instead.")]
+pub use solana_msg::sol_log;
 #[deprecated(
     since = "2.1.0",
     note = "Use `solana_program_memory::syscalls` instead"
@@ -17,8 +19,6 @@ use {
     },
     solana_define_syscall::define_syscall,
 };
-
-define_syscall!(fn sol_log_(message: *const u8, len: u64));
 define_syscall!(fn sol_log_64_(arg1: u64, arg2: u64, arg3: u64, arg4: u64, arg5: u64));
 define_syscall!(fn sol_log_compute_units_());
 define_syscall!(fn sol_log_pubkey(pubkey_addr: *const u8));

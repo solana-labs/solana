@@ -6698,6 +6698,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-msg"
+version = "2.1.0"
+dependencies = [
+ "solana-define-syscall",
+]
+
+[[package]]
 name = "solana-net-shaper"
 version = "2.1.0"
 dependencies = [
@@ -6883,6 +6890,7 @@ dependencies = [
  "solana-frozen-abi",
  "solana-frozen-abi-macro",
  "solana-logger",
+ "solana-msg",
  "solana-program-memory",
  "solana-sanitize",
  "solana-sdk-macro",

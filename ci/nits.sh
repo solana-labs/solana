@@ -28,6 +28,7 @@ declare print_free_tree=(
   ':sdk/sbf/rust/rust-utils/**.rs'
   ':sdk/**.rs'
   ':^sdk/cargo-build-sbf/**.rs'
+  ':^sdk/msg/src/lib.rs'
   ':^sdk/program/src/program_option.rs'
   ':^sdk/program/src/program_stubs.rs'
   ':programs/**.rs'

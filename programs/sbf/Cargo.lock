@@ -5209,6 +5209,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-msg"
+version = "2.1.0"
+dependencies = [
+ "solana-define-syscall",
+]
+
+[[package]]
 name = "solana-net-utils"
 version = "2.1.0"
 dependencies = [
@@ -5319,6 +5326,7 @@ dependencies = [
  "solana-atomic-u64",
  "solana-decode-error",
  "solana-define-syscall",
+ "solana-msg",
  "solana-program-memory",
  "solana-sanitize",
  "solana-sdk-macro",
