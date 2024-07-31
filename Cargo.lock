@@ -6157,6 +6157,7 @@ dependencies = [
  "itertools 0.12.1",
  "lazy_static",
  "log",
+ "rand 0.8.5",
  "rustc_version 0.4.0",
  "solana-address-lookup-table-program",
  "solana-bpf-loader-program",

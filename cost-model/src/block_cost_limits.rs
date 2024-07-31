@@ -1,12 +1,12 @@
 //! defines block cost related limits
 //!
 use {
+    ahash::AHashMap,
     lazy_static::lazy_static,
     solana_sdk::{
         address_lookup_table, bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
         compute_budget, ed25519_program, loader_v4, pubkey::Pubkey, secp256k1_program,
     },
-    std::collections::HashMap,
 };
 
 /// Static configurations:
@@ -37,7 +37,7 @@ pub const INSTRUCTION_DATA_BYTES_COST: u64 = 140 /*bytes per us*/ / COMPUTE_UNIT
 // Number of compute units for each built-in programs
 lazy_static! {
     /// Number of compute units for each built-in programs
-    pub static ref BUILTIN_INSTRUCTION_COSTS: HashMap<Pubkey, u64> = [
+    pub static ref BUILTIN_INSTRUCTION_COSTS: AHashMap<Pubkey, u64> = [
         (solana_stake_program::id(), solana_stake_program::stake_instruction::DEFAULT_COMPUTE_UNITS),
         (solana_config_program::id(), solana_config_program::config_processor::DEFAULT_COMPUTE_UNITS),
         (solana_vote_program::id(), solana_vote_program::vote_processor::DEFAULT_COMPUTE_UNITS),
