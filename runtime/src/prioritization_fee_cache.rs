@@ -1,7 +1,8 @@
 use {
-    crate::{bank::Bank, compute_budget_details::GetComputeBudgetDetails, prioritization_fee::*},
+    crate::{bank::Bank, prioritization_fee::*},
     crossbeam_channel::{unbounded, Receiver, Sender},
     log::*,
+    solana_compute_budget::compute_budget_processor::process_compute_budget_instructions,
     solana_measure::measure_us,
     solana_sdk::{
         clock::{BankId, Slot},
@@ -201,20 +202,20 @@ impl PrioritizationFeeCache {
                     continue;
                 }
 
-                let round_compute_unit_price_enabled = false; // TODO: bank.feture_set.is_active(round_compute_unit_price)
-                let compute_budget_details = sanitized_transaction
-                    .get_compute_budget_details(round_compute_unit_price_enabled);
+                let compute_budget_limits = process_compute_budget_instructions(
+                    sanitized_transaction.message().program_instructions_iter(),
+                );
                 let account_locks = sanitized_transaction
                     .get_account_locks(bank.get_transaction_account_lock_limit());
 
-                if compute_budget_details.is_none() || account_locks.is_err() {
+                if compute_budget_limits.is_err() || account_locks.is_err() {
                     continue;
                 }
-                let compute_budget_details = compute_budget_details.unwrap();
+                let compute_budget_limits = compute_budget_limits.unwrap();
 
                 // filter out any transaction that requests zero compute_unit_limit
                 // since its priority fee amount is not instructive
-                if compute_budget_details.compute_unit_limit == 0 {
+                if compute_budget_limits.compute_unit_limit == 0 {
                     continue;
                 }
 
@@ -229,7 +230,7 @@ impl PrioritizationFeeCache {
                     .send(CacheServiceUpdate::TransactionUpdate {
                         slot: bank.slot(),
                         bank_id: bank.bank_id(),
-                        transaction_fee: compute_budget_details.compute_unit_price,
+                        transaction_fee: compute_budget_limits.compute_unit_price,
                         writable_accounts,
                     })
                     .unwrap_or_else(|err| {

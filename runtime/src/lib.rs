@@ -10,7 +10,6 @@ pub mod bank_client;
 pub mod bank_forks;
 pub mod bank_utils;
 pub mod commitment;
-pub mod compute_budget_details;
 pub mod epoch_stakes;
 pub mod genesis_utils;
 pub mod installed_scheduler_pool;

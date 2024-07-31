@@ -18,7 +18,6 @@ use {
     },
     solana_runtime::{
         bank::{Bank, LoadAndExecuteTransactionsOutput},
-        compute_budget_details::GetComputeBudgetDetails,
         transaction_batch::TransactionBatch,
     },
     solana_sdk::{
@@ -578,10 +577,11 @@ impl Consumer {
             .sanitized_transactions()
             .iter()
             .filter_map(|transaction| {
-                let round_compute_unit_price_enabled = false; // TODO get from working_bank.feature_set
-                transaction
-                    .get_compute_budget_details(round_compute_unit_price_enabled)
-                    .map(|details| details.compute_unit_price)
+                process_compute_budget_instructions(
+                    transaction.message().program_instructions_iter(),
+                )
+                .ok()
+                .map(|limits| limits.compute_unit_price)
             })
             .minmax();
         let (min_prioritization_fees, max_prioritization_fees) =

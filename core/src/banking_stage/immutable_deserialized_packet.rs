@@ -1,7 +1,9 @@
 use {
     super::packet_filter::PacketFilterFailure,
+    solana_compute_budget::compute_budget_processor::{
+        process_compute_budget_instructions, ComputeBudgetLimits,
+    },
     solana_perf::packet::Packet,
-    solana_runtime::compute_budget_details::{ComputeBudgetDetails, GetComputeBudgetDetails},
     solana_sanitize::SanitizeError,
     solana_sdk::{
         hash::Hash,
@@ -43,7 +45,8 @@ pub struct ImmutableDeserializedPacket {
     transaction: SanitizedVersionedTransaction,
     message_hash: Hash,
     is_simple_vote: bool,
-    compute_budget_details: ComputeBudgetDetails,
+    compute_unit_price: u64,
+    compute_unit_limit: u32,
 }
 
 impl ImmutableDeserializedPacket {
@@ -55,13 +58,20 @@ impl ImmutableDeserializedPacket {
         let is_simple_vote = packet.meta().is_simple_vote_tx();
 
         // drop transaction if prioritization fails.
-        let mut compute_budget_details = sanitized_transaction
-            .get_compute_budget_details(packet.meta().round_compute_unit_price())
-            .ok_or(DeserializedPacketError::PrioritizationFailure)?;
+        let ComputeBudgetLimits {
+            mut compute_unit_price,
+            compute_unit_limit,
+            ..
+        } = process_compute_budget_instructions(
+            sanitized_transaction
+                .get_message()
+                .program_instructions_iter(),
+        )
+        .map_err(|_| DeserializedPacketError::PrioritizationFailure)?;
 
         // set compute unit price to zero for vote transactions
         if is_simple_vote {
-            compute_budget_details.compute_unit_price = 0;
+            compute_unit_price = 0;
         };
 
         Ok(Self {
@@ -69,7 +79,8 @@ impl ImmutableDeserializedPacket {
             transaction: sanitized_transaction,
             message_hash,
             is_simple_vote,
-            compute_budget_details,
+            compute_unit_price,
+            compute_unit_limit,
         })
     }
 
@@ -90,15 +101,11 @@ impl ImmutableDeserializedPacket {
     }
 
     pub fn compute_unit_price(&self) -> u64 {
-        self.compute_budget_details.compute_unit_price
+        self.compute_unit_price
     }
 
     pub fn compute_unit_limit(&self) -> u64 {
-        self.compute_budget_details.compute_unit_limit
-    }
-
-    pub fn compute_budget_details(&self) -> ComputeBudgetDetails {
-        self.compute_budget_details.clone()
+        u64::from(self.compute_unit_limit)
     }
 
     // This function deserializes packets into transactions, computes the blake3 hash of transaction
