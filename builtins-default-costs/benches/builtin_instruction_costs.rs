@@ -2,7 +2,7 @@
 extern crate test;
 use {
     rand::Rng,
-    solana_cost_model::block_cost_limits::BUILTIN_INSTRUCTION_COSTS,
+    solana_builtins_default_costs::BUILTIN_INSTRUCTION_COSTS,
     solana_sdk::{
         address_lookup_table, bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
         compute_budget, ed25519_program, loader_v4, pubkey::Pubkey, secp256k1_program,

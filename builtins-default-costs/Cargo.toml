@@ -1,0 +1,45 @@
+[package]
+name = "solana-builtins-default-costs"
+description = "Solana builtins default costs"
+documentation = "https://docs.rs/solana-builtins-default-costs"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+ahash = { workspace = true }
+lazy_static = { workspace = true }
+log = { workspace = true }
+solana-address-lookup-table-program = { workspace = true }
+solana-bpf-loader-program = { workspace = true }
+solana-compute-budget-program = { workspace = true }
+solana-config-program = { workspace = true }
+solana-frozen-abi = { workspace = true, optional = true }
+solana-loader-v4-program = { workspace = true }
+solana-sdk = { workspace = true }
+solana-stake-program = { workspace = true }
+solana-system-program = { workspace = true }
+solana-vote-program = { workspace = true }
+# Add additional builtin programs here
+
+[lib]
+crate-type = ["lib"]
+name = "solana_builtins_default_costs"
+
+[dev-dependencies]
+rand = "0.8.5"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[build-dependencies]
+rustc_version = { workspace = true }
+
+[features]
+frozen-abi = [
+    "dep:solana-frozen-abi",
+    "solana-vote-program/frozen-abi",
+]

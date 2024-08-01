@@ -8,6 +8,7 @@
 use {
     crate::{block_cost_limits::*, transaction_cost::*},
     log::*,
+    solana_builtins_default_costs::BUILTIN_INSTRUCTION_COSTS,
     solana_compute_budget::compute_budget_processor::{
         process_compute_budget_instructions, DEFAULT_HEAP_COST,
         DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT, MAX_COMPUTE_UNIT_LIMIT,
