@@ -5,7 +5,7 @@ use {
         transaction_processing_callback::TransactionProcessingCallback,
     },
     itertools::Itertools,
-    solana_compute_budget::compute_budget_processor::ComputeBudgetLimits,
+    solana_compute_budget::compute_budget_limits::ComputeBudgetLimits,
     solana_program_runtime::loaded_programs::{ProgramCacheEntry, ProgramCacheForTxBatch},
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
@@ -431,7 +431,7 @@ mod tests {
             transaction_processing_callback::TransactionProcessingCallback,
         },
         nonce::state::Versions as NonceVersions,
-        solana_compute_budget::{compute_budget::ComputeBudget, compute_budget_processor},
+        solana_compute_budget::{compute_budget::ComputeBudget, compute_budget_limits},
         solana_program_runtime::loaded_programs::{ProgramCacheEntry, ProgramCacheForTxBatch},
         solana_sdk::{
             account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
@@ -1673,7 +1673,7 @@ mod tests {
         );
 
         let compute_budget = ComputeBudget::new(u64::from(
-            compute_budget_processor::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT,
+            compute_budget_limits::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT,
         ));
         let transaction_context = TransactionContext::new(
             loaded_txs[0].as_ref().unwrap().accounts.clone(),

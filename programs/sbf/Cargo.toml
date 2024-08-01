@@ -42,6 +42,7 @@ solana-poseidon = { path = "../../poseidon/", version = "=2.1.0" }
 solana-program = { path = "../../sdk/program", version = "=2.1.0" }
 solana-program-runtime = { path = "../../program-runtime", version = "=2.1.0" }
 solana-runtime = { path = "../../runtime", version = "=2.1.0" }
+solana-runtime-transaction = { path = "../../runtime-transaction", version = "=2.1.0" }
 solana-sbf-rust-128bit-dep = { path = "rust/128bit_dep", version = "=2.1.0" }
 solana-sbf-rust-invoke-dep = { path = "rust/invoke_dep", version = "=2.1.0" }
 solana-sbf-rust-invoked-dep = { path = "rust/invoked_dep", version = "=2.1.0" }
@@ -108,6 +109,7 @@ solana-measure = { workspace = true }
 solana-program = { workspace = true }
 solana-program-runtime = { workspace = true }
 solana-runtime = { workspace = true, features = ["dev-context-only-utils"] }
+solana-runtime-transaction = { workspace = true }
 solana-sbf-rust-invoke-dep = { workspace = true }
 solana-sbf-rust-realloc-dep = { workspace = true }
 solana-sbf-rust-realloc-invoke-dep = { workspace = true }

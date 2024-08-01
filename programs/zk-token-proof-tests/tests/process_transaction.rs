@@ -1717,7 +1717,7 @@ impl WithMaxComputeUnitLimit for Vec<solana_sdk::instruction::Instruction> {
     fn with_max_compute_unit_limit(mut self) -> Self {
         self.push(
             solana_sdk::compute_budget::ComputeBudgetInstruction::set_compute_unit_limit(
-                solana_compute_budget::compute_budget_processor::MAX_COMPUTE_UNIT_LIMIT,
+                solana_compute_budget::compute_budget_limits::MAX_COMPUTE_UNIT_LIMIT,
             ),
         );
         self

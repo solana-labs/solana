@@ -1,7 +1,7 @@
 use {
     solana_compute_budget::{
         compute_budget::{MAX_CALL_DEPTH, MAX_INSTRUCTION_STACK_DEPTH, STACK_FRAME_SIZE},
-        compute_budget_processor::{MAX_HEAP_FRAME_BYTES, MIN_HEAP_FRAME_BYTES},
+        compute_budget_limits::{MAX_HEAP_FRAME_BYTES, MIN_HEAP_FRAME_BYTES},
     },
     solana_rbpf::{aligned_memory::AlignedMemory, ebpf::HOST_ALIGN},
     std::array,

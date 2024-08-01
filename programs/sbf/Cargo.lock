@@ -4871,6 +4871,7 @@ dependencies = [
  "solana-rpc",
  "solana-rpc-client-api",
  "solana-runtime",
+ "solana-runtime-transaction",
  "solana-sanitize",
  "solana-sdk",
  "solana-send-transaction-service",
@@ -4907,6 +4908,7 @@ dependencies = [
  "solana-builtins-default-costs",
  "solana-compute-budget",
  "solana-metrics",
+ "solana-runtime-transaction",
  "solana-sdk",
  "solana-vote-program",
 ]
@@ -5661,6 +5663,7 @@ dependencies = [
  "solana-perf",
  "solana-program-runtime",
  "solana-rayon-threadlimit",
+ "solana-runtime-transaction",
  "solana-sdk",
  "solana-stake-program",
  "solana-svm",
@@ -5682,6 +5685,17 @@ dependencies = [
  "tempfile",
  "thiserror",
  "zstd",
+]
+
+[[package]]
+name = "solana-runtime-transaction"
+version = "2.1.0"
+dependencies = [
+ "log",
+ "rustc_version",
+ "solana-compute-budget",
+ "solana-sdk",
+ "thiserror",
 ]
 
 [[package]]
@@ -5713,6 +5727,7 @@ dependencies = [
  "solana-program",
  "solana-program-runtime",
  "solana-runtime",
+ "solana-runtime-transaction",
  "solana-sbf-rust-invoke-dep",
  "solana-sbf-rust-realloc-dep",
  "solana-sbf-rust-realloc-invoke-dep",
@@ -6369,6 +6384,7 @@ dependencies = [
  "solana-measure",
  "solana-metrics",
  "solana-program-runtime",
+ "solana-runtime-transaction",
  "solana-sdk",
  "solana-svm-transaction",
  "solana-system-program",

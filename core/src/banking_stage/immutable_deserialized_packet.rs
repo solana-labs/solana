@@ -1,9 +1,8 @@
 use {
     super::packet_filter::PacketFilterFailure,
-    solana_compute_budget::compute_budget_processor::{
-        process_compute_budget_instructions, ComputeBudgetLimits,
-    },
+    solana_compute_budget::compute_budget_limits::ComputeBudgetLimits,
     solana_perf::packet::Packet,
+    solana_runtime_transaction::instructions_processor::process_compute_budget_instructions,
     solana_sanitize::SanitizeError,
     solana_sdk::{
         hash::Hash,

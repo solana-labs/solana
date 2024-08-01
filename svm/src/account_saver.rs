@@ -147,7 +147,7 @@ mod tests {
             nonce_info::NonceInfo,
             transaction_execution_result::{ExecutedTransaction, TransactionExecutionDetails},
         },
-        solana_compute_budget::compute_budget_processor::ComputeBudgetLimits,
+        solana_compute_budget::compute_budget_limits::ComputeBudgetLimits,
         solana_sdk::{
             account::{AccountSharedData, ReadableAccount},
             fee::FeeDetails,

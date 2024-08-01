@@ -1,4 +1,4 @@
-use crate::compute_budget_processor::{self, ComputeBudgetLimits, DEFAULT_HEAP_COST};
+use crate::compute_budget_limits::{self, ComputeBudgetLimits, DEFAULT_HEAP_COST};
 
 #[cfg(all(RUSTC_WITH_SPECIALIZATION, feature = "frozen-abi"))]
 impl ::solana_frozen_abi::abi_example::AbiExample for ComputeBudget {
@@ -127,7 +127,7 @@ pub struct ComputeBudget {
 
 impl Default for ComputeBudget {
     fn default() -> Self {
-        Self::new(compute_budget_processor::MAX_COMPUTE_UNIT_LIMIT as u64)
+        Self::new(compute_budget_limits::MAX_COMPUTE_UNIT_LIMIT as u64)
     }
 }
 

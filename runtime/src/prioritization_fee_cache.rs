@@ -2,8 +2,8 @@ use {
     crate::{bank::Bank, prioritization_fee::*},
     crossbeam_channel::{unbounded, Receiver, Sender},
     log::*,
-    solana_compute_budget::compute_budget_processor::process_compute_budget_instructions,
     solana_measure::measure_us,
+    solana_runtime_transaction::instructions_processor::process_compute_budget_instructions,
     solana_sdk::{
         clock::{BankId, Slot},
         pubkey::Pubkey,
