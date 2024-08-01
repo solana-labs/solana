@@ -587,11 +587,49 @@ impl Consumer {
         let (min_prioritization_fees, max_prioritization_fees) =
             min_max.into_option().unwrap_or_default();
 
+        let mut error_counters = TransactionErrorMetrics::default();
+        let mut retryable_transaction_indexes: Vec<_> = batch
+            .lock_results()
+            .iter()
+            .enumerate()
+            .filter_map(|(index, res)| match res {
+                // following are retryable errors
+                Err(TransactionError::AccountInUse) => {
+                    error_counters.account_in_use += 1;
+                    Some(index)
+                }
+                Err(TransactionError::WouldExceedMaxBlockCostLimit) => {
+                    error_counters.would_exceed_max_block_cost_limit += 1;
+                    Some(index)
+                }
+                Err(TransactionError::WouldExceedMaxVoteCostLimit) => {
+                    error_counters.would_exceed_max_vote_cost_limit += 1;
+                    Some(index)
+                }
+                Err(TransactionError::WouldExceedMaxAccountCostLimit) => {
+                    error_counters.would_exceed_max_account_cost_limit += 1;
+                    Some(index)
+                }
+                Err(TransactionError::WouldExceedAccountDataBlockLimit) => {
+                    error_counters.would_exceed_account_data_block_limit += 1;
+                    Some(index)
+                }
+                // following are non-retryable errors
+                Err(TransactionError::TooManyAccountLocks) => {
+                    error_counters.too_many_account_locks += 1;
+                    None
+                }
+                Err(_) => None,
+                Ok(_) => None,
+            })
+            .collect();
+
         let (load_and_execute_transactions_output, load_execute_us) = measure_us!(bank
             .load_and_execute_transactions(
                 batch,
                 MAX_PROCESSING_AGE,
                 &mut execute_and_commit_timings.execute_timings,
+                &mut error_counters,
                 TransactionProcessingConfig {
                     account_overrides: None,
                     check_program_modification_slot: bank.check_program_modification_slot(),
@@ -608,13 +646,10 @@ impl Consumer {
 
         let LoadAndExecuteTransactionsOutput {
             execution_results,
-            mut retryable_transaction_indexes,
             executed_transactions_count,
             executed_non_vote_transactions_count,
             executed_with_successful_result_count,
             signature_count,
-            error_counters,
-            ..
         } = load_and_execute_transactions_output;
 
         let transactions_attempted_execution_count = execution_results.len();

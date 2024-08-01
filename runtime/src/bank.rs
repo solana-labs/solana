@@ -323,7 +323,6 @@ pub struct LoadAndExecuteTransactionsOutput {
     // Vector of results indicating whether a transaction was executed or could not
     // be executed. Note executed transactions can still have failed!
     pub execution_results: Vec<TransactionExecutionResult>,
-    pub retryable_transaction_indexes: Vec<usize>,
     // Total number of transactions that were executed
     pub executed_transactions_count: usize,
     // Number of non-vote transactions that were executed
@@ -332,7 +331,6 @@ pub struct LoadAndExecuteTransactionsOutput {
     // an error.
     pub executed_with_successful_result_count: usize,
     pub signature_count: u64,
-    pub error_counters: TransactionErrorMetrics,
 }
 
 pub struct TransactionSimulationResult {
@@ -3336,6 +3334,7 @@ impl Bank {
             // delay is not accounted for.
             MAX_PROCESSING_AGE - MAX_TRANSACTION_FORWARDING_DELAY,
             &mut timings,
+            &mut TransactionErrorMetrics::default(),
             TransactionProcessingConfig {
                 account_overrides: Some(&account_overrides),
                 check_program_modification_slot: self.check_program_modification_slot,
@@ -3594,52 +3593,16 @@ impl Bank {
         batch: &TransactionBatch,
         max_age: usize,
         timings: &mut ExecuteTimings,
+        error_counters: &mut TransactionErrorMetrics,
         processing_config: TransactionProcessingConfig,
     ) -> LoadAndExecuteTransactionsOutput {
         let sanitized_txs = batch.sanitized_transactions();
-        let mut error_counters = TransactionErrorMetrics::default();
-
-        let retryable_transaction_indexes: Vec<_> = batch
-            .lock_results()
-            .iter()
-            .enumerate()
-            .filter_map(|(index, res)| match res {
-                // following are retryable errors
-                Err(TransactionError::AccountInUse) => {
-                    error_counters.account_in_use += 1;
-                    Some(index)
-                }
-                Err(TransactionError::WouldExceedMaxBlockCostLimit) => {
-                    error_counters.would_exceed_max_block_cost_limit += 1;
-                    Some(index)
-                }
-                Err(TransactionError::WouldExceedMaxVoteCostLimit) => {
-                    error_counters.would_exceed_max_vote_cost_limit += 1;
-                    Some(index)
-                }
-                Err(TransactionError::WouldExceedMaxAccountCostLimit) => {
-                    error_counters.would_exceed_max_account_cost_limit += 1;
-                    Some(index)
-                }
-                Err(TransactionError::WouldExceedAccountDataBlockLimit) => {
-                    error_counters.would_exceed_account_data_block_limit += 1;
-                    Some(index)
-                }
-                // following are non-retryable errors
-                Err(TransactionError::TooManyAccountLocks) => {
-                    error_counters.too_many_account_locks += 1;
-                    None
-                }
-                Err(_) => None,
-                Ok(_) => None,
-            })
-            .collect();
 
         let (check_results, check_us) = measure_us!(self.check_transactions(
             sanitized_txs,
             batch.lock_results(),
             max_age,
-            &mut error_counters,
+            error_counters,
         ));
         timings.saturating_add_in_place(ExecuteTimingType::CheckUs, check_us);
 
@@ -3779,12 +3742,10 @@ impl Bank {
 
         LoadAndExecuteTransactionsOutput {
             execution_results: sanitized_output.execution_results,
-            retryable_transaction_indexes,
             executed_transactions_count,
             executed_non_vote_transactions_count,
             executed_with_successful_result_count,
             signature_count,
-            error_counters,
         }
     }
 
@@ -4717,11 +4678,11 @@ impl Bank {
             executed_non_vote_transactions_count,
             executed_with_successful_result_count,
             signature_count,
-            ..
         } = self.load_and_execute_transactions(
             batch,
             max_age,
             timings,
+            &mut TransactionErrorMetrics::default(),
             TransactionProcessingConfig {
                 account_overrides: None,
                 check_program_modification_slot: self.check_program_modification_slot,
