@@ -158,7 +158,7 @@ use {
         },
         account_overrides::AccountOverrides,
         account_saver::collect_accounts_to_store,
-        nonce_info::NoncePartial,
+        nonce_info::NonceInfo,
         transaction_commit_result::{CommittedTransaction, TransactionCommitResult},
         transaction_error_metrics::TransactionErrorMetrics,
         transaction_execution_result::{
@@ -3536,7 +3536,7 @@ impl Bank {
     fn load_message_nonce_account(
         &self,
         message: &SanitizedMessage,
-    ) -> Option<(NoncePartial, nonce::state::Data)> {
+    ) -> Option<(NonceInfo, nonce::state::Data)> {
         let nonce_address = message.get_durable_nonce()?;
         let nonce_account = self.get_account_with_fixed_root(nonce_address)?;
         let nonce_data =
@@ -3549,14 +3549,14 @@ impl Bank {
             return None;
         }
 
-        Some((NoncePartial::new(*nonce_address, nonce_account), nonce_data))
+        Some((NonceInfo::new(*nonce_address, nonce_account), nonce_data))
     }
 
     fn check_and_load_message_nonce_account(
         &self,
         message: &SanitizedMessage,
         next_durable_nonce: &DurableNonce,
-    ) -> Option<(NoncePartial, nonce::state::Data)> {
+    ) -> Option<(NonceInfo, nonce::state::Data)> {
         let nonce_is_advanceable = message.recent_blockhash() != next_durable_nonce.as_hash();
         if nonce_is_advanceable {
             self.load_message_nonce_account(message)

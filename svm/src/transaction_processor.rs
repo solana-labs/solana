@@ -969,7 +969,7 @@ mod tests {
     use {
         super::*,
         crate::{
-            account_loader::ValidatedTransactionDetails, nonce_info::NoncePartial,
+            account_loader::ValidatedTransactionDetails, nonce_info::NonceInfo,
             rollback_accounts::RollbackAccounts,
         },
         solana_compute_budget::compute_budget_processor::ComputeBudgetLimits,
@@ -2145,7 +2145,7 @@ mod tests {
 
             let mut error_counters = TransactionErrorMetrics::default();
             let batch_processor = TransactionBatchProcessor::<TestForkGraph>::default();
-            let nonce = Some(NoncePartial::new(
+            let nonce = Some(NonceInfo::new(
                 *fee_payer_address,
                 fee_payer_account.clone(),
             ));

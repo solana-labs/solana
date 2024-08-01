@@ -101,7 +101,7 @@ use {
     },
     solana_stake_program::stake_state::{self, StakeStateV2},
     solana_svm::{
-        account_loader::LoadedTransaction, nonce_info::NoncePartial,
+        account_loader::LoadedTransaction, nonce_info::NonceInfo,
         transaction_commit_result::TransactionCommitResultExtensions,
         transaction_execution_result::ExecutedTransaction,
     },
@@ -4946,7 +4946,7 @@ fn test_check_and_load_message_nonce_account_ok() {
     let nonce_data = get_nonce_data_from_account(&nonce_account).unwrap();
     assert_eq!(
         bank.check_and_load_message_nonce_account(&message, &bank.next_durable_nonce()),
-        Some((NoncePartial::new(nonce_pubkey, nonce_account), nonce_data))
+        Some((NonceInfo::new(nonce_pubkey, nonce_account), nonce_data))
     );
 }
 

@@ -1,5 +1,5 @@
 use {
-    crate::nonce_info::{NonceInfo, NoncePartial},
+    crate::nonce_info::NonceInfo,
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         clock::Epoch,
@@ -15,10 +15,10 @@ pub enum RollbackAccounts {
         fee_payer_account: AccountSharedData,
     },
     SameNonceAndFeePayer {
-        nonce: NoncePartial,
+        nonce: NonceInfo,
     },
     SeparateNonceAndFeePayer {
-        nonce: NoncePartial,
+        nonce: NonceInfo,
         fee_payer_account: AccountSharedData,
     },
 }
@@ -34,7 +34,7 @@ impl Default for RollbackAccounts {
 
 impl RollbackAccounts {
     pub fn new(
-        nonce: Option<NoncePartial>,
+        nonce: Option<NonceInfo>,
         fee_payer_address: Pubkey,
         mut fee_payer_account: AccountSharedData,
         fee_payer_rent_debit: u64,
@@ -52,7 +52,7 @@ impl RollbackAccounts {
         if let Some(nonce) = nonce {
             if &fee_payer_address == nonce.address() {
                 RollbackAccounts::SameNonceAndFeePayer {
-                    nonce: NoncePartial::new(fee_payer_address, fee_payer_account),
+                    nonce: NonceInfo::new(fee_payer_address, fee_payer_account),
                 }
             } else {
                 RollbackAccounts::SeparateNonceAndFeePayer {
@@ -149,7 +149,7 @@ mod tests {
             account
         };
 
-        let nonce = NoncePartial::new(nonce_address, rent_collected_nonce_account.clone());
+        let nonce = NonceInfo::new(nonce_address, rent_collected_nonce_account.clone());
         let rollback_accounts = RollbackAccounts::new(
             Some(nonce),
             nonce_address,
@@ -193,7 +193,7 @@ mod tests {
             account
         };
 
-        let nonce = NoncePartial::new(nonce_address, nonce_account.clone());
+        let nonce = NonceInfo::new(nonce_address, nonce_account.clone());
         let rollback_accounts = RollbackAccounts::new(
             Some(nonce),
             fee_payer_address,

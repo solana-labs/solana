@@ -1,6 +1,6 @@
 use {
     crate::{
-        nonce_info::NonceInfo, rollback_accounts::RollbackAccounts,
+        rollback_accounts::RollbackAccounts,
         transaction_execution_result::TransactionExecutionResult,
     },
     solana_sdk::{
@@ -144,7 +144,7 @@ mod tests {
         super::*,
         crate::{
             account_loader::LoadedTransaction,
-            nonce_info::NoncePartial,
+            nonce_info::NonceInfo,
             transaction_execution_result::{ExecutedTransaction, TransactionExecutionDetails},
         },
         solana_compute_budget::compute_budget_processor::ComputeBudgetLimits,
@@ -383,7 +383,7 @@ mod tests {
             AccountSharedData::new_data(42, &nonce_state, &system_program::id()).unwrap();
         let from_account_pre = AccountSharedData::new(4242, 0, &Pubkey::default());
 
-        let nonce = NoncePartial::new(nonce_address, nonce_account_pre.clone());
+        let nonce = NonceInfo::new(nonce_address, nonce_account_pre.clone());
         let loaded = LoadedTransaction {
             accounts: transaction_accounts,
             program_indices: vec![],
@@ -482,7 +482,7 @@ mod tests {
         let nonce_account_pre =
             AccountSharedData::new_data(42, &nonce_state, &system_program::id()).unwrap();
 
-        let nonce = NoncePartial::new(nonce_address, nonce_account_pre.clone());
+        let nonce = NonceInfo::new(nonce_address, nonce_account_pre.clone());
         let loaded = LoadedTransaction {
             accounts: transaction_accounts,
             program_indices: vec![],

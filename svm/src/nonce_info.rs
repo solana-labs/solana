@@ -3,22 +3,14 @@ use {
         account::AccountSharedData,
         account_utils::StateMut,
         nonce::state::{DurableNonce, State as NonceState, Versions as NonceVersions},
-        nonce_account,
         pubkey::Pubkey,
     },
     thiserror::Error,
 };
 
-pub trait NonceInfo {
-    fn address(&self) -> &Pubkey;
-    fn account(&self) -> &AccountSharedData;
-    fn lamports_per_signature(&self) -> Option<u64>;
-    fn fee_payer_account(&self) -> Option<&AccountSharedData>;
-}
-
 /// Holds limited nonce info available during transaction checks
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct NoncePartial {
+pub struct NonceInfo {
     address: Pubkey,
     account: AccountSharedData,
 }
@@ -31,7 +23,7 @@ pub enum AdvanceNonceError {
     Uninitialized,
 }
 
-impl NoncePartial {
+impl NonceInfo {
     pub fn new(address: Pubkey, account: AccountSharedData) -> Self {
         Self { address, account }
     }
@@ -56,20 +48,13 @@ impl NoncePartial {
             Err(AdvanceNonceError::Uninitialized)
         }
     }
-}
 
-impl NonceInfo for NoncePartial {
-    fn address(&self) -> &Pubkey {
+    pub fn address(&self) -> &Pubkey {
         &self.address
     }
-    fn account(&self) -> &AccountSharedData {
+
+    pub fn account(&self) -> &AccountSharedData {
         &self.account
-    }
-    fn lamports_per_signature(&self) -> Option<u64> {
-        nonce_account::lamports_per_signature_of(&self.account)
-    }
-    fn fee_payer_account(&self) -> Option<&AccountSharedData> {
-        None
     }
 }
 
@@ -102,21 +87,15 @@ mod tests {
             lamports_per_signature,
         )));
 
-        // NoncePartial create + NonceInfo impl
-        let partial = NoncePartial::new(nonce_address, nonce_account.clone());
-        assert_eq!(*partial.address(), nonce_address);
-        assert_eq!(*partial.account(), nonce_account);
-        assert_eq!(
-            partial.lamports_per_signature(),
-            Some(lamports_per_signature)
-        );
-        assert_eq!(partial.fee_payer_account(), None);
+        let nonce_info = NonceInfo::new(nonce_address, nonce_account.clone());
+        assert_eq!(*nonce_info.address(), nonce_address);
+        assert_eq!(*nonce_info.account(), nonce_account);
     }
 
     #[test]
     fn test_try_advance_nonce_success() {
         let authority = Pubkey::new_unique();
-        let mut nonce_partial = NoncePartial::new(
+        let mut nonce_info = NonceInfo::new(
             Pubkey::new_unique(),
             create_nonce_account(NonceState::Initialized(NonceData::new(
                 authority,
@@ -127,10 +106,10 @@ mod tests {
 
         let new_nonce = DurableNonce::from_blockhash(&Hash::new_unique());
         let new_lamports_per_signature = 100;
-        let result = nonce_partial.try_advance_nonce(new_nonce, new_lamports_per_signature);
+        let result = nonce_info.try_advance_nonce(new_nonce, new_lamports_per_signature);
         assert_eq!(result, Ok(()));
 
-        let nonce_versions = StateMut::<NonceVersions>::state(&nonce_partial.account).unwrap();
+        let nonce_versions = StateMut::<NonceVersions>::state(&nonce_info.account).unwrap();
         assert_eq!(
             &NonceState::Initialized(NonceData::new(
                 authority,
@@ -143,25 +122,25 @@ mod tests {
 
     #[test]
     fn test_try_advance_nonce_invalid() {
-        let mut nonce_partial = NoncePartial::new(
+        let mut nonce_info = NonceInfo::new(
             Pubkey::new_unique(),
             AccountSharedData::new(1_000_000, 0, &Pubkey::default()),
         );
 
         let durable_nonce = DurableNonce::from_blockhash(&Hash::new_unique());
-        let result = nonce_partial.try_advance_nonce(durable_nonce, 5000);
+        let result = nonce_info.try_advance_nonce(durable_nonce, 5000);
         assert_eq!(result, Err(AdvanceNonceError::Invalid));
     }
 
     #[test]
     fn test_try_advance_nonce_uninitialized() {
-        let mut nonce_partial = NoncePartial::new(
+        let mut nonce_info = NonceInfo::new(
             Pubkey::new_unique(),
             create_nonce_account(NonceState::Uninitialized),
         );
 
         let durable_nonce = DurableNonce::from_blockhash(&Hash::new_unique());
-        let result = nonce_partial.try_advance_nonce(durable_nonce, 5000);
+        let result = nonce_info.try_advance_nonce(durable_nonce, 5000);
         assert_eq!(result, Err(AdvanceNonceError::Uninitialized));
     }
 }

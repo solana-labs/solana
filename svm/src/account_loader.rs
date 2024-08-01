@@ -1,8 +1,7 @@
 use {
     crate::{
-        account_overrides::AccountOverrides, account_rent_state::RentState,
-        nonce_info::NoncePartial, rollback_accounts::RollbackAccounts,
-        transaction_error_metrics::TransactionErrorMetrics,
+        account_overrides::AccountOverrides, account_rent_state::RentState, nonce_info::NonceInfo,
+        rollback_accounts::RollbackAccounts, transaction_error_metrics::TransactionErrorMetrics,
         transaction_processing_callback::TransactionProcessingCallback,
     },
     itertools::Itertools,
@@ -37,7 +36,7 @@ pub type TransactionLoadResult = Result<LoadedTransaction>;
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct CheckedTransactionDetails {
-    pub nonce: Option<NoncePartial>,
+    pub nonce: Option<NonceInfo>,
     pub lamports_per_signature: u64,
 }
 
