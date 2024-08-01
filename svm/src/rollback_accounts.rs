@@ -72,25 +72,6 @@ impl RollbackAccounts {
         }
     }
 
-    pub fn nonce(&self) -> Option<&NoncePartial> {
-        match self {
-            Self::FeePayerOnly { .. } => None,
-            Self::SameNonceAndFeePayer { nonce } | Self::SeparateNonceAndFeePayer { nonce, .. } => {
-                Some(nonce)
-            }
-        }
-    }
-
-    pub fn fee_payer_account(&self) -> &AccountSharedData {
-        match self {
-            Self::FeePayerOnly { fee_payer_account }
-            | Self::SeparateNonceAndFeePayer {
-                fee_payer_account, ..
-            } => fee_payer_account,
-            Self::SameNonceAndFeePayer { nonce } => nonce.account(),
-        }
-    }
-
     /// Number of accounts tracked for rollback
     pub fn count(&self) -> usize {
         match self {

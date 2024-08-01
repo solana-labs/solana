@@ -31,6 +31,7 @@ solana-system-program = { workspace = true }
 solana-timings = { workspace = true }
 solana-type-overrides = { workspace = true }
 solana-vote = { workspace = true }
+thiserror = { workspace = true }
 
 [lib]
 crate-type = ["lib"]
