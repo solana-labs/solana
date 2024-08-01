@@ -304,14 +304,14 @@ impl SnapshotRequestHandler {
         assert!(snapshot_root_bank.is_startup_verification_complete());
 
         if accounts_package_kind == AccountsPackageKind::Snapshot(SnapshotKind::FullSnapshot) {
-            // The last full snapshot slot is what accounts-db uses to properly handle zero lamport
+            // The latest full snapshot slot is what accounts-db uses to properly handle zero lamport
             // accounts.  We are handling a full snapshot request here, and since taking a snapshot
             // is not allowed to fail, we can update accounts-db now.
             snapshot_root_bank
                 .rc
                 .accounts
                 .accounts_db
-                .set_last_full_snapshot_slot(snapshot_root_bank.slot());
+                .set_latest_full_snapshot_slot(snapshot_root_bank.slot());
         }
 
         let previous_accounts_hash = test_hash_calculation.then(|| {
@@ -734,12 +734,12 @@ fn new_accounts_package_kind(
     snapshot_config: &SnapshotConfig,
 ) -> AccountsPackageKind {
     let block_height = snapshot_request.snapshot_root_bank.block_height();
-    let last_full_snapshot_slot = snapshot_request
+    let latest_full_snapshot_slot = snapshot_request
         .snapshot_root_bank
         .rc
         .accounts
         .accounts_db
-        .last_full_snapshot_slot();
+        .latest_full_snapshot_slot();
     match snapshot_request.request_kind {
         SnapshotRequestKind::EpochAccountsHash => AccountsPackageKind::EpochAccountsHash,
         SnapshotRequestKind::Snapshot => {
@@ -751,10 +751,10 @@ fn new_accounts_package_kind(
             } else if snapshot_utils::should_take_incremental_snapshot(
                 block_height,
                 snapshot_config.incremental_snapshot_archive_interval_slots,
-                last_full_snapshot_slot,
+                latest_full_snapshot_slot,
             ) {
                 AccountsPackageKind::Snapshot(SnapshotKind::IncrementalSnapshot(
-                    last_full_snapshot_slot.unwrap(),
+                    latest_full_snapshot_slot.unwrap(),
                 ))
             } else {
                 AccountsPackageKind::AccountsHashVerifier
@@ -931,18 +931,18 @@ mod test {
             .epoch_accounts_hash_manager
             .set_valid(EpochAccountsHash::new(Hash::new_unique()), 0);
 
-        // We need to get and set accounts-db's last full snapshot slot to test
+        // We need to get and set accounts-db's latest full snapshot slot to test
         // get_next_snapshot_request().  To workaround potential borrowing issues
         // caused by make_banks() below, Arc::clone bank0 and add helper functions.
         let bank0 = bank.clone();
-        fn last_full_snapshot_slot(bank: &Bank) -> Option<Slot> {
-            bank.rc.accounts.accounts_db.last_full_snapshot_slot()
+        fn latest_full_snapshot_slot(bank: &Bank) -> Option<Slot> {
+            bank.rc.accounts.accounts_db.latest_full_snapshot_slot()
         }
-        fn set_last_full_snapshot_slot(bank: &Bank, slot: Slot) {
+        fn set_latest_full_snapshot_slot(bank: &Bank, slot: Slot) {
             bank.rc
                 .accounts
                 .accounts_db
-                .set_last_full_snapshot_slot(slot);
+                .set_latest_full_snapshot_slot(slot);
         }
 
         // Create new banks and send snapshot requests so that the following requests will be in
@@ -965,7 +965,7 @@ mod test {
         //
         // (slots not called out will all be AHV)
         // Also, incremental snapshots before slot 240 (the first full snapshot handled), will
-        // actually be AHV since the last full snapshot slot will be `None`.  This is expected and
+        // actually be AHV since the latest full snapshot slot will be `None`.  This is expected and
         // fine; but maybe unexpected for a reader/debugger without this additional context.
         let mut make_banks = |num_banks| {
             for _ in 0..num_banks {
@@ -991,7 +991,7 @@ mod test {
         make_banks(303);
 
         // Ensure the EAH is handled 1st
-        assert_eq!(last_full_snapshot_slot(&bank0), None,);
+        assert_eq!(latest_full_snapshot_slot(&bank0), None,);
         let (snapshot_request, accounts_package_kind, ..) = snapshot_request_handler
             .get_next_snapshot_request()
             .unwrap();
@@ -1003,7 +1003,7 @@ mod test {
 
         // Ensure the full snapshot from slot 240 is handled 2nd
         // (the older full snapshots are skipped and dropped)
-        assert_eq!(last_full_snapshot_slot(&bank0), None,);
+        assert_eq!(latest_full_snapshot_slot(&bank0), None,);
         let (snapshot_request, accounts_package_kind, ..) = snapshot_request_handler
             .get_next_snapshot_request()
             .unwrap();
@@ -1012,11 +1012,11 @@ mod test {
             AccountsPackageKind::Snapshot(SnapshotKind::FullSnapshot)
         );
         assert_eq!(snapshot_request.snapshot_root_bank.slot(), 240);
-        set_last_full_snapshot_slot(&bank0, 240);
+        set_latest_full_snapshot_slot(&bank0, 240);
 
         // Ensure the incremental snapshot from slot 300 is handled 3rd
         // (the older incremental snapshots are skipped and dropped)
-        assert_eq!(last_full_snapshot_slot(&bank0), Some(240),);
+        assert_eq!(latest_full_snapshot_slot(&bank0), Some(240),);
         let (snapshot_request, accounts_package_kind, ..) = snapshot_request_handler
             .get_next_snapshot_request()
             .unwrap();
@@ -1028,7 +1028,7 @@ mod test {
 
         // Ensure the accounts hash verifier from slot 303 is handled 4th
         // (the older accounts hash verifiers are skipped and dropped)
-        assert_eq!(last_full_snapshot_slot(&bank0), Some(240),);
+        assert_eq!(latest_full_snapshot_slot(&bank0), Some(240),);
         let (snapshot_request, accounts_package_kind, ..) = snapshot_request_handler
             .get_next_snapshot_request()
             .unwrap();
@@ -1039,7 +1039,7 @@ mod test {
         assert_eq!(snapshot_request.snapshot_root_bank.slot(), 303);
 
         // And now ensure the snapshot request channel is empty!
-        assert_eq!(last_full_snapshot_slot(&bank0), Some(240),);
+        assert_eq!(latest_full_snapshot_slot(&bank0), Some(240),);
         assert!(snapshot_request_handler
             .get_next_snapshot_request()
             .is_none());
@@ -1060,7 +1060,7 @@ mod test {
         make_banks(240);
 
         // Ensure the full snapshot is handled 1st
-        assert_eq!(last_full_snapshot_slot(&bank0), Some(240),);
+        assert_eq!(latest_full_snapshot_slot(&bank0), Some(240),);
         let (snapshot_request, accounts_package_kind, ..) = snapshot_request_handler
             .get_next_snapshot_request()
             .unwrap();
@@ -1069,10 +1069,10 @@ mod test {
             AccountsPackageKind::Snapshot(SnapshotKind::FullSnapshot)
         );
         assert_eq!(snapshot_request.snapshot_root_bank.slot(), 480);
-        set_last_full_snapshot_slot(&bank0, 480);
+        set_latest_full_snapshot_slot(&bank0, 480);
 
         // Ensure the EAH is handled 2nd
-        assert_eq!(last_full_snapshot_slot(&bank0), Some(480),);
+        assert_eq!(latest_full_snapshot_slot(&bank0), Some(480),);
         let (snapshot_request, accounts_package_kind, ..) = snapshot_request_handler
             .get_next_snapshot_request()
             .unwrap();
@@ -1083,7 +1083,7 @@ mod test {
         assert_eq!(snapshot_request.snapshot_root_bank.slot(), 500);
 
         // Ensure the incremental snapshot is handled 3rd
-        assert_eq!(last_full_snapshot_slot(&bank0), Some(480),);
+        assert_eq!(latest_full_snapshot_slot(&bank0), Some(480),);
         let (snapshot_request, accounts_package_kind, ..) = snapshot_request_handler
             .get_next_snapshot_request()
             .unwrap();
@@ -1094,7 +1094,7 @@ mod test {
         assert_eq!(snapshot_request.snapshot_root_bank.slot(), 540);
 
         // Ensure the accounts hash verifier is handled 4th
-        assert_eq!(last_full_snapshot_slot(&bank0), Some(480),);
+        assert_eq!(latest_full_snapshot_slot(&bank0), Some(480),);
         let (snapshot_request, accounts_package_kind, ..) = snapshot_request_handler
             .get_next_snapshot_request()
             .unwrap();
@@ -1105,7 +1105,7 @@ mod test {
         assert_eq!(snapshot_request.snapshot_root_bank.slot(), 543);
 
         // And now ensure the snapshot request channel is empty!
-        assert_eq!(last_full_snapshot_slot(&bank0), Some(480),);
+        assert_eq!(latest_full_snapshot_slot(&bank0), Some(480),);
         assert!(snapshot_request_handler
             .get_next_snapshot_request()
             .is_none());

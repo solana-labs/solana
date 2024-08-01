@@ -336,13 +336,13 @@ fn bank_forks_from_snapshot(
         bank
     };
 
-    // We must inform accounts-db of the last full snapshot slot, which is used by the background
+    // We must inform accounts-db of the latest full snapshot slot, which is used by the background
     // processes to handle zero lamport accounts.  Since we've now successfully loaded the bank
     // from snapshots, this is a good time to do that update.
     bank.rc
         .accounts
         .accounts_db
-        .set_last_full_snapshot_slot(full_snapshot_archive_info.slot());
+        .set_latest_full_snapshot_slot(full_snapshot_archive_info.slot());
 
     let full_snapshot_hash = FullSnapshotHash((
         full_snapshot_archive_info.slot(),

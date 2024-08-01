@@ -906,12 +906,12 @@ fn bank_to_full_snapshot_archive_with(
     archive_format: ArchiveFormat,
 ) -> snapshot_utils::Result<FullSnapshotArchiveInfo> {
     assert!(bank.is_complete());
-    // set accounts-db's last full snapshot slot here to ensure zero lamport
+    // set accounts-db's latest full snapshot slot here to ensure zero lamport
     // accounts are handled properly.
     bank.rc
         .accounts
         .accounts_db
-        .set_last_full_snapshot_slot(bank.slot());
+        .set_latest_full_snapshot_slot(bank.slot());
     bank.squash(); // Bank may not be a root
     bank.rehash(); // Bank accounts may have been manually modified by the caller
     bank.force_flush_accounts_cache();
@@ -969,12 +969,12 @@ pub fn bank_to_incremental_snapshot_archive(
 
     assert!(bank.is_complete());
     assert!(bank.slot() > full_snapshot_slot);
-    // set accounts-db's last full snapshot slot here to ensure zero lamport
+    // set accounts-db's latest full snapshot slot here to ensure zero lamport
     // accounts are handled properly.
     bank.rc
         .accounts
         .accounts_db
-        .set_last_full_snapshot_slot(full_snapshot_slot);
+        .set_latest_full_snapshot_slot(full_snapshot_slot);
     bank.squash(); // Bank may not be a root
     bank.rehash(); // Bank accounts may have been manually modified by the caller
     bank.force_flush_accounts_cache();

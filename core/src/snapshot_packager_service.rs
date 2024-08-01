@@ -73,7 +73,7 @@ impl SnapshotPackagerService {
 
                     // Archiving the snapshot package is not allowed to fail.
                     // AccountsBackgroundService calls `clean_accounts()` with a value for
-                    // last_full_snapshot_slot that requires this archive call to succeed.
+                    // latest_full_snapshot_slot that requires this archive call to succeed.
                     let (archive_result, archive_time_us) = measure_us!(snapshot_utils::serialize_and_archive_snapshot_package(
                         snapshot_package,
                         &snapshot_config,

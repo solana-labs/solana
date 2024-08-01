@@ -1497,8 +1497,8 @@ pub struct AccountsDb {
     /// Thus, the state of all accounts on a validator is known to be correct at least once per epoch.
     pub epoch_accounts_hash_manager: EpochAccountsHashManager,
 
-    /// The last full snapshot slot dictates how to handle zero lamport accounts
-    last_full_snapshot_slot: SeqLock<Option<Slot>>,
+    /// The latest full snapshot slot dictates how to handle zero lamport accounts
+    latest_full_snapshot_slot: SeqLock<Option<Slot>>,
 }
 
 #[derive(Debug, Default)]
@@ -2464,7 +2464,7 @@ impl AccountsDb {
             partitioned_epoch_rewards_config: PartitionedEpochRewardsConfig::default(),
             epoch_accounts_hash_manager: EpochAccountsHashManager::new_invalid(),
             test_skip_rewrites_but_include_in_bank_hash: false,
-            last_full_snapshot_slot: SeqLock::new(None),
+            latest_full_snapshot_slot: SeqLock::new(None),
         }
     }
 
@@ -3085,17 +3085,17 @@ impl AccountsDb {
         timings.hashset_to_vec_us += hashset_to_vec.as_us();
 
         // Check if we should purge any of the zero_lamport_accounts_to_purge_later, based on the
-        // last_full_snapshot_slot.
-        let last_full_snapshot_slot = self.last_full_snapshot_slot();
+        // latest_full_snapshot_slot.
+        let latest_full_snapshot_slot = self.latest_full_snapshot_slot();
         assert!(
-            last_full_snapshot_slot.is_some() || self.zero_lamport_accounts_to_purge_after_full_snapshot.is_empty(),
+            latest_full_snapshot_slot.is_some() || self.zero_lamport_accounts_to_purge_after_full_snapshot.is_empty(),
             "if snapshots are disabled, then zero_lamport_accounts_to_purge_later should always be empty"
         );
-        if let Some(last_full_snapshot_slot) = last_full_snapshot_slot {
+        if let Some(latest_full_snapshot_slot) = latest_full_snapshot_slot {
             self.zero_lamport_accounts_to_purge_after_full_snapshot
                 .retain(|(slot, pubkey)| {
                     let is_candidate_for_clean =
-                        max_slot_inclusive >= *slot && last_full_snapshot_slot >= *slot;
+                        max_slot_inclusive >= *slot && latest_full_snapshot_slot >= *slot;
                     if is_candidate_for_clean {
                         pubkeys.push(*pubkey);
                     }
@@ -3664,7 +3664,7 @@ impl AccountsDb {
     /// get purged.  Filter out those accounts here by removing them from 'purges_zero_lamports'
     ///
     /// When using incremental snapshots, do not purge zero-lamport accounts if the slot is higher
-    /// than the last full snapshot slot.  This is to protect against the following scenario:
+    /// than the latest full snapshot slot.  This is to protect against the following scenario:
     ///
     ///   ```text
     ///   A full snapshot is taken, including account 'alpha' with a non-zero balance.  In a later slot,
@@ -3679,19 +3679,19 @@ impl AccountsDb {
     ///   balance.  Very bad!
     ///   ```
     ///
-    /// This filtering step can be skipped if there is no `last_full_snapshot_slot`, or if the
-    /// `max_clean_root_inclusive` is less-than-or-equal-to the `last_full_snapshot_slot`.
+    /// This filtering step can be skipped if there is no `latest_full_snapshot_slot`, or if the
+    /// `max_clean_root_inclusive` is less-than-or-equal-to the `latest_full_snapshot_slot`.
     fn filter_zero_lamport_clean_for_incremental_snapshots(
         &self,
         max_clean_root_inclusive: Option<Slot>,
         store_counts: &HashMap<Slot, (usize, HashSet<Pubkey>)>,
         purges_zero_lamports: &mut HashMap<Pubkey, (SlotList<AccountInfo>, RefCount)>,
     ) {
-        let last_full_snapshot_slot = self.last_full_snapshot_slot();
+        let latest_full_snapshot_slot = self.latest_full_snapshot_slot();
         let should_filter_for_incremental_snapshots = max_clean_root_inclusive.unwrap_or(Slot::MAX)
-            > last_full_snapshot_slot.unwrap_or(Slot::MAX);
+            > latest_full_snapshot_slot.unwrap_or(Slot::MAX);
         assert!(
-            last_full_snapshot_slot.is_some() || !should_filter_for_incremental_snapshots,
+            latest_full_snapshot_slot.is_some() || !should_filter_for_incremental_snapshots,
             "if filtering for incremental snapshots, then snapshots should be enabled",
         );
 
@@ -3726,7 +3726,7 @@ impl AccountsDb {
                 // not get purged here are added to a list so they be considered for purging later
                 // (i.e. after the next full snapshot).
                 assert!(account_info.is_zero_lamport());
-                let cannot_purge = *slot > last_full_snapshot_slot.unwrap();
+                let cannot_purge = *slot > latest_full_snapshot_slot.unwrap();
                 if cannot_purge {
                     self.zero_lamport_accounts_to_purge_after_full_snapshot
                         .insert((*slot, *pubkey));
@@ -4872,18 +4872,18 @@ impl AccountsDb {
             slots.retain(|slot| slot < &newest_slot_skip_shrink_inclusive);
         }
 
-        // if we are restoring from incremental + full snapshot, then we cannot clean past last_full_snapshot_slot.
-        // If we were to clean past that, then we could mark accounts prior to last_full_snapshot_slot as dead.
-        // If we mark accounts prior to last_full_snapshot_slot as dead, then we could shrink those accounts away.
-        // If we shrink accounts away, then when we run the full hash of all accounts calculation up to last_full_snapshot_slot,
-        // then we will get the wrong answer, because some accounts may be GONE from the slot range up to last_full_snapshot_slot.
-        // So, we can only clean UP TO and including last_full_snapshot_slot.
-        // As long as we don't mark anything as dead at slots > last_full_snapshot_slot, then shrink will have nothing to do for
-        // slots > last_full_snapshot_slot.
+        // if we are restoring from incremental + full snapshot, then we cannot clean past latest_full_snapshot_slot.
+        // If we were to clean past that, then we could mark accounts prior to latest_full_snapshot_slot as dead.
+        // If we mark accounts prior to latest_full_snapshot_slot as dead, then we could shrink those accounts away.
+        // If we shrink accounts away, then when we run the full hash of all accounts calculation up to latest_full_snapshot_slot,
+        // then we will get the wrong answer, because some accounts may be GONE from the slot range up to latest_full_snapshot_slot.
+        // So, we can only clean UP TO and including latest_full_snapshot_slot.
+        // As long as we don't mark anything as dead at slots > latest_full_snapshot_slot, then shrink will have nothing to do for
+        // slots > latest_full_snapshot_slot.
         let maybe_clean = || {
             if self.dirty_stores.len() > DIRTY_STORES_CLEANING_THRESHOLD {
-                let last_full_snapshot_slot = self.last_full_snapshot_slot();
-                self.clean_accounts(last_full_snapshot_slot, is_startup, epoch_schedule);
+                let latest_full_snapshot_slot = self.latest_full_snapshot_slot();
+                self.clean_accounts(latest_full_snapshot_slot, is_startup, epoch_schedule);
             }
         };
 
@@ -7228,19 +7228,19 @@ impl AccountsDb {
         self.incremental_accounts_hashes.lock().unwrap().clone()
     }
 
-    /// Purge accounts hashes that are older than `last_full_snapshot_slot`
+    /// Purge accounts hashes that are older than `latest_full_snapshot_slot`
     ///
     /// Should only be called by AccountsHashVerifier, since it consumes the accounts hashes and
     /// knows which ones are still needed.
-    pub fn purge_old_accounts_hashes(&self, last_full_snapshot_slot: Slot) {
+    pub fn purge_old_accounts_hashes(&self, latest_full_snapshot_slot: Slot) {
         self.accounts_hashes
             .lock()
             .unwrap()
-            .retain(|&slot, _| slot >= last_full_snapshot_slot);
+            .retain(|&slot, _| slot >= latest_full_snapshot_slot);
         self.incremental_accounts_hashes
             .lock()
             .unwrap()
-            .retain(|&slot, _| slot >= last_full_snapshot_slot);
+            .retain(|&slot, _| slot >= latest_full_snapshot_slot);
     }
 
     fn sort_slot_storage_scan(accum: &mut BinnedHashData) -> u64 {
@@ -8528,14 +8528,14 @@ impl AccountsDb {
         (result, slots)
     }
 
-    /// Returns the last full snapshot slot
-    pub fn last_full_snapshot_slot(&self) -> Option<Slot> {
-        self.last_full_snapshot_slot.read()
+    /// Returns the latest full snapshot slot
+    pub fn latest_full_snapshot_slot(&self) -> Option<Slot> {
+        self.latest_full_snapshot_slot.read()
     }
 
-    /// Sets the last full snapshot slot to `slot`
-    pub fn set_last_full_snapshot_slot(&self, slot: Slot) {
-        *self.last_full_snapshot_slot.lock_write() = Some(slot);
+    /// Sets the latest full snapshot slot to `slot`
+    pub fn set_latest_full_snapshot_slot(&self, slot: Slot) {
+        *self.latest_full_snapshot_slot.lock_write() = Some(slot);
     }
 
     /// return Some(lamports_to_top_off) if 'account' would collect rent
@@ -14682,7 +14682,7 @@ pub mod tests {
         assert!(db.storage.get_slot_storage_entry(slot).is_none());
     }
 
-    // Test to make sure `clean_accounts()` works properly with `last_full_snapshot_slot`
+    // Test to make sure `clean_accounts()` works properly with `latest_full_snapshot_slot`
     //
     // Basically:
     //
@@ -14692,12 +14692,12 @@ pub mod tests {
     // - call `clean_accounts()` with `max_clean_root` set to 2
     //     - ensure Account1 has *not* been purged
     //     - ensure the store from slot 1 is cleaned up
-    // - call `clean_accounts()` with `last_full_snapshot_slot` set to 2
+    // - call `clean_accounts()` with `latest_full_snapshot_slot` set to 2
     //     - ensure Account1 has *not* been purged
-    // - call `clean_accounts()` with `last_full_snapshot_slot` set to 3
+    // - call `clean_accounts()` with `latest_full_snapshot_slot` set to 3
     //     - ensure Account1 *has* been purged
     define_accounts_db_test!(
-        test_clean_accounts_with_last_full_snapshot_slot,
+        test_clean_accounts_with_latest_full_snapshot_slot,
         |accounts_db| {
             let pubkey = solana_sdk::pubkey::new_rand();
             let owner = solana_sdk::pubkey::new_rand();
@@ -14723,15 +14723,15 @@ pub mod tests {
 
             assert_eq!(accounts_db.ref_count_for_pubkey(&pubkey), 3);
 
-            accounts_db.set_last_full_snapshot_slot(slot2);
+            accounts_db.set_latest_full_snapshot_slot(slot2);
             accounts_db.clean_accounts(Some(slot2), false, &EpochSchedule::default());
             assert_eq!(accounts_db.ref_count_for_pubkey(&pubkey), 2);
 
-            accounts_db.set_last_full_snapshot_slot(slot2);
+            accounts_db.set_latest_full_snapshot_slot(slot2);
             accounts_db.clean_accounts(None, false, &EpochSchedule::default());
             assert_eq!(accounts_db.ref_count_for_pubkey(&pubkey), 1);
 
-            accounts_db.set_last_full_snapshot_slot(slot3);
+            accounts_db.set_latest_full_snapshot_slot(slot3);
             accounts_db.clean_accounts(None, false, &EpochSchedule::default());
             assert_eq!(accounts_db.ref_count_for_pubkey(&pubkey), 0);
         }
@@ -14743,7 +14743,7 @@ pub mod tests {
         let slot = 10;
 
         struct TestParameters {
-            last_full_snapshot_slot: Option<Slot>,
+            latest_full_snapshot_slot: Option<Slot>,
             max_clean_root: Option<Slot>,
             should_contain: bool,
         }
@@ -14760,8 +14760,8 @@ pub mod tests {
             purges_zero_lamports.insert(pubkey, (vec![(slot, account_info)], 1));
 
             let accounts_db = AccountsDb::new_single_for_tests();
-            if let Some(last_full_snapshot_slot) = test_params.last_full_snapshot_slot {
-                accounts_db.set_last_full_snapshot_slot(last_full_snapshot_slot);
+            if let Some(latest_full_snapshot_slot) = test_params.latest_full_snapshot_slot {
+                accounts_db.set_latest_full_snapshot_slot(latest_full_snapshot_slot);
             }
             accounts_db.filter_zero_lamport_clean_for_incremental_snapshots(
                 test_params.max_clean_root,
@@ -14778,16 +14778,16 @@ pub mod tests {
         // Scenario 1: last full snapshot is NONE
         // In this scenario incremental snapshots are OFF, so always purge
         {
-            let last_full_snapshot_slot = None;
+            let latest_full_snapshot_slot = None;
 
             do_test(TestParameters {
-                last_full_snapshot_slot,
+                latest_full_snapshot_slot,
                 max_clean_root: Some(slot),
                 should_contain: true,
             });
 
             do_test(TestParameters {
-                last_full_snapshot_slot,
+                latest_full_snapshot_slot,
                 max_clean_root: None,
                 should_contain: true,
             });
@@ -14797,22 +14797,22 @@ pub mod tests {
         // In this scenario always purge, and just test the various permutations of
         // `should_filter_for_incremental_snapshots` based on `max_clean_root`.
         {
-            let last_full_snapshot_slot = Some(slot + 1);
+            let latest_full_snapshot_slot = Some(slot + 1);
 
             do_test(TestParameters {
-                last_full_snapshot_slot,
-                max_clean_root: last_full_snapshot_slot,
+                latest_full_snapshot_slot,
+                max_clean_root: latest_full_snapshot_slot,
                 should_contain: true,
             });
 
             do_test(TestParameters {
-                last_full_snapshot_slot,
-                max_clean_root: last_full_snapshot_slot.map(|s| s + 1),
+                latest_full_snapshot_slot,
+                max_clean_root: latest_full_snapshot_slot.map(|s| s + 1),
                 should_contain: true,
             });
 
             do_test(TestParameters {
-                last_full_snapshot_slot,
+                latest_full_snapshot_slot,
                 max_clean_root: None,
                 should_contain: true,
             });
@@ -14821,22 +14821,22 @@ pub mod tests {
         // Scenario 3: last full snapshot is EQUAL TO zero lamport account slot
         // In this scenario always purge, as it's the same as Scenario 2.
         {
-            let last_full_snapshot_slot = Some(slot);
+            let latest_full_snapshot_slot = Some(slot);
 
             do_test(TestParameters {
-                last_full_snapshot_slot,
-                max_clean_root: last_full_snapshot_slot,
+                latest_full_snapshot_slot,
+                max_clean_root: latest_full_snapshot_slot,
                 should_contain: true,
             });
 
             do_test(TestParameters {
-                last_full_snapshot_slot,
-                max_clean_root: last_full_snapshot_slot.map(|s| s + 1),
+                latest_full_snapshot_slot,
+                max_clean_root: latest_full_snapshot_slot.map(|s| s + 1),
                 should_contain: true,
             });
 
             do_test(TestParameters {
-                last_full_snapshot_slot,
+                latest_full_snapshot_slot,
                 max_clean_root: None,
                 should_contain: true,
             });
@@ -14846,22 +14846,22 @@ pub mod tests {
         // In this scenario do *not* purge, except when `should_filter_for_incremental_snapshots`
         // is false
         {
-            let last_full_snapshot_slot = Some(slot - 1);
+            let latest_full_snapshot_slot = Some(slot - 1);
 
             do_test(TestParameters {
-                last_full_snapshot_slot,
-                max_clean_root: last_full_snapshot_slot,
+                latest_full_snapshot_slot,
+                max_clean_root: latest_full_snapshot_slot,
                 should_contain: true,
             });
 
             do_test(TestParameters {
-                last_full_snapshot_slot,
-                max_clean_root: last_full_snapshot_slot.map(|s| s + 1),
+                latest_full_snapshot_slot,
+                max_clean_root: latest_full_snapshot_slot.map(|s| s + 1),
                 should_contain: false,
             });
 
             do_test(TestParameters {
-                last_full_snapshot_slot,
+                latest_full_snapshot_slot,
                 max_clean_root: None,
                 should_contain: false,
             });
@@ -17096,7 +17096,7 @@ pub mod tests {
 
         // calculate the incremental accounts hash
         let incremental_accounts_hash = {
-            accounts_db.set_last_full_snapshot_slot(full_accounts_hash_slot);
+            accounts_db.set_latest_full_snapshot_slot(full_accounts_hash_slot);
             accounts_db.clean_accounts(Some(slot - 1), false, &EpochSchedule::default());
             let (storages, _) =
                 accounts_db.get_snapshot_storages(full_accounts_hash_slot + 1..=slot);

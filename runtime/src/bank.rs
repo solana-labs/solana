@@ -5808,7 +5808,7 @@ impl Bank {
         test_hash_calculation: bool,
         skip_shrink: bool,
         force_clean: bool,
-        last_full_snapshot_slot: Slot,
+        latest_full_snapshot_slot: Slot,
         base: Option<(Slot, /*capitalization*/ u64)>,
     ) -> bool {
         let (_, clean_time_us) = measure_us!({
@@ -5820,7 +5820,7 @@ impl Bank {
                 // that slot, then accounts could be removed from older storages, which would
                 // change the accounts hash.
                 self.rc.accounts.accounts_db.clean_accounts(
-                    Some(last_full_snapshot_slot),
+                    Some(latest_full_snapshot_slot),
                     true,
                     self.epoch_schedule(),
                 );

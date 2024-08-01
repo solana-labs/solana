@@ -466,7 +466,7 @@ pub(crate) fn generate_snapshot(
     // slot new_root_slot is less than the the current highest full_snapshot_slot, that means the
     // locally rooted full_snapshot_slot will be rolled back. this requires human inspection。
     //
-    // In even rarer cases, the selected slot might be the last full snapshot slot. We could
+    // In even rarer cases, the selected slot might be the latest full snapshot slot. We could
     // just re-generate a new snapshot to make sure the snapshot is up to date after hard fork,
     // but for now we just return an error to keep the code simple.
     check_slot_smaller_than_intended_snapshot_slot(full_snapshot_slot, new_root_slot, directory)?;
