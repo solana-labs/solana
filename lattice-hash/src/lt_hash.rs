@@ -1,6 +1,6 @@
 use {
     base64::{display::Base64Display, prelude::BASE64_STANDARD},
-    std::{fmt, mem::size_of},
+    std::fmt,
 };
 
 /// A 16-bit, 1024 element lattice-based incremental hash based on blake3
@@ -20,9 +20,9 @@ impl LtHash {
     #[must_use]
     pub fn with(hasher: &blake3::Hasher) -> Self {
         let mut reader = hasher.finalize_xof();
-        let mut buffer = [0; size_of::<Self>()];
-        reader.fill(&mut buffer);
-        Self(bytemuck::must_cast(buffer))
+        let mut inner = [0; Self::NUM_ELEMENTS];
+        reader.fill(bytemuck::must_cast_slice_mut(inner.as_mut_slice()));
+        Self(inner)
     }
 
     /// Mixes `other` into `self`
