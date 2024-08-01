@@ -229,7 +229,7 @@ mod tests {
         let _ref_signer = Foo {
             signer: &Keypair::new(),
         };
-        foo(&Keypair::new());
+        foo(Keypair::new());
 
         let _box_signer = Foo {
             signer: Box::new(Keypair::new()),

@@ -432,7 +432,7 @@ where
     let mut bank_fields: BankFieldsToDeserialize =
         deserialize_from::<_, DeserializableVersionedBank>(&mut stream)?.into();
     let accounts_db_fields = deserialize_accounts_db_fields(stream)?;
-    let extra_fields = deserialize_from(&mut stream)?;
+    let extra_fields = deserialize_from(stream)?;
 
     // Process extra fields
     let ExtraFieldsToDeserialize {

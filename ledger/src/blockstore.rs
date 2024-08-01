@@ -2439,7 +2439,7 @@ impl Blockstore {
             DEFAULT_TICKS_PER_SECOND * timestamp().saturating_sub(first_timestamp) / 1000;
 
         // Seek to the first shred with index >= start_index
-        db_iterator.seek(&C::key((slot, start_index)));
+        db_iterator.seek(C::key((slot, start_index)));
 
         // The index of the first missing shred in the slot
         let mut prev_index = start_index;
