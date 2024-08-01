@@ -18,9 +18,10 @@ use {
         message::v0::{LoadedAddresses, MessageAddressTableLookup},
         pubkey::Pubkey,
         slot_hashes::SlotHashes,
-        transaction::{Result, SanitizedTransaction, TransactionAccountLocks, TransactionError},
+        transaction::{Result, SanitizedTransaction, TransactionError},
         transaction_context::TransactionAccount,
     },
+    solana_svm_transaction::svm_message::SVMMessage,
     std::{
         cmp::Reverse,
         collections::{hash_map, BinaryHeap, HashSet},
@@ -83,6 +84,26 @@ impl AccountLocks {
             removed,
             "Attempted to remove a write-lock for a key that wasn't write-locked"
         );
+    }
+}
+
+struct TransactionAccountLocksIterator<'a, T: SVMMessage> {
+    transaction: &'a T,
+}
+
+impl<'a, T: SVMMessage> TransactionAccountLocksIterator<'a, T> {
+    pub(crate) fn new(transaction: &'a T) -> Self {
+        Self { transaction }
+    }
+
+    pub(crate) fn accounts_with_is_writable(
+        &self,
+    ) -> impl Iterator<Item = (&'a Pubkey, bool)> + Clone {
+        self.transaction
+            .account_keys()
+            .iter()
+            .enumerate()
+            .map(|(index, key)| (key, self.transaction.is_writable(index)))
     }
 }
 
@@ -540,31 +561,27 @@ impl Accounts {
         self.accounts_db.store_uncached(slot, &[(pubkey, account)]);
     }
 
-    fn lock_account(
+    fn lock_account<'a>(
         &self,
         account_locks: &mut AccountLocks,
-        writable_keys: Vec<&Pubkey>,
-        readonly_keys: Vec<&Pubkey>,
+        keys: impl Iterator<Item = (&'a Pubkey, bool)> + Clone,
     ) -> Result<()> {
-        for k in writable_keys.iter() {
-            if account_locks.is_locked_write(k) || account_locks.is_locked_readonly(k) {
-                debug!("Writable account in use: {:?}", k);
-                return Err(TransactionError::AccountInUse);
-            }
-        }
-        for k in readonly_keys.iter() {
-            if account_locks.is_locked_write(k) {
+        for (k, writable) in keys.clone() {
+            if writable {
+                if account_locks.is_locked_write(k) || account_locks.is_locked_readonly(k) {
+                    debug!("Writable account in use: {:?}", k);
+                    return Err(TransactionError::AccountInUse);
+                }
+            } else if account_locks.is_locked_write(k) {
                 debug!("Read-only account in use: {:?}", k);
                 return Err(TransactionError::AccountInUse);
             }
         }
 
-        for k in writable_keys {
-            account_locks.write_locks.insert(*k);
-        }
-
-        for k in readonly_keys {
-            if !account_locks.lock_readonly(k) {
+        for (k, writable) in keys {
+            if writable {
+                account_locks.write_locks.insert(*k);
+            } else if !account_locks.lock_readonly(k) {
                 account_locks.insert_new_readonly(k);
             }
         }
@@ -572,17 +589,17 @@ impl Accounts {
         Ok(())
     }
 
-    fn unlock_account(
+    fn unlock_account<'a>(
         &self,
         account_locks: &mut AccountLocks,
-        writable_keys: Vec<&Pubkey>,
-        readonly_keys: Vec<&Pubkey>,
+        keys: impl Iterator<Item = (&'a Pubkey, bool)>,
     ) {
-        for k in writable_keys {
-            account_locks.unlock_write(k);
-        }
-        for k in readonly_keys {
-            account_locks.unlock_readonly(k);
+        for (k, writable) in keys {
+            if writable {
+                account_locks.unlock_write(k);
+            } else {
+                account_locks.unlock_readonly(k);
+            }
         }
     }
 
@@ -594,8 +611,12 @@ impl Accounts {
         txs: impl Iterator<Item = &'a SanitizedTransaction>,
         tx_account_lock_limit: usize,
     ) -> Vec<Result<()>> {
+        // Validate the account locks, then get iterator if successful validation.
         let tx_account_locks_results: Vec<Result<_>> = txs
-            .map(|tx| tx.get_account_locks(tx_account_lock_limit))
+            .map(|tx| {
+                SanitizedTransaction::validate_account_locks(tx.message(), tx_account_lock_limit)
+                    .map(|_| TransactionAccountLocksIterator::new(tx))
+            })
             .collect();
         self.lock_accounts_inner(tx_account_locks_results)
     }
@@ -607,10 +628,15 @@ impl Accounts {
         results: impl Iterator<Item = Result<()>>,
         tx_account_lock_limit: usize,
     ) -> Vec<Result<()>> {
+        // Validate the account locks, then get iterator if successful validation.
         let tx_account_locks_results: Vec<Result<_>> = txs
             .zip(results)
             .map(|(tx, result)| match result {
-                Ok(()) => tx.get_account_locks(tx_account_lock_limit),
+                Ok(()) => SanitizedTransaction::validate_account_locks(
+                    tx.message(),
+                    tx_account_lock_limit,
+                )
+                .map(|_| TransactionAccountLocksIterator::new(tx)),
                 Err(err) => Err(err),
             })
             .collect();
@@ -620,17 +646,15 @@ impl Accounts {
     #[must_use]
     fn lock_accounts_inner(
         &self,
-        tx_account_locks_results: Vec<Result<TransactionAccountLocks>>,
+        tx_account_locks_results: Vec<Result<TransactionAccountLocksIterator<impl SVMMessage>>>,
     ) -> Vec<Result<()>> {
         let account_locks = &mut self.account_locks.lock().unwrap();
         tx_account_locks_results
             .into_iter()
             .map(|tx_account_locks_result| match tx_account_locks_result {
-                Ok(tx_account_locks) => self.lock_account(
-                    account_locks,
-                    tx_account_locks.writable,
-                    tx_account_locks.readonly,
-                ),
+                Ok(tx_account_locks) => {
+                    self.lock_account(account_locks, tx_account_locks.accounts_with_is_writable())
+                }
                 Err(err) => Err(err),
             })
             .collect()
@@ -639,21 +663,23 @@ impl Accounts {
     /// Once accounts are unlocked, new transactions that modify that state can enter the pipeline
     pub fn unlock_accounts<'a>(
         &self,
-        txs_and_results: impl Iterator<Item = (&'a SanitizedTransaction, &'a Result<()>)>,
+        txs_and_results: impl Iterator<Item = (&'a SanitizedTransaction, &'a Result<()>)> + Clone,
     ) {
-        let keys: Vec<_> = txs_and_results
-            .filter(|(_, res)| res.is_ok())
-            .map(|(tx, _)| tx.get_account_locks_unchecked())
-            .collect();
-        if keys.is_empty() {
+        if !txs_and_results.clone().any(|(_, res)| res.is_ok()) {
             return;
         }
 
         let mut account_locks = self.account_locks.lock().unwrap();
         debug!("bank unlock accounts");
-        keys.into_iter().for_each(|keys| {
-            self.unlock_account(&mut account_locks, keys.writable, keys.readonly);
-        });
+        for (tx, res) in txs_and_results {
+            if res.is_ok() {
+                let tx_account_locks = TransactionAccountLocksIterator::new(tx.message());
+                self.unlock_account(
+                    &mut account_locks,
+                    tx_account_locks.accounts_with_is_writable(),
+                );
+            }
+        }
     }
 
     /// Store the accounts into the DB

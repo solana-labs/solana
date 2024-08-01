@@ -47,6 +47,7 @@ solana-nohash-hasher = { workspace = true }
 solana-rayon-threadlimit = { workspace = true }
 solana-sdk = { workspace = true }
 solana-stake-program = { workspace = true, optional = true }
+solana-svm-transaction = { workspace = true }
 solana-vote-program = { workspace = true, optional = true }
 static_assertions = { workspace = true }
 tar = { workspace = true }

@@ -3424,7 +3424,7 @@ impl Bank {
 
     pub fn unlock_accounts<'a>(
         &self,
-        txs_and_results: impl Iterator<Item = (&'a SanitizedTransaction, &'a Result<()>)>,
+        txs_and_results: impl Iterator<Item = (&'a SanitizedTransaction, &'a Result<()>)> + Clone,
     ) {
         self.rc.accounts.unlock_accounts(txs_and_results)
     }
