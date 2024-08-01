@@ -817,7 +817,6 @@ impl Validator {
         let pruned_banks_request_handler = PrunedBanksRequestHandler {
             pruned_banks_receiver,
         };
-        let last_full_snapshot_slot = starting_snapshot_hashes.map(|x| x.full.0 .0);
         let accounts_background_service = AccountsBackgroundService::new(
             bank_forks.clone(),
             exit.clone(),
@@ -826,7 +825,6 @@ impl Validator {
                 pruned_banks_request_handler,
             },
             config.accounts_db_test_hash_calculation,
-            last_full_snapshot_slot,
         );
         info!(
             "Using: block-verification-method: {}, block-production-method: {}",

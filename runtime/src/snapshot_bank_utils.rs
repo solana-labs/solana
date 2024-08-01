@@ -906,10 +906,16 @@ fn bank_to_full_snapshot_archive_with(
     archive_format: ArchiveFormat,
 ) -> snapshot_utils::Result<FullSnapshotArchiveInfo> {
     assert!(bank.is_complete());
+    // set accounts-db's last full snapshot slot here to ensure zero lamport
+    // accounts are handled properly.
+    bank.rc
+        .accounts
+        .accounts_db
+        .set_last_full_snapshot_slot(bank.slot());
     bank.squash(); // Bank may not be a root
     bank.rehash(); // Bank accounts may have been manually modified by the caller
     bank.force_flush_accounts_cache();
-    bank.clean_accounts(Some(bank.slot()));
+    bank.clean_accounts();
     let calculated_accounts_hash =
         bank.update_accounts_hash(CalcAccountsHashDataSource::Storages, false, false);
 
@@ -963,10 +969,16 @@ pub fn bank_to_incremental_snapshot_archive(
 
     assert!(bank.is_complete());
     assert!(bank.slot() > full_snapshot_slot);
+    // set accounts-db's last full snapshot slot here to ensure zero lamport
+    // accounts are handled properly.
+    bank.rc
+        .accounts
+        .accounts_db
+        .set_last_full_snapshot_slot(full_snapshot_slot);
     bank.squash(); // Bank may not be a root
     bank.rehash(); // Bank accounts may have been manually modified by the caller
     bank.force_flush_accounts_cache();
-    bank.clean_accounts(Some(full_snapshot_slot));
+    bank.clean_accounts();
     let calculated_incremental_accounts_hash =
         bank.update_incremental_accounts_hash(full_snapshot_slot);
 
@@ -1707,7 +1719,7 @@ mod tests {
 
         // Ensure account1 has been cleaned/purged from everywhere
         bank4.squash();
-        bank4.clean_accounts(Some(full_snapshot_slot));
+        bank4.clean_accounts();
         assert!(
             bank4.get_account_modified_slot(&key1.pubkey()).is_none(),
             "Ensure Account1 has been cleaned and purged from AccountsDb"

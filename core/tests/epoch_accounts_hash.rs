@@ -220,7 +220,6 @@ impl BackgroundServices {
                 pruned_banks_request_handler,
             },
             false,
-            None,
         );
 
         info!("Starting background services... DONE");

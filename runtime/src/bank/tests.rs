@@ -8500,7 +8500,7 @@ fn test_store_scan_consistency_root() {
                 current_bank.squash();
                 if current_bank.slot() % 2 == 0 {
                     current_bank.force_flush_accounts_cache();
-                    current_bank.clean_accounts(None);
+                    current_bank.clean_accounts();
                 }
                 prev_bank = current_bank.clone();
                 let slot = current_bank.slot() + 1;
@@ -12307,7 +12307,7 @@ where
         )
         .unwrap();
 
-    // super fun time; callback chooses to .clean_accounts(None) or not
+    // super fun time; callback chooses to .clean_accounts() or not
     let slot = bank.slot() + 1;
     let bank = new_bank_from_parent_with_bank_forks(bank_forks.as_ref(), bank, &collector, slot);
     callback(&bank);
@@ -12337,7 +12337,7 @@ fn test_create_zero_lamport_with_clean() {
         bank.force_flush_accounts_cache();
         // do clean and assert that it actually did its job
         assert_eq!(4, bank.get_snapshot_storages(None).len());
-        bank.clean_accounts(None);
+        bank.clean_accounts();
         assert_eq!(3, bank.get_snapshot_storages(None).len());
     });
 }

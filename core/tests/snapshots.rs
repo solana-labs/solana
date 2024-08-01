@@ -235,12 +235,7 @@ fn run_bank_forks_snapshot_n<F>(
                 .unwrap()
                 .set_root(bank.slot(), &request_sender, None)
                 .unwrap();
-            snapshot_request_handler.handle_snapshot_requests(
-                false,
-                0,
-                &mut None,
-                &AtomicBool::new(false),
-            );
+            snapshot_request_handler.handle_snapshot_requests(false, 0, &AtomicBool::new(false));
         }
     }
 
@@ -500,18 +495,14 @@ fn test_bank_forks_incremental_snapshot(
                 .unwrap()
                 .set_root(bank.slot(), &request_sender, None)
                 .unwrap();
-            snapshot_request_handler.handle_snapshot_requests(
-                false,
-                0,
-                &mut last_full_snapshot_slot,
-                &AtomicBool::new(false),
-            );
+            snapshot_request_handler.handle_snapshot_requests(false, 0, &AtomicBool::new(false));
         }
 
         // Since AccountsBackgroundService isn't running, manually make a full snapshot archive
         // at the right interval
         if snapshot_utils::should_take_full_snapshot(slot, FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS) {
             make_full_snapshot_archive(&bank, &snapshot_test_config.snapshot_config).unwrap();
+            last_full_snapshot_slot = Some(slot);
         }
         // Similarly, make an incremental snapshot archive at the right interval, but only if
         // there's been at least one full snapshot first, and a full snapshot wasn't already
@@ -731,7 +722,6 @@ fn test_snapshots_with_background_services(
         exit.clone(),
         abs_request_handler,
         false,
-        None,
     );
 
     let mut last_full_snapshot_slot = None;

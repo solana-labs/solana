@@ -1496,6 +1496,9 @@ pub struct AccountsDb {
     /// Some time later (to allow for slow calculation time), the bank hash at a slot calculated using 'M' includes the full accounts hash.
     /// Thus, the state of all accounts on a validator is known to be correct at least once per epoch.
     pub epoch_accounts_hash_manager: EpochAccountsHashManager,
+
+    /// The last full snapshot slot dictates how to handle zero lamport accounts
+    last_full_snapshot_slot: SeqLock<Option<Slot>>,
 }
 
 #[derive(Debug, Default)]
@@ -2461,6 +2464,7 @@ impl AccountsDb {
             partitioned_epoch_rewards_config: PartitionedEpochRewardsConfig::default(),
             epoch_accounts_hash_manager: EpochAccountsHashManager::new_invalid(),
             test_skip_rewrites_but_include_in_bank_hash: false,
+            last_full_snapshot_slot: SeqLock::new(None),
         }
     }
 
@@ -2991,7 +2995,6 @@ impl AccountsDb {
         &self,
         max_clean_root_inclusive: Option<Slot>,
         is_startup: bool,
-        last_full_snapshot_slot: Option<Slot>,
         timings: &mut CleanKeyTimings,
         epoch_schedule: &EpochSchedule,
     ) -> (Vec<Pubkey>, Option<Slot>) {
@@ -3083,6 +3086,7 @@ impl AccountsDb {
 
         // Check if we should purge any of the zero_lamport_accounts_to_purge_later, based on the
         // last_full_snapshot_slot.
+        let last_full_snapshot_slot = self.last_full_snapshot_slot();
         assert!(
             last_full_snapshot_slot.is_some() || self.zero_lamport_accounts_to_purge_after_full_snapshot.is_empty(),
             "if snapshots are disabled, then zero_lamport_accounts_to_purge_later should always be empty"
@@ -3104,7 +3108,7 @@ impl AccountsDb {
 
     /// Call clean_accounts() with the common parameters that tests/benches use.
     pub fn clean_accounts_for_tests(&self) {
-        self.clean_accounts(None, false, None, &EpochSchedule::default())
+        self.clean_accounts(None, false, &EpochSchedule::default())
     }
 
     /// called with cli argument to verify refcounts are correct on all accounts
@@ -3186,7 +3190,6 @@ impl AccountsDb {
         &self,
         max_clean_root_inclusive: Option<Slot>,
         is_startup: bool,
-        last_full_snapshot_slot: Option<Slot>,
         epoch_schedule: &EpochSchedule,
     ) {
         if self.exhaustively_verify_refcounts {
@@ -3206,7 +3209,6 @@ impl AccountsDb {
         let (mut candidates, min_dirty_slot) = self.construct_candidate_clean_keys(
             max_clean_root_inclusive,
             is_startup,
-            last_full_snapshot_slot,
             &mut key_timings,
             epoch_schedule,
         );
@@ -3417,7 +3419,6 @@ impl AccountsDb {
         let mut purge_filter = Measure::start("purge_filter");
         self.filter_zero_lamport_clean_for_incremental_snapshots(
             max_clean_root_inclusive,
-            last_full_snapshot_slot,
             &store_counts,
             &mut purges_zero_lamports,
         );
@@ -3683,10 +3684,10 @@ impl AccountsDb {
     fn filter_zero_lamport_clean_for_incremental_snapshots(
         &self,
         max_clean_root_inclusive: Option<Slot>,
-        last_full_snapshot_slot: Option<Slot>,
         store_counts: &HashMap<Slot, (usize, HashSet<Pubkey>)>,
         purges_zero_lamports: &mut HashMap<Pubkey, (SlotList<AccountInfo>, RefCount)>,
     ) {
+        let last_full_snapshot_slot = self.last_full_snapshot_slot();
         let should_filter_for_incremental_snapshots = max_clean_root_inclusive.unwrap_or(Slot::MAX)
             > last_full_snapshot_slot.unwrap_or(Slot::MAX);
         assert!(
@@ -4858,7 +4859,6 @@ impl AccountsDb {
     pub fn shrink_all_slots(
         &self,
         is_startup: bool,
-        last_full_snapshot_slot: Option<Slot>,
         epoch_schedule: &EpochSchedule,
         newest_slot_skip_shrink_inclusive: Option<Slot>,
     ) {
@@ -4882,12 +4882,8 @@ impl AccountsDb {
         // slots > last_full_snapshot_slot.
         let maybe_clean = || {
             if self.dirty_stores.len() > DIRTY_STORES_CLEANING_THRESHOLD {
-                self.clean_accounts(
-                    last_full_snapshot_slot,
-                    is_startup,
-                    last_full_snapshot_slot,
-                    epoch_schedule,
-                );
+                let last_full_snapshot_slot = self.last_full_snapshot_slot();
+                self.clean_accounts(last_full_snapshot_slot, is_startup, epoch_schedule);
             }
         };
 
@@ -8532,6 +8528,16 @@ impl AccountsDb {
         (result, slots)
     }
 
+    /// Returns the last full snapshot slot
+    pub fn last_full_snapshot_slot(&self) -> Option<Slot> {
+        self.last_full_snapshot_slot.read()
+    }
+
+    /// Sets the last full snapshot slot to `slot`
+    pub fn set_last_full_snapshot_slot(&self, slot: Slot) {
+        *self.last_full_snapshot_slot.lock_write() = Some(slot);
+    }
+
     /// return Some(lamports_to_top_off) if 'account' would collect rent
     fn stats_for_rent_payers(
         pubkey: &Pubkey,
@@ -11191,13 +11197,13 @@ pub mod tests {
         // updates in later slots in slot 1
         assert_eq!(accounts.alive_account_count_in_slot(0), 1);
         assert_eq!(accounts.alive_account_count_in_slot(1), 1);
-        accounts.clean_accounts(Some(0), false, None, &EpochSchedule::default());
+        accounts.clean_accounts(Some(0), false, &EpochSchedule::default());
         assert_eq!(accounts.alive_account_count_in_slot(0), 1);
         assert_eq!(accounts.alive_account_count_in_slot(1), 1);
         assert!(accounts.accounts_index.contains_with(&pubkey, None, None));
 
         // Now the account can be cleaned up
-        accounts.clean_accounts(Some(1), false, None, &EpochSchedule::default());
+        accounts.clean_accounts(Some(1), false, &EpochSchedule::default());
         assert_eq!(accounts.alive_account_count_in_slot(0), 0);
         assert_eq!(accounts.alive_account_count_in_slot(1), 0);
 
@@ -12100,7 +12106,7 @@ pub mod tests {
                 accounts.shrink_candidate_slots(&epoch_schedule);
             }
 
-            accounts.shrink_all_slots(*startup, None, &EpochSchedule::default(), None);
+            accounts.shrink_all_slots(*startup, &EpochSchedule::default(), None);
         }
     }
 
@@ -12158,7 +12164,7 @@ pub mod tests {
         );
 
         // Now, do full-shrink.
-        accounts.shrink_all_slots(false, None, &EpochSchedule::default(), None);
+        accounts.shrink_all_slots(false, &EpochSchedule::default(), None);
         assert_eq!(
             pubkey_count_after_shrink,
             accounts.all_account_count_in_accounts_file(shrink_slot)
@@ -12647,7 +12653,7 @@ pub mod tests {
         db.add_root_and_flush_write_cache(1);
 
         // Only clean zero lamport accounts up to slot 0
-        db.clean_accounts(Some(0), false, None, &EpochSchedule::default());
+        db.clean_accounts(Some(0), false, &EpochSchedule::default());
 
         // Should still be able to find zero lamport account in slot 1
         assert_eq!(
@@ -13800,7 +13806,7 @@ pub mod tests {
         db.calculate_accounts_delta_hash(1);
 
         // Clean to remove outdated entry from slot 0
-        db.clean_accounts(Some(1), false, None, &EpochSchedule::default());
+        db.clean_accounts(Some(1), false, &EpochSchedule::default());
 
         // Shrink Slot 0
         {
@@ -13819,7 +13825,7 @@ pub mod tests {
         // Should be one store before clean for slot 0
         db.get_and_assert_single_storage(0);
         db.calculate_accounts_delta_hash(2);
-        db.clean_accounts(Some(2), false, None, &EpochSchedule::default());
+        db.clean_accounts(Some(2), false, &EpochSchedule::default());
 
         // No stores should exist for slot 0 after clean
         assert_no_storages_at_slot(&db, 0);
@@ -14676,8 +14682,9 @@ pub mod tests {
         assert!(db.storage.get_slot_storage_entry(slot).is_none());
     }
 
-    // Test to make sure `clean_accounts()` works properly with the `last_full_snapshot_slot`
-    // parameter.  Basically:
+    // Test to make sure `clean_accounts()` works properly with `last_full_snapshot_slot`
+    //
+    // Basically:
     //
     // - slot 1: set Account1's balance to non-zero
     // - slot 2: set Account1's balance to a different non-zero amount
@@ -14716,13 +14723,16 @@ pub mod tests {
 
             assert_eq!(accounts_db.ref_count_for_pubkey(&pubkey), 3);
 
-            accounts_db.clean_accounts(Some(slot2), false, Some(slot2), &EpochSchedule::default());
+            accounts_db.set_last_full_snapshot_slot(slot2);
+            accounts_db.clean_accounts(Some(slot2), false, &EpochSchedule::default());
             assert_eq!(accounts_db.ref_count_for_pubkey(&pubkey), 2);
 
-            accounts_db.clean_accounts(None, false, Some(slot2), &EpochSchedule::default());
+            accounts_db.set_last_full_snapshot_slot(slot2);
+            accounts_db.clean_accounts(None, false, &EpochSchedule::default());
             assert_eq!(accounts_db.ref_count_for_pubkey(&pubkey), 1);
 
-            accounts_db.clean_accounts(None, false, Some(slot3), &EpochSchedule::default());
+            accounts_db.set_last_full_snapshot_slot(slot3);
+            accounts_db.clean_accounts(None, false, &EpochSchedule::default());
             assert_eq!(accounts_db.ref_count_for_pubkey(&pubkey), 0);
         }
     );
@@ -14750,9 +14760,11 @@ pub mod tests {
             purges_zero_lamports.insert(pubkey, (vec![(slot, account_info)], 1));
 
             let accounts_db = AccountsDb::new_single_for_tests();
+            if let Some(last_full_snapshot_slot) = test_params.last_full_snapshot_slot {
+                accounts_db.set_last_full_snapshot_slot(last_full_snapshot_slot);
+            }
             accounts_db.filter_zero_lamport_clean_for_incremental_snapshots(
                 test_params.max_clean_root,
-                test_params.last_full_snapshot_slot,
                 &store_counts,
                 &mut purges_zero_lamports,
             );
@@ -17019,7 +17031,7 @@ pub mod tests {
 
         // calculate the full accounts hash
         let full_accounts_hash = {
-            accounts_db.clean_accounts(Some(slot - 1), false, None, &EpochSchedule::default());
+            accounts_db.clean_accounts(Some(slot - 1), false, &EpochSchedule::default());
             let (storages, _) = accounts_db.get_snapshot_storages(..=slot);
             let storages = SortedStorages::new(&storages);
             accounts_db.calculate_accounts_hash(
@@ -17084,12 +17096,8 @@ pub mod tests {
 
         // calculate the incremental accounts hash
         let incremental_accounts_hash = {
-            accounts_db.clean_accounts(
-                Some(slot - 1),
-                false,
-                Some(full_accounts_hash_slot),
-                &EpochSchedule::default(),
-            );
+            accounts_db.set_last_full_snapshot_slot(full_accounts_hash_slot);
+            accounts_db.clean_accounts(Some(slot - 1), false, &EpochSchedule::default());
             let (storages, _) =
                 accounts_db.get_snapshot_storages(full_accounts_hash_slot + 1..=slot);
             let storages = SortedStorages::new(&storages);

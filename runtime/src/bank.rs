@@ -5861,7 +5861,6 @@ impl Bank {
                 self.rc.accounts.accounts_db.clean_accounts(
                     Some(last_full_snapshot_slot),
                     true,
-                    Some(last_full_snapshot_slot),
                     self.epoch_schedule(),
                 );
                 info!("Cleaning... Done.");
@@ -5876,7 +5875,6 @@ impl Bank {
                 info!("Shrinking...");
                 self.rc.accounts.accounts_db.shrink_all_slots(
                     true,
-                    Some(last_full_snapshot_slot),
                     self.epoch_schedule(),
                     // we cannot allow the snapshot slot to be shrunk
                     Some(self.slot()),
@@ -6149,7 +6147,7 @@ impl Bank {
     //
     // This fn is meant to be called by the snapshot handler in Accounts Background Service.  If
     // calling from elsewhere, ensure the same invariants hold/expectations are met.
-    pub(crate) fn clean_accounts(&self, last_full_snapshot_slot: Option<Slot>) {
+    pub(crate) fn clean_accounts(&self) {
         // Don't clean the slot we're snapshotting because it may have zero-lamport
         // accounts that were included in the bank delta hash when the bank was frozen,
         // and if we clean them here, any newly created snapshot's hash for this bank
@@ -6161,7 +6159,6 @@ impl Bank {
         self.rc.accounts.accounts_db.clean_accounts(
             Some(highest_slot_to_clean),
             false,
-            last_full_snapshot_slot,
             self.epoch_schedule(),
         );
     }
