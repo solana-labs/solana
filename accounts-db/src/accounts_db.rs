@@ -7778,10 +7778,11 @@ impl AccountsDb {
 
         if Self::should_not_shrink(alive_bytes, total_bytes) {
             trace!(
-                "shrink_slot_forced ({}): not able to shrink at all: alive/stored: {} ({}b / {}b) save: {}",
+                "shrink_slot_forced ({}): not able to shrink at all: alive/stored: {}/{} ({}b / {}b) save: {}",
                 slot,
                 alive_count,
                 stored_count,
+                alive_bytes,
                 total_bytes,
                 total_bytes.saturating_sub(alive_bytes),
             );
