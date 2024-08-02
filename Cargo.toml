@@ -129,6 +129,7 @@ members = [
     "transaction-dos",
     "transaction-metrics-tracker",
     "transaction-status",
+    "transaction-view",
     "turbine",
     "type-overrides",
     "udp-client",
@@ -159,6 +160,7 @@ edition = "2021"
 
 [workspace.dependencies]
 Inflector = "0.11.4"
+agave-transaction-view = { path = "transaction-view", version = "=2.1.0" }
 aquamarine = "0.3.3"
 aes-gcm-siv = "0.11.1"
 ahash = "0.8.10"

@@ -218,6 +218,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "agave-transaction-view"
+version = "2.1.0"
+dependencies = [
+ "agave-transaction-view",
+ "bincode",
+ "criterion",
+ "solana-sdk",
+]
+
+[[package]]
 name = "agave-validator"
 version = "2.1.0"
 dependencies = [

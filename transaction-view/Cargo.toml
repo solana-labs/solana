@@ -1,0 +1,26 @@
+[package]
+name = "agave-transaction-view"
+description = "Agave TranactionView"
+documentation = "https://docs.rs/agave-transaction-view"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+solana-sdk = { workspace = true }
+
+[dev-dependencies]
+# See order-crates-for-publishing.py for using this unusual `path = "."`
+agave-transaction-view = { path = ".", features = ["dev-context-only-utils"] }
+bincode = { workspace = true }
+criterion = { workspace = true }
+
+[features]
+dev-context-only-utils = []
+
+[[bench]]
+name = "bytes"
+harness = false
