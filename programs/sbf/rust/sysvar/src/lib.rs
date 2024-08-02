@@ -29,7 +29,7 @@ pub fn process_instruction(
         sysvar::clock::id().log();
         let clock = Clock::from_account_info(&accounts[2]).unwrap();
         assert_ne!(clock, Clock::default());
-        let got_clock = Clock::get().unwrap();
+        let got_clock = Clock::get()?;
         assert_eq!(clock, got_clock);
     }
 
@@ -39,7 +39,7 @@ pub fn process_instruction(
         sysvar::epoch_schedule::id().log();
         let epoch_schedule = EpochSchedule::from_account_info(&accounts[3]).unwrap();
         assert_eq!(epoch_schedule, EpochSchedule::default());
-        let got_epoch_schedule = EpochSchedule::get().unwrap();
+        let got_epoch_schedule = EpochSchedule::get()?;
         assert_eq!(epoch_schedule, got_epoch_schedule);
     }
 
@@ -47,9 +47,8 @@ pub fn process_instruction(
     msg!("Instructions identifier:");
     sysvar::instructions::id().log();
     assert_eq!(*accounts[4].owner, sysvar::id());
-    let index = instructions::load_current_index_checked(&accounts[4]).unwrap();
-    let instruction =
-        instructions::load_instruction_at_checked(index as usize, &accounts[4]).unwrap();
+    let index = instructions::load_current_index_checked(&accounts[4])?;
+    let instruction = instructions::load_instruction_at_checked(index as usize, &accounts[4])?;
     assert_eq!(0, index);
     assert_eq!(
         instruction,
@@ -86,7 +85,7 @@ pub fn process_instruction(
         msg!("Rent identifier:");
         sysvar::rent::id().log();
         let rent = Rent::from_account_info(&accounts[6]).unwrap();
-        let got_rent = Rent::get().unwrap();
+        let got_rent = Rent::get()?;
         assert_eq!(rent, got_rent);
     }
 
@@ -116,7 +115,7 @@ pub fn process_instruction(
         msg!("EpochRewards identifier:");
         sysvar::epoch_rewards::id().log();
         let epoch_rewards = EpochRewards::from_account_info(&accounts[10]).unwrap();
-        let got_epoch_rewards = EpochRewards::get().unwrap();
+        let got_epoch_rewards = EpochRewards::get()?;
         assert_eq!(epoch_rewards, got_epoch_rewards);
     }
 
