@@ -1520,7 +1520,7 @@ impl ClusterInfo {
     /// max_chunk_size.
     /// Note: some messages cannot be contained within that size so in the worst case this returns
     /// N nested Vecs with 1 item each.
-    fn split_gossip_messages<I, T>(
+    pub fn split_gossip_messages<I, T>(
         max_chunk_size: usize,
         data_feed: I,
     ) -> impl Iterator<Item = Vec<T>>
