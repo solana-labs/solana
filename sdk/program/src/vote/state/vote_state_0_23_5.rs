@@ -75,8 +75,9 @@ mod tests {
         let target_vote_state_versions = VoteStateVersions::V0_23_5(Box::new(target_vote_state));
         let vote_state_buf = bincode::serialize(&target_vote_state_versions).unwrap();
 
-        let mut test_vote_state = VoteState::default();
-        VoteState::deserialize_into(&vote_state_buf, &mut test_vote_state).unwrap();
+        let mut test_vote_state = MaybeUninit::uninit();
+        VoteState::deserialize_into_uninit(&vote_state_buf, &mut test_vote_state).unwrap();
+        let test_vote_state = unsafe { test_vote_state.assume_init() };
 
         assert_eq!(
             target_vote_state_versions.convert_to_current(),
@@ -97,8 +98,9 @@ mod tests {
             let vote_state_buf = bincode::serialize(&target_vote_state_versions).unwrap();
             let target_vote_state = target_vote_state_versions.convert_to_current();
 
-            let mut test_vote_state = VoteState::default();
-            VoteState::deserialize_into(&vote_state_buf, &mut test_vote_state).unwrap();
+            let mut test_vote_state = MaybeUninit::uninit();
+            VoteState::deserialize_into_uninit(&vote_state_buf, &mut test_vote_state).unwrap();
+            let test_vote_state = unsafe { test_vote_state.assume_init() };
 
             assert_eq!(target_vote_state, test_vote_state);
         }
