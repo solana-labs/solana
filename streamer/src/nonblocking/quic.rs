@@ -37,6 +37,7 @@ use {
         signature::{Keypair, Signature},
         timing,
     },
+    solana_metrics::datapoint_info,
     solana_transaction_metrics_tracker::signature_if_should_track_packet,
     std::{
         iter::repeat_with,
@@ -260,7 +261,7 @@ async fn run_server(
     debug!("spawn quic server");
     let mut last_datapoint = Instant::now();
     let unstaked_connection_table: Arc<Mutex<ConnectionTable>> =
-        Arc::new(Mutex::new(ConnectionTable::new()));
+        Arc::new(Mutex::new(ConnectionTable::new(name)));
     let stream_load_ema = Arc::new(StakedStreamLoadEMA::new(
         stats.clone(),
         max_unstaked_connections,
@@ -270,7 +271,7 @@ async fn run_server(
         .quic_endpoints_count
         .store(incoming.len(), Ordering::Relaxed);
     let staked_connection_table: Arc<Mutex<ConnectionTable>> =
-        Arc::new(Mutex::new(ConnectionTable::new()));
+        Arc::new(Mutex::new(ConnectionTable::new(name)));
     let (sender, receiver) = async_unbounded();
     tokio::spawn(packet_batch_sender(
         packet_sender,
@@ -1278,35 +1279,54 @@ impl ConnectionTableKey {
 
 // Map of IP to list of connection entries
 struct ConnectionTable {
-    table: IndexMap<ConnectionTableKey, Vec<ConnectionEntry>>,
+    table: IndexMap<ConnectionTableKey, (Vec<ConnectionEntry>, usize)>,
     total_size: usize,
+    period: usize,
+    name: &'static str,
 }
 
 // Prune the connection which has the oldest update
 // Return number pruned
 impl ConnectionTable {
-    fn new() -> Self {
+    fn new(name: &'static str,) -> Self {
         Self {
             table: IndexMap::default(),
             total_size: 0,
+            period: 0,
+            name,
         }
     }
 
+    pub fn report(&self, period: usize) {
+        datapoint_info!(
+            self.name,
+            (
+                "connection_churn_period",
+                period - self.period,
+                i64
+            ),
+        );
+        }
+
     fn prune_oldest(&mut self, max_size: usize) -> usize {
         let mut num_pruned = 0;
-        let key = |(_, connections): &(_, &Vec<_>)| {
-            connections.iter().map(ConnectionEntry::last_update).min()
+        let key = |(_, connections): &(_, &(Vec<_>, _))| {
+            connections.0.iter().map(ConnectionEntry::last_update).min()
         };
         while self.total_size.saturating_sub(num_pruned) > max_size {
             match self.table.values().enumerate().min_by_key(key) {
                 None => break,
                 Some((index, connections)) => {
-                    num_pruned += connections.len();
-                    self.table.swap_remove_index(index);
+                    num_pruned += connections.0.len();
+                    if let Some(entry) = self.table.swap_remove_index(index) {
+                        // todo: fix
+                        self.report(entry.1.1);
+                    }
                 }
             }
         }
         self.total_size = self.total_size.saturating_sub(num_pruned);
+        self.period +=1;
         num_pruned
     }
 
@@ -1322,7 +1342,7 @@ impl ConnectionTable {
                 repeat_with(move || rng.gen_range(0..size))
             })
             .map(|index| {
-                let connection = self.table[index].first();
+                let connection = self.table[index].0.first();
                 let stake = connection.map(|connection| connection.stake());
                 (index, stake)
             })
@@ -1330,9 +1350,12 @@ impl ConnectionTable {
             .min_by_key(|&(_, stake)| stake)
             .filter(|&(_, stake)| stake < Some(threshold_stake))
             .and_then(|(index, _)| self.table.swap_remove_index(index))
-            .map(|(_, connections)| connections.len())
+            .map(|(_, connections)| {
+                self.report(connections.1);
+                connections.0.len()})
             .unwrap_or_default();
         self.total_size = self.total_size.saturating_sub(num_pruned);
+        self.period += 1;
         num_pruned
     }
 
@@ -1349,20 +1372,20 @@ impl ConnectionTable {
         Arc<AtomicBool>,
         Arc<ConnectionStreamCounter>,
     )> {
-        let connection_entry = self.table.entry(key).or_default();
+        let connection_entry = self.table.entry(key).or_insert_with(||(Vec::new(), self.period));
         let has_connection_capacity = connection_entry
-            .len()
+            .0.len()
             .checked_add(1)
             .map(|c| c <= max_connections_per_peer)
             .unwrap_or(false);
         if has_connection_capacity {
             let exit = Arc::new(AtomicBool::new(false));
             let last_update = Arc::new(AtomicU64::new(last_update));
-            let stream_counter = connection_entry
+            let stream_counter = connection_entry.0
                 .first()
                 .map(|entry| entry.stream_counter.clone())
                 .unwrap_or(Arc::new(ConnectionStreamCounter::new()));
-            connection_entry.push(ConnectionEntry::new(
+            connection_entry.0.push(ConnectionEntry::new(
                 exit.clone(),
                 peer_type,
                 last_update.clone(),
@@ -1371,6 +1394,7 @@ impl ConnectionTable {
                 stream_counter.clone(),
             ));
             self.total_size += 1;
+            self.period += 1;
             Some((last_update, exit, stream_counter))
         } else {
             if let Some(connection) = connection {
@@ -1385,11 +1409,12 @@ impl ConnectionTable {
 
     // Returns number of connections that were removed
     fn remove_connection(&mut self, key: ConnectionTableKey, port: u16, stable_id: usize) -> usize {
-        if let Entry::Occupied(mut e) = self.table.entry(key) {
+        let (connections_removed, period_valid, period) = if let Entry::Occupied(mut e) = self.table.entry(key) {
             let e_ref = e.get_mut();
-            let old_size = e_ref.len();
+            let maybe_removed_period = e_ref.1;
+            let old_size = e_ref.0.len();
 
-            e_ref.retain(|connection_entry| {
+            e_ref.0.retain(|connection_entry| {
                 // Retain the connection entry if the port is different, or if the connection's
                 // stable_id doesn't match the provided stable_id.
                 // (Some unit tests do not fill in a valid connection in the table. To support that,
@@ -1402,16 +1427,25 @@ impl ConnectionTable {
                         .and_then(|connection| (connection.stable_id() != stable_id).then_some(0))
                         .is_some()
             });
-            let new_size = e_ref.len();
-            if e_ref.is_empty() {
+            let new_size = e_ref.0.len();
+            let period_valid = e_ref.0.is_empty();
+            if e_ref.0.is_empty() {
                 e.swap_remove_entry();
             }
             let connections_removed = old_size.saturating_sub(new_size);
             self.total_size = self.total_size.saturating_sub(connections_removed);
-            connections_removed
+            if connections_removed !=0 { self.period += 1;}
+            (connections_removed, period_valid, maybe_removed_period)
         } else {
-            0
+            (0, false, 0)
+        };
+        // todo: this is so bad, fix it T_T. This is a hack to avoid borrowing
+        // self multiple times in the call to report, since in the scope of the if
+        // statement we have borrowed self as mut
+        if period_valid {
+            self.report(period);
         }
+        connections_removed
     }
 }
 
@@ -2062,7 +2096,7 @@ pub mod test {
     fn test_prune_table_with_ip() {
         use std::net::Ipv4Addr;
         solana_logger::setup();
-        let mut table = ConnectionTable::new();
+        let mut table = ConnectionTable::new("test_prune_table_with_ip_connection_table");
         let mut num_entries = 5;
         let max_connections_per_peer = 10;
         let sockets: Vec<_> = (0..num_entries)
@@ -2096,7 +2130,7 @@ pub mod test {
         let pruned = table.prune_oldest(new_size);
         assert_eq!(pruned, num_entries as usize - new_size);
         for v in table.table.values() {
-            for x in v {
+            for x in &v.0 {
                 assert!((x.last_update() + 1) >= (num_entries as u64 - new_size as u64));
             }
         }
@@ -2111,7 +2145,7 @@ pub mod test {
     #[test]
     fn test_prune_table_with_unique_pubkeys() {
         solana_logger::setup();
-        let mut table = ConnectionTable::new();
+        let mut table = ConnectionTable::new("test_prune_table_with_unique_pubkeys_connection_table");
 
         // We should be able to add more entries than max_connections_per_peer, since each entry is
         // from a different peer pubkey.
@@ -2146,7 +2180,7 @@ pub mod test {
     #[test]
     fn test_prune_table_with_non_unique_pubkeys() {
         solana_logger::setup();
-        let mut table = ConnectionTable::new();
+        let mut table = ConnectionTable::new("test_prune_table_with_non_unique_pubkeys_connection_table");
 
         let max_connections_per_peer = 10;
         let pubkey = Pubkey::new_unique();
@@ -2206,7 +2240,7 @@ pub mod test {
     fn test_prune_table_random() {
         use std::net::Ipv4Addr;
         solana_logger::setup();
-        let mut table = ConnectionTable::new();
+        let mut table = ConnectionTable::new("test_prune_table_random_connection_table");
         let num_entries = 5;
         let max_connections_per_peer = 10;
         let sockets: Vec<_> = (0..num_entries)
@@ -2243,7 +2277,7 @@ pub mod test {
     fn test_remove_connections() {
         use std::net::Ipv4Addr;
         solana_logger::setup();
-        let mut table = ConnectionTable::new();
+        let mut table = ConnectionTable::new("test_remove_connections_connection_table");
         let num_ips = 5;
         let max_connections_per_peer = 10;
         let mut sockets: Vec<_> = (0..num_ips)
