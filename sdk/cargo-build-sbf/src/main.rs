@@ -156,7 +156,7 @@ fn find_installed_platform_tools() -> Vec<String> {
 }
 
 fn get_latest_platform_tools_version() -> Result<String, String> {
-    let url = "https://github.com/solana-labs/platform-tools/releases/latest";
+    let url = "https://github.com/anza-xyz/platform-tools/releases/latest";
     let resp = reqwest::blocking::get(url).map_err(|err| format!("Failed to GET {url}: {err}"))?;
     let path = std::path::Path::new(resp.url().path());
     let version = path.file_name().unwrap().to_string_lossy().to_string();
@@ -618,7 +618,7 @@ fn build_solana_package(
     install_if_missing(
         config,
         package,
-        "https://github.com/solana-labs/platform-tools/releases/download",
+        "https://github.com/anza-xyz/platform-tools/releases/download",
         platform_tools_download_file_name.as_str(),
         &target_path,
     )
@@ -913,7 +913,7 @@ fn main() {
 
     // The following line is scanned by CI configuration script to
     // separate cargo caches according to the version of platform-tools.
-    let platform_tools_version = String::from("v1.41");
+    let platform_tools_version = String::from("v1.42");
     let rust_base_version = get_base_rust_version(platform_tools_version.as_str());
     let version = format!(
         "{}\nplatform-tools {}\n{}",
