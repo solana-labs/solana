@@ -4818,7 +4818,8 @@ impl AccountsDb {
             return 0;
         }
 
-        let _guard = self.active_stats.activate(ActiveStatItem::Shrink);
+        let _guard = (!shrink_slots.is_empty())
+            .then_some(|| self.active_stats.activate(ActiveStatItem::Shrink));
 
         let mut measure_shrink_all_candidates = Measure::start("shrink_all_candidate_slots-ms");
         let num_candidates = shrink_slots.len();
