@@ -508,7 +508,8 @@ impl Tower {
         }
     }
 
-    pub(crate) fn is_slot_confirmed(
+    #[cfg(test)]
+    fn is_slot_confirmed(
         &self,
         slot: Slot,
         voted_stakes: &VotedStakes,

@@ -126,12 +126,6 @@ enum ForkReplayMode {
     Parallel(ThreadPool),
 }
 
-#[derive(PartialEq, Eq, Debug)]
-enum ConfirmationType {
-    SupermajorityVoted,
-    DuplicateConfirmed,
-}
-
 enum GenerateVoteTxResult {
     // non voting validator, not eligible for refresh
     NonVoting,
@@ -143,31 +137,6 @@ enum GenerateVoteTxResult {
 impl GenerateVoteTxResult {
     fn is_non_voting(&self) -> bool {
         matches!(self, Self::NonVoting)
-    }
-}
-
-#[derive(PartialEq, Eq, Debug)]
-struct ConfirmedSlot {
-    slot: Slot,
-    frozen_hash: Hash,
-    confirmation_type: ConfirmationType,
-}
-
-impl ConfirmedSlot {
-    fn new_supermajority_voted(slot: Slot, frozen_hash: Hash) -> Self {
-        Self {
-            slot,
-            frozen_hash,
-            confirmation_type: ConfirmationType::SupermajorityVoted,
-        }
-    }
-
-    fn new_duplicate_confirmed_slot(slot: Slot, frozen_hash: Hash) -> Self {
-        Self {
-            slot,
-            frozen_hash,
-            confirmation_type: ConfirmationType::DuplicateConfirmed,
-        }
     }
 }
 
@@ -864,7 +833,7 @@ impl ReplayStage {
                 let mut compute_slot_stats_time = Measure::start("compute_slot_stats_time");
                 for slot in newly_computed_slot_stats {
                     let fork_stats = progress.get_fork_stats(slot).unwrap();
-                    let confirmed_slots = Self::confirm_forks(
+                    let duplicate_confirmed_forks = Self::tower_duplicate_confirmed_forks(
                         &tower,
                         &fork_stats.voted_stakes,
                         fork_stats.total_stake,
@@ -872,8 +841,8 @@ impl ReplayStage {
                         &bank_forks,
                     );
 
-                    Self::mark_slots_confirmed(
-                        &confirmed_slots,
+                    Self::mark_slots_duplicate_confirmed(
+                        &duplicate_confirmed_forks,
                         &blockstore,
                         &bank_forks,
                         &mut progress,
@@ -4117,8 +4086,8 @@ impl ReplayStage {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn mark_slots_confirmed(
-        confirmed_slots: &[ConfirmedSlot],
+    fn mark_slots_duplicate_confirmed(
+        confirmed_slots: &[(Slot, Hash)],
         blockstore: &Blockstore,
         bank_forks: &RwLock<BankForks>,
         progress: &mut ProgressMap,
@@ -4131,36 +4100,14 @@ impl ReplayStage {
         duplicate_confirmed_slots: &mut DuplicateConfirmedSlots,
     ) {
         let root_slot = bank_forks.read().unwrap().root();
-        for ConfirmedSlot {
-            slot,
-            frozen_hash,
-            confirmation_type,
-        } in confirmed_slots.iter()
-        {
-            if *confirmation_type == ConfirmationType::SupermajorityVoted {
-                // This case should be guaranteed as false by confirm_forks()
-                if let Some(false) = progress.is_supermajority_confirmed(*slot) {
-                    // Because supermajority confirmation will iterate through and update the
-                    // subtree in fork choice, only incur this cost if the slot wasn't already
-                    // confirmed
-                    progress.set_supermajority_confirmed_slot(*slot);
-                    // If the slot was confirmed, then it must be frozen. Otherwise, we couldn't
-                    // have replayed any of its descendants and figured out it was confirmed.
-                    assert!(*frozen_hash != Hash::default());
-                }
-            }
+        for (slot, frozen_hash) in confirmed_slots.iter() {
+            assert!(*frozen_hash != Hash::default());
 
             if *slot <= root_slot {
                 continue;
             }
 
-            match confirmation_type {
-                ConfirmationType::SupermajorityVoted => (),
-                ConfirmationType::DuplicateConfirmed => (),
-                #[allow(unreachable_patterns)]
-                _ => panic!("programmer error"),
-            }
-
+            progress.set_duplicate_confirmed_hash(*slot, *frozen_hash);
             if let Some(prev_hash) = duplicate_confirmed_slots.insert(*slot, *frozen_hash) {
                 assert_eq!(prev_hash, *frozen_hash);
                 // Already processed this signal
@@ -4187,60 +4134,53 @@ impl ReplayStage {
         }
     }
 
-    fn confirm_forks(
+    fn tower_duplicate_confirmed_forks(
         tower: &Tower,
         voted_stakes: &VotedStakes,
         total_stake: Stake,
         progress: &ProgressMap,
         bank_forks: &RwLock<BankForks>,
-    ) -> Vec<ConfirmedSlot> {
-        let mut confirmed_forks = vec![];
+    ) -> Vec<(Slot, Hash)> {
+        let mut duplicate_confirmed_forks = vec![];
         for (slot, prog) in progress.iter() {
-            if !prog.fork_stats.is_supermajority_confirmed {
-                let bank = bank_forks
-                    .read()
-                    .unwrap()
-                    .get(*slot)
-                    .expect("bank in progress must exist in BankForks")
-                    .clone();
-                let duration = prog
-                    .replay_stats
-                    .read()
-                    .unwrap()
-                    .started
-                    .elapsed()
-                    .as_millis();
-                if bank.is_frozen() && tower.is_slot_confirmed(*slot, voted_stakes, total_stake) {
-                    info!("validator fork confirmed {} {}ms", *slot, duration);
-                    datapoint_info!("validator-confirmation", ("duration_ms", duration, i64));
-                    confirmed_forks
-                        .push(ConfirmedSlot::new_supermajority_voted(*slot, bank.hash()));
-                } else if bank.is_frozen()
-                    && tower.is_slot_duplicate_confirmed(*slot, voted_stakes, total_stake)
-                {
-                    info!(
-                        "validator fork duplicate confirmed {} {}ms",
-                        *slot, duration
-                    );
-                    datapoint_info!(
-                        "validator-duplicate-confirmation",
-                        ("duration_ms", duration, i64)
-                    );
-                    confirmed_forks.push(ConfirmedSlot::new_duplicate_confirmed_slot(
-                        *slot,
-                        bank.hash(),
-                    ));
-                } else {
-                    debug!(
-                        "validator fork not confirmed {} {}ms {:?}",
-                        *slot,
-                        duration,
-                        voted_stakes.get(slot)
-                    );
-                }
+            if prog.fork_stats.duplicate_confirmed_hash.is_some() {
+                continue;
+            }
+            let bank = bank_forks
+                .read()
+                .unwrap()
+                .get(*slot)
+                .expect("bank in progress must exist in BankForks");
+            let duration = prog
+                .replay_stats
+                .read()
+                .unwrap()
+                .started
+                .elapsed()
+                .as_millis();
+            if !bank.is_frozen() {
+                continue;
+            }
+            if tower.is_slot_duplicate_confirmed(*slot, voted_stakes, total_stake) {
+                info!(
+                    "validator fork duplicate confirmed {} {}ms",
+                    *slot, duration
+                );
+                datapoint_info!(
+                    "validator-duplicate-confirmation",
+                    ("duration_ms", duration, i64)
+                );
+                duplicate_confirmed_forks.push((*slot, bank.hash()));
+            } else {
+                debug!(
+                    "validator fork not confirmed {} {}ms {:?}",
+                    *slot,
+                    duration,
+                    voted_stakes.get(slot)
+                );
             }
         }
-        confirmed_forks
+        duplicate_confirmed_forks
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -5552,7 +5492,7 @@ pub(crate) mod tests {
         // bank 1, so no slot should be confirmed.
         {
             let fork_progress = progress.get(&0).unwrap();
-            let confirmed_forks = ReplayStage::confirm_forks(
+            let confirmed_forks = ReplayStage::tower_duplicate_confirmed_forks(
                 &tower,
                 &fork_progress.fork_stats.voted_stakes,
                 fork_progress.fork_stats.total_stake,
@@ -5602,7 +5542,7 @@ pub(crate) mod tests {
         assert_eq!(newly_computed, vec![1]);
         {
             let fork_progress = progress.get(&1).unwrap();
-            let confirmed_forks = ReplayStage::confirm_forks(
+            let confirmed_forks = ReplayStage::tower_duplicate_confirmed_forks(
                 &tower,
                 &fork_progress.fork_stats.voted_stakes,
                 fork_progress.fork_stats.total_stake,
@@ -5610,10 +5550,7 @@ pub(crate) mod tests {
                 &bank_forks,
             );
             // No new stats should have been computed
-            assert_eq!(
-                confirmed_forks,
-                vec![ConfirmedSlot::new_supermajority_voted(0, bank0.hash())]
-            );
+            assert_eq!(confirmed_forks, vec![(0, bank0.hash())]);
         }
 
         let ancestors = bank_forks.read().unwrap().ancestors();
