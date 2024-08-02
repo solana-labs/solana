@@ -3631,83 +3631,23 @@ impl Bank {
         // Accumulate the transaction batch execution timings.
         timings.accumulate(&sanitized_output.execute_timings);
 
-        let mut signature_count = 0;
+        let ((), collect_logs_us) =
+            measure_us!(self.collect_logs(sanitized_txs, &sanitized_output.execution_results));
+        timings.saturating_add_in_place(ExecuteTimingType::CollectLogsUs, collect_logs_us);
 
+        let mut signature_count = 0;
         let mut executed_transactions_count: usize = 0;
         let mut executed_non_vote_transactions_count: usize = 0;
         let mut executed_with_successful_result_count: usize = 0;
         let err_count = &mut error_counters.total;
-        let transaction_log_collector_config =
-            self.transaction_log_collector_config.read().unwrap();
 
-        let ((), collect_logs_us) = measure_us!(for (execution_result, tx) in
-            sanitized_output.execution_results.iter().zip(sanitized_txs)
-        {
+        for (execution_result, tx) in sanitized_output.execution_results.iter().zip(sanitized_txs) {
             if let Some(debug_keys) = &self.transaction_debug_keys {
                 for key in tx.message().account_keys().iter() {
                     if debug_keys.contains(key) {
                         let result = execution_result.flattened_result();
                         info!("slot: {} result: {:?} tx: {:?}", self.slot, result, tx);
                         break;
-                    }
-                }
-            }
-
-            let is_vote = tx.is_simple_vote_transaction();
-
-            if execution_result.was_executed() // Skip log collection for unprocessed transactions
-                && transaction_log_collector_config.filter != TransactionLogCollectorFilter::None
-            {
-                let mut filtered_mentioned_addresses = Vec::new();
-                if !transaction_log_collector_config
-                    .mentioned_addresses
-                    .is_empty()
-                {
-                    for key in tx.message().account_keys().iter() {
-                        if transaction_log_collector_config
-                            .mentioned_addresses
-                            .contains(key)
-                        {
-                            filtered_mentioned_addresses.push(*key);
-                        }
-                    }
-                }
-
-                let store = match transaction_log_collector_config.filter {
-                    TransactionLogCollectorFilter::All => {
-                        !is_vote || !filtered_mentioned_addresses.is_empty()
-                    }
-                    TransactionLogCollectorFilter::AllWithVotes => true,
-                    TransactionLogCollectorFilter::None => false,
-                    TransactionLogCollectorFilter::OnlyMentionedAddresses => {
-                        !filtered_mentioned_addresses.is_empty()
-                    }
-                };
-
-                if store {
-                    if let Some(TransactionExecutionDetails {
-                        status,
-                        log_messages: Some(log_messages),
-                        ..
-                    }) = execution_result.details()
-                    {
-                        let mut transaction_log_collector =
-                            self.transaction_log_collector.write().unwrap();
-                        let transaction_log_index = transaction_log_collector.logs.len();
-
-                        transaction_log_collector.logs.push(TransactionLogInfo {
-                            signature: *tx.signature(),
-                            result: status.clone(),
-                            is_vote,
-                            log_messages: log_messages.clone(),
-                        });
-                        for key in filtered_mentioned_addresses.into_iter() {
-                            transaction_log_collector
-                                .mentioned_address_map
-                                .entry(key)
-                                .or_default()
-                                .push(transaction_log_index);
-                        }
                     }
                 }
             }
@@ -3719,7 +3659,7 @@ impl Bank {
                 signature_count += u64::from(tx.message().header().num_required_signatures);
                 executed_transactions_count += 1;
 
-                if !is_vote {
+                if !tx.is_simple_vote_transaction() {
                     executed_non_vote_transactions_count += 1;
                 }
             }
@@ -3735,8 +3675,7 @@ impl Bank {
                     *err_count += 1;
                 }
             }
-        });
-        timings.saturating_add_in_place(ExecuteTimingType::CollectLogsUs, collect_logs_us);
+        }
 
         LoadAndExecuteTransactionsOutput {
             execution_results: sanitized_output.execution_results,
@@ -3744,6 +3683,97 @@ impl Bank {
             executed_non_vote_transactions_count,
             executed_with_successful_result_count,
             signature_count,
+        }
+    }
+
+    fn collect_logs(
+        &self,
+        transactions: &[SanitizedTransaction],
+        execution_results: &[TransactionExecutionResult],
+    ) {
+        let transaction_log_collector_config =
+            self.transaction_log_collector_config.read().unwrap();
+        if transaction_log_collector_config.filter == TransactionLogCollectorFilter::None {
+            return;
+        }
+
+        let collected_logs: Vec<_> = execution_results
+            .iter()
+            .zip(transactions)
+            .filter_map(|(execution_result, transaction)| {
+                // Skip log collection for unprocessed transactions
+                let execution_details = execution_result.details()?;
+                Self::collect_transaction_logs(
+                    &transaction_log_collector_config,
+                    transaction,
+                    execution_details,
+                )
+            })
+            .collect();
+
+        if !collected_logs.is_empty() {
+            let mut transaction_log_collector = self.transaction_log_collector.write().unwrap();
+            for (log, filtered_mentioned_addresses) in collected_logs {
+                let transaction_log_index = transaction_log_collector.logs.len();
+                transaction_log_collector.logs.push(log);
+                for key in filtered_mentioned_addresses.into_iter() {
+                    transaction_log_collector
+                        .mentioned_address_map
+                        .entry(key)
+                        .or_default()
+                        .push(transaction_log_index);
+                }
+            }
+        }
+    }
+
+    fn collect_transaction_logs(
+        transaction_log_collector_config: &TransactionLogCollectorConfig,
+        transaction: &SanitizedTransaction,
+        execution_details: &TransactionExecutionDetails,
+    ) -> Option<(TransactionLogInfo, Vec<Pubkey>)> {
+        // Skip log collection if no log messages were recorded
+        let log_messages = execution_details.log_messages.as_ref()?;
+
+        let mut filtered_mentioned_addresses = Vec::new();
+        if !transaction_log_collector_config
+            .mentioned_addresses
+            .is_empty()
+        {
+            for key in transaction.message().account_keys().iter() {
+                if transaction_log_collector_config
+                    .mentioned_addresses
+                    .contains(key)
+                {
+                    filtered_mentioned_addresses.push(*key);
+                }
+            }
+        }
+
+        let is_vote = transaction.is_simple_vote_transaction();
+        let store = match transaction_log_collector_config.filter {
+            TransactionLogCollectorFilter::All => {
+                !is_vote || !filtered_mentioned_addresses.is_empty()
+            }
+            TransactionLogCollectorFilter::AllWithVotes => true,
+            TransactionLogCollectorFilter::None => false,
+            TransactionLogCollectorFilter::OnlyMentionedAddresses => {
+                !filtered_mentioned_addresses.is_empty()
+            }
+        };
+
+        if store {
+            Some((
+                TransactionLogInfo {
+                    signature: *transaction.signature(),
+                    result: execution_details.status.clone(),
+                    is_vote,
+                    log_messages: log_messages.clone(),
+                },
+                filtered_mentioned_addresses,
+            ))
+        } else {
+            None
         }
     }
 
