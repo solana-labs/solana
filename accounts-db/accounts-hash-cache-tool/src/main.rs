@@ -1,4 +1,5 @@
 use {
+    ahash::{HashMap, RandomState},
     bytemuck::Zeroable as _,
     clap::{
         crate_description, crate_name, value_t_or_exit, App, AppSettings, Arg, ArgMatches,
@@ -11,7 +12,6 @@ use {
     },
     std::{
         cmp::Ordering,
-        collections::HashMap,
         fs::{self, File, Metadata},
         io::{self, BufReader, Read},
         mem::size_of,
@@ -377,9 +377,9 @@ fn do_diff_dirs(
                             }
 
                             // if the binary data of the files are different, they are not equal
-                            let ahash_random_state = ahash::RandomState::new();
-                            let hash1 = ahash_random_state.hash_one(mmap1.as_ref());
-                            let hash2 = ahash_random_state.hash_one(mmap2.as_ref());
+                            let hasher = RandomState::new();
+                            let hash1 = hasher.hash_one(mmap1.as_ref());
+                            let hash2 = hasher.hash_one(mmap2.as_ref());
                             if hash1 != hash2 {
                                 return false;
                             }
