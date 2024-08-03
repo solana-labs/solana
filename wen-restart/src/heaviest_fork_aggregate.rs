@@ -44,7 +44,7 @@ impl HeaviestForkAggregate {
         let mut block_stake_map = HashMap::new();
         block_stake_map.insert(
             (my_heaviest_fork_slot, my_heaviest_fork_hash),
-            Self::validator_stake(epoch_stakes, my_pubkey),
+            epoch_stakes.node_id_to_stake(my_pubkey).unwrap_or(0),
         );
         Self {
             supermajority_threshold: wait_for_supermajority_threshold_percent as f64 / 100.0,
@@ -56,15 +56,6 @@ impl HeaviestForkAggregate {
             active_peers,
             active_peers_seen_supermajority: HashSet::new(),
         }
-    }
-
-    // TODO(wen): this will a function in separate EpochStakesMap class later.
-    fn validator_stake(epoch_stakes: &EpochStakes, pubkey: &Pubkey) -> u64 {
-        epoch_stakes
-            .node_id_to_vote_accounts()
-            .get(pubkey)
-            .map(|x| x.total_stake)
-            .unwrap_or_default()
     }
 
     pub(crate) fn aggregate_from_record(
@@ -110,7 +101,7 @@ impl HeaviestForkAggregate {
     ) -> Option<HeaviestForkRecord> {
         let total_stake = self.epoch_stakes.total_stake();
         let from = &received_heaviest_fork.from;
-        let sender_stake = Self::validator_stake(&self.epoch_stakes, from);
+        let sender_stake = self.epoch_stakes.node_id_to_stake(from).unwrap_or(0);
         if sender_stake == 0 {
             warn!(
                 "Gossip should not accept zero-stake RestartLastVotedFork from {:?}",
@@ -183,7 +174,7 @@ impl HeaviestForkAggregate {
     // TODO(wen): use better epoch stake and add a test later.
     pub(crate) fn total_active_stake(&self) -> u64 {
         self.active_peers.iter().fold(0, |sum: u64, pubkey| {
-            sum.saturating_add(Self::validator_stake(&self.epoch_stakes, pubkey))
+            sum.saturating_add(self.epoch_stakes.node_id_to_stake(pubkey).unwrap_or(0))
         })
     }
 
@@ -191,7 +182,7 @@ impl HeaviestForkAggregate {
         self.active_peers_seen_supermajority
             .iter()
             .fold(0, |sum: u64, pubkey| {
-                sum.saturating_add(Self::validator_stake(&self.epoch_stakes, pubkey))
+                sum.saturating_add(self.epoch_stakes.node_id_to_stake(pubkey).unwrap_or(0))
             })
     }
 

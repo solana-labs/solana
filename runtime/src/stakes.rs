@@ -316,6 +316,21 @@ impl Stakes<StakeAccount> {
         })
     }
 
+    #[cfg(test)]
+    pub fn new_for_tests(
+        epoch: Epoch,
+        vote_accounts: VoteAccounts,
+        stake_delegations: ImHashMap<Pubkey, StakeAccount>,
+    ) -> Self {
+        Self {
+            vote_accounts,
+            stake_delegations,
+            unused: 0,
+            epoch,
+            stake_history: StakeHistory::default(),
+        }
+    }
+
     pub(crate) fn history(&self) -> &StakeHistory {
         &self.stake_history
     }
