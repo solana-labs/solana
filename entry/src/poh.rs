@@ -109,18 +109,18 @@ impl Poh {
     }
 }
 
-pub fn compute_hash_time_ns(hashes_sample_size: u64) -> u64 {
+pub fn compute_hash_time(hashes_sample_size: u64) -> Duration {
     info!("Running {} hashes...", hashes_sample_size);
     let mut v = Hash::default();
     let start = Instant::now();
     for _ in 0..hashes_sample_size {
         v = hash(v.as_ref());
     }
-    start.elapsed().as_nanos() as u64
+    start.elapsed()
 }
 
 pub fn compute_hashes_per_tick(duration: Duration, hashes_sample_size: u64) -> u64 {
-    let elapsed_ms = compute_hash_time_ns(hashes_sample_size) / (1000 * 1000);
+    let elapsed_ms = compute_hash_time(hashes_sample_size).as_millis() as u64;
     duration.as_millis() as u64 * hashes_sample_size / elapsed_ms
 }
 
