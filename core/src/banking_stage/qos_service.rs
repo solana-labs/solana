@@ -44,7 +44,7 @@ impl QosService {
         bank: &Bank,
         transactions: &[SanitizedTransaction],
         pre_results: impl Iterator<Item = transaction::Result<()>>,
-    ) -> (Vec<transaction::Result<TransactionCost>>, usize) {
+    ) -> (Vec<transaction::Result<TransactionCost>>, u64) {
         let transaction_costs =
             self.compute_transaction_costs(&bank.feature_set, transactions.iter(), pre_results);
         let (transactions_qos_cost_results, num_included) = self.select_transactions_per_cost(
@@ -56,7 +56,7 @@ impl QosService {
             transactions_qos_cost_results.iter(),
         ));
         let cost_model_throttled_transactions_count =
-            transactions.len().saturating_sub(num_included);
+            transactions.len().saturating_sub(num_included) as u64;
 
         (
             transactions_qos_cost_results,

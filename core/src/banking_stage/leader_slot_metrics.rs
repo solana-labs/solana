@@ -1,5 +1,6 @@
 use {
     super::{
+        consumer::ExecuteAndCommitTransactionsCounts,
         leader_slot_timing_metrics::{LeaderExecuteAndCommitTimings, LeaderSlotTimingMetrics},
         packet_deserializer::PacketReceiverStats,
         unprocessed_transaction_storage::{
@@ -19,45 +20,78 @@ use {
 /// counted in `Self::retryable_transaction_indexes`.
 /// 2) Did not execute due to some fatal error like too old, or duplicate signature. These
 /// will be dropped from the transactions queue and not counted in `Self::retryable_transaction_indexes`
-/// 3) Were executed and committed, captured by `committed_transactions_count` below.
-/// 4) Were executed and failed commit, captured by `failed_commit_count` below.
+/// 3) Were executed and committed, captured by `transaction_counts` below.
+/// 4) Were executed and failed commit, captured by `transaction_counts` below.
 pub(crate) struct ProcessTransactionsSummary {
-    // Returns true if we hit the end of the block/max PoH height for the block before
-    // processing all the transactions in the batch.
+    /// Returns true if we hit the end of the block/max PoH height for the block
+    /// before processing all the transactions in the batch.
     pub reached_max_poh_height: bool,
 
-    // Total number of transactions that were passed as candidates for execution. See description
-    // of struct above for possible outcomes for these transactions
-    pub transactions_attempted_execution_count: usize,
+    /// Total transaction counts tracked for reporting `LeaderSlotMetrics`. See
+    /// description of struct above for possible outcomes for these transactions
+    pub transaction_counts: ProcessTransactionsCounts,
 
-    // Total number of transactions that made it into the block
-    pub committed_transactions_count: usize,
-
-    // Total number of transactions that made it into the block where the transactions
-    // output from execution was success/no error.
-    pub committed_transactions_with_successful_result_count: usize,
-
-    // All transactions that were executed but then failed record because the
-    // slot ended
-    pub failed_commit_count: usize,
-
-    // Indexes of transactions in the transactions slice that were not committed but are retryable
+    /// Indexes of transactions in the transactions slice that were not
+    /// committed but are retryable
     pub retryable_transaction_indexes: Vec<usize>,
 
-    // The number of transactions filtered out by the cost model
-    pub cost_model_throttled_transactions_count: usize,
+    /// The number of transactions filtered out by the cost model
+    pub cost_model_throttled_transactions_count: u64,
 
-    // Total amount of time spent running the cost model
+    /// Total amount of time spent running the cost model
     pub cost_model_us: u64,
 
-    // Breakdown of time spent executing and committing transactions
+    /// Breakdown of time spent executing and committing transactions
     pub execute_and_commit_timings: LeaderExecuteAndCommitTimings,
 
-    // Breakdown of all the transaction errors from transactions passed for execution
+    /// Breakdown of all the transaction errors from transactions passed for
+    /// execution
     pub error_counters: TransactionErrorMetrics,
 
     pub min_prioritization_fees: u64,
     pub max_prioritization_fees: u64,
+}
+
+#[derive(Debug, Default, PartialEq)]
+pub struct ProcessTransactionsCounts {
+    /// Total number of transactions that were passed as candidates for execution
+    pub attempted_execution_count: u64,
+    /// Total number of transactions that made it into the block
+    pub committed_transactions_count: u64,
+    /// Total number of transactions that made it into the block where the
+    /// transactions output from execution was success/no error.
+    pub committed_transactions_with_successful_result_count: u64,
+    /// All transactions that were executed but then failed record because the
+    /// slot ended
+    pub executed_but_failed_commit: u64,
+}
+
+impl ProcessTransactionsCounts {
+    pub fn accumulate(
+        &mut self,
+        transaction_counts: &ExecuteAndCommitTransactionsCounts,
+        committed: bool,
+    ) {
+        saturating_add_assign!(
+            self.attempted_execution_count,
+            transaction_counts.attempted_execution_count
+        );
+        if committed {
+            saturating_add_assign!(
+                self.committed_transactions_count,
+                transaction_counts.executed_count
+            );
+            saturating_add_assign!(
+                self.committed_transactions_with_successful_result_count,
+                transaction_counts.executed_with_successful_result_count
+            );
+        } else {
+            saturating_add_assign!(
+                self.executed_but_failed_commit,
+                transaction_counts.executed_count
+            );
+        }
+    }
 }
 
 // Metrics describing prioritization fee information for each transaction storage before processing transactions
@@ -559,10 +593,7 @@ impl LeaderSlotMetricsTracker {
     ) {
         if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
             let ProcessTransactionsSummary {
-                transactions_attempted_execution_count,
-                committed_transactions_count,
-                committed_transactions_with_successful_result_count,
-                failed_commit_count,
+                transaction_counts,
                 ref retryable_transaction_indexes,
                 cost_model_throttled_transactions_count,
                 cost_model_us,
@@ -577,28 +608,28 @@ impl LeaderSlotMetricsTracker {
                 leader_slot_metrics
                     .packet_count_metrics
                     .transactions_attempted_execution_count,
-                *transactions_attempted_execution_count as u64
+                transaction_counts.attempted_execution_count
             );
 
             saturating_add_assign!(
                 leader_slot_metrics
                     .packet_count_metrics
                     .committed_transactions_count,
-                *committed_transactions_count as u64
+                transaction_counts.committed_transactions_count
             );
 
             saturating_add_assign!(
                 leader_slot_metrics
                     .packet_count_metrics
                     .committed_transactions_with_successful_result_count,
-                *committed_transactions_with_successful_result_count as u64
+                transaction_counts.committed_transactions_with_successful_result_count
             );
 
             saturating_add_assign!(
                 leader_slot_metrics
                     .packet_count_metrics
                     .executed_transactions_failed_commit_count,
-                *failed_commit_count as u64
+                transaction_counts.executed_but_failed_commit
             );
 
             saturating_add_assign!(
@@ -612,9 +643,10 @@ impl LeaderSlotMetricsTracker {
                 leader_slot_metrics
                     .packet_count_metrics
                     .nonretryable_errored_transactions_count,
-                transactions_attempted_execution_count
-                    .saturating_sub(*committed_transactions_count)
-                    .saturating_sub(retryable_transaction_indexes.len()) as u64
+                transaction_counts
+                    .attempted_execution_count
+                    .saturating_sub(transaction_counts.committed_transactions_count)
+                    .saturating_sub(retryable_transaction_indexes.len() as u64)
             );
 
             saturating_add_assign!(
@@ -635,7 +667,7 @@ impl LeaderSlotMetricsTracker {
                 leader_slot_metrics
                     .packet_count_metrics
                     .cost_model_throttled_transactions_count,
-                *cost_model_throttled_transactions_count as u64
+                *cost_model_throttled_transactions_count
             );
 
             saturating_add_assign!(

@@ -74,10 +74,7 @@ impl Committer {
         bank: &Arc<Bank>,
         pre_balance_info: &mut PreBalanceInfo,
         execute_and_commit_timings: &mut LeaderExecuteAndCommitTimings,
-        signature_count: u64,
-        executed_transactions_count: usize,
-        executed_non_vote_transactions_count: usize,
-        executed_with_successful_result_count: usize,
+        execution_counts: &ExecutedTransactionCounts,
     ) -> (u64, Vec<CommitTransactionDetails>) {
         let executed_transactions = execution_results
             .iter()
@@ -90,14 +87,7 @@ impl Committer {
             execution_results,
             last_blockhash,
             lamports_per_signature,
-            ExecutedTransactionCounts {
-                executed_transactions_count: executed_transactions_count as u64,
-                executed_non_vote_transactions_count: executed_non_vote_transactions_count as u64,
-                executed_with_failure_result_count: executed_transactions_count
-                    .saturating_sub(executed_with_successful_result_count)
-                    as u64,
-                signature_count,
-            },
+            execution_counts,
             &mut execute_and_commit_timings.execute_timings,
         ));
         execute_and_commit_timings.commit_us = commit_time_us;

@@ -321,14 +321,9 @@ pub struct LoadAndExecuteTransactionsOutput {
     // Vector of results indicating whether a transaction was executed or could not
     // be executed. Note executed transactions can still have failed!
     pub execution_results: Vec<TransactionExecutionResult>,
-    // Total number of transactions that were executed
-    pub executed_transactions_count: usize,
-    // Number of non-vote transactions that were executed
-    pub executed_non_vote_transactions_count: usize,
-    // Total number of the executed transactions that returned success/not
-    // an error.
-    pub executed_with_successful_result_count: usize,
-    pub signature_count: u64,
+    // Executed transaction counts used to update bank transaction counts and
+    // for metrics reporting.
+    pub execution_counts: ExecutedTransactionCounts,
 }
 
 pub struct TransactionSimulationResult {
@@ -890,10 +885,11 @@ struct PrevEpochInflationRewards {
     foundation_rate: f64,
 }
 
+#[derive(Debug, Default, PartialEq)]
 pub struct ExecutedTransactionCounts {
     pub executed_transactions_count: u64,
+    pub executed_successfully_count: u64,
     pub executed_non_vote_transactions_count: u64,
-    pub executed_with_failure_result_count: u64,
     pub signature_count: u64,
 }
 
@@ -3635,10 +3631,7 @@ impl Bank {
             measure_us!(self.collect_logs(sanitized_txs, &sanitized_output.execution_results));
         timings.saturating_add_in_place(ExecuteTimingType::CollectLogsUs, collect_logs_us);
 
-        let mut signature_count = 0;
-        let mut executed_transactions_count: usize = 0;
-        let mut executed_non_vote_transactions_count: usize = 0;
-        let mut executed_with_successful_result_count: usize = 0;
+        let mut execution_counts = ExecutedTransactionCounts::default();
         let err_count = &mut error_counters.total;
 
         for (execution_result, tx) in sanitized_output.execution_results.iter().zip(sanitized_txs) {
@@ -3656,17 +3649,18 @@ impl Bank {
                 // Signature count must be accumulated only if the transaction
                 // is executed, otherwise a mismatched count between banking and
                 // replay could occur
-                signature_count += u64::from(tx.message().header().num_required_signatures);
-                executed_transactions_count += 1;
+                execution_counts.signature_count +=
+                    u64::from(tx.message().header().num_required_signatures);
+                execution_counts.executed_transactions_count += 1;
 
                 if !tx.is_simple_vote_transaction() {
-                    executed_non_vote_transactions_count += 1;
+                    execution_counts.executed_non_vote_transactions_count += 1;
                 }
             }
 
             match execution_result.flattened_result() {
                 Ok(()) => {
-                    executed_with_successful_result_count += 1;
+                    execution_counts.executed_successfully_count += 1;
                 }
                 Err(err) => {
                     if *err_count == 0 {
@@ -3679,10 +3673,7 @@ impl Bank {
 
         LoadAndExecuteTransactionsOutput {
             execution_results: sanitized_output.execution_results,
-            executed_transactions_count,
-            executed_non_vote_transactions_count,
-            executed_with_successful_result_count,
-            signature_count,
+            execution_counts,
         }
     }
 
@@ -3888,7 +3879,7 @@ impl Bank {
         mut execution_results: Vec<TransactionExecutionResult>,
         last_blockhash: Hash,
         lamports_per_signature: u64,
-        counts: ExecutedTransactionCounts,
+        execution_counts: &ExecutedTransactionCounts,
         timings: &mut ExecuteTimings,
     ) -> Vec<TransactionCommitResult> {
         assert!(
@@ -3899,9 +3890,9 @@ impl Bank {
         let ExecutedTransactionCounts {
             executed_transactions_count,
             executed_non_vote_transactions_count,
-            executed_with_failure_result_count,
+            executed_successfully_count,
             signature_count,
-        } = counts;
+        } = *execution_counts;
 
         self.increment_transaction_count(executed_transactions_count);
         self.increment_non_vote_transaction_count_since_restart(
@@ -3909,6 +3900,8 @@ impl Bank {
         );
         self.increment_signature_count(signature_count);
 
+        let executed_with_failure_result_count =
+            executed_transactions_count.saturating_sub(executed_successfully_count);
         if executed_with_failure_result_count > 0 {
             self.transaction_error_count
                 .fetch_add(executed_with_failure_result_count, Relaxed);
@@ -4702,10 +4695,7 @@ impl Bank {
 
         let LoadAndExecuteTransactionsOutput {
             execution_results,
-            executed_transactions_count,
-            executed_non_vote_transactions_count,
-            executed_with_successful_result_count,
-            signature_count,
+            execution_counts,
         } = self.load_and_execute_transactions(
             batch,
             max_age,
@@ -4729,14 +4719,7 @@ impl Bank {
             execution_results,
             last_blockhash,
             lamports_per_signature,
-            ExecutedTransactionCounts {
-                executed_transactions_count: executed_transactions_count as u64,
-                executed_non_vote_transactions_count: executed_non_vote_transactions_count as u64,
-                executed_with_failure_result_count: executed_transactions_count
-                    .saturating_sub(executed_with_successful_result_count)
-                    as u64,
-                signature_count,
-            },
+            &execution_counts,
             timings,
         );
         let post_balances = if collect_balances {

@@ -2,7 +2,9 @@ use {
     super::{
         committer::{CommitTransactionDetails, Committer, PreBalanceInfo},
         immutable_deserialized_packet::ImmutableDeserializedPacket,
-        leader_slot_metrics::{LeaderSlotMetricsTracker, ProcessTransactionsSummary},
+        leader_slot_metrics::{
+            LeaderSlotMetricsTracker, ProcessTransactionsCounts, ProcessTransactionsSummary,
+        },
         leader_slot_timing_metrics::LeaderExecuteAndCommitTimings,
         qos_service::QosService,
         unprocessed_transaction_storage::{ConsumeScannerPayload, UnprocessedTransactionStorage},
@@ -46,21 +48,16 @@ pub const TARGET_NUM_TRANSACTIONS_PER_BATCH: usize = 64;
 
 pub struct ProcessTransactionBatchOutput {
     // The number of transactions filtered out by the cost model
-    pub(crate) cost_model_throttled_transactions_count: usize,
+    pub(crate) cost_model_throttled_transactions_count: u64,
     // Amount of time spent running the cost model
     pub(crate) cost_model_us: u64,
     pub execute_and_commit_transactions_output: ExecuteAndCommitTransactionsOutput,
 }
 
 pub struct ExecuteAndCommitTransactionsOutput {
-    // Total number of transactions that were passed as candidates for execution
-    pub(crate) transactions_attempted_execution_count: usize,
-    // The number of transactions of that were executed. See description of in `ProcessTransactionsSummary`
-    // for possible outcomes of execution.
-    pub(crate) executed_transactions_count: usize,
-    // Total number of the executed transactions that returned success/not
-    // an error.
-    pub(crate) executed_with_successful_result_count: usize,
+    // Transactions counts reported to `ConsumeWorkerMetrics` and then
+    // accumulated later for `LeaderSlotMetrics`
+    pub(crate) transaction_counts: ExecuteAndCommitTransactionsCounts,
     // Transactions that either were not executed, or were executed and failed to be committed due
     // to the block ending.
     pub(crate) retryable_transaction_indexes: Vec<usize>,
@@ -71,6 +68,18 @@ pub struct ExecuteAndCommitTransactionsOutput {
     pub(crate) error_counters: TransactionErrorMetrics,
     pub(crate) min_prioritization_fees: u64,
     pub(crate) max_prioritization_fees: u64,
+}
+
+#[derive(Debug, Default, PartialEq)]
+pub struct ExecuteAndCommitTransactionsCounts {
+    // Total number of transactions that were passed as candidates for execution
+    pub(crate) attempted_execution_count: u64,
+    // The number of transactions of that were executed. See description of in `ProcessTransactionsSummary`
+    // for possible outcomes of execution.
+    pub(crate) executed_count: u64,
+    // Total number of the executed transactions that returned success/not
+    // an error.
+    pub(crate) executed_with_successful_result_count: u64,
 }
 
 pub struct Consumer {
@@ -275,17 +284,8 @@ impl Consumer {
     ) -> ProcessTransactionsSummary {
         let mut chunk_start = 0;
         let mut all_retryable_tx_indexes = vec![];
-        // All the transactions that attempted execution. See description of
-        // struct ProcessTransactionsSummary above for possible outcomes.
-        let mut total_transactions_attempted_execution_count: usize = 0;
-        // All transactions that were executed and committed
-        let mut total_committed_transactions_count: usize = 0;
-        // All transactions that were executed and committed with a successful result
-        let mut total_committed_transactions_with_successful_result_count: usize = 0;
-        // All transactions that were executed but then failed record because the
-        // slot ended
-        let mut total_failed_commit_count: usize = 0;
-        let mut total_cost_model_throttled_transactions_count: usize = 0;
+        let mut total_transaction_counts = ProcessTransactionsCounts::default();
+        let mut total_cost_model_throttled_transactions_count: u64 = 0;
         let mut total_cost_model_us: u64 = 0;
         let mut total_execute_and_commit_timings = LeaderExecuteAndCommitTimings::default();
         let mut total_error_counters = TransactionErrorMetrics::default();
@@ -315,9 +315,7 @@ impl Consumer {
             saturating_add_assign!(total_cost_model_us, new_cost_model_us);
 
             let ExecuteAndCommitTransactionsOutput {
-                transactions_attempted_execution_count: new_transactions_attempted_execution_count,
-                executed_transactions_count: new_executed_transactions_count,
-                executed_with_successful_result_count: new_executed_with_successful_result_count,
+                transaction_counts: new_transaction_counts,
                 retryable_transaction_indexes: new_retryable_transaction_indexes,
                 commit_transactions_result: new_commit_transactions_result,
                 execute_and_commit_timings: new_execute_and_commit_timings,
@@ -329,32 +327,15 @@ impl Consumer {
 
             total_execute_and_commit_timings.accumulate(&new_execute_and_commit_timings);
             total_error_counters.accumulate(&new_error_counters);
-            saturating_add_assign!(
-                total_transactions_attempted_execution_count,
-                new_transactions_attempted_execution_count
+            total_transaction_counts.accumulate(
+                &new_transaction_counts,
+                new_commit_transactions_result.is_ok(),
             );
+
             overall_min_prioritization_fees =
                 std::cmp::min(overall_min_prioritization_fees, min_prioritization_fees);
             overall_max_prioritization_fees =
                 std::cmp::min(overall_max_prioritization_fees, max_prioritization_fees);
-
-            trace!(
-                "process_transactions result: {:?}",
-                new_commit_transactions_result
-            );
-
-            if new_commit_transactions_result.is_ok() {
-                saturating_add_assign!(
-                    total_committed_transactions_count,
-                    new_executed_transactions_count
-                );
-                saturating_add_assign!(
-                    total_committed_transactions_with_successful_result_count,
-                    new_executed_with_successful_result_count
-                );
-            } else {
-                saturating_add_assign!(total_failed_commit_count, new_executed_transactions_count);
-            }
 
             // Add the retryable txs (transactions that errored in a way that warrants a retry)
             // to the list of unprocessed txs.
@@ -387,11 +368,7 @@ impl Consumer {
 
         ProcessTransactionsSummary {
             reached_max_poh_height,
-            transactions_attempted_execution_count: total_transactions_attempted_execution_count,
-            committed_transactions_count: total_committed_transactions_count,
-            committed_transactions_with_successful_result_count:
-                total_committed_transactions_with_successful_result_count,
-            failed_commit_count: total_failed_commit_count,
+            transaction_counts: total_transaction_counts,
             retryable_transaction_indexes: all_retryable_tx_indexes,
             cost_model_throttled_transactions_count: total_cost_model_throttled_transactions_count,
             cost_model_us: total_cost_model_us,
@@ -646,13 +623,15 @@ impl Consumer {
 
         let LoadAndExecuteTransactionsOutput {
             execution_results,
-            executed_transactions_count,
-            executed_non_vote_transactions_count,
-            executed_with_successful_result_count,
-            signature_count,
+            execution_counts,
         } = load_and_execute_transactions_output;
 
-        let transactions_attempted_execution_count = execution_results.len();
+        let transaction_counts = ExecuteAndCommitTransactionsCounts {
+            executed_count: execution_counts.executed_transactions_count,
+            executed_with_successful_result_count: execution_counts.executed_successfully_count,
+            attempted_execution_count: execution_results.len() as u64,
+        };
+
         let (executed_transactions, execution_results_to_transactions_us) =
             measure_us!(execution_results
                 .iter()
@@ -701,9 +680,7 @@ impl Consumer {
             ));
 
             return ExecuteAndCommitTransactionsOutput {
-                transactions_attempted_execution_count,
-                executed_transactions_count,
-                executed_with_successful_result_count,
+                transaction_counts,
                 retryable_transaction_indexes,
                 commit_transactions_result: Err(recorder_err),
                 execute_and_commit_timings,
@@ -713,27 +690,25 @@ impl Consumer {
             };
         }
 
-        let (commit_time_us, commit_transaction_statuses) = if executed_transactions_count != 0 {
-            self.committer.commit_transactions(
-                batch,
-                execution_results,
-                last_blockhash,
-                lamports_per_signature,
-                starting_transaction_index,
-                bank,
-                &mut pre_balance_info,
-                &mut execute_and_commit_timings,
-                signature_count,
-                executed_transactions_count,
-                executed_non_vote_transactions_count,
-                executed_with_successful_result_count,
-            )
-        } else {
-            (
-                0,
-                vec![CommitTransactionDetails::NotCommitted; execution_results.len()],
-            )
-        };
+        let (commit_time_us, commit_transaction_statuses) =
+            if execution_counts.executed_transactions_count != 0 {
+                self.committer.commit_transactions(
+                    batch,
+                    execution_results,
+                    last_blockhash,
+                    lamports_per_signature,
+                    starting_transaction_index,
+                    bank,
+                    &mut pre_balance_info,
+                    &mut execute_and_commit_timings,
+                    &execution_counts,
+                )
+            } else {
+                (
+                    0,
+                    vec![CommitTransactionDetails::NotCommitted; execution_results.len()],
+                )
+            };
 
         drop(freeze_lock);
 
@@ -752,14 +727,12 @@ impl Consumer {
         );
 
         debug_assert_eq!(
-            commit_transaction_statuses.len(),
-            transactions_attempted_execution_count
+            transaction_counts.attempted_execution_count,
+            commit_transaction_statuses.len() as u64,
         );
 
         ExecuteAndCommitTransactionsOutput {
-            transactions_attempted_execution_count,
-            executed_transactions_count,
-            executed_with_successful_result_count,
+            transaction_counts,
             retryable_transaction_indexes,
             commit_transactions_result: Ok(commit_transaction_statuses),
             execute_and_commit_timings,
@@ -1140,16 +1113,19 @@ mod tests {
                 consumer.process_and_record_transactions(&bank, &transactions, 0);
 
             let ExecuteAndCommitTransactionsOutput {
-                transactions_attempted_execution_count,
-                executed_transactions_count,
-                executed_with_successful_result_count,
+                transaction_counts,
                 commit_transactions_result,
                 ..
             } = process_transactions_batch_output.execute_and_commit_transactions_output;
 
-            assert_eq!(transactions_attempted_execution_count, 1);
-            assert_eq!(executed_transactions_count, 1);
-            assert_eq!(executed_with_successful_result_count, 1);
+            assert_eq!(
+                transaction_counts,
+                ExecuteAndCommitTransactionsCounts {
+                    attempted_execution_count: 1,
+                    executed_count: 1,
+                    executed_with_successful_result_count: 1,
+                }
+            );
             assert!(commit_transactions_result.is_ok());
 
             // Tick up to max tick height
@@ -1185,17 +1161,20 @@ mod tests {
                 consumer.process_and_record_transactions(&bank, &transactions, 0);
 
             let ExecuteAndCommitTransactionsOutput {
-                transactions_attempted_execution_count,
-                executed_transactions_count,
-                executed_with_successful_result_count,
+                transaction_counts,
                 retryable_transaction_indexes,
                 commit_transactions_result,
                 ..
             } = process_transactions_batch_output.execute_and_commit_transactions_output;
-            assert_eq!(transactions_attempted_execution_count, 1);
-            // Transactions was still executed, just wasn't committed, so should be counted here.
-            assert_eq!(executed_transactions_count, 1);
-            assert_eq!(executed_with_successful_result_count, 1);
+            assert_eq!(
+                transaction_counts,
+                ExecuteAndCommitTransactionsCounts {
+                    attempted_execution_count: 1,
+                    // Transactions was still executed, just wasn't committed, so should be counted here.
+                    executed_count: 1,
+                    executed_with_successful_result_count: 1,
+                }
+            );
             assert_eq!(retryable_transaction_indexes, vec![0]);
             assert_matches!(
                 commit_transactions_result,
@@ -1323,16 +1302,19 @@ mod tests {
             let process_transactions_batch_output =
                 consumer.process_and_record_transactions(&bank, &transactions, 0);
             let ExecuteAndCommitTransactionsOutput {
-                transactions_attempted_execution_count,
-                executed_transactions_count,
-                executed_with_successful_result_count,
+                transaction_counts,
                 commit_transactions_result,
                 ..
             } = process_transactions_batch_output.execute_and_commit_transactions_output;
 
-            assert_eq!(transactions_attempted_execution_count, 1);
-            assert_eq!(executed_transactions_count, 1);
-            assert_eq!(executed_with_successful_result_count, 0);
+            assert_eq!(
+                transaction_counts,
+                ExecuteAndCommitTransactionsCounts {
+                    attempted_execution_count: 1,
+                    executed_count: 1,
+                    executed_with_successful_result_count: 0,
+                }
+            );
             assert!(commit_transactions_result.is_ok());
 
             // Ensure that poh did the last tick after recording transactions
@@ -1425,17 +1407,20 @@ mod tests {
                 consumer.process_and_record_transactions(&bank, &transactions, 0);
 
             let ExecuteAndCommitTransactionsOutput {
-                transactions_attempted_execution_count,
-                executed_transactions_count,
-                executed_with_successful_result_count,
+                transaction_counts,
                 commit_transactions_result,
                 retryable_transaction_indexes,
                 ..
             } = process_transactions_batch_output.execute_and_commit_transactions_output;
 
-            assert_eq!(transactions_attempted_execution_count, 1);
-            assert_eq!(executed_transactions_count, 0);
-            assert_eq!(executed_with_successful_result_count, 0);
+            assert_eq!(
+                transaction_counts,
+                ExecuteAndCommitTransactionsCounts {
+                    attempted_execution_count: 1,
+                    executed_count: 0,
+                    executed_with_successful_result_count: 0,
+                }
+            );
             assert!(retryable_transaction_indexes.is_empty());
             assert_eq!(
                 commit_transactions_result.ok(),
@@ -1517,11 +1502,11 @@ mod tests {
                 consumer.process_and_record_transactions(&bank, &transactions, 0);
 
             let ExecuteAndCommitTransactionsOutput {
-                executed_with_successful_result_count,
+                transaction_counts,
                 commit_transactions_result,
                 ..
             } = process_transactions_batch_output.execute_and_commit_transactions_output;
-            assert_eq!(executed_with_successful_result_count, 1);
+            assert_eq!(transaction_counts.executed_with_successful_result_count, 1);
             assert!(commit_transactions_result.is_ok());
 
             let block_cost = get_block_cost();
@@ -1547,12 +1532,12 @@ mod tests {
                 consumer.process_and_record_transactions(&bank, &transactions, 0);
 
             let ExecuteAndCommitTransactionsOutput {
-                executed_with_successful_result_count,
+                transaction_counts,
                 commit_transactions_result,
                 retryable_transaction_indexes,
                 ..
             } = process_transactions_batch_output.execute_and_commit_transactions_output;
-            assert_eq!(executed_with_successful_result_count, 1);
+            assert_eq!(transaction_counts.executed_with_successful_result_count, 1);
             assert!(commit_transactions_result.is_ok());
 
             // first one should have been committed, second one not committed due to AccountInUse error during
@@ -1671,16 +1656,21 @@ mod tests {
             let _ = poh_simulator.join();
 
             let ExecuteAndCommitTransactionsOutput {
-                transactions_attempted_execution_count,
-                executed_transactions_count,
+                transaction_counts,
                 retryable_transaction_indexes,
                 commit_transactions_result,
                 ..
             } = process_transactions_batch_output.execute_and_commit_transactions_output;
 
-            assert_eq!(transactions_attempted_execution_count, 2);
-            assert_eq!(executed_transactions_count, 1);
-            assert_eq!(retryable_transaction_indexes, vec![1],);
+            assert_eq!(
+                transaction_counts,
+                ExecuteAndCommitTransactionsCounts {
+                    attempted_execution_count: 2,
+                    executed_count: 1,
+                    executed_with_successful_result_count: 1,
+                }
+            );
+            assert_eq!(retryable_transaction_indexes, vec![1]);
             assert!(commit_transactions_result.is_ok());
         }
         Blockstore::destroy(ledger_path.path()).unwrap();
@@ -1723,28 +1713,30 @@ mod tests {
             genesis_config.hash(),
         ));
 
-        let transactions_count = transactions.len();
+        let transactions_len = transactions.len();
         let ProcessTransactionsSummary {
             reached_max_poh_height,
-            transactions_attempted_execution_count,
-            committed_transactions_count,
-            committed_transactions_with_successful_result_count,
-            failed_commit_count,
+            transaction_counts,
             retryable_transaction_indexes,
             ..
         } = execute_transactions_with_dummy_poh_service(bank, transactions);
 
         // All the transactions should have been replayed, but only 1 committed
         assert!(!reached_max_poh_height);
-        assert_eq!(transactions_attempted_execution_count, transactions_count);
-        // Both transactions should have been committed, even though one was an error,
-        // because InstructionErrors are committed
-        assert_eq!(committed_transactions_count, 2);
-        assert_eq!(committed_transactions_with_successful_result_count, 1);
-        assert_eq!(failed_commit_count, 0);
+        assert_eq!(
+            transaction_counts,
+            ProcessTransactionsCounts {
+                attempted_execution_count: transactions_len as u64,
+                // Both transactions should have been committed, even though one was an error,
+                // because InstructionErrors are committed
+                committed_transactions_count: 2,
+                committed_transactions_with_successful_result_count: 1,
+                executed_but_failed_commit: 0,
+            }
+        );
         assert_eq!(
             retryable_transaction_indexes,
-            (1..transactions_count - 1).collect::<Vec<usize>>()
+            (1..transactions_len - 1).collect::<Vec<usize>>()
         );
     }
 
@@ -1782,28 +1774,30 @@ mod tests {
             genesis_config.hash(),
         ));
 
-        let transactions_count = transactions.len();
+        let transactions_len = transactions.len();
         let ProcessTransactionsSummary {
             reached_max_poh_height,
-            transactions_attempted_execution_count,
-            committed_transactions_count,
-            committed_transactions_with_successful_result_count,
-            failed_commit_count,
+            transaction_counts,
             retryable_transaction_indexes,
             ..
         } = execute_transactions_with_dummy_poh_service(bank, transactions);
 
         // All the transactions should have been replayed, but only 2 committed (first and last)
         assert!(!reached_max_poh_height);
-        assert_eq!(transactions_attempted_execution_count, transactions_count);
-        assert_eq!(committed_transactions_count, 2);
-        assert_eq!(committed_transactions_with_successful_result_count, 2);
-        assert_eq!(failed_commit_count, 0,);
+        assert_eq!(
+            transaction_counts,
+            ProcessTransactionsCounts {
+                attempted_execution_count: transactions_len as u64,
+                committed_transactions_count: 2,
+                committed_transactions_with_successful_result_count: 2,
+                executed_but_failed_commit: 0,
+            }
+        );
 
         // Everything except first and last index of the transactions failed and are last retryable
         assert_eq!(
             retryable_transaction_indexes,
-            (1..transactions_count - 1).collect::<Vec<usize>>()
+            (1..transactions_len - 1).collect::<Vec<usize>>()
         );
     }
 
@@ -1861,19 +1855,21 @@ mod tests {
 
             let ProcessTransactionsSummary {
                 reached_max_poh_height,
-                transactions_attempted_execution_count,
-                committed_transactions_count,
-                committed_transactions_with_successful_result_count,
-                failed_commit_count,
+                transaction_counts,
                 mut retryable_transaction_indexes,
                 ..
             } = process_transactions_summary;
             assert!(reached_max_poh_height);
-            assert_eq!(transactions_attempted_execution_count, 1);
-            assert_eq!(failed_commit_count, 1);
-            // MaxHeightReached error does not commit, should be zero here
-            assert_eq!(committed_transactions_count, 0);
-            assert_eq!(committed_transactions_with_successful_result_count, 0);
+            assert_eq!(
+                transaction_counts,
+                ProcessTransactionsCounts {
+                    attempted_execution_count: 1,
+                    // MaxHeightReached error does not commit, should be zero here
+                    committed_transactions_count: 0,
+                    committed_transactions_with_successful_result_count: 0,
+                    executed_but_failed_commit: 1,
+                }
+            );
 
             retryable_transaction_indexes.sort_unstable();
             let expected: Vec<usize> = (0..transactions.len()).collect();
