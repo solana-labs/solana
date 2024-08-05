@@ -183,12 +183,18 @@ impl AccountsDb {
     where
         S: AppendVecScan,
     {
-        let oldest_non_ancient_slot = self.get_oldest_non_ancient_slot_for_hash_calc_scan(
-            snapshot_storages.max_slot_inclusive(),
-            config,
-        );
-        let splitter = SplitAncientStorages::new(oldest_non_ancient_slot, snapshot_storages);
-
+        let oldest_non_ancient_slot_for_split = self
+            .get_oldest_non_ancient_slot_for_hash_calc_scan(
+                snapshot_storages.max_slot_inclusive(),
+                config,
+            );
+        let splitter =
+            SplitAncientStorages::new(oldest_non_ancient_slot_for_split, snapshot_storages);
+        let oldest_non_ancient_slot_for_identification = self
+            .get_oldest_non_ancient_slot_from_slot(
+                config.epoch_schedule,
+                snapshot_storages.max_slot_inclusive(),
+            );
         let slots_per_epoch = config
             .rent_collector
             .epoch_schedule
@@ -297,10 +303,7 @@ impl AccountsDb {
                         let mut init_accum = true;
                         // load from cache failed, so create the cache file for this chunk
                         for (slot, storage) in snapshot_storages.iter_range(&range_this_chunk) {
-                            let ancient =
-                                oldest_non_ancient_slot.is_some_and(|oldest_non_ancient_slot| {
-                                    slot < oldest_non_ancient_slot
-                                });
+                            let ancient = slot < oldest_non_ancient_slot_for_identification;
 
                             let (_, scan_us) = measure_us!(if let Some(storage) = storage {
                                 if init_accum {
