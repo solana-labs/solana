@@ -35,7 +35,9 @@ use {
         accounts_db::{AccountShrinkThreshold, AccountsDbConfig},
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
-        hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
+        hardened_unpack::{
+            open_genesis_config, OpenGenesisConfigError, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
+        },
         utils::{move_and_async_delete_path, move_and_async_delete_path_contents},
     },
     solana_client::connection_cache::{ConnectionCache, Protocol},
@@ -591,9 +593,7 @@ impl Validator {
                 "ledger directory does not exist or is not accessible: {ledger_path:?}"
             ));
         }
-        let genesis_config =
-            open_genesis_config(ledger_path, config.max_genesis_archive_unpacked_size)
-                .context("Failed to open genesis config")?;
+        let genesis_config = load_genesis(config, ledger_path)?;
 
         metrics_config_sanity_check(genesis_config.cluster_type)?;
 
@@ -703,7 +703,6 @@ impl Validator {
             PohTimingReportService::new(poh_timing_point_receiver, exit.clone());
 
         let (
-            genesis_config,
             bank_forks,
             blockstore,
             original_blockstore_root,
@@ -727,6 +726,7 @@ impl Validator {
         ) = load_blockstore(
             config,
             ledger_path,
+            &genesis_config,
             exit.clone(),
             &start_progress,
             accounts_update_notifier,
@@ -1809,10 +1809,44 @@ fn blockstore_options_from_config(config: &ValidatorConfig) -> BlockstoreOptions
     }
 }
 
+fn load_genesis(
+    config: &ValidatorConfig,
+    ledger_path: &Path,
+) -> Result<GenesisConfig, ValidatorError> {
+    let genesis_config = open_genesis_config(ledger_path, config.max_genesis_archive_unpacked_size)
+        .map_err(ValidatorError::OpenGenesisConfig)?;
+
+    // This needs to be limited otherwise the state in the VoteAccount data
+    // grows too large
+    let leader_schedule_slot_offset = genesis_config.epoch_schedule.leader_schedule_slot_offset;
+    let slots_per_epoch = genesis_config.epoch_schedule.slots_per_epoch;
+    let leader_epoch_offset = (leader_schedule_slot_offset + slots_per_epoch - 1) / slots_per_epoch;
+    assert!(leader_epoch_offset <= MAX_LEADER_SCHEDULE_EPOCH_OFFSET);
+
+    let genesis_hash = genesis_config.hash();
+    info!("genesis hash: {}", genesis_hash);
+
+    if let Some(expected_genesis_hash) = config.expected_genesis_hash {
+        if genesis_hash != expected_genesis_hash {
+            return Err(ValidatorError::GenesisHashMismatch(
+                genesis_hash,
+                expected_genesis_hash,
+            ));
+        }
+    }
+
+    if !config.no_poh_speed_test {
+        check_poh_speed(&genesis_config, None)?;
+    }
+
+    Ok(genesis_config)
+}
+
 #[allow(clippy::type_complexity)]
 fn load_blockstore(
     config: &ValidatorConfig,
     ledger_path: &Path,
+    genesis_config: &GenesisConfig,
     exit: Arc<AtomicBool>,
     start_progress: &Arc<RwLock<ValidatorStartProgress>>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
@@ -1821,7 +1855,6 @@ fn load_blockstore(
     poh_timing_point_sender: Option<PohTimingSender>,
 ) -> Result<
     (
-        GenesisConfig,
         Arc<RwLock<BankForks>>,
         Arc<Blockstore>,
         Slot,
@@ -1838,30 +1871,6 @@ fn load_blockstore(
 > {
     info!("loading ledger from {:?}...", ledger_path);
     *start_progress.write().unwrap() = ValidatorStartProgress::LoadingLedger;
-    let genesis_config = open_genesis_config(ledger_path, config.max_genesis_archive_unpacked_size)
-        .map_err(|err| format!("Failed to open genesis config: {err}"))?;
-
-    // This needs to be limited otherwise the state in the VoteAccount data
-    // grows too large
-    let leader_schedule_slot_offset = genesis_config.epoch_schedule.leader_schedule_slot_offset;
-    let slots_per_epoch = genesis_config.epoch_schedule.slots_per_epoch;
-    let leader_epoch_offset = (leader_schedule_slot_offset + slots_per_epoch - 1) / slots_per_epoch;
-    assert!(leader_epoch_offset <= MAX_LEADER_SCHEDULE_EPOCH_OFFSET);
-
-    let genesis_hash = genesis_config.hash();
-    info!("genesis hash: {}", genesis_hash);
-
-    if let Some(expected_genesis_hash) = config.expected_genesis_hash {
-        if genesis_hash != expected_genesis_hash {
-            return Err(format!(
-                "genesis hash mismatch: hash={genesis_hash} expected={expected_genesis_hash}. Delete the ledger directory to continue: {ledger_path:?}",
-            ));
-        }
-    }
-
-    if !config.no_poh_speed_test {
-        check_poh_speed(&genesis_config, None).map_err(|err| format!("{err}"))?;
-    }
 
     let mut blockstore =
         Blockstore::open_with_options(ledger_path, blockstore_options_from_config(config))
@@ -1918,7 +1927,7 @@ fn load_blockstore(
 
     let (bank_forks, mut leader_schedule_cache, starting_snapshot_hashes) =
         bank_forks_utils::load_bank_forks(
-            &genesis_config,
+            genesis_config,
             &blockstore,
             config.account_paths.clone(),
             Some(&config.snapshot_config),
@@ -1950,7 +1959,6 @@ fn load_blockstore(
     }
 
     Ok((
-        genesis_config,
         bank_forks,
         blockstore,
         original_blockstore_root,
@@ -2338,8 +2346,14 @@ pub enum ValidatorError {
     #[error("Bad expected bank hash")]
     BadExpectedBankHash,
 
+    #[error("genesis hash mismatch: actual={0}, expected={1}")]
+    GenesisHashMismatch(Hash, Hash),
+
     #[error("Ledger does not have enough data to wait for supermajority")]
     NotEnoughLedgerData,
+
+    #[error("failed to open genesis: {0}")]
+    OpenGenesisConfig(#[source] OpenGenesisConfigError),
 
     #[error("{0}")]
     Other(String),
