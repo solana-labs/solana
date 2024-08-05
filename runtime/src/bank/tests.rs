@@ -101,7 +101,7 @@ use {
     },
     solana_stake_program::stake_state::{self, StakeStateV2},
     solana_svm::{
-        account_loader::LoadedTransaction, nonce_info::NonceInfo,
+        account_loader::LoadedTransaction,
         transaction_commit_result::TransactionCommitResultExtensions,
         transaction_execution_result::ExecutedTransaction,
     },
@@ -192,7 +192,7 @@ pub(in crate::bank) fn create_genesis_config(lamports: u64) -> (GenesisConfig, K
     solana_sdk::genesis_config::create_genesis_config(lamports)
 }
 
-fn new_sanitized_message(message: Message) -> SanitizedMessage {
+pub(in crate::bank) fn new_sanitized_message(message: Message) -> SanitizedMessage {
     SanitizedMessage::try_from_legacy_message(message, &ReservedAccountKeys::empty_key_set())
         .unwrap()
 }
@@ -4815,13 +4815,15 @@ fn test_banks_leak() {
     }
 }
 
-fn get_nonce_blockhash(bank: &Bank, nonce_pubkey: &Pubkey) -> Option<Hash> {
+pub(in crate::bank) fn get_nonce_blockhash(bank: &Bank, nonce_pubkey: &Pubkey) -> Option<Hash> {
     let account = bank.get_account(nonce_pubkey)?;
     let nonce_data = get_nonce_data_from_account(&account)?;
     Some(nonce_data.blockhash())
 }
 
-fn get_nonce_data_from_account(account: &AccountSharedData) -> Option<nonce::state::Data> {
+pub(in crate::bank) fn get_nonce_data_from_account(
+    account: &AccountSharedData,
+) -> Option<nonce::state::Data> {
     let nonce_versions = StateMut::<nonce::state::Versions>::state(account).ok()?;
     if let nonce::State::Initialized(nonce_data) = nonce_versions.state() {
         Some(nonce_data.clone())
@@ -4864,7 +4866,7 @@ fn nonce_setup(
 
 type NonceSetup = (Arc<Bank>, Keypair, Keypair, Keypair, Arc<RwLock<BankForks>>);
 
-fn setup_nonce_with_bank<F>(
+pub(in crate::bank) fn setup_nonce_with_bank<F>(
     supply_lamports: u64,
     mut genesis_cfg_fn: F,
     custodian_lamports: u64,
@@ -4912,159 +4914,11 @@ where
 }
 
 impl Bank {
-    fn next_durable_nonce(&self) -> DurableNonce {
+    pub(in crate::bank) fn next_durable_nonce(&self) -> DurableNonce {
         let hash_queue = self.blockhash_queue.read().unwrap();
         let last_blockhash = hash_queue.last_hash();
         DurableNonce::from_blockhash(&last_blockhash)
     }
-}
-
-#[test]
-fn test_check_and_load_message_nonce_account_ok() {
-    let (bank, _mint_keypair, custodian_keypair, nonce_keypair, _) = setup_nonce_with_bank(
-        10_000_000,
-        |_| {},
-        5_000_000,
-        250_000,
-        None,
-        FeatureSet::all_enabled(),
-    )
-    .unwrap();
-    let custodian_pubkey = custodian_keypair.pubkey();
-    let nonce_pubkey = nonce_keypair.pubkey();
-
-    let nonce_hash = get_nonce_blockhash(&bank, &nonce_pubkey).unwrap();
-    let message = new_sanitized_message(Message::new_with_blockhash(
-        &[
-            system_instruction::advance_nonce_account(&nonce_pubkey, &nonce_pubkey),
-            system_instruction::transfer(&custodian_pubkey, &nonce_pubkey, 100_000),
-        ],
-        Some(&custodian_pubkey),
-        &nonce_hash,
-    ));
-    let nonce_account = bank.get_account(&nonce_pubkey).unwrap();
-    let nonce_data = get_nonce_data_from_account(&nonce_account).unwrap();
-    assert_eq!(
-        bank.check_and_load_message_nonce_account(&message, &bank.next_durable_nonce()),
-        Some((NonceInfo::new(nonce_pubkey, nonce_account), nonce_data))
-    );
-}
-
-#[test]
-fn test_check_and_load_message_nonce_account_not_nonce_fail() {
-    let (bank, _mint_keypair, custodian_keypair, nonce_keypair, _) = setup_nonce_with_bank(
-        10_000_000,
-        |_| {},
-        5_000_000,
-        250_000,
-        None,
-        FeatureSet::all_enabled(),
-    )
-    .unwrap();
-    let custodian_pubkey = custodian_keypair.pubkey();
-    let nonce_pubkey = nonce_keypair.pubkey();
-
-    let nonce_hash = get_nonce_blockhash(&bank, &nonce_pubkey).unwrap();
-    let message = new_sanitized_message(Message::new_with_blockhash(
-        &[
-            system_instruction::transfer(&custodian_pubkey, &nonce_pubkey, 100_000),
-            system_instruction::advance_nonce_account(&nonce_pubkey, &nonce_pubkey),
-        ],
-        Some(&custodian_pubkey),
-        &nonce_hash,
-    ));
-    assert!(bank
-        .check_and_load_message_nonce_account(&message, &bank.next_durable_nonce())
-        .is_none());
-}
-
-#[test]
-fn test_check_and_load_message_nonce_account_missing_ix_pubkey_fail() {
-    let (bank, _mint_keypair, custodian_keypair, nonce_keypair, _) = setup_nonce_with_bank(
-        10_000_000,
-        |_| {},
-        5_000_000,
-        250_000,
-        None,
-        FeatureSet::all_enabled(),
-    )
-    .unwrap();
-    let custodian_pubkey = custodian_keypair.pubkey();
-    let nonce_pubkey = nonce_keypair.pubkey();
-
-    let nonce_hash = get_nonce_blockhash(&bank, &nonce_pubkey).unwrap();
-    let mut message = Message::new_with_blockhash(
-        &[
-            system_instruction::advance_nonce_account(&nonce_pubkey, &nonce_pubkey),
-            system_instruction::transfer(&custodian_pubkey, &nonce_pubkey, 100_000),
-        ],
-        Some(&custodian_pubkey),
-        &nonce_hash,
-    );
-    message.instructions[0].accounts.clear();
-    assert!(bank
-        .check_and_load_message_nonce_account(
-            &new_sanitized_message(message),
-            &bank.next_durable_nonce(),
-        )
-        .is_none());
-}
-
-#[test]
-fn test_check_and_load_message_nonce_account_nonce_acc_does_not_exist_fail() {
-    let (bank, _mint_keypair, custodian_keypair, nonce_keypair, _) = setup_nonce_with_bank(
-        10_000_000,
-        |_| {},
-        5_000_000,
-        250_000,
-        None,
-        FeatureSet::all_enabled(),
-    )
-    .unwrap();
-    let custodian_pubkey = custodian_keypair.pubkey();
-    let nonce_pubkey = nonce_keypair.pubkey();
-    let missing_keypair = Keypair::new();
-    let missing_pubkey = missing_keypair.pubkey();
-
-    let nonce_hash = get_nonce_blockhash(&bank, &nonce_pubkey).unwrap();
-    let message = new_sanitized_message(Message::new_with_blockhash(
-        &[
-            system_instruction::advance_nonce_account(&missing_pubkey, &nonce_pubkey),
-            system_instruction::transfer(&custodian_pubkey, &nonce_pubkey, 100_000),
-        ],
-        Some(&custodian_pubkey),
-        &nonce_hash,
-    ));
-    assert!(bank
-        .check_and_load_message_nonce_account(&message, &bank.next_durable_nonce())
-        .is_none());
-}
-
-#[test]
-fn test_check_and_load_message_nonce_account_bad_tx_hash_fail() {
-    let (bank, _mint_keypair, custodian_keypair, nonce_keypair, _) = setup_nonce_with_bank(
-        10_000_000,
-        |_| {},
-        5_000_000,
-        250_000,
-        None,
-        FeatureSet::all_enabled(),
-    )
-    .unwrap();
-    let custodian_pubkey = custodian_keypair.pubkey();
-    let nonce_pubkey = nonce_keypair.pubkey();
-
-    let message = new_sanitized_message(Message::new_with_blockhash(
-        &[
-            system_instruction::advance_nonce_account(&nonce_pubkey, &nonce_pubkey),
-            system_instruction::transfer(&custodian_pubkey, &nonce_pubkey, 100_000),
-        ],
-        Some(&custodian_pubkey),
-        &Hash::default(),
-    ));
-    assert!(bank
-        .check_and_load_message_nonce_account(&message, &bank.next_durable_nonce())
-        .is_none());
 }
 
 #[test]
