@@ -564,8 +564,31 @@ pub fn make_test_cluster<R: Rng>(
 }
 
 pub(crate) fn get_data_plane_fanout(shred_slot: Slot, root_bank: &Bank) -> usize {
-    if enable_turbine_fanout_experiments(shred_slot, root_bank) {
+    if check_feature_activation(
+        &feature_set::disable_turbine_fanout_experiments::id(),
+        shred_slot,
+        root_bank,
+    ) {
+        DATA_PLANE_FANOUT
+    } else if check_feature_activation(
+        &feature_set::enable_turbine_extended_fanout_experiments::id(),
+        shred_slot,
+        root_bank,
+    ) {
         // Allocate ~2% of slots to turbine fanout experiments.
+        match shred_slot % 359 {
+            11 => 1152,
+            61 => 1280,
+            111 => 1024,
+            161 => 1408,
+            211 => 896,
+            261 => 1536,
+            311 => 768,
+            _ => DATA_PLANE_FANOUT,
+        }
+    } else {
+        // feature_set::enable_turbine_fanout_experiments
+        // is already activated on all clusters.
         match shred_slot % 359 {
             11 => 64,
             61 => 768,
@@ -576,21 +599,7 @@ pub(crate) fn get_data_plane_fanout(shred_slot: Slot, root_bank: &Bank) -> usize
             311 => 384,
             _ => DATA_PLANE_FANOUT,
         }
-    } else {
-        DATA_PLANE_FANOUT
     }
-}
-
-fn enable_turbine_fanout_experiments(shred_slot: Slot, root_bank: &Bank) -> bool {
-    check_feature_activation(
-        &feature_set::enable_turbine_fanout_experiments::id(),
-        shred_slot,
-        root_bank,
-    ) && !check_feature_activation(
-        &feature_set::disable_turbine_fanout_experiments::id(),
-        shred_slot,
-        root_bank,
-    )
 }
 
 // Returns true if the feature is effective for the shred slot.
