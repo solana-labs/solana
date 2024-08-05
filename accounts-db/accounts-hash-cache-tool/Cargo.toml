@@ -15,6 +15,7 @@ bytemuck = { workspace = true }
 clap = { workspace = true }
 memmap2 = { workspace = true }
 solana-accounts-db = { workspace = true }
+solana-program = { workspace = true }
 solana-version = { workspace = true }
 
 [features]

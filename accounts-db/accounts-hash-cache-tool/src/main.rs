@@ -7,9 +7,10 @@ use {
     },
     memmap2::Mmap,
     solana_accounts_db::{
-        parse_cache_hash_data_filename, CacheHashDataFileEntry, CacheHashDataFileHeader,
-        ParsedCacheHashDataFilename,
+        accounts_hash::AccountHash, parse_cache_hash_data_filename, CacheHashDataFileEntry,
+        CacheHashDataFileHeader, ParsedCacheHashDataFilename,
     },
+    solana_program::pubkey::Pubkey,
     std::{
         cmp::Ordering,
         fs::{self, File, Metadata},
@@ -57,6 +58,7 @@ fn main() {
         )
         .subcommand(
             SubCommand::with_name(CMD_DIFF)
+                .about("Compares cache files")
                 .subcommand(
                     SubCommand::with_name(CMD_DIFF_FILES)
                         .about("Diff two accounts hash cache files")
@@ -179,40 +181,9 @@ fn do_inspect(file: impl AsRef<Path>, force: bool) -> Result<(), String> {
 }
 
 fn do_diff_files(file1: impl AsRef<Path>, file2: impl AsRef<Path>) -> Result<(), String> {
-    let force = false; // skipping sanity checks is not supported when diffing
-    let (mut reader1, header1) = open_file(&file1, force).map_err(|err| {
-        format!(
-            "failed to open accounts hash cache file 1 '{}': {err}",
-            file1.as_ref().display(),
-        )
-    })?;
-    let (mut reader2, header2) = open_file(&file2, force).map_err(|err| {
-        format!(
-            "failed to open accounts hash cache file 2 '{}': {err}",
-            file2.as_ref().display(),
-        )
-    })?;
-    // Note: Purposely open both files before reading either one.  This way, if there's an error
-    // opening file 2, we can bail early without having to wait for file 1 to be read completely.
-
-    // extract the entries from both files
-    let do_extract = |reader: &mut BufReader<_>, header: &CacheHashDataFileHeader| {
-        let mut entries = Vec::new();
-        scan_file(reader, header.count, |entry| {
-            entries.push(entry);
-        })?;
-
-        // entries in the file are sorted by pubkey then slot,
-        // so we want to keep the *last* entry (if there are duplicates)
-        let entries: HashMap<_, _> = entries
-            .into_iter()
-            .map(|entry| (entry.pubkey, (entry.hash, entry.lamports)))
-            .collect();
-        Ok::<_, String>(entries)
-    };
-    let entries1 = do_extract(&mut reader1, &header1)
+    let entries1 = extract_latest_entries_in(&file1)
         .map_err(|err| format!("failed to extract entries from file 1: {err}"))?;
-    let entries2 = do_extract(&mut reader2, &header2)
+    let entries2 = extract_latest_entries_in(&file2)
         .map_err(|err| format!("failed to extract entries from file 2: {err}"))?;
 
     // compute the differences between the files
@@ -494,7 +465,31 @@ fn get_cache_files_in(dir: impl AsRef<Path>) -> Result<Vec<CacheFileInfo>, io::E
     Ok(cache_files)
 }
 
-/// Scan file with `reader` and apply `user_fn` to each entry
+/// Returns the entries in `file`
+///
+/// If there are multiple entries for a pubkey, only the latest is returned.
+fn extract_latest_entries_in(
+    file: impl AsRef<Path>,
+) -> Result<HashMap<Pubkey, (AccountHash, /* lamports */ u64)>, String> {
+    let force = false; // skipping sanity checks is not supported when extracting entries
+    let (reader, header) = open_file(&file, force).map_err(|err| {
+        format!(
+            "failed to open accounts hash cache file '{}': {err}",
+            file.as_ref().display(),
+        )
+    })?;
+
+    // entries in the file are sorted by pubkey then slot,
+    // so we want to keep the *last* entry (if there are duplicates)
+    let mut entries = HashMap::default();
+    scan_file(reader, header.count, |entry| {
+        entries.insert(entry.pubkey, (entry.hash, entry.lamports));
+    })?;
+
+    Ok(entries)
+}
+
+/// Scans file with `reader` and applies `user_fn` to each entry
 ///
 /// NOTE: `reader`'s cursor must already be at the first entry; i.e. *past* the header.
 fn scan_file(
