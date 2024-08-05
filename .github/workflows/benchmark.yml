@@ -1,0 +1,98 @@
+name: Benchmark
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  benchmark:
+    name: benchmark
+    runs-on: benchmark
+    strategy:
+      fail-fast: false
+      matrix:
+        # before adding your benchmark. please check these steps:
+        # 1. generate a file that includes your benchmark result. it should looks like
+        #
+        #     ```
+        #     test bench_accounts_delta_hash                         ... bench:  48,035,858 ns/iter (+/- 2,118,806)
+        #     ```
+        #
+        # 2. run `DRY_RUN=1 ./ci/upload-benchmark.sh <YOUR_BENCHMARK_RESULT_FILE_PATH>` to ensure the datapoints are correct
+        #    it should looks similar to this:
+        #
+        #    ```
+        #    datapoint: ,commit=xxxx,test_suite=xxxx,name=bench_accounts_delta_hash median=48035858,deviation=2118806i
+        #    ```
+        #
+        #    you only need to check `name`, `median` and `deviation`
+        #
+        test:
+          - {
+              name: "solana-sdk",
+              commands: ["cargo +$rust_nightly bench -p solana-sdk"],
+            }
+          - {
+              name: "solana-runtime",
+              commands: ["cargo +$rust_nightly bench -p solana-runtime"],
+            }
+          - {
+              name: "solana-gossip",
+              commands: ["cargo +$rust_nightly bench -p solana-gossip"],
+            }
+          - {
+              name: "solana-poh",
+              commands: ["cargo +$rust_nightly bench -p solana-poh"],
+            }
+          - {
+              name: "solana-core",
+              commands: ["cargo +$rust_nightly bench -p solana-core"],
+            }
+          - {
+              name: "sbf",
+              before_command: "make -C programs/sbf all",
+              commands:
+                [
+                  "cargo +$rust_nightly bench --manifest-path programs/sbf/Cargo.toml --features=sbf_c",
+                ],
+            }
+          # spliting solana-accounts-db because it includes criterion bench
+          - {
+              name: "solana-accounts-db",
+              commands:
+                [
+                  "cargo +$rust_nightly bench -p solana-accounts-db --bench accounts_index",
+                  "cargo +$rust_nightly bench -p solana-accounts-db --bench accounts",
+                  "cargo +$rust_nightly bench -p solana-accounts-db --bench append_vec",
+                  "cargo +$rust_nightly bench -p solana-accounts-db --bench bench_accounts_file -- --output-format bencher",
+                  "cargo +$rust_nightly bench -p solana-accounts-db --bench bench_hashing -- --output-format bencher",
+                  "cargo +$rust_nightly bench -p solana-accounts-db --bench bench_serde -- --output-format bencher",
+                ],
+            }
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Before Command
+        if: ${{ matrix.test.before_command != '' }}
+        run: |
+          ${{ matrix.test.before_command }}
+
+      - name: Command
+        run: |
+          source ci/rust-version.sh nightly
+          echo '${{ toJson(matrix.test.commands) }}' | jq -r '.[]' | while read command; do
+            eval $command | tee -a benchmark
+          done
+
+      - name: Upload Result
+        run: |
+          TEST_SUITE="${{ matrix.test.name }}" \
+          COMMIT_HASH="$(git rev-parse HEAD)" \
+          INFLUX_HOST="${{ secrets.BENCHMARK_INFLUX_HOST }}" \
+          INFLUX_DB="${{ secrets.BENCHMARK_INFLUX_DB }}" \
+          INFLUX_USER="${{ secrets.BENCHMARK_INFLUX_USER }}" \
+          INFLUX_PASSWORD="${{ secrets.BENCHMARK_INFLUX_PASSWORD }}" \
+          INFLUX_MEASUREMENT="${{ secrets.BENCHMARK_INFLUX_MEASUREMENT }}" \
+          ./ci/upload-benchmark.sh benchmark
