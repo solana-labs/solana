@@ -18,20 +18,26 @@ while [[ -n $1 ]]; do
 done
 
 cargo_audit_ignores=(
-  # Potential segfault in the time crate
+  # === main repo ===
   #
-  # Blocked on chrono updating `time` to >= 0.2.23
-  --ignore RUSTSEC-2020-0071
-
-  # tokio: vulnerability affecting named pipes on Windows
-  #
-  # Exception is a stopgap to unblock CI
-  # https://github.com/solana-labs/solana/issues/29586
-  --ignore RUSTSEC-2023-0001
-
+  # Crate:     ed25519-dalek
+  # Version:   1.0.1
+  # Title:     Double Public Key Signing Function Oracle Attack on `ed25519-dalek`
+  # Date:      2022-06-11
+  # ID:        RUSTSEC-2022-0093
+  # URL:       https://rustsec.org/advisories/RUSTSEC-2022-0093
+  # Solution:  Upgrade to >=2
   --ignore RUSTSEC-2022-0093
 
-  # curve25519-dalek
+  # === programs/sbf ===
+  #
+  # Crate:     curve25519-dalek
+  # Version:   3.2.1
+  # Title:     Timing variability in `curve25519-dalek`'s `Scalar29::sub`/`Scalar52::sub`
+  # Date:      2024-06-18
+  # ID:        RUSTSEC-2024-0344
+  # URL:       https://rustsec.org/advisories/RUSTSEC-2024-0344
+  # Solution:  Upgrade to >=4.1.3
   --ignore RUSTSEC-2024-0344
 )
 scripts/cargo-for-all-lock-files.sh audit "${cargo_audit_ignores[@]}" | $dep_tree_filter
