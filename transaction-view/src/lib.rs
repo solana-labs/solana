@@ -7,3 +7,5 @@ pub mod bytes;
 mod bytes;
 
 pub mod result;
+#[allow(dead_code)]
+mod signature_meta;

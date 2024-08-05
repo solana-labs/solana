@@ -102,7 +102,11 @@ pub fn optimized_read_compressed_u16(bytes: &[u8], offset: &mut usize) -> Result
 /// 2. The size of `T` is small enough such that a usize will not overflow if
 ///    given the maximum array size (u16::MAX).
 #[inline(always)]
-pub fn offset_array_len<T: Sized>(bytes: &[u8], offset: &mut usize, len: u16) -> Result<()> {
+pub fn advance_offset_for_array<T: Sized>(
+    bytes: &[u8],
+    offset: &mut usize,
+    len: u16,
+) -> Result<()> {
     let array_len_bytes = usize::from(len).wrapping_mul(core::mem::size_of::<T>());
     check_remaining(bytes, *offset, array_len_bytes)?;
     *offset = offset.wrapping_add(array_len_bytes);
@@ -116,7 +120,7 @@ pub fn offset_array_len<T: Sized>(bytes: &[u8], offset: &mut usize, len: u16) ->
 /// 1. The current offset is not greater than `bytes.len()`.
 /// 2. The size of `T` is small enough such that a usize will not overflow.
 #[inline(always)]
-pub fn offset_type<T: Sized>(bytes: &[u8], offset: &mut usize) -> Result<()> {
+pub fn advance_offset_for_type<T: Sized>(bytes: &[u8], offset: &mut usize) -> Result<()> {
     let type_size = core::mem::size_of::<T>();
     check_remaining(bytes, *offset, type_size)?;
     *offset = offset.wrapping_add(type_size);
@@ -267,7 +271,7 @@ mod tests {
     }
 
     #[test]
-    fn test_offset_array_len() {
+    fn test_advance_offset_for_array() {
         #[repr(C)]
         struct MyStruct {
             _a: u8,
@@ -278,17 +282,17 @@ mod tests {
         // Test with a buffer that is too short
         let bytes = [0u8; 1];
         let mut offset = 0;
-        assert!(offset_array_len::<MyStruct>(&bytes, &mut offset, 1).is_err());
+        assert!(advance_offset_for_array::<MyStruct>(&bytes, &mut offset, 1).is_err());
 
         // Test with a buffer that is long enough
         let bytes = [0u8; 4];
         let mut offset = 0;
-        assert!(offset_array_len::<MyStruct>(&bytes, &mut offset, 2).is_ok());
+        assert!(advance_offset_for_array::<MyStruct>(&bytes, &mut offset, 2).is_ok());
         assert_eq!(offset, 4);
     }
 
     #[test]
-    fn test_offset_type() {
+    fn test_advance_offset_for_type() {
         #[repr(C)]
         struct MyStruct {
             _a: u8,
@@ -299,12 +303,12 @@ mod tests {
         // Test with a buffer that is too short
         let bytes = [0u8; 1];
         let mut offset = 0;
-        assert!(offset_type::<MyStruct>(&bytes, &mut offset).is_err());
+        assert!(advance_offset_for_type::<MyStruct>(&bytes, &mut offset).is_err());
 
         // Test with a buffer that is long enough
         let bytes = [0u8; 4];
         let mut offset = 0;
-        assert!(offset_type::<MyStruct>(&bytes, &mut offset).is_ok());
+        assert!(advance_offset_for_type::<MyStruct>(&bytes, &mut offset).is_ok());
         assert_eq!(offset, 2);
     }
 }
