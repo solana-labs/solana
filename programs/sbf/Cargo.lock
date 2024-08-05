@@ -5708,6 +5708,7 @@ version = "2.1.0"
 dependencies = [
  "agave-validator",
  "bincode",
+ "borsh 1.5.1",
  "byteorder 1.5.0",
  "elf",
  "itertools 0.10.5",
@@ -5787,6 +5788,14 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
+ "solana-program",
+]
+
+[[package]]
+name = "solana-sbf-rust-call-args"
+version = "2.1.0"
+dependencies = [
+ "borsh 1.5.1",
  "solana-program",
 ]
 
