@@ -1,6 +1,7 @@
 //! Service to calculate accounts hashes
 
 use {
+    crate::snapshot_packager_service::PendingSnapshotPackages,
     crossbeam_channel::{Receiver, Sender},
     solana_accounts_db::{
         accounts_db::CalcAccountsHashKind,
@@ -24,7 +25,7 @@ use {
         io::Result as IoResult,
         sync::{
             atomic::{AtomicBool, Ordering},
-            Arc,
+            Arc, Mutex,
         },
         thread::{self, Builder, JoinHandle},
         time::Duration,
@@ -39,7 +40,7 @@ impl AccountsHashVerifier {
     pub fn new(
         accounts_package_sender: Sender<AccountsPackage>,
         accounts_package_receiver: Receiver<AccountsPackage>,
-        snapshot_package_sender: Option<Sender<SnapshotPackage>>,
+        pending_snapshot_packages: Arc<Mutex<PendingSnapshotPackages>>,
         exit: Arc<AtomicBool>,
         snapshot_config: SnapshotConfig,
     ) -> Self {
@@ -71,9 +72,8 @@ impl AccountsHashVerifier {
 
                     let (result, handling_time_us) = measure_us!(Self::process_accounts_package(
                         accounts_package,
-                        snapshot_package_sender.as_ref(),
+                        &pending_snapshot_packages,
                         &snapshot_config,
-                        &exit,
                     ));
                     if let Err(err) = result {
                         error!("Stopping AccountsHashVerifier! Fatal error while processing accounts package: {err}");
@@ -208,9 +208,8 @@ impl AccountsHashVerifier {
     #[allow(clippy::too_many_arguments)]
     fn process_accounts_package(
         accounts_package: AccountsPackage,
-        snapshot_package_sender: Option<&Sender<SnapshotPackage>>,
+        pending_snapshot_packages: &Mutex<PendingSnapshotPackages>,
         snapshot_config: &SnapshotConfig,
-        exit: &AtomicBool,
     ) -> IoResult<()> {
         let (accounts_hash_kind, bank_incremental_snapshot_persistence) =
             Self::calculate_and_verify_accounts_hash(&accounts_package, snapshot_config)?;
@@ -221,11 +220,10 @@ impl AccountsHashVerifier {
 
         Self::submit_for_packaging(
             accounts_package,
-            snapshot_package_sender,
+            pending_snapshot_packages,
             snapshot_config,
             accounts_hash_kind,
             bank_incremental_snapshot_persistence,
-            exit,
         );
 
         Ok(())
@@ -462,11 +460,10 @@ impl AccountsHashVerifier {
 
     fn submit_for_packaging(
         accounts_package: AccountsPackage,
-        snapshot_package_sender: Option<&Sender<SnapshotPackage>>,
+        pending_snapshot_packages: &Mutex<PendingSnapshotPackages>,
         snapshot_config: &SnapshotConfig,
         accounts_hash_kind: AccountsHashKind,
         bank_incremental_snapshot_persistence: Option<BankIncrementalSnapshotPersistence>,
-        exit: &AtomicBool,
     ) {
         if !snapshot_config.should_generate_snapshots()
             || !matches!(
@@ -476,24 +473,16 @@ impl AccountsHashVerifier {
         {
             return;
         }
-        let Some(snapshot_package_sender) = snapshot_package_sender else {
-            return;
-        };
 
         let snapshot_package = SnapshotPackage::new(
             accounts_package,
             accounts_hash_kind,
             bank_incremental_snapshot_persistence,
         );
-        let send_result = snapshot_package_sender.send(snapshot_package);
-        if let Err(err) = send_result {
-            // Sending the snapshot package should never fail *unless* we're shutting down.
-            let snapshot_package = &err.0;
-            assert!(
-                exit.load(Ordering::Relaxed),
-                "Failed to send snapshot package: {err}, {snapshot_package:?}"
-            );
-        }
+        pending_snapshot_packages
+            .lock()
+            .unwrap()
+            .push(snapshot_package);
     }
 
     pub fn join(self) -> thread::Result<()> {

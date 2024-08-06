@@ -8,7 +8,8 @@ use {
         utils::{create_all_accounts_run_and_snapshot_dirs, move_and_async_delete_path_contents},
     },
     solana_core::{
-        accounts_hash_verifier::AccountsHashVerifier, validator::BlockVerificationMethod,
+        accounts_hash_verifier::AccountsHashVerifier,
+        snapshot_packager_service::PendingSnapshotPackages, validator::BlockVerificationMethod,
     },
     solana_geyser_plugin_manager::geyser_plugin_service::{
         GeyserPluginService, GeyserPluginServiceError,
@@ -48,7 +49,7 @@ use {
         process::exit,
         sync::{
             atomic::{AtomicBool, Ordering},
-            Arc, RwLock,
+            Arc, Mutex, RwLock,
         },
     },
     thiserror::Error,
@@ -335,11 +336,12 @@ pub fn load_and_process_ledger(
         }
     }
 
+    let pending_snapshot_packages = Arc::new(Mutex::new(PendingSnapshotPackages::default()));
     let (accounts_package_sender, accounts_package_receiver) = crossbeam_channel::unbounded();
     let accounts_hash_verifier = AccountsHashVerifier::new(
         accounts_package_sender.clone(),
         accounts_package_receiver,
-        None,
+        pending_snapshot_packages,
         exit.clone(),
         SnapshotConfig::new_load_only(),
     );

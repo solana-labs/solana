@@ -12,7 +12,7 @@ use {
     },
     solana_core::{
         accounts_hash_verifier::AccountsHashVerifier,
-        snapshot_packager_service::SnapshotPackagerService,
+        snapshot_packager_service::{PendingSnapshotPackages, SnapshotPackagerService},
     },
     solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
     solana_runtime::{
@@ -43,7 +43,7 @@ use {
         mem::ManuallyDrop,
         sync::{
             atomic::{AtomicBool, Ordering},
-            Arc, RwLock,
+            Arc, Mutex, RwLock,
         },
         time::Duration,
     },
@@ -180,10 +180,9 @@ impl BackgroundServices {
     ) -> Self {
         info!("Starting background services...");
 
-        let (snapshot_package_sender, snapshot_package_receiver) = crossbeam_channel::unbounded();
+        let pending_snapshot_packages = Arc::new(Mutex::new(PendingSnapshotPackages::default()));
         let snapshot_packager_service = SnapshotPackagerService::new(
-            snapshot_package_sender.clone(),
-            snapshot_package_receiver,
+            pending_snapshot_packages.clone(),
             None,
             exit.clone(),
             cluster_info.clone(),
@@ -195,7 +194,7 @@ impl BackgroundServices {
         let accounts_hash_verifier = AccountsHashVerifier::new(
             accounts_package_sender.clone(),
             accounts_package_receiver,
-            Some(snapshot_package_sender),
+            pending_snapshot_packages,
             exit.clone(),
             snapshot_config.clone(),
         );
