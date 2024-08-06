@@ -339,7 +339,13 @@ pub fn streaming_unpack_snapshot<A: Read>(
         |_, _| {},
         |entry_path_buf| {
             if entry_path_buf.is_file() {
-                sender.send(entry_path_buf).unwrap();
+                let result = sender.send(entry_path_buf);
+                if let Err(err) = result {
+                    panic!(
+                        "failed to send path '{}' from unpacker to rebuilder: {err}",
+                        err.0.display(),
+                    );
+                }
             }
         },
     )
