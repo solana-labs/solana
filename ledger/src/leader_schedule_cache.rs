@@ -139,14 +139,10 @@ impl LeaderScheduleCache {
                     .map(move |i| i as Slot + first_slot)
             })
             .skip_while(|slot| {
-                match blockstore {
-                    None => false,
-                    // Skip slots we have already sent a shred for.
-                    Some(blockstore) => match blockstore.meta(*slot).unwrap() {
-                        Some(meta) => meta.received > 0,
-                        None => false,
-                    },
-                }
+                // Skip slots we already have shreds for
+                blockstore
+                    .map(|bs| bs.has_existing_shreds_for_slot(*slot))
+                    .unwrap_or(false)
             });
         let first_slot = schedule.next()?;
         let max_slot = first_slot.saturating_add(max_slot_range);

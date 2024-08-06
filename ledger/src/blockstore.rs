@@ -4049,6 +4049,13 @@ impl Blockstore {
         Ok(duplicate_slots_iterator.map(|(slot, _)| slot))
     }
 
+    pub fn has_existing_shreds_for_slot(&self, slot: Slot) -> bool {
+        match self.meta(slot).unwrap() {
+            Some(meta) => meta.received > 0,
+            None => false,
+        }
+    }
+
     /// Returns the max root or 0 if it does not exist
     pub fn max_root(&self) -> Slot {
         self.max_root.load(Ordering::Relaxed)
