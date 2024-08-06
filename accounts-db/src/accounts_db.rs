@@ -11067,52 +11067,86 @@ pub mod tests {
     #[test]
     fn test_shrink_zero_lamport_single_ref_account() {
         solana_logger::setup();
+        // note that 'None' checks the case based on the default value of `latest_full_snapshot_slot` in `AccountsDb`
+        for latest_full_snapshot_slot in [None, Some(0), Some(1), Some(2)] {
+            // store a zero and non-zero lamport account
+            // make sure clean marks the ref_count=1, zero lamport account dead and removes pubkey from index completely
+            let accounts = AccountsDb::new_single_for_tests();
+            let pubkey_zero = Pubkey::from([1; 32]);
+            let pubkey2 = Pubkey::from([2; 32]);
+            let account = AccountSharedData::new(1, 0, AccountSharedData::default().owner());
+            let zero_lamport_account =
+                AccountSharedData::new(0, 0, AccountSharedData::default().owner());
+            let slot = 1;
+            // Store a zero-lamport account and a non-zero lamport account
+            accounts.store_for_tests(
+                slot,
+                &[(&pubkey_zero, &zero_lamport_account), (&pubkey2, &account)],
+            );
 
-        // store a zero and non-zero lamport account
-        // make sure clean marks the ref_count=1, zero lamport account dead and removes pubkey from index completely
-        let accounts = AccountsDb::new_single_for_tests();
-        let pubkey_zero = Pubkey::from([1; 32]);
-        let pubkey2 = Pubkey::from([2; 32]);
-        let account = AccountSharedData::new(1, 0, AccountSharedData::default().owner());
-        let zero_lamport_account =
-            AccountSharedData::new(0, 0, AccountSharedData::default().owner());
+            // Simulate rooting the zero-lamport account, should be a
+            // candidate for cleaning
+            accounts.calculate_accounts_delta_hash(slot);
+            accounts.add_root_and_flush_write_cache(slot);
 
-        // Store a zero-lamport account and a non-zero lamport account
-        accounts.store_for_tests(
-            1,
-            &[(&pubkey_zero, &zero_lamport_account), (&pubkey2, &account)],
-        );
+            // for testing, we need to cause shrink to think this will be productive.
+            // The zero lamport account isn't dead, but it can become dead inside shrink.
+            accounts
+                .storage
+                .get_slot_storage_entry(slot)
+                .unwrap()
+                .alive_bytes
+                .fetch_sub(aligned_stored_size(0), Ordering::Relaxed);
 
-        // Simulate rooting the zero-lamport account, should be a
-        // candidate for cleaning
-        accounts.calculate_accounts_delta_hash(1);
-        accounts.add_root_and_flush_write_cache(1);
+            if let Some(latest_full_snapshot_slot) = latest_full_snapshot_slot {
+                accounts.set_latest_full_snapshot_slot(latest_full_snapshot_slot);
+            }
 
-        // for testing, we need to cause shrink to think this will be productive.
-        // The zero lamport account isn't dead, but it can become dead inside shrink.
-        accounts
-            .storage
-            .get_slot_storage_entry(1)
-            .unwrap()
-            .alive_bytes
-            .fetch_sub(aligned_stored_size(0), Ordering::Relaxed);
+            // Shrink the slot. The behavior on the zero lamport account will depend on `latest_full_snapshot_slot`.
+            accounts.shrink_slot_forced(slot);
 
-        // Slot 1 should be cleaned, but
-        // zero-lamport account should not be cleaned since last full snapshot root is before slot 1
-        accounts.shrink_slot_forced(1);
+            assert!(
+                accounts.storage.get_slot_storage_entry(1).is_some(),
+                "{latest_full_snapshot_slot:?}"
+            );
 
-        assert!(accounts.storage.get_slot_storage_entry(1).is_some());
+            let expected_alive_count = if latest_full_snapshot_slot.unwrap_or(Slot::MAX) < slot {
+                // zero lamport account should NOT be dead in the index
+                assert!(
+                    accounts
+                        .accounts_index
+                        .contains_with(&pubkey_zero, None, None),
+                    "{latest_full_snapshot_slot:?}"
+                );
+                2
+            } else {
+                // zero lamport account should be dead in the index
+                assert!(
+                    !accounts
+                        .accounts_index
+                        .contains_with(&pubkey_zero, None, None),
+                    "{latest_full_snapshot_slot:?}"
+                );
+                // the zero lamport account should be marked as dead
+                1
+            };
 
-        // the zero lamport account should be marked as dead
-        assert_eq!(accounts.alive_account_count_in_slot(1), 1);
+            assert_eq!(
+                accounts.alive_account_count_in_slot(slot),
+                expected_alive_count,
+                "{latest_full_snapshot_slot:?}"
+            );
 
-        // zero lamport account should be dead in the index
-        assert!(!accounts
-            .accounts_index
-            .contains_with(&pubkey_zero, None, None));
-        // other account should still be alive
-        assert!(accounts.accounts_index.contains_with(&pubkey2, None, None));
-        assert!(accounts.storage.get_slot_storage_entry(1).is_some());
+            // other account should still be alive
+            assert!(
+                accounts.accounts_index.contains_with(&pubkey2, None, None),
+                "{latest_full_snapshot_slot:?}"
+            );
+            assert!(
+                accounts.storage.get_slot_storage_entry(slot).is_some(),
+                "{latest_full_snapshot_slot:?}"
+            );
+        }
     }
 
     #[test]
