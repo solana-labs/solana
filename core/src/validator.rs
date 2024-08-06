@@ -735,6 +735,11 @@ impl Validator {
             Some(poh_timing_point_sender.clone()),
         )
         .map_err(ValidatorError::Other)?;
+
+        if !config.no_poh_speed_test {
+            check_poh_speed(&bank_forks.read().unwrap().root_bank(), None)?;
+        }
+
         let hard_forks = bank_forks.read().unwrap().root_bank().hard_forks();
         if !hard_forks.is_empty() {
             info!("Hard forks: {:?}", hard_forks);
@@ -745,7 +750,6 @@ impl Validator {
             &genesis_config.hash(),
             Some(&hard_forks),
         ));
-
         Self::print_node_info(&node);
 
         if let Some(expected_shred_version) = config.expected_shred_version {
@@ -1671,33 +1675,35 @@ fn active_vote_account_exists_in_bank(bank: &Bank, vote_account: &Pubkey) -> boo
     false
 }
 
-fn check_poh_speed(
-    genesis_config: &GenesisConfig,
-    maybe_hash_samples: Option<u64>,
-) -> Result<(), ValidatorError> {
-    if let Some(hashes_per_tick) = genesis_config.hashes_per_tick() {
-        let ticks_per_slot = genesis_config.ticks_per_slot();
-        let hashes_per_slot = hashes_per_tick * ticks_per_slot;
-        let hash_samples = maybe_hash_samples.unwrap_or(hashes_per_slot);
+fn check_poh_speed(bank: &Bank, maybe_hash_samples: Option<u64>) -> Result<(), ValidatorError> {
+    let Some(hashes_per_tick) = bank.hashes_per_tick() else {
+        warn!("Unable to read hashes per tick from Bank, skipping PoH speed check");
+        return Ok(());
+    };
 
-        let hash_time = compute_hash_time(hash_samples);
-        let my_hashes_per_second = (hash_samples as f64 / hash_time.as_secs_f64()) as u64;
-        let target_slot_duration = Duration::from_nanos(genesis_config.ns_per_slot() as u64);
-        let target_hashes_per_second =
-            (hashes_per_slot as f64 / target_slot_duration.as_secs_f64()) as u64;
+    let ticks_per_slot = bank.ticks_per_slot();
+    let hashes_per_slot = hashes_per_tick * ticks_per_slot;
+    let hash_samples = maybe_hash_samples.unwrap_or(hashes_per_slot);
 
-        info!(
-            "PoH speed check: \
+    let hash_time = compute_hash_time(hash_samples);
+    let my_hashes_per_second = (hash_samples as f64 / hash_time.as_secs_f64()) as u64;
+
+    let target_slot_duration = Duration::from_nanos(bank.ns_per_slot as u64);
+    let target_hashes_per_second =
+        (hashes_per_slot as f64 / target_slot_duration.as_secs_f64()) as u64;
+
+    info!(
+        "PoH speed check: \
             computed hashes per second {my_hashes_per_second}, \
             target hashes per second {target_hashes_per_second}"
-        );
-        if my_hashes_per_second < target_hashes_per_second {
-            return Err(ValidatorError::PohTooSlow {
-                mine: my_hashes_per_second,
-                target: target_hashes_per_second,
-            });
-        }
+    );
+    if my_hashes_per_second < target_hashes_per_second {
+        return Err(ValidatorError::PohTooSlow {
+            mine: my_hashes_per_second,
+            target: target_hashes_per_second,
+        });
     }
+
     Ok(())
 }
 
@@ -1827,10 +1833,6 @@ fn load_genesis(
                 expected_genesis_hash,
             ));
         }
-    }
-
-    if !config.no_poh_speed_test {
-        check_poh_speed(&genesis_config, None)?;
     }
 
     Ok(genesis_config)
@@ -2931,11 +2933,25 @@ mod tests {
         ));
     }
 
+    fn target_tick_duration() -> Duration {
+        // DEFAULT_MS_PER_SLOT = 400
+        // DEFAULT_TICKS_PER_SLOT = 64
+        // MS_PER_TICK = 6
+        //
+        // But, DEFAULT_MS_PER_SLOT / DEFAULT_TICKS_PER_SLOT = 6.25
+        //
+        // So, convert to microseconds first to avoid the integer rounding error
+        let target_tick_duration_us = solana_sdk::clock::DEFAULT_MS_PER_SLOT * 1000
+            / solana_sdk::clock::DEFAULT_TICKS_PER_SLOT;
+        assert_eq!(target_tick_duration_us, 6250);
+        Duration::from_micros(target_tick_duration_us)
+    }
+
     #[test]
     fn test_poh_speed() {
         solana_logger::setup();
         let poh_config = PohConfig {
-            target_tick_duration: Duration::from_millis(solana_sdk::clock::MS_PER_TICK),
+            target_tick_duration: target_tick_duration(),
             // make PoH rate really fast to cause the panic condition
             hashes_per_tick: Some(100 * solana_sdk::clock::DEFAULT_HASHES_PER_TICK),
             ..PohConfig::default()
@@ -2944,13 +2960,15 @@ mod tests {
             poh_config,
             ..GenesisConfig::default()
         };
-        assert!(check_poh_speed(&genesis_config, Some(10_000)).is_err());
+        let bank = Bank::new_for_tests(&genesis_config);
+        assert!(check_poh_speed(&bank, Some(10_000)).is_err());
     }
 
     #[test]
     fn test_poh_speed_no_hashes_per_tick() {
+        solana_logger::setup();
         let poh_config = PohConfig {
-            target_tick_duration: Duration::from_millis(solana_sdk::clock::MS_PER_TICK),
+            target_tick_duration: target_tick_duration(),
             hashes_per_tick: None,
             ..PohConfig::default()
         };
@@ -2958,6 +2976,7 @@ mod tests {
             poh_config,
             ..GenesisConfig::default()
         };
-        check_poh_speed(&genesis_config, Some(10_000)).unwrap();
+        let bank = Bank::new_for_tests(&genesis_config);
+        check_poh_speed(&bank, Some(10_000)).unwrap();
     }
 }

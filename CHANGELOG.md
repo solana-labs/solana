@@ -22,6 +22,7 @@ Release channels have their own copy of this changelog:
     * removed the unreleased `redelegate` instruction processor and CLI commands (#2213)
 * Changes
   * SDK: removed the `respan` macro. This was marked as "internal use only" and was no longer used internally.
+  * `agave-validator`: Update PoH speed check to compare against current hash rate from a Bank (#2447)
 
 ## [2.0.0]
 * Breaking
