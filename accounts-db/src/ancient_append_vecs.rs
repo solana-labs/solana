@@ -3836,6 +3836,7 @@ pub mod tests {
                 unrefed_pubkeys: unrefed_pubkeys.iter().collect(),
 
                 // irrelevant fields
+                zero_lamport_single_ref_pubkeys: Vec::default(),
                 slot: 0,
                 capacity: 0,
                 alive_accounts: ShrinkCollectAliveSeparatedByRefs {
