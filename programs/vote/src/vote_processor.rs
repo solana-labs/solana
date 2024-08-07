@@ -46,7 +46,6 @@ fn process_authorize_with_seed_instruction(
         authorization_type,
         &expected_authority_keys,
         &clock,
-        invoke_context.get_feature_set(),
     )
 }
 
@@ -75,25 +74,12 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
             }
             let clock =
                 get_sysvar_with_account_check::clock(invoke_context, instruction_context, 2)?;
-            vote_state::initialize_account(
-                &mut me,
-                &vote_init,
-                &signers,
-                &clock,
-                invoke_context.get_feature_set(),
-            )
+            vote_state::initialize_account(&mut me, &vote_init, &signers, &clock)
         }
         VoteInstruction::Authorize(voter_pubkey, vote_authorize) => {
             let clock =
                 get_sysvar_with_account_check::clock(invoke_context, instruction_context, 1)?;
-            vote_state::authorize(
-                &mut me,
-                &voter_pubkey,
-                vote_authorize,
-                &signers,
-                &clock,
-                invoke_context.get_feature_set(),
-            )
+            vote_state::authorize(&mut me, &voter_pubkey, vote_authorize, &signers, &clock)
         }
         VoteInstruction::AuthorizeWithSeed(args) => {
             instruction_context.check_number_of_instruction_accounts(3)?;
@@ -132,12 +118,7 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
             let node_pubkey = transaction_context.get_key_of_account_at_index(
                 instruction_context.get_index_of_instruction_account_in_transaction(1)?,
             )?;
-            vote_state::update_validator_identity(
-                &mut me,
-                node_pubkey,
-                &signers,
-                invoke_context.get_feature_set(),
-            )
+            vote_state::update_validator_identity(&mut me, node_pubkey, &signers)
         }
         VoteInstruction::UpdateCommission(commission) => {
             let sysvar_cache = invoke_context.get_sysvar_cache();
@@ -228,7 +209,6 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
                 &signers,
                 &rent_sysvar,
                 &clock_sysvar,
-                invoke_context.get_feature_set(),
             )
         }
         VoteInstruction::AuthorizeChecked(vote_authorize) => {
@@ -241,14 +221,7 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
             }
             let clock =
                 get_sysvar_with_account_check::clock(invoke_context, instruction_context, 1)?;
-            vote_state::authorize(
-                &mut me,
-                voter_pubkey,
-                vote_authorize,
-                &signers,
-                &clock,
-                invoke_context.get_feature_set(),
-            )
+            vote_state::authorize(&mut me, voter_pubkey, vote_authorize, &signers, &clock)
         }
     }
 });
@@ -275,7 +248,6 @@ mod tests {
         solana_sdk::{
             account::{self, Account, AccountSharedData, ReadableAccount},
             account_utils::StateMut,
-            feature_set::FeatureSet,
             hash::Hash,
             instruction::{AccountMeta, Instruction},
             pubkey::Pubkey,
@@ -318,27 +290,6 @@ mod tests {
             expected_result,
             Entrypoint::vm,
             |_invoke_context| {},
-            |_invoke_context| {},
-        )
-    }
-
-    fn process_instruction_disabled_features(
-        instruction_data: &[u8],
-        transaction_accounts: Vec<(Pubkey, AccountSharedData)>,
-        instruction_accounts: Vec<AccountMeta>,
-        expected_result: Result<(), InstructionError>,
-    ) -> Vec<AccountSharedData> {
-        mock_process_instruction(
-            &id(),
-            Vec::new(),
-            instruction_data,
-            transaction_accounts,
-            instruction_accounts,
-            expected_result,
-            Entrypoint::vm,
-            |invoke_context| {
-                invoke_context.mock_set_feature_set(std::sync::Arc::new(FeatureSet::default()));
-            },
             |_invoke_context| {},
         )
     }
@@ -1796,15 +1747,7 @@ mod tests {
             (sysvar::rent::id(), create_default_rent_account()),
         ];
 
-        // should succeed when vote_state_add_vote_latency is disabled
-        process_instruction_disabled_features(
-            &instructions[1].data,
-            transaction_accounts.clone(),
-            instructions[1].accounts.clone(),
-            Ok(()),
-        );
-
-        // should fail, if vote_state_add_vote_latency is enabled
+        // should fail, since VoteState1_14_11 isn't supported anymore
         process_instruction(
             &instructions[1].data,
             transaction_accounts,
@@ -1845,15 +1788,6 @@ mod tests {
             (sysvar::rent::id(), create_default_rent_account()),
         ];
 
-        // should fail, if vote_state_add_vote_latency is disabled
-        process_instruction_disabled_features(
-            &instructions[1].data,
-            transaction_accounts.clone(),
-            instructions[1].accounts.clone(),
-            Err(InstructionError::InvalidAccountData),
-        );
-
-        // succeeds, since vote_state_add_vote_latency is enabled
         process_instruction(
             &instructions[1].data,
             transaction_accounts,

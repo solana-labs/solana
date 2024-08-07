@@ -166,33 +166,24 @@ pub fn to<T: WritableAccount>(versioned: &VoteStateVersions, account: &mut T) ->
 fn set_vote_account_state(
     vote_account: &mut BorrowedAccount,
     vote_state: VoteState,
-    feature_set: &FeatureSet,
 ) -> Result<(), InstructionError> {
-    // Only if vote_state_add_vote_latency feature is enabled should the new version of vote state be stored
-    if feature_set.is_active(&feature_set::vote_state_add_vote_latency::id()) {
-        // If the account is not large enough to store the vote state, then attempt a realloc to make it large enough.
-        // The realloc can only proceed if the vote account has balance sufficient for rent exemption at the new size.
-        if (vote_account.get_data().len() < VoteStateVersions::vote_state_size_of(true))
-            && (!vote_account
-                .is_rent_exempt_at_data_length(VoteStateVersions::vote_state_size_of(true))
-                || vote_account
-                    .set_data_length(VoteStateVersions::vote_state_size_of(true))
-                    .is_err())
-        {
-            // Account cannot be resized to the size of a vote state as it will not be rent exempt, or failed to be
-            // resized for other reasons.  So store the V1_14_11 version.
-            return vote_account.set_state(&VoteStateVersions::V1_14_11(Box::new(
-                VoteState1_14_11::from(vote_state),
-            )));
-        }
-        // Vote account is large enough to store the newest version of vote state
-        vote_account.set_state(&VoteStateVersions::new_current(vote_state))
-    // Else when the vote_state_add_vote_latency feature is not enabled, then the V1_14_11 version is stored
-    } else {
-        vote_account.set_state(&VoteStateVersions::V1_14_11(Box::new(
+    // If the account is not large enough to store the vote state, then attempt a realloc to make it large enough.
+    // The realloc can only proceed if the vote account has balance sufficient for rent exemption at the new size.
+    if (vote_account.get_data().len() < VoteStateVersions::vote_state_size_of(true))
+        && (!vote_account
+            .is_rent_exempt_at_data_length(VoteStateVersions::vote_state_size_of(true))
+            || vote_account
+                .set_data_length(VoteStateVersions::vote_state_size_of(true))
+                .is_err())
+    {
+        // Account cannot be resized to the size of a vote state as it will not be rent exempt, or failed to be
+        // resized for other reasons.  So store the V1_14_11 version.
+        return vote_account.set_state(&VoteStateVersions::V1_14_11(Box::new(
             VoteState1_14_11::from(vote_state),
-        )))
+        )));
     }
+    // Vote account is large enough to store the newest version of vote state
+    vote_account.set_state(&VoteStateVersions::new_current(vote_state))
 }
 
 /// Checks the proposed vote state with the current and
@@ -852,7 +843,6 @@ pub fn authorize<S: std::hash::BuildHasher>(
     vote_authorize: VoteAuthorize,
     signers: &HashSet<Pubkey, S>,
     clock: &Clock,
-    feature_set: &FeatureSet,
 ) -> Result<(), InstructionError> {
     let mut vote_state: VoteState = vote_account
         .get_state::<VoteStateVersions>()?
@@ -887,7 +877,7 @@ pub fn authorize<S: std::hash::BuildHasher>(
         }
     }
 
-    set_vote_account_state(vote_account, vote_state, feature_set)
+    set_vote_account_state(vote_account, vote_state)
 }
 
 /// Update the node_pubkey, requires signature of the authorized voter
@@ -895,7 +885,6 @@ pub fn update_validator_identity<S: std::hash::BuildHasher>(
     vote_account: &mut BorrowedAccount,
     node_pubkey: &Pubkey,
     signers: &HashSet<Pubkey, S>,
-    feature_set: &FeatureSet,
 ) -> Result<(), InstructionError> {
     let mut vote_state: VoteState = vote_account
         .get_state::<VoteStateVersions>()?
@@ -909,7 +898,7 @@ pub fn update_validator_identity<S: std::hash::BuildHasher>(
 
     vote_state.node_pubkey = *node_pubkey;
 
-    set_vote_account_state(vote_account, vote_state, feature_set)
+    set_vote_account_state(vote_account, vote_state)
 }
 
 /// Update the vote account's commission
@@ -958,7 +947,7 @@ pub fn update_commission<S: std::hash::BuildHasher>(
 
     vote_state.commission = commission;
 
-    set_vote_account_state(vote_account, vote_state, feature_set)
+    set_vote_account_state(vote_account, vote_state)
 }
 
 /// Given a proposed new commission, returns true if this would be a commission increase, false otherwise
@@ -1003,7 +992,6 @@ pub fn withdraw<S: std::hash::BuildHasher>(
     signers: &HashSet<Pubkey, S>,
     rent_sysvar: &Rent,
     clock: &Clock,
-    feature_set: &FeatureSet,
 ) -> Result<(), InstructionError> {
     let mut vote_account = instruction_context
         .try_borrow_instruction_account(transaction_context, vote_account_index)?;
@@ -1037,7 +1025,7 @@ pub fn withdraw<S: std::hash::BuildHasher>(
         } else {
             // Deinitialize upon zero-balance
             datapoint_debug!("vote-account-close", ("allow", 1, i64));
-            set_vote_account_state(&mut vote_account, VoteState::default(), feature_set)?;
+            set_vote_account_state(&mut vote_account, VoteState::default())?;
         }
     } else {
         let min_rent_exempt_balance = rent_sysvar.minimum_balance(vote_account.get_data().len());
@@ -1062,13 +1050,8 @@ pub fn initialize_account<S: std::hash::BuildHasher>(
     vote_init: &VoteInit,
     signers: &HashSet<Pubkey, S>,
     clock: &Clock,
-    feature_set: &FeatureSet,
 ) -> Result<(), InstructionError> {
-    if vote_account.get_data().len()
-        != VoteStateVersions::vote_state_size_of(
-            feature_set.is_active(&feature_set::vote_state_add_vote_latency::id()),
-        )
-    {
+    if vote_account.get_data().len() != VoteStateVersions::vote_state_size_of(true) {
         return Err(InstructionError::InvalidAccountData);
     }
     let versioned = vote_account.get_state::<VoteStateVersions>()?;
@@ -1080,7 +1063,7 @@ pub fn initialize_account<S: std::hash::BuildHasher>(
     // node must agree to accept this vote account
     verify_authorized_signer(&vote_init.node_pubkey, signers)?;
 
-    set_vote_account_state(vote_account, VoteState::new(vote_init, clock), feature_set)
+    set_vote_account_state(vote_account, VoteState::new(vote_init, clock))
 }
 
 fn verify_and_get_vote_state<S: std::hash::BuildHasher>(
@@ -1130,7 +1113,7 @@ pub fn process_vote_with_account<S: std::hash::BuildHasher>(
             .ok_or(VoteError::EmptySlots)
             .and_then(|slot| vote_state.process_timestamp(*slot, timestamp))?;
     }
-    set_vote_account_state(vote_account, vote_state, feature_set)
+    set_vote_account_state(vote_account, vote_state)
 }
 
 pub fn process_vote_state_update<S: std::hash::BuildHasher>(
@@ -1150,7 +1133,7 @@ pub fn process_vote_state_update<S: std::hash::BuildHasher>(
         vote_state_update,
         Some(feature_set),
     )?;
-    set_vote_account_state(vote_account, vote_state, feature_set)
+    set_vote_account_state(vote_account, vote_state)
 }
 
 pub fn do_process_vote_state_update(
@@ -1200,7 +1183,7 @@ pub fn process_tower_sync<S: std::hash::BuildHasher>(
         tower_sync,
         Some(feature_set),
     )?;
-    set_vote_account_state(vote_account, vote_state, feature_set)
+    set_vote_account_state(vote_account, vote_state)
 }
 
 fn do_process_tower_sync(
@@ -1320,8 +1303,6 @@ mod tests {
 
     #[test]
     fn test_vote_state_upgrade_from_1_14_11() {
-        let mut feature_set = FeatureSet::default();
-
         // Create an initial vote account that is sized for the 1_14_11 version of vote state, and has only the
         // required lamports for rent exempt minimum at that size
         let node_pubkey = solana_sdk::pubkey::new_rand();
@@ -1417,7 +1398,7 @@ mod tests {
         // Now re-set the vote account state; because the feature is not enabled, the old 1_14_11 format should be
         // written out
         assert_eq!(
-            set_vote_account_state(&mut borrowed_account, vote_state.clone(), &feature_set),
+            set_vote_account_state(&mut borrowed_account, vote_state.clone()),
             Ok(())
         );
         let vote_state_version = borrowed_account.get_state::<VoteStateVersions>().unwrap();
@@ -1431,11 +1412,10 @@ mod tests {
 
         let vote_state = converted_vote_state;
 
-        // Test that when the feature is enabled, if the vote account does not have sufficient lamports to realloc,
+        // Test that if the vote account does not have sufficient lamports to realloc,
         // the old vote state is written out
-        feature_set.activate(&feature_set::vote_state_add_vote_latency::id(), 1);
         assert_eq!(
-            set_vote_account_state(&mut borrowed_account, vote_state.clone(), &feature_set),
+            set_vote_account_state(&mut borrowed_account, vote_state.clone()),
             Ok(())
         );
         let vote_state_version = borrowed_account.get_state::<VoteStateVersions>().unwrap();
@@ -1456,7 +1436,7 @@ mod tests {
             Ok(())
         );
         assert_eq!(
-            set_vote_account_state(&mut borrowed_account, vote_state.clone(), &feature_set),
+            set_vote_account_state(&mut borrowed_account, vote_state.clone()),
             Ok(())
         );
         let vote_state_version = borrowed_account.get_state::<VoteStateVersions>().unwrap();
