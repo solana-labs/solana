@@ -6017,11 +6017,6 @@ impl Bank {
             .shrink_ancient_slots(self.epoch_schedule())
     }
 
-    pub fn validate_fee_collector_account(&self) -> bool {
-        self.feature_set
-            .is_active(&feature_set::validate_fee_collector_account::id())
-    }
-
     pub fn read_cost_tracker(&self) -> LockResult<RwLockReadGuard<CostTracker>> {
         self.cost_tracker.read()
     }
