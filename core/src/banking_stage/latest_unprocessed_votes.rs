@@ -8,9 +8,13 @@ use {
     solana_perf::packet::Packet,
     solana_runtime::bank::Bank,
     solana_sdk::{
+        account::from_account,
         clock::{Slot, UnixTimestamp},
+        hash::Hash,
         program_utils::limited_deserialize,
         pubkey::Pubkey,
+        slot_hashes::SlotHashes,
+        sysvar,
     },
     solana_vote_program::vote_instruction::VoteInstruction,
     std::{
@@ -36,6 +40,7 @@ pub struct LatestValidatorVotePacket {
     pubkey: Pubkey,
     vote: Option<Arc<ImmutableDeserializedPacket>>,
     slot: Slot,
+    hash: Hash,
     forwarded: bool,
     timestamp: Option<UnixTimestamp>,
 }
@@ -70,11 +75,13 @@ impl LatestValidatorVotePacket {
                     .first()
                     .ok_or(DeserializedPacketError::VoteTransactionError)?;
                 let slot = vote_state_update_instruction.last_voted_slot().unwrap_or(0);
+                let hash = vote_state_update_instruction.hash();
                 let timestamp = vote_state_update_instruction.timestamp();
 
                 Ok(Self {
                     vote: Some(vote),
                     slot,
+                    hash,
                     pubkey,
                     vote_source,
                     forwarded: false,
@@ -97,6 +104,10 @@ impl LatestValidatorVotePacket {
         self.slot
     }
 
+    pub(crate) fn hash(&self) -> Hash {
+        self.hash
+    }
+
     pub fn timestamp(&self) -> Option<UnixTimestamp> {
         self.timestamp
     }
@@ -115,9 +126,6 @@ impl LatestValidatorVotePacket {
     }
 }
 
-// TODO: replace this with rand::seq::index::sample_weighted once we can update rand to 0.8+
-// This requires updating dependencies of ed25519-dalek as rand_core is not compatible cross
-// version https://github.com/dalek-cryptography/ed25519-dalek/pull/214
 pub(crate) fn weighted_random_order_by_stake<'a>(
     bank: &Bank,
     pubkeys: impl Iterator<Item = &'a Pubkey>,
@@ -322,17 +330,30 @@ impl LatestUnprocessedVotes {
     }
 
     /// Drains all votes yet to be processed sorted by a weighted random ordering by stake
+    /// Do not touch votes that are for a different fork from `bank` as we know they will fail,
+    /// however the next bank could be built on a different fork and consume these votes.
     pub fn drain_unprocessed(&self, bank: Arc<Bank>) -> Vec<Arc<ImmutableDeserializedPacket>> {
-        let pubkeys_by_stake = weighted_random_order_by_stake(
-            &bank,
-            self.latest_votes_per_pubkey.read().unwrap().keys(),
-        )
-        .collect_vec();
+        let slot_hashes = bank
+            .get_account(&sysvar::slot_hashes::id())
+            .and_then(|account| from_account::<SlotHashes, _>(&account));
+        if slot_hashes.is_none() {
+            error!(
+                "Slot hashes sysvar doesn't exist on bank {}. Including all votes without filtering",
+                bank.slot()
+            );
+        }
+
+        let pubkeys_by_stake = {
+            let binding = self.latest_votes_per_pubkey.read().unwrap();
+            weighted_random_order_by_stake(&bank, binding.keys())
+        };
         pubkeys_by_stake
-            .into_iter()
             .filter_map(|pubkey| {
                 self.get_entry(pubkey).and_then(|lock| {
                     let mut latest_vote = lock.write().unwrap();
+                    if !Self::is_valid_for_our_fork(&latest_vote, &slot_hashes) {
+                        return None;
+                    }
                     latest_vote.take_vote().map(|vote| {
                         self.num_unprocessed_votes.fetch_sub(1, Ordering::Relaxed);
                         vote
@@ -340,6 +361,21 @@ impl LatestUnprocessedVotes {
                 })
             })
             .collect_vec()
+    }
+
+    /// Check if `vote` can land in our fork based on `slot_hashes`
+    fn is_valid_for_our_fork(
+        vote: &LatestValidatorVotePacket,
+        slot_hashes: &Option<SlotHashes>,
+    ) -> bool {
+        let Some(slot_hashes) = slot_hashes else {
+            // When slot hashes is not present we do not filter
+            return true;
+        };
+        slot_hashes
+            .get(&vote.slot())
+            .map(|found_hash| *found_hash == vote.hash())
+            .unwrap_or(false)
     }
 
     /// Sometimes we forward and hold the packets, sometimes we forward and clear.
