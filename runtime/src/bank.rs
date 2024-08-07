@@ -5913,6 +5913,13 @@ impl Bank {
             .get(node_id)
     }
 
+    /// Get the total stake belonging to vote accounts associated with the given node id for the
+    /// given epoch.
+    pub fn epoch_node_id_to_stake(&self, epoch: Epoch, node_id: &Pubkey) -> Option<u64> {
+        self.epoch_stakes(epoch)
+            .and_then(|epoch_stakes| epoch_stakes.node_id_to_stake(node_id))
+    }
+
     /// Get the fixed total stake of all vote accounts for current epoch
     pub fn total_epoch_stake(&self) -> u64 {
         self.epoch_stakes

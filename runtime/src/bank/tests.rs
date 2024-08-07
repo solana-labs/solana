@@ -12984,3 +12984,46 @@ fn test_blockhash_last_valid_block_height() {
     );
     assert!(!bank.is_blockhash_valid(&last_blockhash));
 }
+
+#[test]
+fn test_bank_epoch_stakes() {
+    solana_logger::setup();
+    let num_of_nodes: u64 = 30;
+    let stakes = (1..num_of_nodes.checked_add(1).expect("Shouldn't be big")).collect::<Vec<_>>();
+    let voting_keypairs = stakes
+        .iter()
+        .map(|_| ValidatorVoteKeypairs::new_rand())
+        .collect::<Vec<_>>();
+    let total_stake = stakes.iter().sum();
+    let GenesisConfigInfo { genesis_config, .. } =
+        create_genesis_config_with_vote_accounts(1_000_000_000, &voting_keypairs, stakes.clone());
+
+    let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
+    let bank1 = Bank::new_from_parent(
+        bank0.clone(),
+        &Pubkey::default(),
+        bank0.get_slots_in_epoch(0) + 1,
+    );
+
+    let initial_epochs = bank0.epoch_stake_keys();
+    assert_eq!(initial_epochs, vec![0, 1]);
+
+    assert_eq!(bank0.epoch(), 0);
+    assert_eq!(bank0.epoch_total_stake(0), Some(total_stake));
+    assert_eq!(bank0.epoch_node_id_to_stake(0, &Pubkey::new_unique()), None);
+    for (i, keypair) in voting_keypairs.iter().enumerate() {
+        assert_eq!(
+            bank0.epoch_node_id_to_stake(0, &keypair.node_keypair.pubkey()),
+            Some(stakes[i])
+        );
+    }
+    assert_eq!(bank1.epoch(), 1);
+    assert_eq!(bank1.epoch_total_stake(1), Some(total_stake));
+    assert_eq!(bank1.epoch_node_id_to_stake(1, &Pubkey::new_unique()), None);
+    for (i, keypair) in voting_keypairs.iter().enumerate() {
+        assert_eq!(
+            bank1.epoch_node_id_to_stake(1, &keypair.node_keypair.pubkey()),
+            Some(stakes[i])
+        );
+    }
+}
