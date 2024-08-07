@@ -34,9 +34,7 @@ use {
     rand::Rng,
     rayon::iter::{IntoParallelIterator, ParallelIterator},
     rocksdb::{DBRawIterator, LiveFile},
-    solana_accounts_db::hardened_unpack::{
-        unpack_genesis_archive, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
-    },
+    solana_accounts_db::hardened_unpack::unpack_genesis_archive,
     solana_entry::entry::{create_ticks, Entry},
     solana_measure::measure::Measure,
     solana_metrics::{
@@ -4963,6 +4961,22 @@ macro_rules! create_new_tmp_ledger {
         $crate::blockstore::create_new_ledger_from_name(
             $crate::tmp_ledger_name!(),
             $genesis_config,
+            $crate::macro_reexports::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
+            $crate::blockstore_options::LedgerColumnOptions::default(),
+        )
+    };
+}
+
+#[macro_export]
+macro_rules! create_new_tmp_ledger_with_size {
+    (
+        $genesis_config:expr,
+        $max_genesis_archive_unpacked_size:expr $(,)?
+    ) => {
+        $crate::blockstore::create_new_ledger_from_name(
+            $crate::tmp_ledger_name!(),
+            $genesis_config,
+            $max_genesis_archive_unpacked_size,
             $crate::blockstore_options::LedgerColumnOptions::default(),
         )
     };
@@ -4974,6 +4988,7 @@ macro_rules! create_new_tmp_ledger_fifo {
         $crate::blockstore::create_new_ledger_from_name(
             $crate::tmp_ledger_name!(),
             $genesis_config,
+            $crate::macro_reexports::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
             $crate::blockstore_options::LedgerColumnOptions {
                 shred_storage_type: $crate::blockstore_options::ShredStorageType::RocksFifo(
                     $crate::blockstore_options::BlockstoreRocksFifoOptions::new_for_tests(),
@@ -4990,6 +5005,7 @@ macro_rules! create_new_tmp_ledger_auto_delete {
         $crate::blockstore::create_new_ledger_from_name_auto_delete(
             $crate::tmp_ledger_name!(),
             $genesis_config,
+            $crate::macro_reexports::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
             $crate::blockstore_options::LedgerColumnOptions::default(),
         )
     };
@@ -5001,6 +5017,7 @@ macro_rules! create_new_tmp_ledger_fifo_auto_delete {
         $crate::blockstore::create_new_ledger_from_name_auto_delete(
             $crate::tmp_ledger_name!(),
             $genesis_config,
+            $crate::macro_reexports::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
             $crate::blockstore_options::LedgerColumnOptions {
                 shred_storage_type: $crate::blockstore_options::ShredStorageType::RocksFifo(
                     $crate::blockstore_options::BlockstoreRocksFifoOptions::new_for_tests(),
@@ -5027,10 +5044,15 @@ pub(crate) fn verify_shred_slots(slot: Slot, parent: Slot, root: Slot) -> bool {
 pub fn create_new_ledger_from_name(
     name: &str,
     genesis_config: &GenesisConfig,
+    max_genesis_archive_unpacked_size: u64,
     column_options: LedgerColumnOptions,
 ) -> (PathBuf, Hash) {
-    let (ledger_path, blockhash) =
-        create_new_ledger_from_name_auto_delete(name, genesis_config, column_options);
+    let (ledger_path, blockhash) = create_new_ledger_from_name_auto_delete(
+        name,
+        genesis_config,
+        max_genesis_archive_unpacked_size,
+        column_options,
+    );
     (ledger_path.into_path(), blockhash)
 }
 
@@ -5041,13 +5063,14 @@ pub fn create_new_ledger_from_name(
 pub fn create_new_ledger_from_name_auto_delete(
     name: &str,
     genesis_config: &GenesisConfig,
+    max_genesis_archive_unpacked_size: u64,
     column_options: LedgerColumnOptions,
 ) -> (TempDir, Hash) {
     let ledger_path = get_ledger_path_from_name_auto_delete(name);
     let blockhash = create_new_ledger(
         ledger_path.path(),
         genesis_config,
-        MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
+        max_genesis_archive_unpacked_size,
         column_options,
     )
     .unwrap();

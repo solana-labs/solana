@@ -46,3 +46,8 @@ extern crate log;
 #[cfg_attr(feature = "frozen-abi", macro_use)]
 #[cfg(feature = "frozen-abi")]
 extern crate solana_frozen_abi_macro;
+
+#[doc(hidden)]
+pub mod macro_reexports {
+    pub use solana_accounts_db::hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE;
+}

@@ -18,7 +18,7 @@ use {
         contact_info::{ContactInfo, Protocol},
         gossip_service::discover_cluster,
     },
-    solana_ledger::{create_new_tmp_ledger, shred::Shred},
+    solana_ledger::{create_new_tmp_ledger_with_size, shred::Shred},
     solana_rpc_client::rpc_client::RpcClient,
     solana_runtime::{
         genesis_utils::{
@@ -312,9 +312,13 @@ impl LocalCluster {
             .native_instruction_processors
             .extend_from_slice(&config.native_instruction_processors);
 
-        let (leader_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
-        let leader_contact_info = leader_node.info.clone();
         let mut leader_config = safe_clone_config(&config.validator_configs[0]);
+        let (leader_ledger_path, _blockhash) = create_new_tmp_ledger_with_size!(
+            &genesis_config,
+            leader_config.max_genesis_archive_unpacked_size,
+        );
+
+        let leader_contact_info = leader_node.info.clone();
         leader_config.rpc_addrs = Some((
             leader_node.info.rpc().unwrap(),
             leader_node.info.rpc_pubsub().unwrap(),
@@ -494,7 +498,10 @@ impl LocalCluster {
         let validator_pubkey = validator_keypair.pubkey();
         let validator_node = Node::new_localhost_with_pubkey(&validator_keypair.pubkey());
         let contact_info = validator_node.info.clone();
-        let (ledger_path, _blockhash) = create_new_tmp_ledger!(&self.genesis_config);
+        let (ledger_path, _blockhash) = create_new_tmp_ledger_with_size!(
+            &self.genesis_config,
+            validator_config.max_genesis_archive_unpacked_size,
+        );
 
         // Give the validator some lamports to setup vote accounts
         if is_listener {
