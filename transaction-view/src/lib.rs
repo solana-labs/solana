@@ -7,6 +7,8 @@ pub mod bytes;
 mod bytes;
 
 #[allow(dead_code)]
+mod instructions_meta;
+#[allow(dead_code)]
 mod message_header_meta;
 pub mod result;
 #[allow(dead_code)]
