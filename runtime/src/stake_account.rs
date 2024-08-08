@@ -55,10 +55,10 @@ impl StakeAccount<Delegation> {
     }
 
     #[inline]
-    pub(crate) fn stake(&self) -> Stake {
+    pub(crate) fn stake(&self) -> &Stake {
         // Safe to unwrap here because StakeAccount<Delegation> will always
         // only wrap a stake-state.
-        self.stake_state.stake().unwrap()
+        self.stake_state.stake_ref().unwrap()
     }
 }
 

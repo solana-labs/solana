@@ -213,6 +213,13 @@ impl StakeStateV2 {
         }
     }
 
+    pub fn stake_ref(&self) -> Option<&Stake> {
+        match self {
+            StakeStateV2::Stake(_meta, stake, _stake_flags) => Some(stake),
+            _ => None,
+        }
+    }
+
     pub fn delegation(&self) -> Option<Delegation> {
         match self {
             StakeStateV2::Stake(_meta, stake, _stake_flags) => Some(stake.delegation),

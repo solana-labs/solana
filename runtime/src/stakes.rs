@@ -544,12 +544,15 @@ impl From<Stakes<StakeAccount>> for Stakes<Delegation> {
     }
 }
 
+/// This conversion is very memory intensive so should only be used in
+/// development contexts.
+#[cfg(feature = "dev-context-only-utils")]
 impl From<Stakes<StakeAccount>> for Stakes<Stake> {
     fn from(stakes: Stakes<StakeAccount>) -> Self {
         let stake_delegations = stakes
             .stake_delegations
             .into_iter()
-            .map(|(pubkey, stake_account)| (pubkey, stake_account.stake()))
+            .map(|(pubkey, stake_account)| (pubkey, *stake_account.stake()))
             .collect();
         Self {
             vote_accounts: stakes.vote_accounts,
@@ -557,6 +560,23 @@ impl From<Stakes<StakeAccount>> for Stakes<Stake> {
             unused: stakes.unused,
             epoch: stakes.epoch,
             stake_history: stakes.stake_history,
+        }
+    }
+}
+
+impl<'a> From<&'a Stakes<StakeAccount>> for Stakes<&'a Stake> {
+    fn from(stakes: &'a Stakes<StakeAccount>) -> Self {
+        let stake_delegations = stakes
+            .stake_delegations
+            .iter()
+            .map(|(pubkey, stake_account)| (*pubkey, stake_account.stake()))
+            .collect();
+        Self {
+            vote_accounts: stakes.vote_accounts.clone(),
+            stake_delegations,
+            unused: stakes.unused,
+            epoch: stakes.epoch,
+            stake_history: stakes.stake_history.clone(),
         }
     }
 }

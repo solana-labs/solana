@@ -389,7 +389,8 @@ where
 /// added to this struct a minor release before they are added to the serialize
 /// struct.
 #[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
-#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[cfg_attr(feature = "dev-context-only-utils", derive(PartialEq))]
+#[derive(Clone, Debug, Deserialize)]
 struct ExtraFieldsToDeserialize {
     #[serde(deserialize_with = "default_on_eof")]
     lamports_per_signature: u64,
@@ -408,8 +409,8 @@ struct ExtraFieldsToDeserialize {
 /// be added to the deserialize struct a minor release before they are added to
 /// this one.
 #[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
-#[cfg_attr(feature = "dev-context-only-utils", derive(Default))]
-#[derive(Debug, Serialize, PartialEq)]
+#[cfg_attr(feature = "dev-context-only-utils", derive(Default, PartialEq))]
+#[derive(Debug, Serialize)]
 pub struct ExtraFieldsToSerialize<'a> {
     pub lamports_per_signature: u64,
     pub incremental_snapshot_persistence: Option<&'a BankIncrementalSnapshotPersistence>,

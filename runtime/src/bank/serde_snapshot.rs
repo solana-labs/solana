@@ -6,7 +6,8 @@ mod tests {
                 epoch_accounts_hash_utils, test_utils as bank_test_utils, Bank, EpochRewardStatus,
             },
             epoch_stakes::{
-                EpochAuthorizedVoters, EpochStakes, NodeIdToVoteAccounts, VersionedEpochStakes,
+                EpochAuthorizedVoters, EpochStakes, NodeIdToVoteAccounts, StakesSerdeWrapper,
+                VersionedEpochStakes,
             },
             genesis_utils::activate_all_features,
             runtime_config::RuntimeConfig,
@@ -306,7 +307,7 @@ mod tests {
         bank.epoch_stakes.insert(
             42,
             EpochStakes::from(VersionedEpochStakes::Current {
-                stakes: Stakes::<Stake>::default(),
+                stakes: StakesSerdeWrapper::Stake(Stakes::<Stake>::default()),
                 total_stake: 42,
                 node_id_to_vote_accounts: Arc::<NodeIdToVoteAccounts>::default(),
                 epoch_authorized_voters: Arc::<EpochAuthorizedVoters>::default(),
@@ -535,7 +536,7 @@ mod tests {
         #[cfg_attr(
             feature = "frozen-abi",
             derive(AbiExample),
-            frozen_abi(digest = "CeNFPePrUfgJT2GNr7zYfMQVuJwGyU46bz1Skq7hAPht")
+            frozen_abi(digest = "7a6C1oFtgZiMtZig7FbX9289xn55QadQ962rX61Gheef")
         )]
         #[derive(Serialize)]
         pub struct BankAbiTestWrapper {
