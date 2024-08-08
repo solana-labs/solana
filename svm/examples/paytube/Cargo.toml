@@ -1,0 +1,22 @@
+[package]
+name = "solana-svm-example-paytube"
+description = "Reference example using Solana SVM API"
+version = { workspace = true }
+edition = { workspace = true }
+publish = false
+
+[dependencies]
+solana-bpf-loader-program = { workspace = true }
+solana-client = { workspace = true }
+solana-compute-budget = { workspace = true }
+solana-logger = { workspace = true }
+solana-program-runtime = { workspace = true }
+solana-sdk = { workspace = true }
+solana-svm = { workspace = true }
+solana-system-program = { workspace = true }
+spl-associated-token-account = { workspace = true }
+spl-token = { workspace = true }
+termcolor = "1.4.1"
+
+[dev-dependencies]
+solana-test-validator = { workspace = true }
