@@ -443,7 +443,7 @@ solana-zk-keygen = { path = "zk-keygen", version = "=2.1.0" }
 solana-zk-sdk = { path = "zk-sdk", version = "=2.1.0" }
 solana-zk-token-proof-program = { path = "programs/zk-token-proof", version = "=2.1.0" }
 solana-zk-token-sdk = { path = "zk-token-sdk", version = "=2.1.0" }
-solana_rbpf = "=0.8.2"
+solana_rbpf = "=0.8.5"
 spl-associated-token-account = "=4.0.0"
 spl-instruction-padding = "0.2"
 spl-memo = "=5.0.0"
