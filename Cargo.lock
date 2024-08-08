@@ -8047,7 +8047,6 @@ dependencies = [
  "protobuf-src",
  "rand 0.8.5",
  "rayon",
- "rustc_version 0.4.0",
  "serial_test",
  "solana-accounts-db",
  "solana-entry",

@@ -31,3 +31,8 @@ solana-logger = { workspace = true }
 
 [build-dependencies]
 rustc_version = { workspace = true }
+
+[features]
+default = ["frozen-abi"]
+# no reason to deactivate this. It's needed because the build.rs is reused elsewhere
+frozen-abi = []

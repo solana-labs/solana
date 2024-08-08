@@ -58,11 +58,12 @@ solana-svm-conformance = { workspace = true }
 targets = ["x86_64-unknown-linux-gnu"]
 
 [build-dependencies]
-rustc_version = { workspace = true }
+rustc_version = { workspace = true, optional = true }
 
 [features]
 dev-context-only-utils = ["dep:qualifier_attr"]
 frozen-abi = [
+    "dep:rustc_version",
     "dep:solana-frozen-abi",
     "dep:solana-frozen-abi-macro",
     "solana-compute-budget/frozen-abi",

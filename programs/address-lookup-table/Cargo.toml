@@ -24,7 +24,7 @@ solana-program-runtime = { workspace = true }
 solana-sdk = { workspace = true }
 
 [build-dependencies]
-rustc_version = { workspace = true }
+rustc_version = { workspace = true, optional = true }
 
 [lib]
 crate-type = ["lib"]

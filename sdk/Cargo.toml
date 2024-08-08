@@ -37,6 +37,7 @@ full = [
 borsh = ["dep:borsh", "solana-program/borsh", "solana-secp256k1-recover/borsh"]
 dev-context-only-utils = ["qualifier_attr"]
 frozen-abi = [
+    "dep:rustc_version",
     "dep:solana-frozen-abi",
     "dep:solana-frozen-abi-macro",
     "solana-program/frozen-abi",
@@ -111,7 +112,7 @@ static_assertions = { workspace = true }
 tiny-bip39 = { workspace = true }
 
 [build-dependencies]
-rustc_version = { workspace = true }
+rustc_version = { workspace = true, optional = true }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

@@ -1,5 +1,3 @@
-extern crate rustc_version;
-
 use std::io::Result;
 
 fn main() -> Result<()> {

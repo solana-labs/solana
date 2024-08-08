@@ -10,7 +10,7 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [build-dependencies]
-rustc_version = { workspace = true }
+rustc_version = { workspace = true, optional = true }
 
 [dependencies]
 serde = { workspace = true }
@@ -23,7 +23,7 @@ bincode = { workspace = true }
 serde_json = { workspace = true }
 
 [features]
-frozen-abi = ["dep:solana-frozen-abi", "dep:solana-frozen-abi-macro"]
+frozen-abi = ["dep:rustc_version", "dep:solana-frozen-abi", "dep:solana-frozen-abi-macro"]
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

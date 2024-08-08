@@ -80,7 +80,7 @@ test-case = { workspace = true }
 targets = ["x86_64-unknown-linux-gnu"]
 
 [build-dependencies]
-rustc_version = { workspace = true }
+rustc_version = { workspace = true, optional = true }
 
 [features]
 dev-context-only-utils = [
@@ -89,6 +89,7 @@ dev-context-only-utils = [
     "dep:solana-vote-program",
 ]
 frozen-abi = [
+    "dep:rustc_version",
     "dep:solana-frozen-abi",
     "dep:solana-frozen-abi-macro",
     "solana-sdk/frozen-abi",

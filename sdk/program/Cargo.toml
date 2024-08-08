@@ -33,8 +33,8 @@ sha2 = { workspace = true }
 sha3 = { workspace = true }
 solana-atomic-u64 = { workspace = true }
 solana-decode-error = { workspace = true }
-solana-frozen-abi = { workspace = true, optional = true }
-solana-frozen-abi-macro = { workspace = true, optional = true }
+solana-frozen-abi = { workspace = true, optional = true, features = ["frozen-abi"] }
+solana-frozen-abi-macro = { workspace = true, optional = true, features = ["frozen-abi"] }
 solana-msg = { workspace = true }
 solana-program-memory = { workspace = true }
 solana-sanitize = { workspace = true }
@@ -86,7 +86,7 @@ static_assertions = { workspace = true }
 test-case = { workspace = true }
 
 [build-dependencies]
-rustc_version = { workspace = true }
+rustc_version = { workspace = true, optional = true }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -98,4 +98,9 @@ crate-type = ["cdylib", "rlib"]
 default = ["borsh"]
 borsh = ["dep:borsh", "dep:borsh0-10"]
 dev-context-only-utils = ["dep:qualifier_attr"]
-frozen-abi = ["dep:solana-frozen-abi", "dep:solana-frozen-abi-macro", "solana-short-vec/frozen-abi"]
+frozen-abi = [
+    "dep:rustc_version",
+    "dep:solana-frozen-abi",
+    "dep:solana-frozen-abi-macro",
+    "solana-short-vec/frozen-abi",
+]

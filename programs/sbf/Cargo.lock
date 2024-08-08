@@ -4505,7 +4505,6 @@ dependencies = [
  "num_enum",
  "rand 0.8.5",
  "rayon",
- "rustc_version",
  "seqlock",
  "serde",
  "serde_derive",
@@ -4534,7 +4533,6 @@ dependencies = [
  "log",
  "num-derive",
  "num-traits",
- "rustc_version",
  "solana-log-collector",
  "solana-program",
  "solana-program-runtime",
@@ -4600,7 +4598,6 @@ dependencies = [
  "fnv",
  "log",
  "rand 0.8.5",
- "rustc_version",
  "serde",
  "serde_derive",
  "solana-sanitize",
@@ -4668,7 +4665,6 @@ dependencies = [
  "ahash 0.8.10",
  "lazy_static",
  "log",
- "rustc_version",
  "solana-address-lookup-table-program",
  "solana-bpf-loader-program",
  "solana-compute-budget-program",
@@ -4769,7 +4765,6 @@ dependencies = [
 name = "solana-compute-budget"
 version = "2.1.0"
 dependencies = [
- "rustc_version",
  "solana-sdk",
 ]
 
@@ -4844,7 +4839,6 @@ dependencies = [
  "rand_chacha 0.3.1",
  "rayon",
  "rolling-file",
- "rustc_version",
  "rustls",
  "serde",
  "serde_bytes",
@@ -4904,7 +4898,6 @@ dependencies = [
  "ahash 0.8.10",
  "lazy_static",
  "log",
- "rustc_version",
  "solana-builtins-default-costs",
  "solana-compute-budget",
  "solana-metrics",
@@ -5051,7 +5044,6 @@ dependencies = [
  "rand 0.8.5",
  "rand_chacha 0.3.1",
  "rayon",
- "rustc_version",
  "serde",
  "serde_bytes",
  "serde_derive",
@@ -5129,7 +5121,6 @@ dependencies = [
  "rayon",
  "reed-solomon-erasure",
  "rocksdb",
- "rustc_version",
  "scopeguard",
  "serde",
  "serde_bytes",
@@ -5272,7 +5263,6 @@ dependencies = [
  "nix",
  "rand 0.8.5",
  "rayon",
- "rustc_version",
  "serde",
  "solana-metrics",
  "solana-rayon-threadlimit",
@@ -5334,7 +5324,6 @@ dependencies = [
  "num-traits",
  "parking_lot 0.12.2",
  "rand 0.8.5",
- "rustc_version",
  "serde",
  "serde_bytes",
  "serde_derive",
@@ -5375,7 +5364,6 @@ dependencies = [
  "num-traits",
  "percentage",
  "rand 0.8.5",
- "rustc_version",
  "serde",
  "solana-compute-budget",
  "solana-log-collector",
@@ -5643,7 +5631,6 @@ dependencies = [
  "rand 0.8.5",
  "rayon",
  "regex",
- "rustc_version",
  "serde",
  "serde_derive",
  "serde_json",
@@ -5692,7 +5679,6 @@ name = "solana-runtime-transaction"
 version = "2.1.0"
 dependencies = [
  "log",
- "rustc_version",
  "solana-compute-budget",
  "solana-sdk",
  "thiserror",
@@ -6206,7 +6192,6 @@ dependencies = [
  "qualifier_attr",
  "rand 0.7.3",
  "rand 0.8.5",
- "rustc_version",
  "serde",
  "serde_bytes",
  "serde_derive",
@@ -6244,7 +6229,6 @@ version = "2.1.0"
 dependencies = [
  "borsh 1.5.1",
  "libsecp256k1 0.6.0",
- "rustc_version",
  "solana-define-syscall",
  "thiserror",
 ]
@@ -6274,7 +6258,6 @@ dependencies = [
 name = "solana-short-vec"
 version = "2.1.0"
 dependencies = [
- "rustc_version",
  "serde",
 ]
 
@@ -6284,7 +6267,6 @@ version = "2.1.0"
 dependencies = [
  "bincode",
  "log",
- "rustc_version",
  "solana-config-program",
  "solana-log-collector",
  "solana-program-runtime",
@@ -6382,7 +6364,6 @@ dependencies = [
  "log",
  "percentage",
  "qualifier_attr",
- "rustc_version",
  "serde",
  "serde_derive",
  "solana-bpf-loader-program",
@@ -6626,7 +6607,6 @@ name = "solana-version"
 version = "2.1.0"
 dependencies = [
  "log",
- "rustc_version",
  "semver",
  "serde",
  "serde_derive",
@@ -6640,7 +6620,6 @@ version = "2.1.0"
 dependencies = [
  "itertools 0.12.1",
  "log",
- "rustc_version",
  "serde",
  "serde_derive",
  "solana-sdk",
@@ -6655,7 +6634,6 @@ dependencies = [
  "log",
  "num-derive",
  "num-traits",
- "rustc_version",
  "serde",
  "serde_derive",
  "solana-metrics",
@@ -6676,7 +6654,6 @@ dependencies = [
  "prost-types",
  "protobuf-src",
  "rayon",
- "rustc_version",
  "solana-entry",
  "solana-gossip",
  "solana-ledger",
