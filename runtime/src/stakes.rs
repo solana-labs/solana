@@ -26,6 +26,9 @@ use {
     thiserror::Error,
 };
 
+mod serde_stakes;
+pub(crate) use serde_stakes::serde_stakes_enum_compat;
+
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("Invalid delegation: {0}")]
@@ -283,7 +286,7 @@ impl Stakes<StakeAccount> {
                 let stake_account = StakeAccount::try_from(stake_account)?;
                 // Sanity check that the delegation is consistent with what is
                 // stored in the account.
-                if stake_account.delegation() == *delegation {
+                if stake_account.delegation() == delegation {
                     map.insert(*pubkey, stake_account);
                     Ok(map)
                 } else {
@@ -527,12 +530,15 @@ impl StakesEnum {
     }
 }
 
+/// This conversion is very memory intensive so should only be used in
+/// development contexts.
+#[cfg(feature = "dev-context-only-utils")]
 impl From<Stakes<StakeAccount>> for Stakes<Delegation> {
     fn from(stakes: Stakes<StakeAccount>) -> Self {
         let stake_delegations = stakes
             .stake_delegations
             .into_iter()
-            .map(|(pubkey, stake_account)| (pubkey, stake_account.delegation()))
+            .map(|(pubkey, stake_account)| (pubkey, *stake_account.delegation()))
             .collect();
         Self {
             vote_accounts: stakes.vote_accounts,
@@ -581,6 +587,9 @@ impl<'a> From<&'a Stakes<StakeAccount>> for Stakes<&'a Stake> {
     }
 }
 
+/// This conversion is memory intensive so should only be used in development
+/// contexts.
+#[cfg(feature = "dev-context-only-utils")]
 impl From<Stakes<Stake>> for Stakes<Delegation> {
     fn from(stakes: Stakes<Stake>) -> Self {
         let stake_delegations = stakes
@@ -598,6 +607,9 @@ impl From<Stakes<Stake>> for Stakes<Delegation> {
     }
 }
 
+/// This conversion is memory intensive so should only be used in development
+/// contexts.
+#[cfg(feature = "dev-context-only-utils")]
 impl From<StakesEnum> for Stakes<Delegation> {
     fn from(stakes: StakesEnum) -> Self {
         match stakes {
@@ -638,36 +650,6 @@ impl PartialEq<StakesEnum> for StakesEnum {
                 stakes == other
             }
         }
-    }
-}
-
-// In order to maintain backward compatibility, the StakesEnum in EpochStakes
-// and SerializableVersionedBank should be serialized as Stakes<Delegation>.
-pub(crate) mod serde_stakes_enum_compat {
-    use {
-        super::*,
-        serde::{Deserialize, Deserializer, Serialize, Serializer},
-    };
-
-    pub(crate) fn serialize<S>(stakes: &StakesEnum, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        match stakes {
-            StakesEnum::Delegations(stakes) => stakes.serialize(serializer),
-            stakes => {
-                let stakes = Stakes::<Delegation>::from(stakes.clone());
-                stakes.serialize(serializer)
-            }
-        }
-    }
-
-    pub(crate) fn deserialize<'de, D>(deserializer: D) -> Result<Arc<StakesEnum>, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let stakes = Stakes::<Delegation>::deserialize(deserializer)?;
-        Ok(Arc::new(StakesEnum::Delegations(stakes)))
     }
 }
 
@@ -716,7 +698,6 @@ fn refresh_vote_accounts(
 pub(crate) mod tests {
     use {
         super::*,
-        rand::Rng,
         rayon::ThreadPoolBuilder,
         solana_sdk::{account::WritableAccount, pubkey::Pubkey, rent::Rent, stake},
         solana_stake_program::stake_state,
@@ -1142,64 +1123,5 @@ pub(crate) mod tests {
                 *expected_warmed_stake
             );
         }
-    }
-
-    #[test]
-    fn test_serde_stakes_enum_compat() {
-        #[derive(Debug, PartialEq, Deserialize, Serialize)]
-        struct Dummy {
-            head: String,
-            #[serde(with = "serde_stakes_enum_compat")]
-            stakes: Arc<StakesEnum>,
-            tail: String,
-        }
-        let mut rng = rand::thread_rng();
-        let stakes_cache = StakesCache::new(Stakes {
-            unused: rng.gen(),
-            epoch: rng.gen(),
-            ..Stakes::default()
-        });
-        for _ in 0..rng.gen_range(5usize..10) {
-            let vote_pubkey = solana_sdk::pubkey::new_rand();
-            let vote_account = vote_state::create_account(
-                &vote_pubkey,
-                &solana_sdk::pubkey::new_rand(), // node_pubkey
-                rng.gen_range(0..101),           // commission
-                rng.gen_range(0..1_000_000),     // lamports
-            );
-            stakes_cache.check_and_store(&vote_pubkey, &vote_account, None);
-            for _ in 0..rng.gen_range(10usize..20) {
-                let stake_pubkey = solana_sdk::pubkey::new_rand();
-                let rent = Rent::with_slots_per_epoch(rng.gen());
-                let stake_account = stake_state::create_account(
-                    &stake_pubkey, // authorized
-                    &vote_pubkey,
-                    &vote_account,
-                    &rent,
-                    rng.gen_range(0..1_000_000), // lamports
-                );
-                stakes_cache.check_and_store(&stake_pubkey, &stake_account, None);
-            }
-        }
-        let stakes: Stakes<StakeAccount> = stakes_cache.stakes().clone();
-        assert!(stakes.vote_accounts.as_ref().len() >= 5);
-        assert!(stakes.stake_delegations.len() >= 50);
-        let dummy = Dummy {
-            head: String::from("dummy-head"),
-            stakes: Arc::new(StakesEnum::from(stakes.clone())),
-            tail: String::from("dummy-tail"),
-        };
-        assert!(dummy.stakes.vote_accounts().as_ref().len() >= 5);
-        let data = bincode::serialize(&dummy).unwrap();
-        let other: Dummy = bincode::deserialize(&data).unwrap();
-        assert_eq!(other, dummy);
-        let stakes = Stakes::<Delegation>::from(stakes);
-        assert!(stakes.vote_accounts.as_ref().len() >= 5);
-        assert!(stakes.stake_delegations.len() >= 50);
-        let other = match &*other.stakes {
-            StakesEnum::Accounts(_) | StakesEnum::Stakes(_) => panic!("wrong type!"),
-            StakesEnum::Delegations(delegations) => delegations,
-        };
-        assert_eq!(other, &stakes)
     }
 }

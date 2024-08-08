@@ -227,6 +227,13 @@ impl StakeStateV2 {
         }
     }
 
+    pub fn delegation_ref(&self) -> Option<&Delegation> {
+        match self {
+            StakeStateV2::Stake(_meta, stake, _stake_flags) => Some(&stake.delegation),
+            _ => None,
+        }
+    }
+
     pub fn authorized(&self) -> Option<Authorized> {
         match self {
             StakeStateV2::Stake(meta, _stake, _stake_flags) => Some(meta.authorized),

@@ -378,10 +378,9 @@ impl Bank {
                     let stake_pubkey = **stake_pubkey;
                     let stake_account = (*stake_account).to_owned();
 
-                    let delegation = stake_account.delegation();
+                    let vote_pubkey = stake_account.delegation().voter_pubkey;
                     let (mut stake_account, stake_state) =
                         <(AccountSharedData, StakeStateV2)>::from(stake_account);
-                    let vote_pubkey = delegation.voter_pubkey;
                     let vote_account = get_vote_account(&vote_pubkey)?;
                     if vote_account.owner() != &solana_vote_program {
                         return None;
@@ -501,8 +500,7 @@ impl Bank {
             stake_delegations
                 .par_iter()
                 .map(|(_stake_pubkey, stake_account)| {
-                    let delegation = stake_account.delegation();
-                    let vote_pubkey = delegation.voter_pubkey;
+                    let vote_pubkey = stake_account.delegation().voter_pubkey;
 
                     let Some(vote_account) = get_vote_account(&vote_pubkey) else {
                         return 0;
