@@ -6527,6 +6527,7 @@ dependencies = [
  "crossbeam-channel",
  "futures 0.3.30",
  "itertools 0.12.1",
+ "lazy-lru",
  "log",
  "lru",
  "quinn",

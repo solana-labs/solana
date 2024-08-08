@@ -1,7 +1,7 @@
 use {
     crate::{broadcast_stage::BroadcastStage, retransmit_stage::RetransmitStage},
     itertools::Itertools,
-    lru::LruCache,
+    lazy_lru::LruCache,
     rand::{seq::SliceRandom, Rng, SeedableRng},
     rand_chacha::ChaChaRng,
     solana_gossip::{
@@ -31,7 +31,7 @@ use {
         iter::repeat_with,
         marker::PhantomData,
         net::{IpAddr, SocketAddr},
-        sync::{Arc, Mutex, RwLock},
+        sync::{Arc, RwLock},
         time::{Duration, Instant},
     },
     thiserror::Error,
@@ -78,7 +78,7 @@ type CacheEntry<T> = Option<(/*as of:*/ Instant, Arc<ClusterNodes<T>>)>;
 pub struct ClusterNodesCache<T> {
     // Cache entries are wrapped in Arc<RwLock<...>>, so that, when needed, only
     // one thread does the computations to update the entry for the epoch.
-    cache: Mutex<LruCache<Epoch, Arc<RwLock<CacheEntry<T>>>>>,
+    cache: RwLock<LruCache<Epoch, Arc<RwLock<CacheEntry<T>>>>>,
     ttl: Duration, // Time to live.
 }
 
@@ -434,7 +434,7 @@ impl<T> ClusterNodesCache<T> {
         ttl: Duration,
     ) -> Self {
         Self {
-            cache: Mutex::new(LruCache::new(cap)),
+            cache: RwLock::new(LruCache::new(cap)),
             ttl,
         }
     }
@@ -442,15 +442,19 @@ impl<T> ClusterNodesCache<T> {
 
 impl<T: 'static> ClusterNodesCache<T> {
     fn get_cache_entry(&self, epoch: Epoch) -> Arc<RwLock<CacheEntry<T>>> {
-        let mut cache = self.cache.lock().unwrap();
-        match cache.get(&epoch) {
-            Some(entry) => Arc::clone(entry),
-            None => {
-                let entry = Arc::default();
-                cache.put(epoch, Arc::clone(&entry));
-                entry
-            }
+        if let Some(entry) = self.cache.read().unwrap().get(&epoch) {
+            return Arc::clone(entry);
         }
+        let mut cache = self.cache.write().unwrap();
+        // Have to recheck again here because the cache might have been updated
+        // by another thread in between the time this thread releases the read
+        // lock and obtains the write lock.
+        if let Some(entry) = cache.get(&epoch) {
+            return Arc::clone(entry);
+        }
+        let entry = Arc::default();
+        cache.put(epoch, Arc::clone(&entry));
+        entry
     }
 
     pub(crate) fn get(
