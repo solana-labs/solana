@@ -16,7 +16,7 @@ impl PubkeyBinCalculator24 {
         Self::num_bits::<u32>() as u32 - x.leading_zeros() - 1
     }
 
-    pub(crate) fn new(bins: usize) -> Self {
+    pub fn new(bins: usize) -> Self {
         const MAX_BITS: u32 = 24;
         assert!(bins > 0);
         let max_plus_1 = 1 << MAX_BITS;
@@ -29,7 +29,7 @@ impl PubkeyBinCalculator24 {
     }
 
     #[inline]
-    pub(crate) fn bin_from_pubkey(&self, pubkey: &Pubkey) -> usize {
+    pub fn bin_from_pubkey(&self, pubkey: &Pubkey) -> usize {
         let as_ref = pubkey.as_ref();
         ((as_ref[0] as usize) << 16 | (as_ref[1] as usize) << 8 | (as_ref[2] as usize))
             >> self.shift_bits

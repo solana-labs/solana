@@ -31,7 +31,7 @@ pub mod epoch_accounts_hash;
 mod file_io;
 pub mod hardened_unpack;
 pub mod partitioned_rewards;
-mod pubkey_bins;
+pub mod pubkey_bins;
 mod read_only_accounts_cache;
 mod rolling_bit_field;
 pub mod secondary_index;
