@@ -88,7 +88,9 @@ impl Bank {
         };
         let lamports =
             self.get_minimum_balance_for_rent_exemption(UpgradeableLoaderState::size_of_program());
-        let account = AccountSharedData::new_data(lamports, &state, &bpf_loader_upgradeable::id())?;
+        let mut account =
+            AccountSharedData::new_data(lamports, &state, &bpf_loader_upgradeable::id())?;
+        account.set_executable(true);
         Ok(account)
     }
 
@@ -557,6 +559,9 @@ pub(crate) mod tests {
             // Program account is owned by the upgradeable loader.
             assert_eq!(program_account.owner(), &bpf_loader_upgradeable::id());
 
+            // Program account is executable.
+            assert!(program_account.executable());
+
             // Program account has the correct state, with a pointer to its program
             // data address.
             let program_account_state: UpgradeableLoaderState = program_account.state().unwrap();
@@ -887,6 +892,7 @@ pub(crate) mod tests {
             let owner = &bpf_loader_upgradeable::id();
 
             let mut account = AccountSharedData::new(lamports, space, owner);
+            account.set_executable(true);
             account.data_as_mut_slice().copy_from_slice(&data);
             bank.store_account_and_update_capitalization(program_address, &account);
             account

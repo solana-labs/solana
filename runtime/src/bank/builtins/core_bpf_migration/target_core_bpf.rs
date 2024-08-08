@@ -20,7 +20,8 @@ pub(crate) struct TargetCoreBpf {
 impl TargetCoreBpf {
     /// Collects the details of a Core BPF program and verifies it is properly
     /// configured.
-    /// The program account should exist with a pointer to its data account.
+    /// The program account should exist with a pointer to its data account
+    /// and it should be marked as executable.
     /// The program data account should exist with the correct state
     /// (a ProgramData header and the program ELF).
     pub(crate) fn new_checked(
@@ -37,6 +38,13 @@ impl TargetCoreBpf {
         // The program account should be owned by the upgradeable loader.
         if program_account.owner() != &bpf_loader_upgradeable::id() {
             return Err(CoreBpfMigrationError::IncorrectOwner(*program_address));
+        }
+
+        // The program account should be executable.
+        if !program_account.executable() {
+            return Err(CoreBpfMigrationError::ProgramAccountNotExecutable(
+                *program_address,
+            ));
         }
 
         // The program account should have a pointer to its data account.
@@ -94,11 +102,11 @@ mod tests {
         solana_sdk::{account::WritableAccount, bpf_loader_upgradeable},
     };
 
-    fn store_account(bank: &Bank, address: &Pubkey, data: &[u8], owner: &Pubkey) {
+    fn store_account(bank: &Bank, address: &Pubkey, data: &[u8], owner: &Pubkey, executable: bool) {
         let space = data.len();
         let lamports = bank.get_minimum_balance_for_rent_exemption(space);
         let mut account = AccountSharedData::new(lamports, space, owner);
-        account.set_executable(true);
+        account.set_executable(executable);
         account.data_as_mut_slice().copy_from_slice(data);
         bank.store_account_and_update_capitalization(address, &account);
     }
@@ -125,10 +133,27 @@ mod tests {
             })
             .unwrap(),
             &Pubkey::new_unique(), // Not the upgradeable loader
+            true,
         );
         assert_matches!(
             TargetCoreBpf::new_checked(&bank, &program_address).unwrap_err(),
             CoreBpfMigrationError::IncorrectOwner(..)
+        );
+
+        // Fail if the program account is not executable.
+        store_account(
+            &bank,
+            &program_address,
+            &bincode::serialize(&UpgradeableLoaderState::Program {
+                programdata_address: program_data_address,
+            })
+            .unwrap(),
+            &bpf_loader_upgradeable::id(),
+            false, // Not executable
+        );
+        assert_matches!(
+            TargetCoreBpf::new_checked(&bank, &program_address).unwrap_err(),
+            CoreBpfMigrationError::ProgramAccountNotExecutable(..)
         );
 
         // Fail if the program account does not have the correct state.
@@ -137,6 +162,7 @@ mod tests {
             &program_address,
             &[4u8; 200], // Not the correct state
             &bpf_loader_upgradeable::id(),
+            true,
         );
         assert_matches!(
             TargetCoreBpf::new_checked(&bank, &program_address).unwrap_err(),
@@ -154,6 +180,7 @@ mod tests {
             })
             .unwrap(),
             &bpf_loader_upgradeable::id(),
+            true,
         );
         assert_matches!(
             TargetCoreBpf::new_checked(&bank, &program_address).unwrap_err(),
@@ -171,6 +198,7 @@ mod tests {
             })
             .unwrap(),
             &bpf_loader_upgradeable::id(),
+            true,
         );
 
         // Store the proper program account.
@@ -182,6 +210,7 @@ mod tests {
             })
             .unwrap(),
             &bpf_loader_upgradeable::id(),
+            true,
         );
 
         // Fail if the program data account does not exist.
@@ -200,6 +229,7 @@ mod tests {
             })
             .unwrap(),
             &Pubkey::new_unique(), // Not the upgradeable loader
+            false,
         );
         assert_matches!(
             TargetCoreBpf::new_checked(&bank, &program_address).unwrap_err(),
@@ -212,6 +242,7 @@ mod tests {
             &program_data_address,
             &[4u8; 200], // Not the correct state
             &bpf_loader_upgradeable::id(),
+            false,
         );
         assert_matches!(
             TargetCoreBpf::new_checked(&bank, &program_address).unwrap_err(),
@@ -228,6 +259,7 @@ mod tests {
             })
             .unwrap(),
             &bpf_loader_upgradeable::id(),
+            false,
         );
         assert_matches!(
             TargetCoreBpf::new_checked(&bank, &program_address).unwrap_err(),
@@ -257,6 +289,7 @@ mod tests {
                 &program_data_address,
                 &data,
                 &bpf_loader_upgradeable::id(),
+                false,
             );
 
             let target_core_bpf = TargetCoreBpf::new_checked(&bank, &program_address).unwrap();
