@@ -42,8 +42,10 @@ printf -v allowed '"%s",' "${tainted_packages[@]}"
 allowed="${allowed%,}"
 
 mode=${1:-full}
+# consume the mode, so that other arguments are forwarded to cargo-hack
+shift
 case "$mode" in
-  tree | check-bins | check-all-targets | full)
+  tree | check-bins-and-lib | check-all-targets | full)
     ;;
   *)
     echo "$0: unrecognized mode: $mode";
@@ -156,9 +158,9 @@ fi
 # consistency with other CI steps and for the possibility of new similar lints.
 export RUSTFLAGS="-D warnings -Z threads=8 $RUSTFLAGS"
 
-if [[ $mode = "check-bins" || $mode = "full" ]]; then
-  _ cargo "+${rust_nightly}" hack check --bins
+if [[ $mode = "check-bins-and-lib" || $mode = "full" ]]; then
+  _ cargo "+${rust_nightly}" hack "$@" check
 fi
 if [[ $mode = "check-all-targets" || $mode = "full" ]]; then
-  _ cargo "+${rust_nightly}" hack check --all-targets
+  _ cargo "+${rust_nightly}" hack "$@" check --all-targets
 fi
