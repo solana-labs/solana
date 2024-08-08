@@ -2811,6 +2811,17 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                 .validator(is_parsable::<u64>)
                 .takes_value(true)
                 .help("Override the runtime's account lock limit per transaction"),
+        )
+        .arg(
+            Arg::with_name("clone_feature_set")
+                .long("clone-feature-set")
+                .takes_value(false)
+                .requires("json_rpc_url")
+                .help(
+                    "Copy a feature set from the cluster referenced by the --url \
+                     argument in the genesis configuration. If the ledger \
+                     already exists then this parameter is silently ignored",
+                ),
         );
 }
 

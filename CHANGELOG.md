@@ -23,6 +23,7 @@ Release channels have their own copy of this changelog:
 * Changes
   * SDK: removed the `respan` macro. This was marked as "internal use only" and was no longer used internally.
   * `agave-validator`: Update PoH speed check to compare against current hash rate from a Bank (#2447)
+  * `solana-test-validator`: Add `--clone-feature-set` flag to mimic features from a target cluster (#2480)
 
 ## [2.0.0]
 * Breaking

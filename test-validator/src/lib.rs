@@ -43,6 +43,7 @@ use {
         commitment_config::CommitmentConfig,
         epoch_schedule::EpochSchedule,
         exit::Exit,
+        feature,
         feature_set::FEATURE_NAMES,
         fee_calculator::FeeRateGovernor,
         instruction::{AccountMeta, Instruction},
@@ -425,6 +426,32 @@ impl TestValidatorGenesis {
 
         self.clone_programdata_accounts(programdata_addresses, rpc_client, false)?;
 
+        Ok(self)
+    }
+
+    pub fn clone_feature_set(&mut self, rpc_client: &RpcClient) -> Result<&mut Self, String> {
+        for feature_ids in FEATURE_NAMES
+            .keys()
+            .cloned()
+            .collect::<Vec<Pubkey>>()
+            .chunks(MAX_MULTIPLE_ACCOUNTS)
+        {
+            rpc_client
+                .get_multiple_accounts(feature_ids)
+                .map_err(|err| format!("Failed to fetch: {err}"))?
+                .into_iter()
+                .zip(feature_ids)
+                .for_each(|(maybe_account, feature_id)| {
+                    if maybe_account
+                        .as_ref()
+                        .and_then(feature::from_account)
+                        .and_then(|feature| feature.activated_at)
+                        .is_none()
+                    {
+                        self.deactivate_feature_set.insert(*feature_id);
+                    }
+                });
+        }
         Ok(self)
     }
 
