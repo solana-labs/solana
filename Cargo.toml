@@ -387,7 +387,7 @@ solana-wen-restart = { path = "wen-restart", version = "=1.18.22" }
 solana-zk-keygen = { path = "zk-keygen", version = "=1.18.22" }
 solana-zk-token-proof-program = { path = "programs/zk-token-proof", version = "=1.18.22" }
 solana-zk-token-sdk = { path = "zk-token-sdk", version = "=1.18.22" }
-solana_rbpf = "=0.8.0"
+solana_rbpf = "=0.8.3"
 spl-associated-token-account = "=2.3.0"
 spl-instruction-padding = "0.1"
 spl-memo = "=4.0.0"
