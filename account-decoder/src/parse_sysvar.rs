@@ -245,9 +245,9 @@ pub struct UiEpochRewards {
     pub distribution_starting_block_height: u64,
     pub num_partitions: u64,
     pub parent_blockhash: String,
-    pub total_points: u128,
-    pub total_rewards: u64,
-    pub distributed_rewards: u64,
+    pub total_points: String,
+    pub total_rewards: String,
+    pub distributed_rewards: String,
     pub active: bool,
 }
 
@@ -257,9 +257,9 @@ impl From<EpochRewards> for UiEpochRewards {
             distribution_starting_block_height: epoch_rewards.distribution_starting_block_height,
             num_partitions: epoch_rewards.num_partitions,
             parent_blockhash: epoch_rewards.parent_blockhash.to_string(),
-            total_points: epoch_rewards.total_points,
-            total_rewards: epoch_rewards.total_rewards,
-            distributed_rewards: epoch_rewards.distributed_rewards,
+            total_points: epoch_rewards.total_points.to_string(),
+            total_rewards: epoch_rewards.total_rewards.to_string(),
+            distributed_rewards: epoch_rewards.distributed_rewards.to_string(),
             active: epoch_rewards.active,
         }
     }
