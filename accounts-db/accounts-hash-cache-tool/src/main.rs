@@ -203,7 +203,7 @@ fn do_inspect(file: impl AsRef<Path>, force: bool) -> Result<(), String> {
             file.as_ref().display(),
         )
     })?;
-    let count_width = (header.count as f64).log10().ceil() as usize;
+    let count_width = width10(header.count as u64);
 
     let mut count = Saturating(0);
     scan_file(reader, header.count, |entry| {
@@ -235,13 +235,13 @@ fn do_diff_files(file1: impl AsRef<Path>, file2: impl AsRef<Path>) -> Result<(),
     let num_accounts1 = entries1.len();
     let num_accounts2 = entries2.len();
     let num_accounts_width = {
-        let width1 = (num_accounts1 as f64).log10().ceil() as usize;
-        let width2 = (num_accounts2 as f64).log10().ceil() as usize;
+        let width1 = width10(num_accounts1 as u64);
+        let width2 = width10(num_accounts2 as u64);
         cmp::max(width1, width2)
     };
     let lamports_width = {
-        let width1 = (capitalization1 as f64).log10().ceil() as usize;
-        let width2 = (capitalization2 as f64).log10().ceil() as usize;
+        let width1 = width10(capitalization1);
+        let width2 = width10(capitalization2);
         cmp::max(width1, width2)
     };
     println!("File 1: number of accounts: {num_accounts1:num_accounts_width$}, capitalization: {capitalization1:lamports_width$} lamports");
@@ -284,7 +284,7 @@ fn do_diff_files(file1: impl AsRef<Path>, file2: impl AsRef<Path>) -> Result<(),
 
     // display the unique entries in each file
     let do_print = |entries: &[CacheHashDataFileEntry]| {
-        let count_width = (entries.len() as f64).log10().ceil() as usize;
+        let count_width = width10(entries.len() as u64);
         if entries.is_empty() {
             println!("(none)");
         } else {
@@ -307,7 +307,7 @@ fn do_diff_files(file1: impl AsRef<Path>, file2: impl AsRef<Path>) -> Result<(),
     do_print(&unique_entries2);
 
     println!("Mismatch values:");
-    let count_width = (mismatch_entries.len() as f64).log10().ceil() as usize;
+    let count_width = width10(mismatch_entries.len() as u64);
     if mismatch_entries.is_empty() {
         println!("(none)");
     } else {
@@ -435,7 +435,7 @@ fn do_diff_dirs(
     }
 
     let do_print = |entries: &[&CacheFileInfo]| {
-        let count_width = (entries.len() as f64).log10().ceil() as usize;
+        let count_width = width10(entries.len() as u64);
         if entries.is_empty() {
             println!("(none)");
         } else {
@@ -450,7 +450,7 @@ fn do_diff_dirs(
     do_print(&uniques2);
 
     println!("Mismatch files:");
-    let count_width = (mismatches.len() as f64).log10().ceil() as usize;
+    let count_width = width10(mismatches.len() as u64);
     if mismatches.is_empty() {
         println!("(none)");
     } else {
@@ -558,13 +558,13 @@ fn do_diff_state(dir1: impl AsRef<Path>, dir2: impl AsRef<Path>) -> Result<(), S
     drop(timer);
 
     let num_accounts_width = {
-        let width1 = (num_accounts1 as f64).log10().ceil() as usize;
-        let width2 = (num_accounts2 as f64).log10().ceil() as usize;
+        let width1 = width10(num_accounts1 as u64);
+        let width2 = width10(num_accounts2 as u64);
         cmp::max(width1, width2)
     };
     let lamports_width = {
-        let width1 = (capitalization1 as f64).log10().ceil() as usize;
-        let width2 = (capitalization2 as f64).log10().ceil() as usize;
+        let width1 = width10(capitalization1);
+        let width2 = width10(capitalization2);
         cmp::max(width1, width2)
     };
 
@@ -575,7 +575,7 @@ fn do_diff_state(dir1: impl AsRef<Path>, dir2: impl AsRef<Path>) -> Result<(), S
     if unique_entries1.is_empty() {
         println!("(none)");
     } else {
-        let count_width = (unique_entries1.len() as f64).log10().ceil() as usize;
+        let count_width = width10(unique_entries1.len() as u64);
         let mut total_lamports = Saturating(0);
         for (i, entry) in unique_entries1.iter().enumerate() {
             total_lamports += entry.1 .1;
@@ -593,7 +593,7 @@ fn do_diff_state(dir1: impl AsRef<Path>, dir2: impl AsRef<Path>) -> Result<(), S
     if unique_entries1.is_empty() {
         println!("(none)");
     } else {
-        let count_width = (unique_entries2.len() as f64).log10().ceil() as usize;
+        let count_width = width10(unique_entries2.len() as u64);
         let mut total_lamports = Saturating(0);
         for (i, entry) in unique_entries2.iter().enumerate() {
             total_lamports += entry.1 .1;
@@ -608,7 +608,7 @@ fn do_diff_state(dir1: impl AsRef<Path>, dir2: impl AsRef<Path>) -> Result<(), S
     }
 
     println!("Mismatch values:");
-    let count_width = (mismatch_entries.len() as f64).log10().ceil() as usize;
+    let count_width = width10(mismatch_entries.len() as u64);
     if mismatch_entries.is_empty() {
         println!("(none)");
     } else {
@@ -835,6 +835,11 @@ fn open_file(
     }
 
     Ok((reader, header))
+}
+
+/// Returns the number of characters required to print `x` in base-10
+fn width10(x: u64) -> usize {
+    (x as f64).log10().ceil() as usize
 }
 
 #[derive(Debug)]
