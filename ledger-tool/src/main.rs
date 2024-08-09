@@ -683,8 +683,6 @@ fn record_transactions(
 ) {
     for tsm in recv {
         if let TransactionStatusMessage::Batch(batch) = tsm {
-            let slot = batch.bank.slot();
-
             assert_eq!(batch.transactions.len(), batch.commit_results.len());
 
             let transactions: Vec<_> = batch
@@ -725,11 +723,11 @@ fn record_transactions(
 
             let mut slots = slots.lock().unwrap();
 
-            if let Some(recorded_slot) = slots.iter_mut().find(|f| f.slot == slot) {
+            if let Some(recorded_slot) = slots.iter_mut().find(|f| f.slot == batch.slot) {
                 recorded_slot.transactions.extend(transactions);
             } else {
                 slots.push(SlotDetails {
-                    slot,
+                    slot: batch.slot,
                     transactions,
                     ..Default::default()
                 });

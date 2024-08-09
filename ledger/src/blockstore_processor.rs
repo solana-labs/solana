@@ -207,7 +207,7 @@ pub fn execute_batch(
             TransactionTokenBalancesSet::new(pre_token_balances, post_token_balances);
 
         transaction_status_sender.send_transaction_status_batch(
-            bank.clone(),
+            bank.slot(),
             transactions,
             commit_results,
             balances,
@@ -2108,7 +2108,7 @@ pub enum TransactionStatusMessage {
 }
 
 pub struct TransactionStatusBatch {
-    pub bank: Arc<Bank>,
+    pub slot: Slot,
     pub transactions: Vec<SanitizedTransaction>,
     pub commit_results: Vec<TransactionCommitResult>,
     pub balances: TransactionBalancesSet,
@@ -2124,19 +2124,17 @@ pub struct TransactionStatusSender {
 impl TransactionStatusSender {
     pub fn send_transaction_status_batch(
         &self,
-        bank: Arc<Bank>,
+        slot: Slot,
         transactions: Vec<SanitizedTransaction>,
         commit_results: Vec<TransactionCommitResult>,
         balances: TransactionBalancesSet,
         token_balances: TransactionTokenBalancesSet,
         transaction_indexes: Vec<usize>,
     ) {
-        let slot = bank.slot();
-
         if let Err(e) = self
             .sender
             .send(TransactionStatusMessage::Batch(TransactionStatusBatch {
-                bank,
+                slot,
                 transactions,
                 commit_results,
                 balances,

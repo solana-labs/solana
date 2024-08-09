@@ -69,14 +69,13 @@ impl TransactionStatusService {
     ) -> Result<(), RecvTimeoutError> {
         match write_transaction_status_receiver.recv_timeout(Duration::from_secs(1))? {
             TransactionStatusMessage::Batch(TransactionStatusBatch {
-                bank,
+                slot,
                 transactions,
                 commit_results,
                 balances,
                 token_balances,
                 transaction_indexes,
             }) => {
-                let slot = bank.slot();
                 for (
                     transaction,
                     commit_result,
@@ -384,7 +383,7 @@ pub(crate) mod tests {
         let signature = *transaction.signature();
         let transaction_index: usize = bank.transaction_count().try_into().unwrap();
         let transaction_status_batch = TransactionStatusBatch {
-            bank,
+            slot,
             transactions: vec![transaction],
             commit_results: vec![commit_result],
             balances,
