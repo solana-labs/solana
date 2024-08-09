@@ -6,27 +6,28 @@ use {
     solana_sdk::{packet::PACKET_DATA_SIZE, pubkey::Pubkey},
 };
 
+// The packet has a maximum length of 1232 bytes.
+// This means the maximum number of 32 byte keys is 38.
+// 38 as an min-sized encoded u16 is 1 byte.
+// We can simply read this byte, if it's >38 we can return None.
+const MAX_STATIC_ACCOUNTS_PER_PACKET: u8 =
+    (PACKET_DATA_SIZE / core::mem::size_of::<Pubkey>()) as u8;
+
 /// Contains meta-data about the static account keys in a transaction packet.
 #[derive(Default)]
 pub struct StaticAccountKeysMeta {
     /// The number of static accounts in the transaction.
-    pub(crate) num_static_accounts: u16,
+    pub(crate) num_static_accounts: u8,
     /// The offset to the first static account in the transaction.
     pub(crate) offset: u16,
 }
 
 impl StaticAccountKeysMeta {
     pub fn try_new(bytes: &[u8], offset: &mut usize) -> Result<Self> {
-        // The packet has a maximum length of 1232 bytes.
-        // This means the maximum number of 32 byte keys is 38.
-        // 38 as an min-sized encoded u16 is 1 byte.
-        // We can simply read this byte, if it's >38 we can return None.
-        const MAX_STATIC_ACCOUNTS_PER_PACKET: u16 =
-            (PACKET_DATA_SIZE / core::mem::size_of::<Pubkey>()) as u16;
         // Max size must not have the MSB set so that it is size 1.
         const _: () = assert!(MAX_STATIC_ACCOUNTS_PER_PACKET & 0b1000_0000 == 0);
 
-        let num_static_accounts = read_byte(bytes, offset)? as u16;
+        let num_static_accounts = read_byte(bytes, offset)?;
         if num_static_accounts == 0 || num_static_accounts > MAX_STATIC_ACCOUNTS_PER_PACKET {
             return Err(TransactionParsingError);
         }
@@ -36,7 +37,7 @@ impl StaticAccountKeysMeta {
         // check if the offset is greater than u16::MAX.
         let static_accounts_offset = *offset as u16;
         // Update offset for array of static accounts.
-        advance_offset_for_array::<Pubkey>(bytes, offset, num_static_accounts)?;
+        advance_offset_for_array::<Pubkey>(bytes, offset, u16::from(num_static_accounts))?;
 
         Ok(Self {
             num_static_accounts,
@@ -68,7 +69,7 @@ mod tests {
 
     #[test]
     fn test_max_accounts() {
-        let signatures = vec![Pubkey::default(); 38];
+        let signatures = vec![Pubkey::default(); usize::from(MAX_STATIC_ACCOUNTS_PER_PACKET)];
         let bytes = bincode::serialize(&ShortVec(signatures)).unwrap();
         let mut offset = 0;
         let meta = StaticAccountKeysMeta::try_new(&bytes, &mut offset).unwrap();
@@ -79,7 +80,7 @@ mod tests {
 
     #[test]
     fn test_too_many_accounts() {
-        let signatures = vec![Pubkey::default(); 39];
+        let signatures = vec![Pubkey::default(); usize::from(MAX_STATIC_ACCOUNTS_PER_PACKET) + 1];
         let bytes = bincode::serialize(&ShortVec(signatures)).unwrap();
         let mut offset = 0;
         assert!(StaticAccountKeysMeta::try_new(&bytes, &mut offset).is_err());
