@@ -1,4 +1,5 @@
 #![allow(clippy::arithmetic_side_effects)]
+#![deny(clippy::wildcard_enum_match_arm)]
 // Remove the following `allow` when `StakeState` is removed, required to avoid
 // warnings from uses of deprecated types during trait derivations.
 #![allow(deprecated)]
@@ -105,23 +106,23 @@ impl StakeState {
 
     pub fn stake(&self) -> Option<Stake> {
         match self {
-            StakeState::Stake(_meta, stake) => Some(*stake),
-            _ => None,
+            Self::Stake(_meta, stake) => Some(*stake),
+            Self::Uninitialized | Self::Initialized(_) | Self::RewardsPool => None,
         }
     }
 
     pub fn delegation(&self) -> Option<Delegation> {
         match self {
-            StakeState::Stake(_meta, stake) => Some(stake.delegation),
-            _ => None,
+            Self::Stake(_meta, stake) => Some(stake.delegation),
+            Self::Uninitialized | Self::Initialized(_) | Self::RewardsPool => None,
         }
     }
 
     pub fn authorized(&self) -> Option<Authorized> {
         match self {
-            StakeState::Stake(meta, _stake) => Some(meta.authorized),
-            StakeState::Initialized(meta) => Some(meta.authorized),
-            _ => None,
+            Self::Stake(meta, _stake) => Some(meta.authorized),
+            Self::Initialized(meta) => Some(meta.authorized),
+            Self::Uninitialized | Self::RewardsPool => None,
         }
     }
 
@@ -131,9 +132,9 @@ impl StakeState {
 
     pub fn meta(&self) -> Option<Meta> {
         match self {
-            StakeState::Stake(meta, _stake) => Some(*meta),
-            StakeState::Initialized(meta) => Some(*meta),
-            _ => None,
+            Self::Stake(meta, _stake) => Some(*meta),
+            Self::Initialized(meta) => Some(*meta),
+            Self::Uninitialized | Self::RewardsPool => None,
         }
     }
 }
@@ -208,37 +209,37 @@ impl StakeStateV2 {
 
     pub fn stake(&self) -> Option<Stake> {
         match self {
-            StakeStateV2::Stake(_meta, stake, _stake_flags) => Some(*stake),
-            _ => None,
+            Self::Stake(_meta, stake, _stake_flags) => Some(*stake),
+            Self::Uninitialized | Self::Initialized(_) | Self::RewardsPool => None,
         }
     }
 
     pub fn stake_ref(&self) -> Option<&Stake> {
         match self {
-            StakeStateV2::Stake(_meta, stake, _stake_flags) => Some(stake),
-            _ => None,
+            Self::Stake(_meta, stake, _stake_flags) => Some(stake),
+            Self::Uninitialized | Self::Initialized(_) | Self::RewardsPool => None,
         }
     }
 
     pub fn delegation(&self) -> Option<Delegation> {
         match self {
-            StakeStateV2::Stake(_meta, stake, _stake_flags) => Some(stake.delegation),
-            _ => None,
+            Self::Stake(_meta, stake, _stake_flags) => Some(stake.delegation),
+            Self::Uninitialized | Self::Initialized(_) | Self::RewardsPool => None,
         }
     }
 
     pub fn delegation_ref(&self) -> Option<&Delegation> {
         match self {
             StakeStateV2::Stake(_meta, stake, _stake_flags) => Some(&stake.delegation),
-            _ => None,
+            Self::Uninitialized | Self::Initialized(_) | Self::RewardsPool => None,
         }
     }
 
     pub fn authorized(&self) -> Option<Authorized> {
         match self {
-            StakeStateV2::Stake(meta, _stake, _stake_flags) => Some(meta.authorized),
-            StakeStateV2::Initialized(meta) => Some(meta.authorized),
-            _ => None,
+            Self::Stake(meta, _stake, _stake_flags) => Some(meta.authorized),
+            Self::Initialized(meta) => Some(meta.authorized),
+            Self::Uninitialized | Self::RewardsPool => None,
         }
     }
 
@@ -248,9 +249,9 @@ impl StakeStateV2 {
 
     pub fn meta(&self) -> Option<Meta> {
         match self {
-            StakeStateV2::Stake(meta, _stake, _stake_flags) => Some(*meta),
-            StakeStateV2::Initialized(meta) => Some(*meta),
-            _ => None,
+            Self::Stake(meta, _stake, _stake_flags) => Some(*meta),
+            Self::Initialized(meta) => Some(*meta),
+            Self::Uninitialized | Self::RewardsPool => None,
         }
     }
 }
@@ -375,10 +376,15 @@ impl Authorized {
         signers: &HashSet<Pubkey>,
         stake_authorize: StakeAuthorize,
     ) -> Result<(), InstructionError> {
-        match stake_authorize {
-            StakeAuthorize::Staker if signers.contains(&self.staker) => Ok(()),
-            StakeAuthorize::Withdrawer if signers.contains(&self.withdrawer) => Ok(()),
-            _ => Err(InstructionError::MissingRequiredSignature),
+        let authorized_signer = match stake_authorize {
+            StakeAuthorize::Staker => &self.staker,
+            StakeAuthorize::Withdrawer => &self.withdrawer,
+        };
+
+        if signers.contains(authorized_signer) {
+            Ok(())
+        } else {
+            Err(InstructionError::MissingRequiredSignature)
         }
     }
 
