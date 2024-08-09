@@ -6,6 +6,7 @@ use {
         SubCommand,
     },
     memmap2::Mmap,
+    rayon::prelude::*,
     solana_accounts_db::{
         accounts_hash::AccountHash, parse_cache_hash_data_filename,
         pubkey_bins::PubkeyBinCalculator24, CacheHashDataFileEntry, CacheHashDataFileHeader,
@@ -20,6 +21,7 @@ use {
         mem::size_of,
         num::Saturating,
         path::{Path, PathBuf},
+        sync::RwLock,
         time::Instant,
     },
 };
@@ -28,6 +30,7 @@ const CMD_INSPECT: &str = "inspect";
 const CMD_DIFF: &str = "diff";
 const CMD_DIFF_FILES: &str = "files";
 const CMD_DIFF_DIRS: &str = "directories";
+const CMD_DIFF_STATE: &str = "state";
 
 fn main() {
     let matches = App::new(crate_name!())
@@ -102,6 +105,29 @@ fn main() {
                                 .takes_value(false)
                                 .help("After diff-ing the directories, diff the files that were found to have mismatches"),
                         ),
+                )
+                .subcommand(
+                    SubCommand::with_name(CMD_DIFF_STATE)
+                        .about("Diff the final state of two accounts hash cache directories")
+                        .long_about(
+                            "Diff the final state of two accounts hash cache directories. \
+                             Load all the latest entries from each directory, then compare \
+                             the final states for anything missing or mismatching."
+                        )
+                        .arg(
+                            Arg::with_name("path1")
+                                .index(1)
+                                .takes_value(true)
+                                .value_name("PATH1")
+                                .help("Accounts hash cache directory 1 to diff"),
+                        )
+                        .arg(
+                            Arg::with_name("path2")
+                                .index(2)
+                                .takes_value(true)
+                                .value_name("PATH2")
+                                .help("Accounts hash cache directory 2 to diff"),
+                        ),
                 ),
         )
         .get_matches();
@@ -118,6 +144,9 @@ fn main() {
                 }
                 (CMD_DIFF_DIRS, Some(diff_subcommand_matches)) => {
                     cmd_diff_dirs(&matches, diff_subcommand_matches)
+                }
+                (CMD_DIFF_STATE, Some(diff_subcommand_matches)) => {
+                    cmd_diff_state(&matches, diff_subcommand_matches)
                 }
                 _ => unreachable!(),
             }
@@ -156,6 +185,15 @@ fn cmd_diff_dirs(
     let path2 = value_t_or_exit!(subcommand_matches, "path2", String);
     let then_diff_files = subcommand_matches.is_present("then_diff_files");
     do_diff_dirs(path1, path2, then_diff_files)
+}
+
+fn cmd_diff_state(
+    _app_matches: &ArgMatches<'_>,
+    subcommand_matches: &ArgMatches<'_>,
+) -> Result<(), String> {
+    let path1 = value_t_or_exit!(subcommand_matches, "path1", String);
+    let path2 = value_t_or_exit!(subcommand_matches, "path2", String);
+    do_diff_state(path1, path2)
 }
 
 fn do_inspect(file: impl AsRef<Path>, force: bool) -> Result<(), String> {
@@ -440,6 +478,159 @@ fn do_diff_dirs(
     Ok(())
 }
 
+fn do_diff_state(dir1: impl AsRef<Path>, dir2: impl AsRef<Path>) -> Result<(), String> {
+    const NUM_BINS: usize = 8192;
+    let extract = |dir: &Path| -> Result<_, String> {
+        let files =
+            get_cache_files_in(dir).map_err(|err| format!("failed to get cache files: {err}"))?;
+        let BinnedLatestEntriesInfo {
+            latest_entries,
+            capitalization,
+        } = extract_binned_latest_entries_in(files.iter().map(|file| &file.path), NUM_BINS)
+            .map_err(|err| format!("failed to extract entries: {err}"))?;
+        let num_accounts: usize = latest_entries.iter().map(|bin| bin.len()).sum();
+        let entries = Vec::from(latest_entries);
+        let state: Box<_> = entries.into_iter().map(RwLock::new).collect();
+        Ok((state, capitalization, num_accounts))
+    };
+
+    let timer = LoggingTimer::new("Reconstructing state");
+    let dir1 = dir1.as_ref();
+    let dir2 = dir2.as_ref();
+    let (state1, state2) = rayon::join(|| extract(dir1), || extract(dir2));
+    let (state1, capitalization1, num_accounts1) = state1
+        .map_err(|err| format!("failed to get state for dir 1 '{}': {err}", dir1.display()))?;
+    let (state2, capitalization2, num_accounts2) = state2
+        .map_err(|err| format!("failed to get state for dir 2 '{}': {err}", dir2.display()))?;
+    drop(timer);
+
+    let timer = LoggingTimer::new("Diffing state");
+    let (mut mismatch_entries, mut unique_entries1) = (0..NUM_BINS)
+        .into_par_iter()
+        .map(|bindex| {
+            let mut bin1 = state1[bindex].write().unwrap();
+            let mut bin2 = state2[bindex].write().unwrap();
+
+            let mut mismatch_entries = Vec::new();
+            let mut unique_entries1 = Vec::new();
+            for entry1 in bin1.drain() {
+                let (key1, value1) = entry1;
+                match bin2.remove(&key1) {
+                    Some(value2) => {
+                        // the pubkey was found in both states, so compare the hashes and lamports
+                        if value1 == value2 {
+                            // hashes and lamports are equal, so nothing to do
+                        } else {
+                            // otherwise we have a mismatch; note it
+                            mismatch_entries.push((key1, value1, value2));
+                        }
+                    }
+                    None => {
+                        // this pubkey was *not* found in state2, so its a unique entry in state1
+                        unique_entries1.push((key1, value1));
+                    }
+                }
+            }
+            (mismatch_entries, unique_entries1)
+        })
+        .reduce(
+            || (Vec::new(), Vec::new()),
+            |mut accum, elem| {
+                accum.0.extend(elem.0);
+                accum.1.extend(elem.1);
+                accum
+            },
+        );
+    drop(timer);
+
+    // all the remaining entries in state2 are the ones *not* found in state1
+    let mut unique_entries2 = Vec::new();
+    for bin in Vec::from(state2).into_iter() {
+        let mut bin = bin.write().unwrap();
+        unique_entries2.extend(bin.drain());
+    }
+
+    // sort all the results by pubkey to make them saner to view
+    let timer = LoggingTimer::new("Sorting results");
+    unique_entries1.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+    unique_entries2.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+    mismatch_entries.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+    drop(timer);
+
+    let num_accounts_width = {
+        let width1 = (num_accounts1 as f64).log10().ceil() as usize;
+        let width2 = (num_accounts2 as f64).log10().ceil() as usize;
+        cmp::max(width1, width2)
+    };
+    let lamports_width = {
+        let width1 = (capitalization1 as f64).log10().ceil() as usize;
+        let width2 = (capitalization2 as f64).log10().ceil() as usize;
+        cmp::max(width1, width2)
+    };
+
+    println!("State 1: total number of accounts: {num_accounts1:num_accounts_width$}, total capitalization: {capitalization1:lamports_width$} lamports");
+    println!("State 2: total number of accounts: {num_accounts2:num_accounts_width$}, total capitalization: {capitalization2:lamports_width$} lamports");
+
+    println!("Unique entries in state 1:");
+    if unique_entries1.is_empty() {
+        println!("(none)");
+    } else {
+        let count_width = (unique_entries1.len() as f64).log10().ceil() as usize;
+        let mut total_lamports = Saturating(0);
+        for (i, entry) in unique_entries1.iter().enumerate() {
+            total_lamports += entry.1 .1;
+            println!(
+                "{i:count_width$}: pubkey: {:44}, hash: {:44}, lamports: {:lamports_width$}",
+                entry.0.to_string(),
+                entry.1 .0 .0.to_string(),
+                entry.1 .1,
+            );
+        }
+        println!("total lamports: {}", total_lamports.0);
+    }
+
+    println!("Unique entries in state 2:");
+    if unique_entries1.is_empty() {
+        println!("(none)");
+    } else {
+        let count_width = (unique_entries2.len() as f64).log10().ceil() as usize;
+        let mut total_lamports = Saturating(0);
+        for (i, entry) in unique_entries2.iter().enumerate() {
+            total_lamports += entry.1 .1;
+            println!(
+                "{i:count_width$}: pubkey: {:44}, hash: {:44}, lamports: {:lamports_width$}",
+                entry.0.to_string(),
+                entry.1 .0 .0.to_string(),
+                entry.1 .1,
+            );
+        }
+        println!("total lamports: {}", total_lamports.0);
+    }
+
+    println!("Mismatch values:");
+    let count_width = (mismatch_entries.len() as f64).log10().ceil() as usize;
+    if mismatch_entries.is_empty() {
+        println!("(none)");
+    } else {
+        for (i, (pubkey, value1, value2)) in mismatch_entries.iter().enumerate() {
+            println!(
+                "{i:count_width$}: pubkey: {:44}, hash: {:44}, lamports: {:lamports_width$}",
+                pubkey.to_string(),
+                value1.0 .0.to_string(),
+                value1.1,
+            );
+            println!(
+                "{i:count_width$}: {:52}, hash: {:44}, lamports: {:lamports_width$}",
+                "(state 2 same)",
+                value2.0 .0.to_string(),
+                value2.1,
+            );
+        }
+    }
+
+    Ok(())
+}
+
 /// Returns all the cache hash data files in `dir`, sorted in ascending slot-and-bin-range order
 fn get_cache_files_in(dir: impl AsRef<Path>) -> Result<Vec<CacheFileInfo>, io::Error> {
     fn get_files_in(dir: impl AsRef<Path>) -> Result<Vec<(PathBuf, Metadata)>, io::Error> {
@@ -663,6 +854,26 @@ struct LatestEntriesInfo {
 struct BinnedLatestEntriesInfo {
     latest_entries: Box<[HashMap<Pubkey, (AccountHash, /* lamports */ u64)>]>,
     capitalization: u64, // lamports
+}
+
+#[derive(Debug)]
+struct LoggingTimer {
+    _elapsed_on_drop: ElapsedOnDrop,
+}
+
+impl LoggingTimer {
+    #[must_use]
+    fn new(message: impl Into<String>) -> Self {
+        let message = message.into();
+        let elapsed_on_drop = ElapsedOnDrop {
+            message: format!("{message}... Done in "),
+            start: Instant::now(),
+        };
+        println!("{message}...");
+        Self {
+            _elapsed_on_drop: elapsed_on_drop,
+        }
+    }
 }
 
 #[derive(Debug)]

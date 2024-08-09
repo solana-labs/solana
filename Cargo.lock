@@ -71,6 +71,7 @@ dependencies = [
  "bytemuck",
  "clap 2.33.3",
  "memmap2",
+ "rayon",
  "solana-accounts-db",
  "solana-program",
  "solana-version",
