@@ -2475,16 +2475,21 @@ impl ClusterInfo {
 
         // Check if there is a duplicate instance of
         // this node with more recent timestamp.
-        let instance = self.instance.read().unwrap();
-        let check_duplicate_instance = |values: &[CrdsValue]| {
-            if should_check_duplicate_instance {
-                for value in values {
-                    if instance.check_duplicate(value) {
-                        return Err(GossipError::DuplicateNodeInstance);
-                    }
+        let check_duplicate_instance = {
+            let instance = self.instance.read().unwrap();
+            let my_contact_info = self.my_contact_info();
+            move |values: &[CrdsValue]| {
+                if should_check_duplicate_instance
+                    && values.iter().any(|value| {
+                        instance.check_duplicate(value)
+                            || matches!(&value.data, CrdsData::ContactInfo(other)
+                                if my_contact_info.check_duplicate(other))
+                    })
+                {
+                    return Err(GossipError::DuplicateNodeInstance);
                 }
+                Ok(())
             }
-            Ok(())
         };
         let mut pings = Vec::new();
         let mut rng = rand::thread_rng();
