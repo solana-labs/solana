@@ -96,13 +96,13 @@ impl BulletproofGens {
         }
 
         self.G_vec.extend(
-            &mut GeneratorsChain::new(&[b'G'])
+            &mut GeneratorsChain::new(b"G")
                 .fast_forward(self.gens_capacity)
                 .take(new_capacity - self.gens_capacity),
         );
 
         self.H_vec.extend(
-            &mut GeneratorsChain::new(&[b'H'])
+            &mut GeneratorsChain::new(b"H")
                 .fast_forward(self.gens_capacity)
                 .take(new_capacity - self.gens_capacity),
         );
