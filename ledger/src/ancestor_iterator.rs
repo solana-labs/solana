@@ -35,7 +35,7 @@ impl<'a> Iterator for AncestorIterator<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         let current = self.current;
-        current.map(|slot| {
+        current.inspect(|&slot| {
             if slot != 0 {
                 self.current = self
                     .blockstore
@@ -45,7 +45,6 @@ impl<'a> Iterator for AncestorIterator<'a> {
             } else {
                 self.current = None;
             }
-            slot
         })
     }
 }

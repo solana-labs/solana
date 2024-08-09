@@ -27,9 +27,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .append(true)
                 .create(true)
                 .open(LEDGER_UDEV_RULES_LOCATION)
-                .map_err(|e| {
+                .inspect_err(|_e| {
                     println!("Could not write to file; this script requires sudo privileges");
-                    e
                 })?;
             file.write_all(LEDGER_UDEV_RULES.as_bytes())?;
 

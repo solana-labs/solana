@@ -407,9 +407,8 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         let compute_budget_limits = process_compute_budget_instructions(
             message.program_instructions_iter(),
         )
-        .map_err(|err| {
+        .inspect_err(|_err| {
             error_counters.invalid_compute_budget += 1;
-            err
         })?;
 
         let fee_payer_address = message.fee_payer();

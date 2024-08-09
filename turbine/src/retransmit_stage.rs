@@ -265,9 +265,8 @@ fn retransmit(
                     quic_endpoint_sender,
                     stats,
                 )
-                .map_err(|err| {
-                    stats.record_error(&err);
-                    err
+                .inspect_err(|err| {
+                    stats.record_error(err);
                 })
                 .ok()?;
                 Some((key.slot(), root_distance, num_nodes))
@@ -290,9 +289,8 @@ fn retransmit(
                         quic_endpoint_sender,
                         stats,
                     )
-                    .map_err(|err| {
-                        stats.record_error(&err);
-                        err
+                    .inspect_err(|err| {
+                        stats.record_error(err);
                     })
                     .ok()?;
                     Some((key.slot(), root_distance, num_nodes))

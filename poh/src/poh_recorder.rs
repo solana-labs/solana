@@ -992,11 +992,10 @@ impl PohRecorder {
                 self.send_entry_us += send_entry_us;
                 send_entry_res?;
                 let starting_transaction_index =
-                    working_bank.transaction_index.map(|transaction_index| {
+                    working_bank.transaction_index.inspect(|transaction_index| {
                         let next_starting_transaction_index =
                             transaction_index.saturating_add(num_transactions);
                         working_bank.transaction_index = Some(next_starting_transaction_index);
-                        transaction_index
                     });
                 return Ok(starting_transaction_index);
             }
