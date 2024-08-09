@@ -435,14 +435,6 @@ impl ContactInfo {
         node.set_serve_repair_quic((addr, port + 4)).unwrap();
         node
     }
-
-    // Returns true if the other contact-info is a duplicate instance of this
-    // node, with a more recent `outset` timestamp.
-    #[inline]
-    #[must_use]
-    pub(crate) fn check_duplicate(&self, other: &ContactInfo) -> bool {
-        self.pubkey == other.pubkey && self.outset < other.outset
-    }
 }
 
 impl Default for ContactInfo {
@@ -1023,60 +1015,5 @@ mod tests {
             node.tpu_forwards(Protocol::QUIC),
             Err(Error::InvalidPort(0))
         );
-    }
-
-    #[test]
-    fn test_check_duplicate() {
-        let mut rng = rand::thread_rng();
-        let mut node = ContactInfo::new(
-            Keypair::new().pubkey(),
-            rng.gen(), // wallclock
-            rng.gen(), // shred_version
-        );
-        // Same contact-info is not a duplicate instance.
-        {
-            let other = node.clone();
-            assert!(!node.check_duplicate(&other));
-            assert!(!other.check_duplicate(&node));
-        }
-        // Updated socket address is not a duplicate instance.
-        {
-            let mut other = node.clone();
-            other.set_gossip(new_rand_socket(&mut rng)).unwrap();
-            other.set_serve_repair(new_rand_socket(&mut rng)).unwrap();
-            assert!(!node.check_duplicate(&other));
-            assert!(!other.check_duplicate(&node));
-            other.remove_serve_repair();
-            assert!(!node.check_duplicate(&other));
-            assert!(!other.check_duplicate(&node));
-        }
-        // Updated wallclock is not a duplicate instance.
-        {
-            let other = node.clone();
-            node.set_wallclock(rng.gen());
-            assert!(!node.check_duplicate(&other));
-            assert!(!other.check_duplicate(&node));
-        }
-        // Different pubkey is not a duplicate instance.
-        {
-            let other = ContactInfo::new(
-                Keypair::new().pubkey(),
-                rng.gen(), // wallclock
-                rng.gen(), // shred_version
-            );
-            assert!(!node.check_duplicate(&other));
-            assert!(!other.check_duplicate(&node));
-        }
-        // Same pubkey, more recent outset timestamp is a duplicate instance.
-        {
-            let other = ContactInfo::new(
-                node.pubkey,
-                rng.gen(), // wallclock
-                rng.gen(), // shred_version
-            );
-            assert!(node.outset < other.outset);
-            assert!(node.check_duplicate(&other));
-            assert!(!other.check_duplicate(&node));
-        }
     }
 }
