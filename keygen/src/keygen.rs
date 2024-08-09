@@ -703,7 +703,7 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
                                     .count
                                     .fetch_sub(1, Ordering::Relaxed);
                                 if !no_outfile {
-                                    write_keypair_file(&keypair, &format!("{}.json", keypair.pubkey()))
+                                    write_keypair_file(&keypair, format!("{}.json", keypair.pubkey()))
                                     .unwrap();
                                     println!(
                                         "Wrote keypair to {}",
