@@ -183,6 +183,29 @@ pull_request_rules:
           2. Open a follow-up PR to update the JavaScript client `@solana/web3.js` ([example](https://github.com/solana-labs/solana-web3.js/pull/2868/files))
 
           Thank you for keeping the RPC clients in sync with the server API @{{author}}.
+  - name: Reminder to add Firedancer team to changes in `programs/` and `sdk/`
+    conditions:
+      - or:
+        - files~=^programs/address-lookup-table/src/.*\.rs$
+        - files~=^programs/bpf_loader/src/.*\.rs$
+        - files~=^programs/compute_budget/src/.*\.rs$
+        - files~=^programs/config/src/.*\.rs$
+        - files~=^programs/loader-v4/src/.*\.rs$
+        - files~=^programs/stake/src/.*\.rs$
+        - files~=^programs/system/src/.*\.rs$
+        - files~=^programs/vote/src/.*\.rs$
+        - files~=^programs/zk-elgamal-proof/src/.*\.rs$
+        - files~=^sdk/program/src/stake.*\.rs$  # includes stake_history.rs
+        - files~=^sdk/program/src/vote/.*\.rs$
+    actions:
+      comment:
+        message: |
+          The Firedancer team maintains a line-for-line reimplementation of the
+          native programs, and until native programs are moved to BPF, those
+          implementations must exactly match their Agave counterparts.
+          If this PR represents a change to a native program implementation (not
+          tests), please include a reviewer from the Firedancer team. And please
+          keep refactors to a minimum.
 
 commands_restrictions:
   # The author of copied PRs is the Mergify user.
