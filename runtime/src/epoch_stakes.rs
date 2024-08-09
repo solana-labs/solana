@@ -1,7 +1,7 @@
 use {
     crate::{
         stake_account::StakeAccount,
-        stakes::{Stakes, StakesEnum},
+        stakes::{serde_stakes_to_delegation_format, Stakes, StakesEnum},
     },
     serde::{Deserialize, Deserializer, Serialize, Serializer},
     solana_sdk::{clock::Epoch, pubkey::Pubkey, stake::state::Stake},
@@ -24,7 +24,7 @@ pub struct NodeVoteAccounts {
 #[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
 #[cfg_attr(feature = "dev-context-only-utils", derive(PartialEq))]
 pub struct EpochStakes {
-    #[serde(with = "crate::stakes::serde_stakes_enum_compat")]
+    #[serde(with = "serde_stakes_to_delegation_format")]
     stakes: Arc<StakesEnum>,
     total_stake: u64,
     node_id_to_vote_accounts: Arc<NodeIdToVoteAccounts>,

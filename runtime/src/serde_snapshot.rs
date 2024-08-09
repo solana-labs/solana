@@ -10,7 +10,7 @@ use {
         runtime_config::RuntimeConfig,
         serde_snapshot::storage::SerializableAccountStorageEntry,
         snapshot_utils::{SnapshotError, StorageAndNextAccountsFileId},
-        stakes::{serde_stakes_enum_compat, Stakes, StakesEnum},
+        stakes::{serde_stakes_to_delegation_format, Stakes, StakesEnum},
     },
     bincode::{self, config::Options, Error},
     log::*,
@@ -237,7 +237,7 @@ struct SerializableVersionedBank {
     rent_collector: RentCollector,
     epoch_schedule: EpochSchedule,
     inflation: Inflation,
-    #[serde(serialize_with = "serde_stakes_enum_compat::serialize")]
+    #[serde(serialize_with = "serde_stakes_to_delegation_format::serialize")]
     stakes: StakesEnum,
     unused_accounts: UnusedAccounts,
     epoch_stakes: HashMap<Epoch, EpochStakes>,
