@@ -33,8 +33,8 @@ use {
     },
     solana_svm::{
         account_loader::{CheckedTransactionDetails, TransactionCheckResult},
-        transaction_execution_result::TransactionExecutionResult,
         transaction_processing_callback::TransactionProcessingCallback,
+        transaction_processing_result::TransactionProcessingResultExtensions,
         transaction_processor::{
             ExecutionRecordingConfig, TransactionBatchProcessor, TransactionProcessingConfig,
             TransactionProcessingEnvironment,
@@ -429,9 +429,11 @@ fn svm_integration() {
         &processing_config,
     );
 
-    assert_eq!(result.execution_results.len(), 5);
+    assert_eq!(result.processing_results.len(), 5);
 
-    let executed_tx_0 = result.execution_results[0].executed_transaction().unwrap();
+    let executed_tx_0 = result.processing_results[0]
+        .processed_transaction()
+        .unwrap();
     assert!(executed_tx_0.was_successful());
     let logs = executed_tx_0
         .execution_details
@@ -440,7 +442,9 @@ fn svm_integration() {
         .unwrap();
     assert!(logs.contains(&"Program log: Hello, Solana!".to_string()));
 
-    let executed_tx_1 = result.execution_results[1].executed_transaction().unwrap();
+    let executed_tx_1 = result.processing_results[1]
+        .processed_transaction()
+        .unwrap();
     assert!(executed_tx_1.was_successful());
 
     // The SVM does not commit the account changes in MockBank
@@ -453,7 +457,9 @@ fn svm_integration() {
         .unwrap();
     assert_eq!(recipient_data.1.lamports(), 900010);
 
-    let executed_tx_2 = result.execution_results[2].executed_transaction().unwrap();
+    let executed_tx_2 = result.processing_results[2]
+        .processed_transaction()
+        .unwrap();
     let return_data = executed_tx_2
         .execution_details
         .return_data
@@ -464,7 +470,9 @@ fn svm_integration() {
     let clock_info: Clock = bincode::deserialize(clock_data.data()).unwrap();
     assert_eq!(clock_info.unix_timestamp, time);
 
-    let executed_tx_3 = result.execution_results[3].executed_transaction().unwrap();
+    let executed_tx_3 = result.processing_results[3]
+        .processed_transaction()
+        .unwrap();
     assert!(executed_tx_3.execution_details.status.is_err());
     assert!(executed_tx_3
         .execution_details
@@ -474,7 +482,7 @@ fn svm_integration() {
         .contains(&"Transfer: insufficient lamports 900000, need 900050".to_string()));
 
     assert!(matches!(
-        result.execution_results[4],
-        TransactionExecutionResult::NotExecuted(TransactionError::BlockhashNotFound)
+        result.processing_results[4],
+        Err(TransactionError::BlockhashNotFound)
     ));
 }

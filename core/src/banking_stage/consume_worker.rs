@@ -234,18 +234,18 @@ impl ConsumeWorkerMetrics {
         }: &ExecuteAndCommitTransactionsOutput,
     ) {
         self.count_metrics
-            .transactions_attempted_execution_count
+            .transactions_attempted_processing_count
             .fetch_add(
-                transaction_counts.attempted_execution_count,
+                transaction_counts.attempted_processing_count,
                 Ordering::Relaxed,
             );
         self.count_metrics
-            .executed_transactions_count
-            .fetch_add(transaction_counts.executed_count, Ordering::Relaxed);
+            .processed_transactions_count
+            .fetch_add(transaction_counts.processed_count, Ordering::Relaxed);
         self.count_metrics
-            .executed_with_successful_result_count
+            .processed_with_successful_result_count
             .fetch_add(
-                transaction_counts.executed_with_successful_result_count,
+                transaction_counts.processed_with_successful_result_count,
                 Ordering::Relaxed,
             );
         self.count_metrics
@@ -410,9 +410,9 @@ impl ConsumeWorkerMetrics {
 }
 
 struct ConsumeWorkerCountMetrics {
-    transactions_attempted_execution_count: AtomicU64,
-    executed_transactions_count: AtomicU64,
-    executed_with_successful_result_count: AtomicU64,
+    transactions_attempted_processing_count: AtomicU64,
+    processed_transactions_count: AtomicU64,
+    processed_with_successful_result_count: AtomicU64,
     retryable_transaction_count: AtomicUsize,
     retryable_expired_bank_count: AtomicUsize,
     cost_model_throttled_transactions_count: AtomicU64,
@@ -423,9 +423,9 @@ struct ConsumeWorkerCountMetrics {
 impl Default for ConsumeWorkerCountMetrics {
     fn default() -> Self {
         Self {
-            transactions_attempted_execution_count: AtomicU64::default(),
-            executed_transactions_count: AtomicU64::default(),
-            executed_with_successful_result_count: AtomicU64::default(),
+            transactions_attempted_processing_count: AtomicU64::default(),
+            processed_transactions_count: AtomicU64::default(),
+            processed_with_successful_result_count: AtomicU64::default(),
             retryable_transaction_count: AtomicUsize::default(),
             retryable_expired_bank_count: AtomicUsize::default(),
             cost_model_throttled_transactions_count: AtomicU64::default(),
@@ -441,19 +441,19 @@ impl ConsumeWorkerCountMetrics {
             "banking_stage_worker_counts",
             "id" => id,
             (
-                "transactions_attempted_execution_count",
-                self.transactions_attempted_execution_count
+                "transactions_attempted_processing_count",
+                self.transactions_attempted_processing_count
                     .swap(0, Ordering::Relaxed),
                 i64
             ),
             (
-                "executed_transactions_count",
-                self.executed_transactions_count.swap(0, Ordering::Relaxed),
+                "processed_transactions_count",
+                self.processed_transactions_count.swap(0, Ordering::Relaxed),
                 i64
             ),
             (
-                "executed_with_successful_result_count",
-                self.executed_with_successful_result_count
+                "processed_with_successful_result_count",
+                self.processed_with_successful_result_count
                     .swap(0, Ordering::Relaxed),
                 i64
             ),

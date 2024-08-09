@@ -55,9 +55,9 @@ impl LeaderExecuteAndCommitTimings {
             "id" => id,
             ("slot", slot as i64, i64),
             (
-                "execution_results_to_transactions_us",
+                "processing_results_to_transactions_us",
                 self.record_transactions_timings
-                    .execution_results_to_transactions_us as i64,
+                    .processing_results_to_transactions_us as i64,
                 i64
             ),
             (

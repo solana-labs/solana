@@ -1,7 +1,9 @@
 use {
     crate::{
         rollback_accounts::RollbackAccounts,
-        transaction_execution_result::TransactionExecutionResult,
+        transaction_processing_result::{
+            TransactionProcessingResult, TransactionProcessingResultExtensions,
+        },
     },
     solana_sdk::{
         account::AccountSharedData, nonce::state::DurableNonce, pubkey::Pubkey,
@@ -14,20 +16,20 @@ use {
 // optimization edge cases where some write locked accounts have skip storage.
 fn max_number_of_accounts_to_collect(
     txs: &[SanitizedTransaction],
-    execution_results: &[TransactionExecutionResult],
+    processing_results: &[TransactionProcessingResult],
 ) -> usize {
-    execution_results
+    processing_results
         .iter()
         .zip(txs)
-        .filter_map(|(execution_result, tx)| {
-            execution_result
-                .executed_transaction()
-                .map(|executed_tx| (executed_tx, tx))
+        .filter_map(|(processing_result, tx)| {
+            processing_result
+                .processed_transaction()
+                .map(|processed_tx| (processed_tx, tx))
         })
         .map(
-            |(executed_tx, tx)| match executed_tx.execution_details.status {
+            |(processed_tx, tx)| match processed_tx.execution_details.status {
                 Ok(_) => tx.message().num_write_locks() as usize,
-                Err(_) => executed_tx.loaded_transaction.rollback_accounts.count(),
+                Err(_) => processed_tx.loaded_transaction.rollback_accounts.count(),
             },
         )
         .sum()
@@ -35,35 +37,35 @@ fn max_number_of_accounts_to_collect(
 
 pub fn collect_accounts_to_store<'a>(
     txs: &'a [SanitizedTransaction],
-    execution_results: &'a mut [TransactionExecutionResult],
+    processing_results: &'a mut [TransactionProcessingResult],
     durable_nonce: &DurableNonce,
     lamports_per_signature: u64,
 ) -> (
     Vec<(&'a Pubkey, &'a AccountSharedData)>,
     Vec<Option<&'a SanitizedTransaction>>,
 ) {
-    let collect_capacity = max_number_of_accounts_to_collect(txs, execution_results);
+    let collect_capacity = max_number_of_accounts_to_collect(txs, processing_results);
     let mut accounts = Vec::with_capacity(collect_capacity);
     let mut transactions = Vec::with_capacity(collect_capacity);
-    for (execution_result, tx) in execution_results.iter_mut().zip(txs) {
-        let Some(executed_tx) = execution_result.executed_transaction_mut() else {
+    for (processing_result, transaction) in processing_results.iter_mut().zip(txs) {
+        let Some(processed_tx) = processing_result.processed_transaction_mut() else {
             // Don't store any accounts if tx wasn't executed
             continue;
         };
 
-        if executed_tx.execution_details.status.is_ok() {
+        if processed_tx.execution_details.status.is_ok() {
             collect_accounts_for_successful_tx(
                 &mut accounts,
                 &mut transactions,
-                tx,
-                &executed_tx.loaded_transaction.accounts,
+                transaction,
+                &processed_tx.loaded_transaction.accounts,
             );
         } else {
             collect_accounts_for_failed_tx(
                 &mut accounts,
                 &mut transactions,
-                tx,
-                &mut executed_tx.loaded_transaction.rollback_accounts,
+                transaction,
+                &mut processed_tx.loaded_transaction.rollback_accounts,
                 durable_nonce,
                 lamports_per_signature,
             );
@@ -180,11 +182,11 @@ mod tests {
         ))
     }
 
-    fn new_execution_result(
+    fn new_processing_result(
         status: Result<()>,
         loaded_transaction: LoadedTransaction,
-    ) -> TransactionExecutionResult {
-        TransactionExecutionResult::Executed(Box::new(ExecutedTransaction {
+    ) -> TransactionProcessingResult {
+        Ok(ExecutedTransaction {
             execution_details: TransactionExecutionDetails {
                 status,
                 log_messages: None,
@@ -195,7 +197,7 @@ mod tests {
             },
             loaded_transaction,
             programs_modified_by_tx: HashMap::new(),
-        }))
+        })
     }
 
     #[test]
@@ -260,14 +262,14 @@ mod tests {
         };
 
         let txs = vec![tx0.clone(), tx1.clone()];
-        let mut execution_results = vec![
-            new_execution_result(Ok(()), loaded0),
-            new_execution_result(Ok(()), loaded1),
+        let mut processing_results = vec![
+            new_processing_result(Ok(()), loaded0),
+            new_processing_result(Ok(()), loaded1),
         ];
-        let max_collected_accounts = max_number_of_accounts_to_collect(&txs, &execution_results);
+        let max_collected_accounts = max_number_of_accounts_to_collect(&txs, &processing_results);
         assert_eq!(max_collected_accounts, 2);
         let (collected_accounts, transactions) =
-            collect_accounts_to_store(&txs, &mut execution_results, &DurableNonce::default(), 0);
+            collect_accounts_to_store(&txs, &mut processing_results, &DurableNonce::default(), 0);
         assert_eq!(collected_accounts.len(), 2);
         assert!(collected_accounts
             .iter()
@@ -314,18 +316,18 @@ mod tests {
         };
 
         let txs = vec![tx];
-        let mut execution_results = vec![new_execution_result(
+        let mut processing_results = vec![new_processing_result(
             Err(TransactionError::InstructionError(
                 1,
                 InstructionError::InvalidArgument,
             )),
             loaded,
         )];
-        let max_collected_accounts = max_number_of_accounts_to_collect(&txs, &execution_results);
+        let max_collected_accounts = max_number_of_accounts_to_collect(&txs, &processing_results);
         assert_eq!(max_collected_accounts, 1);
         let durable_nonce = DurableNonce::from_blockhash(&Hash::new_unique());
         let (collected_accounts, _) =
-            collect_accounts_to_store(&txs, &mut execution_results, &durable_nonce, 0);
+            collect_accounts_to_store(&txs, &mut processing_results, &durable_nonce, 0);
         assert_eq!(collected_accounts.len(), 1);
         assert_eq!(
             collected_accounts
@@ -400,17 +402,17 @@ mod tests {
 
         let durable_nonce = DurableNonce::from_blockhash(&Hash::new_unique());
         let txs = vec![tx];
-        let mut execution_results = vec![new_execution_result(
+        let mut processing_results = vec![new_processing_result(
             Err(TransactionError::InstructionError(
                 1,
                 InstructionError::InvalidArgument,
             )),
             loaded,
         )];
-        let max_collected_accounts = max_number_of_accounts_to_collect(&txs, &execution_results);
+        let max_collected_accounts = max_number_of_accounts_to_collect(&txs, &processing_results);
         assert_eq!(max_collected_accounts, 2);
         let (collected_accounts, _) =
-            collect_accounts_to_store(&txs, &mut execution_results, &durable_nonce, 0);
+            collect_accounts_to_store(&txs, &mut processing_results, &durable_nonce, 0);
         assert_eq!(collected_accounts.len(), 2);
         assert_eq!(
             collected_accounts
@@ -498,17 +500,17 @@ mod tests {
 
         let durable_nonce = DurableNonce::from_blockhash(&Hash::new_unique());
         let txs = vec![tx];
-        let mut execution_results = vec![new_execution_result(
+        let mut processing_results = vec![new_processing_result(
             Err(TransactionError::InstructionError(
                 1,
                 InstructionError::InvalidArgument,
             )),
             loaded,
         )];
-        let max_collected_accounts = max_number_of_accounts_to_collect(&txs, &execution_results);
+        let max_collected_accounts = max_number_of_accounts_to_collect(&txs, &processing_results);
         assert_eq!(max_collected_accounts, 1);
         let (collected_accounts, _) =
-            collect_accounts_to_store(&txs, &mut execution_results, &durable_nonce, 0);
+            collect_accounts_to_store(&txs, &mut processing_results, &durable_nonce, 0);
         assert_eq!(collected_accounts.len(), 1);
         let collected_nonce_account = collected_accounts
             .iter()

@@ -36,6 +36,7 @@ use {
         account_loader::CheckedTransactionDetails,
         program_loader,
         transaction_processing_callback::TransactionProcessingCallback,
+        transaction_processing_result::TransactionProcessingResultExtensions,
         transaction_processor::{
             ExecutionRecordingConfig, TransactionBatchProcessor, TransactionProcessingConfig,
             TransactionProcessingEnvironment,
@@ -311,17 +312,8 @@ fn run_fixture(fixture: InstrFixture, filename: OsString, execute_as_instr: bool
     );
 
     // Assert that the transaction has worked without errors.
-    if !result.execution_results[0].was_executed()
-        || result.execution_results[0]
-            .details()
-            .unwrap()
-            .status
-            .is_err()
-    {
-        if matches!(
-            result.execution_results[0].flattened_result(),
-            Err(TransactionError::InsufficientFundsForRent { .. })
-        ) {
+    if let Err(err) = result.processing_results[0].flattened_result() {
+        if matches!(err, TransactionError::InsufficientFundsForRent { .. }) {
             // This is a transaction error not an instruction error, so execute the instruction
             // instead.
             execute_fixture_as_instr(
@@ -344,7 +336,9 @@ fn run_fixture(fixture: InstrFixture, filename: OsString, execute_as_instr: bool
         return;
     }
 
-    let executed_tx = result.execution_results[0].executed_transaction().unwrap();
+    let executed_tx = result.processing_results[0]
+        .processed_transaction()
+        .unwrap();
     let execution_details = &executed_tx.execution_details;
     let loaded_accounts = &executed_tx.loaded_transaction.accounts;
     verify_accounts_and_data(

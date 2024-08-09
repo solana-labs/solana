@@ -155,9 +155,12 @@ use {
         transaction_commit_result::{CommittedTransaction, TransactionCommitResult},
         transaction_error_metrics::TransactionErrorMetrics,
         transaction_execution_result::{
-            TransactionExecutionDetails, TransactionExecutionResult, TransactionLoadedAccountsStats,
+            TransactionExecutionDetails, TransactionLoadedAccountsStats,
         },
         transaction_processing_callback::TransactionProcessingCallback,
+        transaction_processing_result::{
+            TransactionProcessingResult, TransactionProcessingResultExtensions,
+        },
         transaction_processor::{
             ExecutionRecordingConfig, TransactionBatchProcessor, TransactionLogMessages,
             TransactionProcessingConfig, TransactionProcessingEnvironment,
@@ -315,12 +318,12 @@ impl BankRc {
 }
 
 pub struct LoadAndExecuteTransactionsOutput {
-    // Vector of results indicating whether a transaction was executed or could not
-    // be executed. Note executed transactions can still have failed!
-    pub execution_results: Vec<TransactionExecutionResult>,
-    // Executed transaction counts used to update bank transaction counts and
+    // Vector of results indicating whether a transaction was processed or could not
+    // be processed. Note processed transactions can still have failed!
+    pub processing_results: Vec<TransactionProcessingResult>,
+    // Processed transaction counts used to update bank transaction counts and
     // for metrics reporting.
-    pub execution_counts: ExecutedTransactionCounts,
+    pub processed_counts: ProcessedTransactionCounts,
 }
 
 pub struct TransactionSimulationResult {
@@ -883,10 +886,10 @@ struct PrevEpochInflationRewards {
 }
 
 #[derive(Debug, Default, PartialEq)]
-pub struct ExecutedTransactionCounts {
-    pub executed_transactions_count: u64,
-    pub executed_successfully_count: u64,
-    pub executed_non_vote_transactions_count: u64,
+pub struct ProcessedTransactionCounts {
+    pub processed_transactions_count: u64,
+    pub processed_non_vote_transactions_count: u64,
+    pub processed_with_successful_result_count: u64,
     pub signature_count: u64,
 }
 
@@ -3082,12 +3085,13 @@ impl Bank {
     fn update_transaction_statuses(
         &self,
         sanitized_txs: &[SanitizedTransaction],
-        execution_results: &[TransactionExecutionResult],
+        processing_results: &[TransactionProcessingResult],
     ) {
         let mut status_cache = self.status_cache.write().unwrap();
-        assert_eq!(sanitized_txs.len(), execution_results.len());
-        for (tx, execution_result) in sanitized_txs.iter().zip(execution_results) {
-            if let Some(details) = execution_result.details() {
+        assert_eq!(sanitized_txs.len(), processing_results.len());
+        for (tx, processing_result) in sanitized_txs.iter().zip(processing_results) {
+            if let Ok(processed_tx) = &processing_result {
+                let details = &processed_tx.execution_details;
                 // Add the message hash to the status cache to ensure that this message
                 // won't be processed again with a different signature.
                 status_cache.insert(
@@ -3315,7 +3319,7 @@ impl Bank {
         let mut timings = ExecuteTimings::default();
 
         let LoadAndExecuteTransactionsOutput {
-            mut execution_results,
+            mut processing_results,
             ..
         } = self.load_and_execute_transactions(
             &batch,
@@ -3352,18 +3356,15 @@ impl Bank {
 
         debug!("simulate_transaction: {:?}", timings);
 
-        let execution_result =
-            execution_results
-                .pop()
-                .unwrap_or(TransactionExecutionResult::NotExecuted(
-                    TransactionError::InvalidProgramForExecution,
-                ));
-        let flattened_result = execution_result.flattened_result();
+        let processing_result = processing_results
+            .pop()
+            .unwrap_or(Err(TransactionError::InvalidProgramForExecution));
+        let flattened_result = processing_result.flattened_result();
         let (post_simulation_accounts, logs, return_data, inner_instructions) =
-            match execution_result {
-                TransactionExecutionResult::Executed(executed_tx) => {
-                    let details = executed_tx.execution_details;
-                    let post_simulation_accounts = executed_tx
+            match processing_result {
+                Ok(processed_tx) => {
+                    let details = processed_tx.execution_details;
+                    let post_simulation_accounts = processed_tx
                         .loaded_transaction
                         .accounts
                         .into_iter()
@@ -3376,7 +3377,7 @@ impl Bank {
                         details.inner_instructions,
                     )
                 }
-                TransactionExecutionResult::NotExecuted(_) => (vec![], None, None, None),
+                Err(_) => (vec![], None, None, None),
             };
         let logs = logs.unwrap_or_default();
 
@@ -3491,39 +3492,43 @@ impl Bank {
         timings.accumulate(&sanitized_output.execute_timings);
 
         let ((), collect_logs_us) =
-            measure_us!(self.collect_logs(sanitized_txs, &sanitized_output.execution_results));
+            measure_us!(self.collect_logs(sanitized_txs, &sanitized_output.processing_results));
         timings.saturating_add_in_place(ExecuteTimingType::CollectLogsUs, collect_logs_us);
 
-        let mut execution_counts = ExecutedTransactionCounts::default();
+        let mut processed_counts = ProcessedTransactionCounts::default();
         let err_count = &mut error_counters.total;
 
-        for (execution_result, tx) in sanitized_output.execution_results.iter().zip(sanitized_txs) {
+        for (processing_result, tx) in sanitized_output
+            .processing_results
+            .iter()
+            .zip(sanitized_txs)
+        {
             if let Some(debug_keys) = &self.transaction_debug_keys {
                 for key in tx.message().account_keys().iter() {
                     if debug_keys.contains(key) {
-                        let result = execution_result.flattened_result();
+                        let result = processing_result.flattened_result();
                         info!("slot: {} result: {:?} tx: {:?}", self.slot, result, tx);
                         break;
                     }
                 }
             }
 
-            if execution_result.was_executed() {
+            if processing_result.was_processed() {
                 // Signature count must be accumulated only if the transaction
-                // is executed, otherwise a mismatched count between banking and
-                // replay could occur
-                execution_counts.signature_count +=
+                // is processed, otherwise a mismatched count between banking
+                // and replay could occur
+                processed_counts.signature_count +=
                     u64::from(tx.message().header().num_required_signatures);
-                execution_counts.executed_transactions_count += 1;
+                processed_counts.processed_transactions_count += 1;
 
                 if !tx.is_simple_vote_transaction() {
-                    execution_counts.executed_non_vote_transactions_count += 1;
+                    processed_counts.processed_non_vote_transactions_count += 1;
                 }
             }
 
-            match execution_result.flattened_result() {
+            match processing_result.flattened_result() {
                 Ok(()) => {
-                    execution_counts.executed_successfully_count += 1;
+                    processed_counts.processed_with_successful_result_count += 1;
                 }
                 Err(err) => {
                     if *err_count == 0 {
@@ -3535,15 +3540,15 @@ impl Bank {
         }
 
         LoadAndExecuteTransactionsOutput {
-            execution_results: sanitized_output.execution_results,
-            execution_counts,
+            processing_results: sanitized_output.processing_results,
+            processed_counts,
         }
     }
 
     fn collect_logs(
         &self,
         transactions: &[SanitizedTransaction],
-        execution_results: &[TransactionExecutionResult],
+        processing_results: &[TransactionProcessingResult],
     ) {
         let transaction_log_collector_config =
             self.transaction_log_collector_config.read().unwrap();
@@ -3551,12 +3556,13 @@ impl Bank {
             return;
         }
 
-        let collected_logs: Vec<_> = execution_results
+        let collected_logs: Vec<_> = processing_results
             .iter()
             .zip(transactions)
-            .filter_map(|(execution_result, transaction)| {
+            .filter_map(|(processing_result, transaction)| {
                 // Skip log collection for unprocessed transactions
-                let execution_details = execution_result.details()?;
+                let processed_tx = processing_result.processed_transaction()?;
+                let execution_details = &processed_tx.execution_details;
                 Self::collect_transaction_logs(
                     &transaction_log_collector_config,
                     transaction,
@@ -3698,17 +3704,17 @@ impl Bank {
 
     fn filter_program_errors_and_collect_fee(
         &self,
-        execution_results: &[TransactionExecutionResult],
+        processing_results: &[TransactionProcessingResult],
     ) {
         let mut fees = 0;
 
-        execution_results
+        processing_results
             .iter()
-            .for_each(|execution_result| match execution_result {
-                TransactionExecutionResult::Executed(executed_tx) => {
-                    fees += executed_tx.loaded_transaction.fee_details.total_fee();
+            .for_each(|processing_result| match processing_result {
+                Ok(processed_tx) => {
+                    fees += processed_tx.loaded_transaction.fee_details.total_fee();
                 }
-                TransactionExecutionResult::NotExecuted(_) => {}
+                Err(_) => {}
             });
 
         self.collector_fees.fetch_add(fees, Relaxed);
@@ -3717,17 +3723,18 @@ impl Bank {
     // Note: this function is not yet used; next PR will call it behind a feature gate
     fn filter_program_errors_and_collect_fee_details(
         &self,
-        execution_results: &[TransactionExecutionResult],
+        processing_results: &[TransactionProcessingResult],
     ) {
         let mut accumulated_fee_details = FeeDetails::default();
 
-        execution_results
+        processing_results
             .iter()
-            .for_each(|execution_result| match execution_result {
-                TransactionExecutionResult::Executed(executed_tx) => {
-                    accumulated_fee_details.accumulate(&executed_tx.loaded_transaction.fee_details);
+            .for_each(|processing_result| match processing_result {
+                Ok(processed_tx) => {
+                    accumulated_fee_details
+                        .accumulate(&processed_tx.loaded_transaction.fee_details);
                 }
-                TransactionExecutionResult::NotExecuted(_) => {}
+                Err(_) => {}
             });
 
         self.collector_fee_details
@@ -3739,10 +3746,10 @@ impl Bank {
     pub fn commit_transactions(
         &self,
         sanitized_txs: &[SanitizedTransaction],
-        mut execution_results: Vec<TransactionExecutionResult>,
+        mut processing_results: Vec<TransactionProcessingResult>,
         last_blockhash: Hash,
         lamports_per_signature: u64,
-        execution_counts: &ExecutedTransactionCounts,
+        processed_counts: &ProcessedTransactionCounts,
         timings: &mut ExecuteTimings,
     ) -> Vec<TransactionCommitResult> {
         assert!(
@@ -3750,39 +3757,36 @@ impl Bank {
             "commit_transactions() working on a bank that is already frozen or is undergoing freezing!"
         );
 
-        let ExecutedTransactionCounts {
-            executed_transactions_count,
-            executed_non_vote_transactions_count,
-            executed_successfully_count,
+        let ProcessedTransactionCounts {
+            processed_transactions_count,
+            processed_non_vote_transactions_count,
+            processed_with_successful_result_count,
             signature_count,
-        } = *execution_counts;
+        } = *processed_counts;
 
-        self.increment_transaction_count(executed_transactions_count);
+        self.increment_transaction_count(processed_transactions_count);
         self.increment_non_vote_transaction_count_since_restart(
-            executed_non_vote_transactions_count,
+            processed_non_vote_transactions_count,
         );
         self.increment_signature_count(signature_count);
 
-        let executed_with_failure_result_count =
-            executed_transactions_count.saturating_sub(executed_successfully_count);
-        if executed_with_failure_result_count > 0 {
-            self.transaction_error_count
-                .fetch_add(executed_with_failure_result_count, Relaxed);
-        }
+        let processed_with_failure_result_count =
+            processed_transactions_count.saturating_sub(processed_with_successful_result_count);
+        self.transaction_error_count
+            .fetch_add(processed_with_failure_result_count, Relaxed);
 
-        // Should be equivalent to checking `executed_transactions_count > 0`
-        if execution_results.iter().any(|result| result.was_executed()) {
+        if processed_transactions_count > 0 {
             self.is_delta.store(true, Relaxed);
             self.transaction_entries_count.fetch_add(1, Relaxed);
             self.transactions_per_entry_max
-                .fetch_max(executed_transactions_count, Relaxed);
+                .fetch_max(processed_transactions_count, Relaxed);
         }
 
         let ((), store_accounts_us) = measure_us!({
             let durable_nonce = DurableNonce::from_blockhash(&last_blockhash);
             let (accounts_to_store, transactions) = collect_accounts_to_store(
                 sanitized_txs,
-                &mut execution_results,
+                &mut processing_results,
                 &durable_nonce,
                 lamports_per_signature,
             );
@@ -3791,17 +3795,17 @@ impl Bank {
                 .store_cached((self.slot(), accounts_to_store.as_slice()), &transactions);
         });
 
-        self.collect_rent(&execution_results);
+        self.collect_rent(&processing_results);
 
         // Cached vote and stake accounts are synchronized with accounts-db
         // after each transaction.
         let ((), update_stakes_cache_us) =
-            measure_us!(self.update_stakes_cache(sanitized_txs, &execution_results));
+            measure_us!(self.update_stakes_cache(sanitized_txs, &processing_results));
 
         let ((), update_executors_us) = measure_us!({
             let mut cache = None;
-            for execution_result in &execution_results {
-                if let TransactionExecutionResult::Executed(executed_tx) = execution_result {
+            for processing_result in &processing_results {
+                if let Some(executed_tx) = processing_result.processed_transaction() {
                     let programs_modified_by_tx = &executed_tx.programs_modified_by_tx;
                     if executed_tx.was_successful() && !programs_modified_by_tx.is_empty() {
                         cache
@@ -3814,9 +3818,10 @@ impl Bank {
             }
         });
 
-        let accounts_data_len_delta = execution_results
+        let accounts_data_len_delta = processing_results
             .iter()
-            .filter_map(TransactionExecutionResult::details)
+            .filter_map(|processing_result| processing_result.processed_transaction())
+            .map(|processed_tx| &processed_tx.execution_details)
             .filter_map(|details| {
                 details
                     .status
@@ -3827,12 +3832,12 @@ impl Bank {
         self.update_accounts_data_size_delta_on_chain(accounts_data_len_delta);
 
         let ((), update_transaction_statuses_us) =
-            measure_us!(self.update_transaction_statuses(sanitized_txs, &execution_results));
+            measure_us!(self.update_transaction_statuses(sanitized_txs, &processing_results));
 
         if self.feature_set.is_active(&reward_full_priority_fee::id()) {
-            self.filter_program_errors_and_collect_fee_details(&execution_results)
+            self.filter_program_errors_and_collect_fee_details(&processing_results)
         } else {
-            self.filter_program_errors_and_collect_fee(&execution_results)
+            self.filter_program_errors_and_collect_fee(&processing_results)
         };
 
         timings.saturating_add_in_place(ExecuteTimingType::StoreUs, store_accounts_us);
@@ -3846,45 +3851,45 @@ impl Bank {
             update_transaction_statuses_us,
         );
 
-        Self::create_commit_results(execution_results)
+        Self::create_commit_results(processing_results)
     }
 
     fn create_commit_results(
-        execution_results: Vec<TransactionExecutionResult>,
+        processing_results: Vec<TransactionProcessingResult>,
     ) -> Vec<TransactionCommitResult> {
-        execution_results
+        processing_results
             .into_iter()
-            .map(|execution_result| match execution_result {
-                TransactionExecutionResult::Executed(executed_tx) => {
-                    let loaded_tx = &executed_tx.loaded_transaction;
+            .map(|processing_result| match processing_result {
+                Ok(processed_tx) => {
+                    let loaded_tx = &processed_tx.loaded_transaction;
                     let loaded_account_stats = TransactionLoadedAccountsStats {
                         loaded_accounts_data_size: loaded_tx.loaded_accounts_data_size,
                         loaded_accounts_count: loaded_tx.accounts.len(),
                     };
 
                     // Rent is only collected for successfully executed transactions
-                    let rent_debits = if executed_tx.was_successful() {
-                        executed_tx.loaded_transaction.rent_debits
+                    let rent_debits = if processed_tx.was_successful() {
+                        processed_tx.loaded_transaction.rent_debits
                     } else {
                         RentDebits::default()
                     };
 
                     Ok(CommittedTransaction {
                         loaded_account_stats,
-                        execution_details: executed_tx.execution_details,
-                        fee_details: executed_tx.loaded_transaction.fee_details,
+                        execution_details: processed_tx.execution_details,
+                        fee_details: processed_tx.loaded_transaction.fee_details,
                         rent_debits,
                     })
                 }
-                TransactionExecutionResult::NotExecuted(err) => Err(err),
+                Err(err) => Err(err),
             })
             .collect()
     }
 
-    fn collect_rent(&self, execution_results: &[TransactionExecutionResult]) {
-        let collected_rent = execution_results
+    fn collect_rent(&self, processing_results: &[TransactionProcessingResult]) {
+        let collected_rent = processing_results
             .iter()
-            .filter_map(|executed_result| executed_result.executed_transaction())
+            .filter_map(|processing_result| processing_result.processed_transaction())
             .filter(|executed_tx| executed_tx.was_successful())
             .map(|executed_tx| executed_tx.loaded_transaction.rent)
             .sum();
@@ -4557,8 +4562,8 @@ impl Bank {
         };
 
         let LoadAndExecuteTransactionsOutput {
-            execution_results,
-            execution_counts,
+            processing_results,
+            processed_counts,
         } = self.load_and_execute_transactions(
             batch,
             max_age,
@@ -4579,10 +4584,10 @@ impl Bank {
             self.last_blockhash_and_lamports_per_signature();
         let commit_results = self.commit_transactions(
             batch.sanitized_transactions(),
-            execution_results,
+            processing_results,
             last_blockhash,
             lamports_per_signature,
-            &execution_counts,
+            &processed_counts,
             timings,
         );
         let post_balances = if collect_balances {
@@ -5822,16 +5827,16 @@ impl Bank {
     fn update_stakes_cache(
         &self,
         txs: &[SanitizedTransaction],
-        execution_results: &[TransactionExecutionResult],
+        processing_results: &[TransactionProcessingResult],
     ) {
-        debug_assert_eq!(txs.len(), execution_results.len());
+        debug_assert_eq!(txs.len(), processing_results.len());
         let new_warmup_cooldown_rate_epoch = self.new_warmup_cooldown_rate_epoch();
         txs.iter()
-            .zip(execution_results)
-            .filter_map(|(tx, execution_result)| {
-                execution_result
-                    .executed_transaction()
-                    .map(|executed_tx| (tx, executed_tx))
+            .zip(processing_results)
+            .filter_map(|(tx, processing_result)| {
+                processing_result
+                    .processed_transaction()
+                    .map(|processed_tx| (tx, processed_tx))
             })
             .filter(|(_, executed_tx)| executed_tx.was_successful())
             .flat_map(|(tx, executed_tx)| {

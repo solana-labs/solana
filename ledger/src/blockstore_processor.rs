@@ -57,7 +57,7 @@ use {
         },
     },
     solana_svm::{
-        transaction_commit_result::TransactionCommitResult,
+        transaction_commit_result::{TransactionCommitResult, TransactionCommitResultExtensions},
         transaction_processor::ExecutionRecordingConfig,
     },
     solana_timings::{report_execute_timings, ExecuteTimingType, ExecuteTimings},
@@ -190,7 +190,7 @@ pub fn execute_batch(
     let committed_transactions = commit_results
         .iter()
         .zip(batch.sanitized_transactions())
-        .filter_map(|(commit_result, tx)| commit_result.is_ok().then_some(tx))
+        .filter_map(|(commit_result, tx)| commit_result.was_committed().then_some(tx))
         .collect_vec();
 
     let first_err = get_first_error(batch, &commit_results);

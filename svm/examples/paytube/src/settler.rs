@@ -18,7 +18,10 @@ use {
         pubkey::Pubkey, signature::Keypair, signer::Signer, system_instruction,
         transaction::Transaction as SolanaTransaction,
     },
-    solana_svm::transaction_processor::LoadAndExecuteSanitizedTransactionsOutput,
+    solana_svm::{
+        transaction_processing_result::TransactionProcessingResultExtensions,
+        transaction_processor::LoadAndExecuteSanitizedTransactionsOutput,
+    },
     spl_associated_token_account::get_associated_token_address,
     std::collections::HashMap,
 };
@@ -61,11 +64,11 @@ impl Ledger {
         let mut ledger: HashMap<LedgerKey, i128> = HashMap::new();
         paytube_transactions
             .iter()
-            .zip(svm_output.execution_results)
+            .zip(svm_output.processing_results)
             .for_each(|(transaction, result)| {
                 // Only append to the ledger if the PayTube transaction was
                 // successful.
-                if result.was_executed_successfully() {
+                if result.was_processed_with_successful_result() {
                     let mint = transaction.mint;
                     let mut keys = [transaction.from, transaction.to];
                     keys.sort();

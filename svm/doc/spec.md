@@ -206,9 +206,9 @@ The output of the transaction batch processor's
 
 - `error_metrics`: Error metrics for transactions that were processed.
 - `execute_timings`: Timings for transaction batch execution.
-- `execution_results`: Vector of results indicating whether a transaction was
-  executed or could not be executed. Note executed transactions can still have
-  failed!
+- `processing_results`: Vector of results indicating whether a transaction was
+  processed or could not be processed for some reason. Note that processed
+  transactions can still have failed!
 
 # Functional Model
 

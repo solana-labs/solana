@@ -51,44 +51,6 @@ impl ExecutedTransaction {
     }
 }
 
-impl TransactionExecutionResult {
-    pub fn was_executed_successfully(&self) -> bool {
-        self.executed_transaction()
-            .map(|executed_tx| executed_tx.was_successful())
-            .unwrap_or(false)
-    }
-
-    pub fn was_executed(&self) -> bool {
-        self.executed_transaction().is_some()
-    }
-
-    pub fn details(&self) -> Option<&TransactionExecutionDetails> {
-        self.executed_transaction()
-            .map(|executed_tx| &executed_tx.execution_details)
-    }
-
-    pub fn flattened_result(&self) -> transaction::Result<()> {
-        match self {
-            Self::Executed(executed_tx) => executed_tx.execution_details.status.clone(),
-            Self::NotExecuted(err) => Err(err.clone()),
-        }
-    }
-
-    pub fn executed_transaction(&self) -> Option<&ExecutedTransaction> {
-        match self {
-            Self::Executed(executed_tx) => Some(executed_tx.as_ref()),
-            Self::NotExecuted { .. } => None,
-        }
-    }
-
-    pub fn executed_transaction_mut(&mut self) -> Option<&mut ExecutedTransaction> {
-        match self {
-            Self::Executed(executed_tx) => Some(executed_tx.as_mut()),
-            Self::NotExecuted { .. } => None,
-        }
-    }
-}
-
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TransactionExecutionDetails {
     pub status: transaction::Result<()>,

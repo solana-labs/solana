@@ -18,13 +18,13 @@ pub struct CommittedTransaction {
 }
 
 pub trait TransactionCommitResultExtensions {
-    fn was_executed(&self) -> bool;
+    fn was_committed(&self) -> bool;
     fn was_executed_successfully(&self) -> bool;
     fn transaction_result(&self) -> TransactionResult<()>;
 }
 
 impl TransactionCommitResultExtensions for TransactionCommitResult {
-    fn was_executed(&self) -> bool {
+    fn was_committed(&self) -> bool {
         self.is_ok()
     }
 

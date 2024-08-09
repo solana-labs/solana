@@ -232,8 +232,11 @@ fn test_race_register_tick_freeze() {
     }
 }
 
-fn new_execution_result(status: Result<()>, fee_details: FeeDetails) -> TransactionExecutionResult {
-    TransactionExecutionResult::Executed(Box::new(ExecutedTransaction {
+fn new_processing_result(
+    status: Result<()>,
+    fee_details: FeeDetails,
+) -> TransactionProcessingResult {
+    Ok(ExecutedTransaction {
         loaded_transaction: LoadedTransaction {
             fee_details,
             ..LoadedTransaction::default()
@@ -247,7 +250,7 @@ fn new_execution_result(status: Result<()>, fee_details: FeeDetails) -> Transact
             accounts_data_len_delta: 0,
         },
         programs_modified_by_tx: HashMap::new(),
-    }))
+    })
 }
 
 impl Bank {
@@ -2874,9 +2877,9 @@ fn test_filter_program_errors_and_collect_fee() {
 
     let tx_fee = 42;
     let fee_details = FeeDetails::new(tx_fee, 0, false);
-    let execution_results = vec![
-        new_execution_result(Ok(()), fee_details),
-        new_execution_result(
+    let processing_results = vec![
+        new_processing_result(Ok(()), fee_details),
+        new_processing_result(
             Err(TransactionError::InstructionError(
                 1,
                 SystemError::ResultWithNegativeLamports.into(),
@@ -2886,7 +2889,7 @@ fn test_filter_program_errors_and_collect_fee() {
     ];
     let initial_balance = bank.get_balance(&leader);
 
-    bank.filter_program_errors_and_collect_fee(&execution_results);
+    bank.filter_program_errors_and_collect_fee(&processing_results);
     bank.freeze();
     assert_eq!(
         bank.get_balance(&leader),
@@ -2905,9 +2908,9 @@ fn test_filter_program_errors_and_collect_priority_fee() {
 
     let priority_fee = 42;
     let fee_details: FeeDetails = FeeDetails::new(0, priority_fee, false);
-    let execution_results = vec![
-        new_execution_result(Ok(()), fee_details),
-        new_execution_result(
+    let processing_results = vec![
+        new_processing_result(Ok(()), fee_details),
+        new_processing_result(
             Err(TransactionError::InstructionError(
                 1,
                 SystemError::ResultWithNegativeLamports.into(),
@@ -2917,7 +2920,7 @@ fn test_filter_program_errors_and_collect_priority_fee() {
     ];
     let initial_balance = bank.get_balance(&leader);
 
-    bank.filter_program_errors_and_collect_fee(&execution_results);
+    bank.filter_program_errors_and_collect_fee(&processing_results);
     bank.freeze();
     assert_eq!(
         bank.get_balance(&leader),
@@ -12800,9 +12803,9 @@ fn test_filter_program_errors_and_collect_fee_details() {
     let bank = Bank::new_for_tests(&genesis_config);
 
     let results = vec![
-        TransactionExecutionResult::NotExecuted(TransactionError::AccountNotFound),
-        new_execution_result(Ok(()), tx_fee_details),
-        new_execution_result(
+        Err(TransactionError::AccountNotFound),
+        new_processing_result(Ok(()), tx_fee_details),
+        new_processing_result(
             Err(TransactionError::InstructionError(
                 0,
                 SystemError::ResultWithNegativeLamports.into(),

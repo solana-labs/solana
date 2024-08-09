@@ -113,7 +113,7 @@ impl Record {
 
 #[derive(Default, Debug)]
 pub struct RecordTransactionsTimings {
-    pub execution_results_to_transactions_us: u64,
+    pub processing_results_to_transactions_us: u64,
     pub hash_us: u64,
     pub poh_record_us: u64,
 }
@@ -121,8 +121,8 @@ pub struct RecordTransactionsTimings {
 impl RecordTransactionsTimings {
     pub fn accumulate(&mut self, other: &RecordTransactionsTimings) {
         saturating_add_assign!(
-            self.execution_results_to_transactions_us,
-            other.execution_results_to_transactions_us
+            self.processing_results_to_transactions_us,
+            other.processing_results_to_transactions_us
         );
         saturating_add_assign!(self.hash_us, other.hash_us);
         saturating_add_assign!(self.poh_record_us, other.poh_record_us);
