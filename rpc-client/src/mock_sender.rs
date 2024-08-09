@@ -242,11 +242,7 @@ impl RpcSender for MockSender {
                             range: RpcBlockProductionRange {
                                 first_slot: config_range.first_slot,
                                 last_slot: {
-                                    if let Some(last_slot) = config_range.last_slot {
-                                        last_slot
-                                    } else {
-                                        2
-                                    }
+                                    config_range.last_slot.unwrap_or(2)
                                 },
                             },
                         },
