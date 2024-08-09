@@ -170,15 +170,6 @@ mod tests {
         std::sync::Arc,
     };
 
-    #[derive(Debug, serde_derive::Serialize, serde_derive::Deserialize)]
-    enum MockInstruction {
-        NoopSuccess,
-        NoopFail,
-        ModifyOwned,
-        ModifyNotOwned,
-        ModifyReadonly,
-    }
-
     fn new_sanitized_message(message: Message) -> SanitizedMessage {
         SanitizedMessage::try_from_legacy_message(message, &ReservedAccountKeys::empty_key_set())
             .unwrap()
