@@ -282,29 +282,10 @@ fn do_diff_files(file1: impl AsRef<Path>, file2: impl AsRef<Path>) -> Result<(),
     let (unique_entries1, mismatch_entries) = do_compute(&entries1, &entries2);
     let (unique_entries2, _) = do_compute(&entries2, &entries1);
 
-    // display the unique entries in each file
-    let do_print = |entries: &[CacheHashDataFileEntry]| {
-        let count_width = width10(entries.len() as u64);
-        if entries.is_empty() {
-            println!("(none)");
-        } else {
-            let mut total_lamports = Saturating(0);
-            for (i, entry) in entries.iter().enumerate() {
-                total_lamports += entry.lamports;
-                println!(
-                    "{i:count_width$}: pubkey: {:44}, hash: {:44}, lamports: {:lamports_width$}",
-                    entry.pubkey.to_string(),
-                    entry.hash.0.to_string(),
-                    entry.lamports,
-                );
-            }
-            println!("total lamports: {}", total_lamports.0);
-        }
-    };
     println!("Unique entries in file 1:");
-    do_print(&unique_entries1);
+    print_unique_entries(&unique_entries1, lamports_width);
     println!("Unique entries in file 2:");
-    do_print(&unique_entries2);
+    print_unique_entries(&unique_entries2, lamports_width);
 
     println!("Mismatch values:");
     let count_width = width10(mismatch_entries.len() as u64);
@@ -527,7 +508,11 @@ fn do_diff_state(dir1: impl AsRef<Path>, dir2: impl AsRef<Path>) -> Result<(), S
                     }
                     None => {
                         // this pubkey was *not* found in state2, so its a unique entry in state1
-                        unique_entries1.push((key1, value1));
+                        unique_entries1.push(CacheHashDataFileEntry {
+                            pubkey: key1,
+                            hash: value1.0,
+                            lamports: value1.1,
+                        });
                     }
                 }
             }
@@ -547,13 +532,19 @@ fn do_diff_state(dir1: impl AsRef<Path>, dir2: impl AsRef<Path>) -> Result<(), S
     let mut unique_entries2 = Vec::new();
     for bin in Vec::from(state2).into_iter() {
         let mut bin = bin.write().unwrap();
-        unique_entries2.extend(bin.drain());
+        unique_entries2.extend(bin.drain().map(|(pubkey, (hash, lamports))| {
+            CacheHashDataFileEntry {
+                pubkey,
+                hash,
+                lamports,
+            }
+        }));
     }
 
     // sort all the results by pubkey to make them saner to view
     let timer = LoggingTimer::new("Sorting results");
-    unique_entries1.sort_unstable_by(|a, b| a.0.cmp(&b.0));
-    unique_entries2.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+    unique_entries1.sort_unstable_by(|a, b| a.pubkey.cmp(&b.pubkey));
+    unique_entries2.sort_unstable_by(|a, b| a.pubkey.cmp(&b.pubkey));
     mismatch_entries.sort_unstable_by(|a, b| a.0.cmp(&b.0));
     drop(timer);
 
@@ -571,29 +562,10 @@ fn do_diff_state(dir1: impl AsRef<Path>, dir2: impl AsRef<Path>) -> Result<(), S
     println!("State 1: total number of accounts: {num_accounts1:num_accounts_width$}, total capitalization: {capitalization1:lamports_width$} lamports");
     println!("State 2: total number of accounts: {num_accounts2:num_accounts_width$}, total capitalization: {capitalization2:lamports_width$} lamports");
 
-    let do_print = |entries: &[(Pubkey, (AccountHash, /* lamports */ u64))]| {
-        if entries.is_empty() {
-            println!("(none)");
-        } else {
-            let count_width = width10(entries.len() as u64);
-            let mut total_lamports = Saturating(0);
-            for (i, entry) in entries.iter().enumerate() {
-                total_lamports += entry.1 .1;
-                println!(
-                    "{i:count_width$}: pubkey: {:44}, hash: {:44}, lamports: {:lamports_width$}",
-                    entry.0.to_string(),
-                    entry.1 .0 .0.to_string(),
-                    entry.1 .1,
-                );
-            }
-            println!("total lamports: {}", total_lamports.0);
-        }
-    };
-
     println!("Unique entries in state 1:");
-    do_print(&unique_entries1);
+    print_unique_entries(&unique_entries1, lamports_width);
     println!("Unique entries in state 2:");
-    do_print(&unique_entries2);
+    print_unique_entries(&unique_entries2, lamports_width);
 
     println!("Mismatch values:");
     let count_width = width10(mismatch_entries.len() as u64);
@@ -823,6 +795,27 @@ fn open_file(
     }
 
     Ok((reader, header))
+}
+
+/// Prints unique entries
+fn print_unique_entries(entries: &[CacheHashDataFileEntry], lamports_width: usize) {
+    if entries.is_empty() {
+        println!("(none)");
+        return;
+    }
+
+    let count_width = width10(entries.len() as u64);
+    let mut total_lamports = Saturating(0);
+    for (i, entry) in entries.iter().enumerate() {
+        total_lamports += entry.lamports;
+        println!(
+            "{i:count_width$}: pubkey: {:44}, hash: {:44}, lamports: {:lamports_width$}",
+            entry.pubkey.to_string(),
+            entry.hash.0.to_string(),
+            entry.lamports,
+        );
+    }
+    println!("total lamports: {}", total_lamports.0);
 }
 
 /// Returns the number of characters required to print `x` in base-10
