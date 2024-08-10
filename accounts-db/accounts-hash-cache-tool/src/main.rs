@@ -571,41 +571,29 @@ fn do_diff_state(dir1: impl AsRef<Path>, dir2: impl AsRef<Path>) -> Result<(), S
     println!("State 1: total number of accounts: {num_accounts1:num_accounts_width$}, total capitalization: {capitalization1:lamports_width$} lamports");
     println!("State 2: total number of accounts: {num_accounts2:num_accounts_width$}, total capitalization: {capitalization2:lamports_width$} lamports");
 
-    println!("Unique entries in state 1:");
-    if unique_entries1.is_empty() {
-        println!("(none)");
-    } else {
-        let count_width = width10(unique_entries1.len() as u64);
-        let mut total_lamports = Saturating(0);
-        for (i, entry) in unique_entries1.iter().enumerate() {
-            total_lamports += entry.1 .1;
-            println!(
-                "{i:count_width$}: pubkey: {:44}, hash: {:44}, lamports: {:lamports_width$}",
-                entry.0.to_string(),
-                entry.1 .0 .0.to_string(),
-                entry.1 .1,
-            );
+    let do_print = |entries: &[(Pubkey, (AccountHash, /* lamports */ u64))]| {
+        if entries.is_empty() {
+            println!("(none)");
+        } else {
+            let count_width = width10(entries.len() as u64);
+            let mut total_lamports = Saturating(0);
+            for (i, entry) in entries.iter().enumerate() {
+                total_lamports += entry.1 .1;
+                println!(
+                    "{i:count_width$}: pubkey: {:44}, hash: {:44}, lamports: {:lamports_width$}",
+                    entry.0.to_string(),
+                    entry.1 .0 .0.to_string(),
+                    entry.1 .1,
+                );
+            }
+            println!("total lamports: {}", total_lamports.0);
         }
-        println!("total lamports: {}", total_lamports.0);
-    }
+    };
 
+    println!("Unique entries in state 1:");
+    do_print(&unique_entries1);
     println!("Unique entries in state 2:");
-    if unique_entries1.is_empty() {
-        println!("(none)");
-    } else {
-        let count_width = width10(unique_entries2.len() as u64);
-        let mut total_lamports = Saturating(0);
-        for (i, entry) in unique_entries2.iter().enumerate() {
-            total_lamports += entry.1 .1;
-            println!(
-                "{i:count_width$}: pubkey: {:44}, hash: {:44}, lamports: {:lamports_width$}",
-                entry.0.to_string(),
-                entry.1 .0 .0.to_string(),
-                entry.1 .1,
-            );
-        }
-        println!("total lamports: {}", total_lamports.0);
-    }
+    do_print(&unique_entries2);
 
     println!("Mismatch values:");
     let count_width = width10(mismatch_entries.len() as u64);
