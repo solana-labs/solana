@@ -57,7 +57,7 @@ impl PubkeyValidityProof {
     /// invertible).
     ///
     /// * `elgamal_keypair` = The ElGamal keypair that pertains to the ElGamal public key to be
-    /// proved
+    ///   proved
     /// * `transcript` - The transcript that does the bookkeeping for the Fiat-Shamir heuristic
     pub fn new(elgamal_keypair: &ElGamalKeypair, transcript: &mut Transcript) -> Self {
         transcript.pubkey_proof_domain_separator();

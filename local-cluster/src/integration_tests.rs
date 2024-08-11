@@ -298,9 +298,9 @@ pub fn create_custom_leader_schedule_with_random_keys(
 /// continues to achieve consensus
 /// # Arguments
 /// * `partitions` - A slice of partition configurations, where each partition
-/// configuration is a usize representing a node's stake
+///   configuration is a usize representing a node's stake
 /// * `leader_schedule` - An option that specifies whether the cluster should
-/// run with a fixed, predetermined leader schedule
+///   run with a fixed, predetermined leader schedule
 #[allow(clippy::cognitive_complexity)]
 pub fn run_cluster_partition<C>(
     partitions: &[usize],

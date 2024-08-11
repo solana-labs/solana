@@ -6,6 +6,7 @@
 //! that is identified by a Pubkey.
 //! * 1 Pubkey maps many CrdsValueLabels
 //! * 1 CrdsValueLabel maps to 1 CrdsValue
+//!
 //! The Label, the record Pubkey, and all the record labels can be derived
 //! from a single CrdsValue.
 //!

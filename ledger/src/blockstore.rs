@@ -912,8 +912,8 @@ impl Blockstore {
     ///       but N.index() is less than the current slot_meta.received
     ///       for slot S.
     ///     - The slot is not currently full
-    ///     It means there's an alternate version of this slot. See
-    ///     `check_insert_data_shred` for more details.
+    ///       It means there's an alternate version of this slot. See
+    ///       `check_insert_data_shred` for more details.
     ///   - [`cf::ShredData`]: stores data shreds (in check_insert_data_shreds).
     ///   - [`cf::ShredCode`]: stores coding shreds (in check_insert_coding_shreds).
     ///   - [`cf::SlotMeta`]: the SlotMeta of the input `shreds` and their related
@@ -935,8 +935,7 @@ impl Blockstore {
     ///     shreds inside `shreds` will be updated and committed to
     ///     `cf::MerkleRootMeta`.
     ///   - [`cf::Index`]: stores (slot id, index to the index_working_set_entry)
-    ///     pair to the `cf::Index` column family for each index_working_set_entry
-    ///     which insert did occur in this function call.
+    ///     pair to the `cf::Index` column family for each index_working_set_entry which insert did occur in this function call.
     ///
     /// Arguments:
     ///  - `shreds`: the shreds to be inserted.
@@ -4301,17 +4300,17 @@ impl Blockstore {
     /// it handles the following two things:
     ///
     /// 1. based on the `SlotMetaWorkingSetEntry` for `slot`, check if `slot`
-    /// did not previously have a parent slot but does now.  If `slot` satisfies
-    /// this condition, update the Orphan property of both `slot` and its parent
-    /// slot based on their current orphan status.  Specifically:
+    ///    did not previously have a parent slot but does now.  If `slot` satisfies
+    ///    this condition, update the Orphan property of both `slot` and its parent
+    ///    slot based on their current orphan status.  Specifically:
     ///  - updates the orphan property of slot to no longer be an orphan because
     ///    it has a parent.
     ///  - adds the parent to the orphan column family if the parent's parent is
     ///    currently unknown.
     ///
     /// 2. if the `SlotMetaWorkingSetEntry` for `slot` indicates this slot
-    /// is newly connected to a parent slot, then this function will update
-    /// the is_connected property of all its direct and indirect children slots.
+    ///    is newly connected to a parent slot, then this function will update
+    ///    the is_connected property of all its direct and indirect children slots.
     ///
     /// This function may update column family [`cf::Orphans`] and indirectly
     /// update SlotMeta from its output parameter `new_chained_slots`.

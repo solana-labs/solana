@@ -123,6 +123,7 @@ fn redeem_stake_rewards(
 ///   * staker_rewards to be distributed
 ///   * voter_rewards to be distributed
 ///   * new value for credits_observed in the stake
+///
 /// returns None if there's no payout or if any deserved payout is < 1 lamport
 fn calculate_stake_rewards(
     rewarded_epoch: Epoch,

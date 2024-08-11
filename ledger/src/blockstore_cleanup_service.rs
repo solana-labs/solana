@@ -93,8 +93,8 @@ impl BlockstoreCleanupService {
     ///
     /// Return value (bool, Slot, u64):
     /// - `slots_to_clean` (bool): a boolean value indicating whether there
-    /// are any slots to clean.  If true, then `cleanup_ledger` function
-    /// will then proceed with the ledger cleanup.
+    ///   are any slots to clean.  If true, then `cleanup_ledger` function
+    ///   will then proceed with the ledger cleanup.
     /// - `lowest_slot_to_purge` (Slot): the lowest slot to purge.  Any
     ///   slot which is older or equal to `lowest_slot_to_purge` will be
     ///   cleaned up.

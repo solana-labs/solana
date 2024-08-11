@@ -1433,7 +1433,7 @@ impl Bank {
 
     /// Like `new_from_parent` but additionally:
     /// * Doesn't assume that the parent is anywhere near `slot`, parent could be millions of slots
-    /// in the past
+    ///   in the past
     /// * Adjusts the new bank's tick height to avoid having to run PoH for millions of slots
     /// * Freezes the new bank, assuming that the user will `Bank::new_from_parent` from this bank
     /// * Calculates and sets the epoch accounts hash from the parent

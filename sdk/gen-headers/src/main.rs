@@ -16,10 +16,10 @@ use {
  * 1. process every inc file in syscalls header file
  *
  * 2. in every such file replace the syscall declaration by a new
- * declaration with a new extended name, and a static function
- * definition that computes a hash of the original name and uses the
- * hash to initialize a function pointer, the function pointer then is
- * used the call the syscall function.
+ *    declaration with a new extended name, and a static function
+ *    definition that computes a hash of the original name and uses the
+ *    hash to initialize a function pointer, the function pointer then is
+ *    used the call the syscall function.
  */
 fn main() {
     let syscalls_inc_path = PathBuf::from("sdk/sbf/c/inc/sol/inc");

@@ -6,6 +6,7 @@
 //! A regular twisted ElGamal ciphertext consists of two components:
 //! - A Pedersen commitment that encodes a message to be encrypted
 //! - A "decryption handle" that binds the Pedersen opening to a specific public key
+//!
 //! The ciphertext can be generalized to hold not a single decryption handle, but multiple handles
 //! pertaining to multiple ElGamal public keys. These ciphertexts are referred to as a "grouped"
 //! ElGamal ciphertext.

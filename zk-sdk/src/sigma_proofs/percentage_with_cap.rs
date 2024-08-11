@@ -69,7 +69,7 @@ impl PercentageWithCapProof {
     /// A typical percentage-with-cap application is defined with respect to the following values:
     /// - a commitment encoding a `base_amount` and a commitment encoding a `percentage_amount`
     /// - two constants `percentage_rate_basis_point`, which defines the percentage rate in units
-    /// of 0.01% and `max_value`, which defines the max cap amount.
+    ///   of 0.01% and `max_value`, which defines the max cap amount.
     ///
     /// This setting requires that the `percentage_amount` is either a certain percentage of the
     /// `base_amount` (determined by the `percentage_rate_basis_point`) or is equal to the max cap

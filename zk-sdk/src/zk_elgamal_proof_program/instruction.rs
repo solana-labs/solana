@@ -253,7 +253,7 @@ pub enum ProofInstruction {
     ///   2. `[]` The proof context account owner
     ///
     ///   * Otherwise
-    ///   None
+    ///     None
     ///
     /// The instruction expects either:
     ///   i. `GroupedCiphertext3HandlesValidityProofData` if proof is provided as instruction data
@@ -276,7 +276,7 @@ pub enum ProofInstruction {
     ///   2. `[]` The proof context account owner
     ///
     ///   * Otherwise
-    ///   None
+    ///     None
     ///
     /// The instruction expects either:
     ///   i. `BatchedGroupedCiphertext3HandlesValidityProofData` if proof is provided as instruction data

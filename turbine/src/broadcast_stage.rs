@@ -265,6 +265,7 @@ impl BroadcastStage {
     /// * `window` - Cache of Shreds that we have broadcast
     /// * `receiver` - Receive channel for Shreds to be retransmitted to all the layer 1 nodes.
     /// * `exit_sender` - Set to true when this service exits, allows rest of Tpu to exit cleanly.
+    ///
     /// Otherwise, when a Tpu closes, it only closes the stages that come after it. The stages
     /// that come before could be blocked on a receive, and never notice that they need to
     /// exit. Now, if any stage of the Tpu closes, it will lead to closing the WriteStage (b/c

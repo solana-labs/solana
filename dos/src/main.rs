@@ -5,6 +5,7 @@
 //!
 //! * `mode` argument defines interface to use (e.g. rpc, tvu, tpu)
 //! * `data-type` argument specifies the type of the request.
+//!
 //! Some request types might be used only with particular `mode` value.
 //! For example, `get-account-info` is valid only with `mode=rpc`.
 //!
@@ -16,27 +17,27 @@
 //! The following configurations are suggested:
 //! Let `COMMON="--mode tpu --data-type transaction --unique-transactions"`
 //! 1. Without blockhash or payer:
-//! 1.1 With invalid signatures
-//! ```bash
-//! solana-dos $COMMON --num-signatures 8
-//! ```
-//! 1.2 With valid signatures
-//! ```bash
-//! solana-dos $COMMON --valid-signatures --num-signatures 8
-//! ```
+//!    1.1 With invalid signatures
+//!    ```bash
+//!    solana-dos $COMMON --num-signatures 8
+//!    ```
+//!    1.2 With valid signatures
+//!    ```bash
+//!    solana-dos $COMMON --valid-signatures --num-signatures 8
+//!    ```
 //! 2. With blockhash and payer:
-//! 2.1 Single-instruction transaction
-//! ```bash
-//! solana-dos $COMMON --valid-blockhash --transaction-type transfer --num-instructions 1
-//! ```
-//! 2.2 Multi-instruction transaction
-//! ```bash
-//! solana-dos $COMMON --valid-blockhash --transaction-type transfer --num-instructions 8
-//! ```
-//! 2.3 Account-creation transaction
-//! ```bash
-//! solana-dos $COMMON --valid-blockhash --transaction-type account-creation
-//! ```
+//!    2.1 Single-instruction transaction
+//!    ```bash
+//!    solana-dos $COMMON --valid-blockhash --transaction-type transfer --num-instructions 1
+//!    ```
+//!    2.2 Multi-instruction transaction
+//!    ```bash
+//!    solana-dos $COMMON --valid-blockhash --transaction-type transfer --num-instructions 8
+//!    ```
+//!    2.3 Account-creation transaction
+//!    ```bash
+//!    solana-dos $COMMON --valid-blockhash --transaction-type account-creation
+//!    ```
 //!
 #![allow(clippy::arithmetic_side_effects)]
 #![allow(deprecated)]
@@ -89,12 +90,12 @@ fn compute_rate_per_second(count: usize) -> usize {
 /// Provide functionality to generate several types of transactions:
 ///
 /// 1. Without blockhash
-/// 1.1 With valid signatures (number of signatures is configurable)
-/// 1.2 With invalid signatures (number of signatures is configurable)
+///    1.1 With valid signatures (number of signatures is configurable)
+///    1.2 With invalid signatures (number of signatures is configurable)
 ///
 /// 2. With blockhash (but still deliberately invalid):
-/// 2.1 Transfer from 1 payer to multiple destinations (many instructions per transaction)
-/// 2.2 Create an account
+///    2.1 Transfer from 1 payer to multiple destinations (many instructions per transaction)
+///    2.2 Create an account
 ///
 #[derive(Clone)]
 struct TransactionGenerator {

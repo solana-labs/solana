@@ -16,10 +16,10 @@ use {
 /// A summary of what happened to transactions passed to the processing pipeline.
 /// Transactions can
 /// 1) Did not even make it to processing due to being filtered out by things like AccountInUse
-/// lock conflicts or CostModel compute limits. These types of errors are retryable and
-/// counted in `Self::retryable_transaction_indexes`.
+///    lock conflicts or CostModel compute limits. These types of errors are retryable and
+///    counted in `Self::retryable_transaction_indexes`.
 /// 2) Did not process due to some fatal error like too old, or duplicate signature. These
-/// will be dropped from the transactions queue and not counted in `Self::retryable_transaction_indexes`
+///    will be dropped from the transactions queue and not counted in `Self::retryable_transaction_indexes`
 /// 3) Were processed and committed, captured by `transaction_counts` below.
 /// 4) Were processed and failed commit, captured by `transaction_counts` below.
 pub(crate) struct ProcessTransactionsSummary {

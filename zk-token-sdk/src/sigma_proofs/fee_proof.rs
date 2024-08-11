@@ -68,7 +68,7 @@ impl FeeSigmaProof {
     /// `fee_amount` must satisfy the relation `transfer_amount * (fee_rate_basis_point /
     /// 10_000) = fee_amount` or equivalently, `(transfer_amount * fee_rate_basis_point) - (10_000
     /// * fee_amount) = 0`. More generally, let `delta_fee = (transfer_amount *
-    /// fee_rate_basis_point) - (10_000 * fee_amount)`. Then assuming that a division rounding
+    ///   fee_rate_basis_point) - (10_000 * fee_amount)`. Then assuming that a division rounding
     /// could occur, the `delta_fee` must satisfy the bound `0 <= delta_fee < 10_000`.
     ///
     /// If `fee_amount >= max_fee`, then `fee_amount = max_fee` and therefore, the prover can
@@ -89,11 +89,11 @@ impl FeeSigmaProof {
     /// and `create_proof_fee_below_max` to enforce that the function executes in constant time.
     ///
     /// * `(fee_amount, fee_commitment, fee_opening)` - The amount, Pedersen commitment, and
-    /// opening of the transfer fee
+    ///   opening of the transfer fee
     /// * `(delta_fee, delta_commitment, delta_opening)` - The amount, Pedersen commitment, and
-    /// opening of the "real" delta amount
+    ///   opening of the "real" delta amount
     /// * `(claimed_commitment, claimed_opening)` - The Pedersen commitment and opening of the
-    /// "claimed" delta amount
+    ///   "claimed" delta amount
     /// * `max_fee` - The maximum fee bound
     /// * `transcript` - The transcript that does the bookkeeping for the Fiat-Shamir heuristic
     pub fn new(
@@ -226,7 +226,7 @@ impl FeeSigmaProof {
     ///
     /// * `fee_commitment` - The Pedersen commitment of the transfer fee
     /// * `(delta_fee, delta_opening)` - The Pedersen commitment and opening of the "real" delta
-    /// value
+    ///   value
     /// * `claimed_opening` - The opening of the Pedersen commitment of the "claimed" delta value
     /// * `max_fee` - The maximum fee bound
     /// * `transcript` - The transcript that does the bookkeeping for the Fiat-Shamir heuristic

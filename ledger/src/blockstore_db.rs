@@ -2109,9 +2109,9 @@ fn new_cf_descriptor_fifo<C: 'static + Column + ColumnName>(
 /// instead.
 ///
 /// - [`max_cf_size`]: the maximum allowed column family size.  Note that
-/// rocksdb will start deleting the oldest SST file when the column family
-/// size reaches `max_cf_size` - `FIFO_WRITE_BUFFER_SIZE` to strictly
-/// maintain the size limit.
+///   rocksdb will start deleting the oldest SST file when the column family
+///   size reaches `max_cf_size` - `FIFO_WRITE_BUFFER_SIZE` to strictly
+///   maintain the size limit.
 fn get_cf_options_fifo<C: 'static + Column + ColumnName>(
     max_cf_size: &u64,
     column_options: &LedgerColumnOptions,

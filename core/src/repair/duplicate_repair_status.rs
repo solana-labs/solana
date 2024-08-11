@@ -193,10 +193,10 @@ impl AncestorRequestStatus {
     /// Record the response from `from_addr`. Returns Some(DuplicateAncestorDecision)
     /// if we have finalized a decision based on the responses. We can finalize a decision when
     /// one of the following conditions is met:
-    /// 1) We have heard from all the validators, OR
-    /// 2) >= MINIMUM_ANCESTOR_AGREEMENT_SIZE have agreed that we have the correct versions
-    /// of nth ancestor, for some `n>0`, AND >= MINIMUM_ANCESTOR_AGREEMENT_SIZE have
-    /// agreed we have the wrong version of the `n-1` ancestor.
+    /// 1. We have heard from all the validators
+    /// 2. Or >= MINIMUM_ANCESTOR_AGREEMENT_SIZE have agreed that we have the correct versions
+    ///    of nth ancestor, for some `n>0`, AND >= MINIMUM_ANCESTOR_AGREEMENT_SIZE have
+    ///    agreed we have the wrong version of the `n-1` ancestor.
     pub fn add_response(
         &mut self,
         from_addr: &SocketAddr,
