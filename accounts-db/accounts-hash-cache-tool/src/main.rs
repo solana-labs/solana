@@ -32,6 +32,8 @@ const CMD_DIFF_FILES: &str = "files";
 const CMD_DIFF_DIRS: &str = "directories";
 const CMD_DIFF_STATE: &str = "state";
 
+const DEFAULT_BINS: &str = "8192";
+
 fn main() {
     let matches = App::new(crate_name!())
         .about(crate_description!())
@@ -127,6 +129,20 @@ fn main() {
                                 .takes_value(true)
                                 .value_name("PATH2")
                                 .help("Accounts hash cache directory 2 to diff"),
+                        )
+                        .arg(
+                            Arg::with_name("bins")
+                                .long("bins")
+                                .takes_value(true)
+                                .value_name("NUM")
+                                .default_value(DEFAULT_BINS)
+                                .help("Sets the number of bins to split the entries into")
+                                .long_help(
+                                    "Sets the number of bins to split the entries into. \
+                                     The binning is based on each entry's pubkey. \
+                                     Must be a power of two, greater than 0, \
+                                     and less-than-or-equal-to 16,777,216 (2^24)"
+                                ),
                         ),
                 ),
         )
@@ -193,7 +209,8 @@ fn cmd_diff_state(
 ) -> Result<(), String> {
     let path1 = value_t_or_exit!(subcommand_matches, "path1", String);
     let path2 = value_t_or_exit!(subcommand_matches, "path2", String);
-    do_diff_state(path1, path2)
+    let num_bins = value_t_or_exit!(subcommand_matches, "bins", usize);
+    do_diff_state(path1, path2, num_bins)
 }
 
 fn do_inspect(file: impl AsRef<Path>, force: bool) -> Result<(), String> {
@@ -459,15 +476,18 @@ fn do_diff_dirs(
     Ok(())
 }
 
-fn do_diff_state(dir1: impl AsRef<Path>, dir2: impl AsRef<Path>) -> Result<(), String> {
-    const NUM_BINS: usize = 8192;
+fn do_diff_state(
+    dir1: impl AsRef<Path>,
+    dir2: impl AsRef<Path>,
+    num_bins: usize,
+) -> Result<(), String> {
     let extract = |dir: &Path| -> Result<_, String> {
         let files =
             get_cache_files_in(dir).map_err(|err| format!("failed to get cache files: {err}"))?;
         let BinnedLatestEntriesInfo {
             latest_entries,
             capitalization,
-        } = extract_binned_latest_entries_in(files.iter().map(|file| &file.path), NUM_BINS)
+        } = extract_binned_latest_entries_in(files.iter().map(|file| &file.path), num_bins)
             .map_err(|err| format!("failed to extract entries: {err}"))?;
         let num_accounts: usize = latest_entries.iter().map(|bin| bin.len()).sum();
         let entries = Vec::from(latest_entries);
@@ -486,7 +506,7 @@ fn do_diff_state(dir1: impl AsRef<Path>, dir2: impl AsRef<Path>) -> Result<(), S
     drop(timer);
 
     let timer = LoggingTimer::new("Diffing state");
-    let (mut mismatch_entries, mut unique_entries1) = (0..NUM_BINS)
+    let (mut mismatch_entries, mut unique_entries1) = (0..num_bins)
         .into_par_iter()
         .map(|bindex| {
             let mut bin1 = state1[bindex].write().unwrap();
