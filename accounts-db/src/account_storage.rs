@@ -43,8 +43,10 @@ impl AccountStorage {
     /// Callers to this function have 2 choices:
     /// 1. hold the account index read lock for the pubkey so that the account index entry cannot be changed prior to or during this call. (scans do this)
     /// 2. expect to be ready to start over and read the index again if this function returns None
+    ///
     /// Operations like shrinking or write cache flushing may have updated the index between when the caller read the index and called this function to
     /// load from the append vec specified in the index.
+    ///
     /// In practice, this fn will return the entry from the map in the very first lookup unless a shrink is in progress.
     /// The third lookup will only be called if a requesting thread exactly interposes itself between the 2 map manipulations in the drop of 'shrink_in_progress'.
     pub(crate) fn get_account_storage_entry(

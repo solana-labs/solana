@@ -325,6 +325,7 @@ pub enum StoreReclaims {
 /// 3. use it (slot, append_vec, etc.)
 /// 4. re-create it sometimes
 /// 5. goto 3
+///
 /// If a caller uses it before initializing it, it will be a runtime unwrap() error, similar to an assert.
 /// That condition is an illegal use pattern and is justifiably an assertable condition.
 #[derive(Default)]
@@ -9176,6 +9177,7 @@ impl AccountsDb {
     /// 1. get the _duplicate_ accounts data len from the given pubkeys
     /// 2. get the slots that contained duplicate pubkeys
     /// 3. update rent stats
+    ///
     /// Note this should only be used when ALL entries in the accounts index are roots.
     /// returns (data len sum of all older duplicates, slots that contained duplicate pubkeys)
     fn visit_duplicate_pubkeys_during_startup(

@@ -376,6 +376,7 @@ impl<T: IndexValue> PreAllocatedAccountMapEntry<T> {
     /// create an entry that is equivalent to this process:
     /// 1. new empty (refcount=0, slot_list={})
     /// 2. update(slot, account_info)
+    ///
     /// This code is called when the first entry [ie. (slot,account_info)] for a pubkey is inserted into the index.
     pub fn new<U: DiskIndexValue + From<T> + Into<T>>(
         slot: Slot,

@@ -2,6 +2,7 @@
 //! an ancient append vec is:
 //! 1. a slot that is older than an epoch old
 //! 2. multiple 'slots' squashed into a single older (ie. ancient) slot for convenience and performance
+//!
 //! Otherwise, an ancient append vec is the same as any other append vec
 use {
     crate::{
@@ -717,8 +718,9 @@ impl AccountsDb {
     /// given all accounts per ancient slot, in slots that we want to combine together:
     /// 1. Look up each pubkey in the index
     /// 2. separate, by slot, into:
-    /// 2a. pubkeys with refcount = 1. This means this pubkey exists NOWHERE else in accounts db.
-    /// 2b. pubkeys with refcount > 1
+    ///    2a. pubkeys with refcount = 1. This means this pubkey exists NOWHERE else in accounts db.
+    ///    2b. pubkeys with refcount > 1
+    ///
     /// Note that the return value can contain fewer items than 'accounts_per_storage' if we find storages which won't be affected.
     /// 'accounts_per_storage' should be sorted by slot
     fn calc_accounts_to_combine<'a>(
