@@ -1999,6 +1999,7 @@ impl ReplayStage {
     /// - Bank forks already contains a bank for this leader slot
     /// - We have not landed a vote yet and the `wait_for_vote_to_start_leader` flag is set
     /// - We have failed the propagated check
+    ///
     /// Returns whether a new working bank was created and inserted into bank forks.
     #[allow(clippy::too_many_arguments)]
     fn maybe_start_leader(
