@@ -15,10 +15,14 @@ use {
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount},
         clock::{Epoch, Slot},
+        fee::FeeDetails,
         hash::Hash,
+        inner_instruction::InnerInstructionsList,
         pubkey::Pubkey,
+        transaction::Result as TransactionResult,
+        transaction_context::TransactionReturnData,
     },
-    solana_svm::transaction_execution_result::TransactionExecutionDetails,
+    solana_svm::transaction_commit_result::CommittedTransaction,
     solana_transaction_status::UiInstruction,
     std::str::FromStr,
 };
@@ -74,7 +78,30 @@ pub struct TransactionDetails {
     pub accounts: Vec<String>,
     pub instructions: Vec<UiInstruction>,
     pub is_simple_vote_tx: bool,
-    pub execution_results: Option<TransactionExecutionDetails>,
+    pub commit_details: Option<TransactionCommitDetails>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct TransactionCommitDetails {
+    pub status: TransactionResult<()>,
+    pub log_messages: Option<Vec<String>>,
+    pub inner_instructions: Option<InnerInstructionsList>,
+    pub return_data: Option<TransactionReturnData>,
+    pub executed_units: u64,
+    pub fee_details: FeeDetails,
+}
+
+impl From<CommittedTransaction> for TransactionCommitDetails {
+    fn from(committed_tx: CommittedTransaction) -> Self {
+        Self {
+            status: committed_tx.status,
+            log_messages: committed_tx.log_messages,
+            inner_instructions: committed_tx.inner_instructions,
+            return_data: committed_tx.return_data,
+            executed_units: committed_tx.executed_units,
+            fee_details: committed_tx.fee_details,
+        }
+    }
 }
 
 /// The components that go into a bank hash calculation for a single bank/slot.

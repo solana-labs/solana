@@ -6,10 +6,7 @@ use {
         blockstore::Blockstore,
         blockstore_processor::{TransactionStatusBatch, TransactionStatusMessage},
     },
-    solana_svm::{
-        transaction_commit_result::CommittedTransaction,
-        transaction_execution_result::TransactionExecutionDetails,
-    },
+    solana_svm::transaction_commit_result::CommittedTransaction,
     solana_transaction_status::{
         extract_and_fmt_memos, map_inner_instructions, Reward, TransactionStatusMeta,
     },
@@ -98,15 +95,11 @@ impl TransactionStatusService {
                     };
 
                     let CommittedTransaction {
-                        execution_details:
-                            TransactionExecutionDetails {
-                                status,
-                                log_messages,
-                                inner_instructions,
-                                return_data,
-                                executed_units,
-                                ..
-                            },
+                        status,
+                        log_messages,
+                        inner_instructions,
+                        return_data,
+                        executed_units,
                         fee_details,
                         rent_debits,
                         ..
@@ -332,17 +325,14 @@ pub(crate) mod tests {
         rent_debits.insert(&pubkey, 123, 456);
 
         let commit_result = Ok(CommittedTransaction {
-            loaded_account_stats: TransactionLoadedAccountsStats::default(),
-            execution_details: TransactionExecutionDetails {
-                status: Ok(()),
-                log_messages: None,
-                inner_instructions: None,
-                return_data: None,
-                executed_units: 0,
-                accounts_data_len_delta: 0,
-            },
+            status: Ok(()),
+            log_messages: None,
+            inner_instructions: None,
+            return_data: None,
+            executed_units: 0,
             fee_details: FeeDetails::default(),
             rent_debits,
+            loaded_account_stats: TransactionLoadedAccountsStats::default(),
         });
 
         let balances = TransactionBalancesSet {

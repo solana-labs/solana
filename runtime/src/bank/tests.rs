@@ -5732,7 +5732,7 @@ fn test_pre_post_transaction_balances() {
     // Failed transactions still produce balance sets
     // This is an InstructionError - fees charged
     assert_eq!(
-        commit_results[2].transaction_result(),
+        commit_results[2].as_ref().unwrap().status,
         Err(TransactionError::InstructionError(
             0,
             InstructionError::Custom(1),
@@ -9090,7 +9090,6 @@ fn test_tx_log_order() {
     assert!(commit_results[0]
         .as_ref()
         .unwrap()
-        .execution_details
         .log_messages
         .as_ref()
         .unwrap()[1]
@@ -9099,7 +9098,6 @@ fn test_tx_log_order() {
     assert!(commit_results[1]
         .as_ref()
         .unwrap()
-        .execution_details
         .log_messages
         .as_ref()
         .unwrap()[2]
@@ -9193,12 +9191,7 @@ fn test_tx_return_data() {
                 None,
             )
             .0;
-        let return_data = commit_results[0]
-            .as_ref()
-            .unwrap()
-            .execution_details
-            .return_data
-            .clone();
+        let return_data = commit_results[0].as_ref().unwrap().return_data.clone();
         if let Some(index) = index {
             let return_data = return_data.unwrap();
             assert_eq!(return_data.program_id, mock_program_id);

@@ -63,7 +63,7 @@ use {
     },
     solana_svm::{
         transaction_commit_result::CommittedTransaction,
-        transaction_execution_result::{InnerInstruction, TransactionExecutionDetails},
+        transaction_execution_result::InnerInstruction,
         transaction_processor::ExecutionRecordingConfig,
     },
     solana_timings::ExecuteTimings,
@@ -107,12 +107,12 @@ fn process_transaction_and_record_inner(
             None,
         )
         .0;
-    let TransactionExecutionDetails {
+    let CommittedTransaction {
         inner_instructions,
         log_messages,
         status,
         ..
-    } = commit_results.swap_remove(0).unwrap().execution_details;
+    } = commit_results.swap_remove(0).unwrap();
     let inner_instructions = inner_instructions.expect("cpi recording should be enabled");
     let log_messages = log_messages.expect("log recording should be enabled");
     (status, inner_instructions, log_messages)
@@ -163,16 +163,12 @@ fn execute_transactions(
         )| {
             commit_result.map(|committed_tx| {
                 let CommittedTransaction {
+                    status,
+                    log_messages,
+                    inner_instructions,
+                    return_data,
+                    executed_units,
                     fee_details,
-                    execution_details:
-                        TransactionExecutionDetails {
-                            status,
-                            log_messages,
-                            inner_instructions,
-                            return_data,
-                            executed_units,
-                            ..
-                        },
                     ..
                 } = committed_tx;
 
@@ -5244,7 +5240,6 @@ fn test_function_call_args() {
     let return_data = &result[0]
         .as_ref()
         .unwrap()
-        .execution_details
         .return_data
         .as_ref()
         .unwrap()

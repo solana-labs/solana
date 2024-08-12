@@ -6,7 +6,6 @@
 pub use solana_sdk::inner_instruction::{InnerInstruction, InnerInstructionsList};
 use {
     crate::account_loader::LoadedTransaction,
-    serde::{Deserialize, Serialize},
     solana_program_runtime::loaded_programs::ProgramCacheEntry,
     solana_sdk::{
         pubkey::Pubkey,
@@ -51,7 +50,7 @@ impl ExecutedTransaction {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TransactionExecutionDetails {
     pub status: transaction::Result<()>,
     pub log_messages: Option<Vec<String>>,
@@ -61,4 +60,10 @@ pub struct TransactionExecutionDetails {
     /// The change in accounts data len for this transaction.
     /// NOTE: This value is valid IFF `status` is `Ok`.
     pub accounts_data_len_delta: i64,
+}
+
+impl TransactionExecutionDetails {
+    pub fn was_successful(&self) -> bool {
+        self.status.is_ok()
+    }
 }

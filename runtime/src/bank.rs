@@ -149,7 +149,7 @@ use {
         stake_state::StakeStateV2,
     },
     solana_svm::{
-        account_loader::collect_rent_from_account,
+        account_loader::{collect_rent_from_account, LoadedTransaction},
         account_overrides::AccountOverrides,
         account_saver::collect_accounts_to_store,
         transaction_commit_result::{CommittedTransaction, TransactionCommitResult},
@@ -3859,29 +3859,37 @@ impl Bank {
     ) -> Vec<TransactionCommitResult> {
         processing_results
             .into_iter()
-            .map(|processing_result| match processing_result {
-                Ok(processed_tx) => {
-                    let loaded_tx = &processed_tx.loaded_transaction;
-                    let loaded_account_stats = TransactionLoadedAccountsStats {
-                        loaded_accounts_data_size: loaded_tx.loaded_accounts_data_size,
-                        loaded_accounts_count: loaded_tx.accounts.len(),
-                    };
+            .map(|processing_result| {
+                let processed_tx = processing_result?;
+                let execution_details = processed_tx.execution_details;
+                let LoadedTransaction {
+                    rent_debits,
+                    accounts: loaded_accounts,
+                    loaded_accounts_data_size,
+                    fee_details,
+                    ..
+                } = processed_tx.loaded_transaction;
 
-                    // Rent is only collected for successfully executed transactions
-                    let rent_debits = if processed_tx.was_successful() {
-                        processed_tx.loaded_transaction.rent_debits
-                    } else {
-                        RentDebits::default()
-                    };
+                // Rent is only collected for successfully executed transactions
+                let rent_debits = if execution_details.was_successful() {
+                    rent_debits
+                } else {
+                    RentDebits::default()
+                };
 
-                    Ok(CommittedTransaction {
-                        loaded_account_stats,
-                        execution_details: processed_tx.execution_details,
-                        fee_details: processed_tx.loaded_transaction.fee_details,
-                        rent_debits,
-                    })
-                }
-                Err(err) => Err(err),
+                Ok(CommittedTransaction {
+                    status: execution_details.status,
+                    log_messages: execution_details.log_messages,
+                    inner_instructions: execution_details.inner_instructions,
+                    return_data: execution_details.return_data,
+                    executed_units: execution_details.executed_units,
+                    fee_details,
+                    rent_debits,
+                    loaded_account_stats: TransactionLoadedAccountsStats {
+                        loaded_accounts_count: loaded_accounts.len(),
+                        loaded_accounts_data_size,
+                    },
+                })
             })
             .collect()
     }
@@ -4615,7 +4623,7 @@ impl Bank {
     pub fn process_transaction_with_metadata(
         &self,
         tx: impl Into<VersionedTransaction>,
-    ) -> Result<TransactionExecutionDetails> {
+    ) -> Result<CommittedTransaction> {
         let txs = vec![tx.into()];
         let batch = self.prepare_entry_batch(txs)?;
 
@@ -4632,8 +4640,7 @@ impl Bank {
             Some(1000 * 1000),
         );
 
-        let committed_tx = commit_results.remove(0)?;
-        Ok(committed_tx.execution_details)
+        commit_results.remove(0)
     }
 
     /// Process multiple transaction in a single batch. This is used for benches and unit tests.

@@ -706,16 +706,14 @@ fn record_transactions(
                         .collect();
 
                     let is_simple_vote_tx = tx.is_simple_vote_transaction();
-                    let execution_results = commit_result
-                        .ok()
-                        .map(|committed_tx| committed_tx.execution_details);
+                    let commit_details = commit_result.ok().map(|committed_tx| committed_tx.into());
 
                     TransactionDetails {
                         signature: tx.signature().to_string(),
                         accounts,
                         instructions,
                         is_simple_vote_tx,
-                        execution_results,
+                        commit_details,
                         index,
                     }
                 })

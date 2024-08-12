@@ -101,7 +101,7 @@ impl Committer {
                 // transaction committed to block. qos_service uses these information to adjust
                 // reserved block space.
                 Ok(committed_tx) => CommitTransactionDetails::Committed {
-                    compute_units: committed_tx.execution_details.executed_units,
+                    compute_units: committed_tx.executed_units,
                     loaded_accounts_data_size: committed_tx
                         .loaded_account_stats
                         .loaded_accounts_data_size,
