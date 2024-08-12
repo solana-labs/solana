@@ -354,9 +354,8 @@ impl LatestUnprocessedVotes {
                     if !Self::is_valid_for_our_fork(&latest_vote, &slot_hashes) {
                         return None;
                     }
-                    latest_vote.take_vote().map(|vote| {
+                    latest_vote.take_vote().inspect(|_vote| {
                         self.num_unprocessed_votes.fetch_sub(1, Ordering::Relaxed);
-                        vote
                     })
                 })
             })
