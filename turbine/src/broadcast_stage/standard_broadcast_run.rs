@@ -511,8 +511,8 @@ fn should_chain_merkle_shreds(slot: Slot, cluster_type: ClusterType) -> bool {
         ClusterType::Development => true,
         ClusterType::Devnet => false,
         ClusterType::MainnetBeta => false,
-        // Roll out chained Merkle shreds to ~5% of testnet.
-        ClusterType::Testnet => slot % 19 == 1,
+        // Roll out chained Merkle shreds to ~21% of testnet.
+        ClusterType::Testnet => slot % 19 < 4,
     }
 }
 
