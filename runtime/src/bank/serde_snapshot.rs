@@ -6,8 +6,7 @@ mod tests {
                 epoch_accounts_hash_utils, test_utils as bank_test_utils, Bank, EpochRewardStatus,
             },
             epoch_stakes::{
-                EpochAuthorizedVoters, EpochStakes, NodeIdToVoteAccounts, StakesSerdeWrapper,
-                VersionedEpochStakes,
+                EpochAuthorizedVoters, EpochStakes, NodeIdToVoteAccounts, VersionedEpochStakes,
             },
             genesis_utils::activate_all_features,
             runtime_config::RuntimeConfig,
@@ -20,7 +19,7 @@ mod tests {
                 create_tmp_accounts_dir_for_tests, get_storages_to_serialize, ArchiveFormat,
                 StorageAndNextAccountsFileId,
             },
-            stakes::{Stakes, StakesEnum},
+            stakes::{SerdeStakesToStakeFormat, Stakes, StakesEnum},
         },
         solana_accounts_db::{
             account_storage::{AccountStorageMap, AccountStorageReference},
@@ -307,7 +306,7 @@ mod tests {
         bank.epoch_stakes.insert(
             42,
             EpochStakes::from(VersionedEpochStakes::Current {
-                stakes: StakesSerdeWrapper::Stake(Stakes::<Stake>::default()),
+                stakes: SerdeStakesToStakeFormat::Stake(Stakes::<Stake>::default()),
                 total_stake: 42,
                 node_id_to_vote_accounts: Arc::<NodeIdToVoteAccounts>::default(),
                 epoch_authorized_voters: Arc::<EpochAuthorizedVoters>::default(),
@@ -536,7 +535,7 @@ mod tests {
         #[cfg_attr(
             feature = "frozen-abi",
             derive(AbiExample),
-            frozen_abi(digest = "HRBDXrGrHMZU4cNebKHT7jEmhrgd3h1c2qUMMywrGPiq")
+            frozen_abi(digest = "J7MnnLU99fYk2hfZPjdqyTYxgHstwRUDk2Yr8fFnXxFp")
         )]
         #[derive(Serialize)]
         pub struct BankAbiTestWrapper {

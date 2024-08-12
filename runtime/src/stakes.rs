@@ -28,6 +28,7 @@ use {
 
 mod serde_stakes;
 pub(crate) use serde_stakes::serde_stakes_to_delegation_format;
+pub use serde_stakes::SerdeStakesToStakeFormat;
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -566,23 +567,6 @@ impl From<Stakes<StakeAccount>> for Stakes<Stake> {
             unused: stakes.unused,
             epoch: stakes.epoch,
             stake_history: stakes.stake_history,
-        }
-    }
-}
-
-impl<'a> From<&'a Stakes<StakeAccount>> for Stakes<&'a Stake> {
-    fn from(stakes: &'a Stakes<StakeAccount>) -> Self {
-        let stake_delegations = stakes
-            .stake_delegations
-            .iter()
-            .map(|(pubkey, stake_account)| (*pubkey, stake_account.stake()))
-            .collect();
-        Self {
-            vote_accounts: stakes.vote_accounts.clone(),
-            stake_delegations,
-            unused: stakes.unused,
-            epoch: stakes.epoch,
-            stake_history: stakes.stake_history.clone(),
         }
     }
 }
