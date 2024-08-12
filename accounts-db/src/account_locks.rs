@@ -2,8 +2,12 @@
 use qualifier_attr::qualifiers;
 use {
     ahash::{AHashMap, AHashSet},
-    solana_sdk::{pubkey::Pubkey, transaction::TransactionError},
-    std::collections::hash_map,
+    solana_sdk::{
+        message::AccountKeys,
+        pubkey::Pubkey,
+        transaction::{TransactionError, MAX_TX_ACCOUNT_LOCKS},
+    },
+    std::{cell::RefCell, collections::hash_map},
 };
 
 #[derive(Debug, Default)]
@@ -110,9 +114,51 @@ impl AccountLocks {
     }
 }
 
+/// Validate account locks before locking.
+pub fn validate_account_locks(
+    account_keys: AccountKeys,
+    tx_account_lock_limit: usize,
+) -> Result<(), TransactionError> {
+    if account_keys.len() > tx_account_lock_limit {
+        Err(TransactionError::TooManyAccountLocks)
+    } else if has_duplicates(account_keys) {
+        Err(TransactionError::AccountLoadedTwice)
+    } else {
+        Ok(())
+    }
+}
+
+thread_local! {
+    static HAS_DUPLICATES_SET: RefCell<AHashSet<Pubkey>> = RefCell::new(AHashSet::with_capacity(MAX_TX_ACCOUNT_LOCKS));
+}
+
+/// Check for duplicate account keys.
+fn has_duplicates(account_keys: AccountKeys) -> bool {
+    // Benchmarking has shown that for sets of 32 or more keys, it is faster to
+    // use a HashSet to check for duplicates.
+    // For smaller sets a brute-force O(n^2) check seems to be faster.
+    const USE_ACCOUNT_LOCK_SET_SIZE: usize = 32;
+    if account_keys.len() >= USE_ACCOUNT_LOCK_SET_SIZE {
+        HAS_DUPLICATES_SET.with_borrow_mut(|set| {
+            let has_duplicates = account_keys.iter().any(|key| !set.insert(*key));
+            set.clear();
+            has_duplicates
+        })
+    } else {
+        for (idx, key) in account_keys.iter().enumerate() {
+            for jdx in idx + 1..account_keys.len() {
+                if key == &account_keys[jdx] {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use {super::*, solana_sdk::message::v0::LoadedAddresses};
 
     #[test]
     fn test_account_locks() {
@@ -151,5 +197,95 @@ mod tests {
         // Unlock read lock.
         account_locks.unlock_accounts([(&key2, false)].into_iter());
         assert!(!account_locks.is_locked_readonly(&key2));
+    }
+
+    #[test]
+    fn test_validate_account_locks_valid_no_dynamic() {
+        let static_keys = &[Pubkey::new_unique(), Pubkey::new_unique()];
+        let account_keys = AccountKeys::new(static_keys, None);
+        assert!(validate_account_locks(account_keys, MAX_TX_ACCOUNT_LOCKS).is_ok());
+    }
+
+    #[test]
+    fn test_validate_account_locks_too_many_no_dynamic() {
+        let static_keys = &[Pubkey::new_unique(), Pubkey::new_unique()];
+        let account_keys = AccountKeys::new(static_keys, None);
+        assert_eq!(
+            validate_account_locks(account_keys, 1),
+            Err(TransactionError::TooManyAccountLocks)
+        );
+    }
+
+    #[test]
+    fn test_validate_account_locks_duplicate_no_dynamic() {
+        let duplicate_key = Pubkey::new_unique();
+        let static_keys = &[duplicate_key, Pubkey::new_unique(), duplicate_key];
+        let account_keys = AccountKeys::new(static_keys, None);
+        assert_eq!(
+            validate_account_locks(account_keys, MAX_TX_ACCOUNT_LOCKS),
+            Err(TransactionError::AccountLoadedTwice)
+        );
+    }
+
+    #[test]
+    fn test_validate_account_locks_valid_dynamic() {
+        let static_keys = &[Pubkey::new_unique(), Pubkey::new_unique()];
+        let dynamic_keys = LoadedAddresses {
+            writable: vec![Pubkey::new_unique()],
+            readonly: vec![Pubkey::new_unique()],
+        };
+        let account_keys = AccountKeys::new(static_keys, Some(&dynamic_keys));
+        assert!(validate_account_locks(account_keys, MAX_TX_ACCOUNT_LOCKS).is_ok());
+    }
+
+    #[test]
+    fn test_validate_account_locks_too_many_dynamic() {
+        let static_keys = &[Pubkey::new_unique()];
+        let dynamic_keys = LoadedAddresses {
+            writable: vec![Pubkey::new_unique()],
+            readonly: vec![Pubkey::new_unique()],
+        };
+        let account_keys = AccountKeys::new(static_keys, Some(&dynamic_keys));
+        assert_eq!(
+            validate_account_locks(account_keys, 2),
+            Err(TransactionError::TooManyAccountLocks)
+        );
+    }
+
+    #[test]
+    fn test_validate_account_locks_duplicate_dynamic() {
+        let duplicate_key = Pubkey::new_unique();
+        let static_keys = &[duplicate_key];
+        let dynamic_keys = LoadedAddresses {
+            writable: vec![Pubkey::new_unique()],
+            readonly: vec![duplicate_key],
+        };
+        let account_keys = AccountKeys::new(static_keys, Some(&dynamic_keys));
+        assert_eq!(
+            validate_account_locks(account_keys, MAX_TX_ACCOUNT_LOCKS),
+            Err(TransactionError::AccountLoadedTwice)
+        );
+    }
+
+    #[test]
+    fn test_has_duplicates_small() {
+        let mut keys = (0..16).map(|_| Pubkey::new_unique()).collect::<Vec<_>>();
+        let account_keys = AccountKeys::new(&keys, None);
+        assert!(!has_duplicates(account_keys));
+
+        keys[14] = keys[3]; // Duplicate key
+        let account_keys = AccountKeys::new(&keys, None);
+        assert!(has_duplicates(account_keys));
+    }
+
+    #[test]
+    fn test_has_duplicates_large() {
+        let mut keys = (0..64).map(|_| Pubkey::new_unique()).collect::<Vec<_>>();
+        let account_keys = AccountKeys::new(&keys, None);
+        assert!(!has_duplicates(account_keys));
+
+        keys[47] = keys[3]; // Duplicate key
+        let account_keys = AccountKeys::new(&keys, None);
+        assert!(has_duplicates(account_keys));
     }
 }

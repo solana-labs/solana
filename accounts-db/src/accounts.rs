@@ -1,6 +1,6 @@
 use {
     crate::{
-        account_locks::AccountLocks,
+        account_locks::{validate_account_locks, AccountLocks},
         accounts_db::{
             AccountStorageEntry, AccountsAddRootTiming, AccountsDb, LoadHint, LoadedAccount,
             ScanAccountStorageData, ScanStorageResult, VerifyAccountsHashAndLamportsConfig,
@@ -520,7 +520,7 @@ impl Accounts {
         // Validate the account locks, then get iterator if successful validation.
         let tx_account_locks_results: Vec<Result<_>> = txs
             .map(|tx| {
-                SanitizedTransaction::validate_account_locks(tx.message(), tx_account_lock_limit)
+                validate_account_locks(tx.account_keys(), tx_account_lock_limit)
                     .map(|_| TransactionAccountLocksIterator::new(tx))
             })
             .collect();
@@ -530,7 +530,7 @@ impl Accounts {
     #[must_use]
     pub fn lock_accounts_with_results<'a>(
         &self,
-        txs: impl Iterator<Item = &'a SanitizedTransaction>,
+        txs: impl Iterator<Item = &'a (impl SVMMessage + 'a)>,
         results: impl Iterator<Item = Result<()>>,
         tx_account_lock_limit: usize,
     ) -> Vec<Result<()>> {
@@ -538,11 +538,8 @@ impl Accounts {
         let tx_account_locks_results: Vec<Result<_>> = txs
             .zip(results)
             .map(|(tx, result)| match result {
-                Ok(()) => SanitizedTransaction::validate_account_locks(
-                    tx.message(),
-                    tx_account_lock_limit,
-                )
-                .map(|_| TransactionAccountLocksIterator::new(tx)),
+                Ok(()) => validate_account_locks(tx.account_keys(), tx_account_lock_limit)
+                    .map(|_| TransactionAccountLocksIterator::new(tx)),
                 Err(err) => Err(err),
             })
             .collect();
