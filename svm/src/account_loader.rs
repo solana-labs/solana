@@ -198,6 +198,7 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
 ) -> Result<LoadedTransaction> {
     let mut tx_rent: TransactionRent = 0;
     let account_keys = message.account_keys();
+    let mut accounts = Vec::with_capacity(account_keys.len());
     let mut accounts_found = Vec::with_capacity(account_keys.len());
     let mut rent_debits = RentDebits::default();
     let mut accumulated_accounts_data_size: u32 = 0;
@@ -208,85 +209,96 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
         .unique()
         .collect::<Vec<&u8>>();
 
-    let mut accounts = account_keys
-        .iter()
-        .enumerate()
-        .map(|(i, key)| {
-            let mut account_found = true;
-            #[allow(clippy::collapsible_else_if)]
-            let account = if solana_sdk::sysvar::instructions::check_id(key) {
-                construct_instructions_account(message)
-            } else {
-                let is_fee_payer = i == 0;
-                let instruction_account = u8::try_from(i)
-                    .map(|i| instruction_accounts.contains(&&i))
-                    .unwrap_or(false);
-                let (account_size, account, rent) = if is_fee_payer {
-                    (
-                        tx_details.fee_payer_account.data().len(),
-                        tx_details.fee_payer_account.clone(),
-                        tx_details.fee_payer_rent_debit,
-                    )
-                } else if let Some(account_override) =
-                    account_overrides.and_then(|overrides| overrides.get(key))
-                {
-                    (account_override.data().len(), account_override.clone(), 0)
-                } else if let Some(program) = (!instruction_account && !message.is_writable(i))
-                    .then_some(())
-                    .and_then(|_| loaded_programs.find(key))
-                {
-                    callbacks
-                        .get_account_shared_data(key)
-                        .ok_or(TransactionError::AccountNotFound)?;
-                    // Optimization to skip loading of accounts which are only used as
-                    // programs in top-level instructions and not passed as instruction accounts.
-                    let program_account = account_shared_data_from_program(&program);
-                    (program.account_size, program_account, 0)
-                } else {
-                    callbacks
-                        .get_account_shared_data(key)
-                        .map(|mut account| {
-                            if message.is_writable(i) {
-                                let rent_due = collect_rent_from_account(
-                                    feature_set,
-                                    rent_collector,
-                                    key,
-                                    &mut account,
-                                )
-                                .rent_amount;
+    let mut collect_account =
+        |key, account_size, account: AccountSharedData, rent, account_found| -> Result<()> {
+            accumulate_and_check_loaded_account_data_size(
+                &mut accumulated_accounts_data_size,
+                account_size,
+                tx_details.compute_budget_limits.loaded_accounts_bytes,
+                error_metrics,
+            )?;
 
-                                (account.data().len(), account, rent_due)
-                            } else {
-                                (account.data().len(), account, 0)
-                            }
-                        })
-                        .unwrap_or_else(|| {
-                            account_found = false;
-                            let mut default_account = AccountSharedData::default();
-                            // All new accounts must be rent-exempt (enforced in Bank::execute_loaded_transaction).
-                            // Currently, rent collection sets rent_epoch to u64::MAX, but initializing the account
-                            // with this field already set would allow us to skip rent collection for these accounts.
-                            default_account.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH);
-                            (default_account.data().len(), default_account, 0)
-                        })
-                };
-                accumulate_and_check_loaded_account_data_size(
-                    &mut accumulated_accounts_data_size,
-                    account_size,
-                    tx_details.compute_budget_limits.loaded_accounts_bytes,
-                    error_metrics,
-                )?;
+            tx_rent += rent;
+            rent_debits.insert(key, rent, account.lamports());
 
-                tx_rent += rent;
-                rent_debits.insert(key, rent, account.lamports());
-
-                account
-            };
-
+            accounts.push((*key, account));
             accounts_found.push(account_found);
-            Ok((*key, account))
-        })
-        .collect::<Result<Vec<_>>>()?;
+            Ok(())
+        };
+
+    // Since the fee payer is always the first account, collect it first. Note
+    // that account overrides are already applied during fee payer validation so
+    // it's fine to use the fee payer directly here rather than checking account
+    // overrides again.
+    collect_account(
+        message.fee_payer(),
+        tx_details.fee_payer_account.data().len(),
+        tx_details.fee_payer_account,
+        tx_details.fee_payer_rent_debit,
+        true, // account_found
+    )?;
+
+    // Attempt to load and collect remaining non-fee payer accounts
+    for (i, key) in account_keys.iter().enumerate().skip(1) {
+        let mut account_found = true;
+        let is_instruction_account = u8::try_from(i)
+            .map(|i| instruction_accounts.contains(&&i))
+            .unwrap_or(false);
+        let (account_size, account, rent) = if solana_sdk::sysvar::instructions::check_id(key) {
+            // Since the instructions sysvar is constructed by the SVM
+            // and modified for each transaction instruction, it cannot
+            // be overridden.
+            (
+                0, /* loaded size */
+                construct_instructions_account(message),
+                0, /* collected rent */
+            )
+        } else if let Some(account_override) =
+            account_overrides.and_then(|overrides| overrides.get(key))
+        {
+            (account_override.data().len(), account_override.clone(), 0)
+        } else if let Some(program) = (!is_instruction_account && !message.is_writable(i))
+            .then_some(())
+            .and_then(|_| loaded_programs.find(key))
+        {
+            callbacks
+                .get_account_shared_data(key)
+                .ok_or(TransactionError::AccountNotFound)?;
+            // Optimization to skip loading of accounts which are only used as
+            // programs in top-level instructions and not passed as instruction accounts.
+            let program_account = account_shared_data_from_program(&program);
+            (program.account_size, program_account, 0)
+        } else {
+            callbacks
+                .get_account_shared_data(key)
+                .map(|mut account| {
+                    if message.is_writable(i) {
+                        let rent_due = collect_rent_from_account(
+                            feature_set,
+                            rent_collector,
+                            key,
+                            &mut account,
+                        )
+                        .rent_amount;
+
+                        (account.data().len(), account, rent_due)
+                    } else {
+                        (account.data().len(), account, 0)
+                    }
+                })
+                .unwrap_or_else(|| {
+                    account_found = false;
+                    let mut default_account = AccountSharedData::default();
+                    // All new accounts must be rent-exempt (enforced in Bank::execute_loaded_transaction).
+                    // Currently, rent collection sets rent_epoch to u64::MAX, but initializing the account
+                    // with this field already set would allow us to skip rent collection for these accounts.
+                    default_account.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH);
+                    (default_account.data().len(), default_account, 0)
+                })
+        };
+
+        collect_account(key, account_size, account, rent, account_found)?;
+    }
 
     let builtins_start_index = accounts.len();
     let program_indices = message

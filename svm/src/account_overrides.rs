@@ -3,7 +3,9 @@ use {
     std::collections::HashMap,
 };
 
-/// Encapsulates overridden accounts, typically used for transaction simulations
+/// Encapsulates overridden accounts, typically used for transaction
+/// simulations. Account overrides are currently not used when loading the
+/// durable nonce account or when constructing the instructions sysvar account.
 #[derive(Default)]
 pub struct AccountOverrides {
     accounts: HashMap<Pubkey, AccountSharedData>,
