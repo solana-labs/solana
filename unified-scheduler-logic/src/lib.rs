@@ -772,35 +772,51 @@ impl SchedulingStateMachine {
         index: usize,
         usage_queue_loader: &mut impl FnMut(Pubkey) -> UsageQueue,
     ) -> Task {
-        // Calling the _unchecked() version here is safe for faster operation, because
-        // `get_account_locks()` (the safe variant) is ensured to be called in
-        // DefaultTransactionHandler::handle() via Bank::prepare_unlocked_batch_from_single_tx().
+        // It's crucial for tasks to be validated with
+        // `account_locks::validate_account_locks()` prior to the creation.
+        // That's because it's part of protocol consensus regarding the
+        // rejection of blocks containing malformed transactions
+        // (`AccountLoadedTwice` and `TooManyAccountLocks`). Even more,
+        // `SchedulingStateMachine` can't properly handle transactions with
+        // duplicate addresses (those falling under `AccountLoadedTwice`).
         //
-        // The safe variant has additional account-locking related verifications, which is crucial.
+        // However, it's okay for now not to call `::validate_account_locks()`
+        // here.
         //
-        // Currently the replaying stage is redundantly calling `get_account_locks()` when unified
-        // scheduler is enabled on the given transaction at the blockstore. This will be relaxed
-        // for optimization in the future. As for banking stage with unified scheduler, it will
-        // need to run .get_account_locks() at least once somewhere in the code path. In the
-        // distant future, this function `create_task()` should be adjusted so that both stages do
-        // the checks before calling this (say, with some ad-hoc type like
-        // `SanitizedTransactionWithCheckedAccountLocks`) or do the checks here, resulting in
-        // eliminating the redundant one in the replaying stage and in the handler.
-        let locks = transaction.get_account_locks_unchecked();
-
-        let writable_locks = locks
-            .writable
+        // Currently `replay_stage` is always calling
+        //`::validate_account_locks()` regardless of whether unified-scheduler
+        // is enabled or not at the blockstore
+        // (`Bank::prepare_sanitized_batch()` is called in
+        // `process_entries()`). This verification will be hoisted for
+        // optimization when removing
+        // `--block-verification-method=blockstore-processor`.
+        //
+        // As for `banking_stage` with unified scheduler, it will need to run
+        // `validate_account_locks()` at least once somewhere in the code path.
+        // In the distant future, this function (`create_task()`) should be
+        // adjusted so that both stages do the checks before calling this or do
+        // the checks here, to simplify the two code paths regarding the
+        // essential `validate_account_locks` validation.
+        //
+        // Lastly, `validate_account_locks()` is currently called in
+        // `DefaultTransactionHandler::handle()` via
+        // `Bank::prepare_unlocked_batch_from_single_tx()` as well.
+        // This redundancy is known. It was just left as-is out of abundance
+        // of caution.
+        let lock_contexts = transaction
+            .message()
+            .account_keys()
             .iter()
-            .map(|address| (address, RequestedUsage::Writable));
-        let readonly_locks = locks
-            .readonly
-            .iter()
-            .map(|address| (address, RequestedUsage::Readonly));
-
-        let lock_contexts = writable_locks
-            .chain(readonly_locks)
-            .map(|(address, requested_usage)| {
-                LockContext::new(usage_queue_loader(**address), requested_usage)
+            .enumerate()
+            .map(|(index, address)| {
+                LockContext::new(
+                    usage_queue_loader(*address),
+                    if transaction.message().is_writable(index) {
+                        RequestedUsage::Writable
+                    } else {
+                        RequestedUsage::Readonly
+                    },
+                )
             })
             .collect();
 
