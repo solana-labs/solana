@@ -11,6 +11,7 @@ pub struct CacheHashDataStats {
     pub save_us: AtomicU64,
     pub saved_to_cache: AtomicUsize,
     pub write_to_mmap_us: AtomicU64,
+    pub flush_mmap_us: AtomicU64,
     pub create_save_us: AtomicU64,
     pub load_us: AtomicU64,
     pub read_us: AtomicU64,
@@ -59,6 +60,11 @@ impl CacheHashDataStats {
             (
                 "write_to_mmap_us",
                 self.write_to_mmap_us.load(Ordering::Relaxed),
+                i64
+            ),
+            (
+                "flush_mmap_us",
+                self.flush_mmap_us.load(Ordering::Relaxed),
                 i64
             ),
             (
