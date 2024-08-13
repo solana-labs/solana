@@ -31,6 +31,7 @@ pub fn read_byte(bytes: &[u8], offset: &mut usize) -> Result<u8> {
 ///
 /// Assumptions:
 /// - The current offset is not greater than `bytes.len()`.
+#[allow(dead_code)]
 #[inline(always)]
 pub fn read_compressed_u16(bytes: &[u8], offset: &mut usize) -> Result<u16> {
     let mut result = 0u16;
