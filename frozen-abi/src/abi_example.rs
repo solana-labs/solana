@@ -534,7 +534,7 @@ impl<T: Serialize + ?Sized> AbiEnumVisitor for T {
     }
 }
 
-impl<T: Serialize + ?Sized + AbiExample> AbiEnumVisitor for T {
+impl<T: Serialize + AbiExample> AbiEnumVisitor for T {
     default fn visit_for_abi(&self, digester: &mut AbiDigester) -> DigestResult {
         info!("AbiEnumVisitor for T: {}", type_name::<T>());
         // not calling self.serialize(...) is intentional here as the most generic impl
