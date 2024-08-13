@@ -529,15 +529,17 @@ pub(crate) fn find_bankhash_of_heaviest_fork(
     let recyclers = VerifyRecyclers::default();
     let mut timing = ExecuteTimings::default();
     let opts = ProcessOptions::default();
-    // Grab one write lock until end of function because we are the only one touching bankforks now.
-    let mut my_bankforks = bank_forks.write().unwrap();
     // Now replay all the missing blocks.
     let mut parent_bank = root_bank;
     for slot in slots {
         if exit.load(Ordering::Relaxed) {
             return Err(WenRestartError::Exiting.into());
         }
-        let bank = match my_bankforks.get(slot) {
+        let saved_bank;
+        {
+            saved_bank = bank_forks.read().unwrap().get(slot);
+        }
+        let bank = match saved_bank {
             Some(cur_bank) => {
                 if !cur_bank.is_frozen() {
                     return Err(WenRestartError::BlockNotFrozenAfterReplay(slot, None).into());
@@ -552,7 +554,10 @@ pub(crate) fn find_bankhash_of_heaviest_fork(
                         .unwrap(),
                     slot,
                 );
-                let bank_with_scheduler = my_bankforks.insert_from_ledger(new_bank);
+                let bank_with_scheduler;
+                {
+                    bank_with_scheduler = bank_forks.write().unwrap().insert_from_ledger(new_bank);
+                }
                 let mut progress = ConfirmationProgress::new(parent_bank.last_blockhash());
                 if let Err(e) = process_single_slot(
                     &blockstore,
@@ -573,7 +578,15 @@ pub(crate) fn find_bankhash_of_heaviest_fork(
                     )
                     .into());
                 }
-                my_bankforks.get(slot).unwrap()
+                let cur_bank;
+                {
+                    cur_bank = bank_forks
+                        .read()
+                        .unwrap()
+                        .get(slot)
+                        .expect("bank should have been just inserted");
+                }
+                cur_bank
             }
         };
         parent_bank = bank;
