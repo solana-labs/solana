@@ -69,13 +69,13 @@ impl VotingService {
         vote_op: VoteOp,
     ) {
         if let VoteOp::PushVote { saved_tower, .. } = &vote_op {
-            let mut measure = Measure::start("tower_save-ms");
+            let mut measure = Measure::start("tower storage save");
             if let Err(err) = tower_storage.store(saved_tower) {
                 error!("Unable to save tower to storage: {:?}", err);
                 std::process::exit(1);
             }
             measure.stop();
-            inc_new_counter_info!("tower_save-ms", measure.as_ms() as usize);
+            trace!("{measure}");
         }
 
         let _ = cluster_info.send_transaction(
