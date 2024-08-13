@@ -23,6 +23,7 @@ use {
     },
     arrayvec::ArrayVec,
     crossbeam_channel::RecvTimeoutError,
+    solana_accounts_db::account_locks::validate_account_locks,
     solana_cost_model::cost_model::CostModel,
     solana_measure::measure_us,
     solana_runtime::{bank::Bank, bank_forks::BankForks},
@@ -526,8 +527,8 @@ impl SchedulerController {
                 })
                 .inspect(|_| saturating_add_assign!(post_sanitization_count, 1))
                 .filter(|(_packet, tx)| {
-                    SanitizedTransaction::validate_account_locks(
-                        tx.message(),
+                    validate_account_locks(
+                        tx.message().account_keys(),
                         transaction_account_lock_limit,
                     )
                     .is_ok()

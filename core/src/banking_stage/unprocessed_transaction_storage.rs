@@ -17,6 +17,7 @@ use {
     },
     itertools::Itertools,
     min_max_heap::MinMaxHeap,
+    solana_accounts_db::account_locks::validate_account_locks,
     solana_measure::measure_us,
     solana_runtime::bank::Bank,
     solana_sdk::{
@@ -171,8 +172,8 @@ fn consume_scan_should_process_packet(
         let message = sanitized_transaction.message();
 
         // Check the number of locks and whether there are duplicates
-        if SanitizedTransaction::validate_account_locks(
-            message,
+        if validate_account_locks(
+            message.account_keys(),
             bank.get_transaction_account_lock_limit(),
         )
         .is_err()

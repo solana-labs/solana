@@ -66,6 +66,7 @@ use {
     },
     serde::Serialize,
     solana_accounts_db::{
+        account_locks::validate_account_locks,
         accounts::{AccountAddressFilter, Accounts, PubkeyAccountSlot},
         accounts_db::{
             AccountShrinkThreshold, AccountStorageEntry, AccountsDb, AccountsDbConfig,
@@ -3281,10 +3282,8 @@ impl Bank {
         transaction: &'a SanitizedTransaction,
     ) -> TransactionBatch<'_, '_> {
         let tx_account_lock_limit = self.get_transaction_account_lock_limit();
-        let lock_result = SanitizedTransaction::validate_account_locks(
-            transaction.message(),
-            tx_account_lock_limit,
-        );
+        let lock_result =
+            validate_account_locks(transaction.message().account_keys(), tx_account_lock_limit);
         let mut batch = TransactionBatch::new(
             vec![lock_result],
             self,
