@@ -35,7 +35,19 @@ pub(crate) type TransactionRent = u64;
 pub(crate) type TransactionProgramIndices = Vec<Vec<IndexOfAccount>>;
 pub type TransactionCheckResult = Result<CheckedTransactionDetails>;
 pub type TransactionValidationResult = Result<ValidatedTransactionDetails>;
-pub type TransactionLoadResult = Result<LoadedTransaction>;
+
+#[derive(PartialEq, Eq, Debug)]
+pub enum TransactionLoadResult {
+    /// All transaction accounts were loaded successfully
+    Loaded(LoadedTransaction),
+    /// Some transaction accounts needed for execution were unable to be loaded
+    /// but the fee payer and any nonce account needed for fee collection were
+    /// loaded successfully
+    FeesOnly(FeesOnlyTransaction),
+    /// Some transaction accounts needed for fee collection were unable to be
+    /// loaded
+    NotLoaded(TransactionError),
+}
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct CheckedTransactionDetails {
@@ -64,6 +76,13 @@ pub struct LoadedTransaction {
     pub rent: TransactionRent,
     pub rent_debits: RentDebits,
     pub loaded_accounts_data_size: u32,
+}
+
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub struct FeesOnlyTransaction {
+    pub load_error: TransactionError,
+    pub rollback_accounts: RollbackAccounts,
+    pub fee_details: FeeDetails,
 }
 
 /// Collect rent from an account if rent is still enabled and regardless of
@@ -167,35 +186,90 @@ pub(crate) fn load_accounts<CB: TransactionProcessingCallback>(
 ) -> Vec<TransactionLoadResult> {
     txs.iter()
         .zip(validation_results)
-        .map(|etx| match etx {
-            (tx, Ok(tx_details)) => {
-                // load transactions
-                load_transaction_accounts(
-                    callbacks,
-                    tx,
-                    tx_details,
-                    error_metrics,
-                    account_overrides,
-                    feature_set,
-                    rent_collector,
-                    loaded_programs,
-                )
-            }
-            (_, Err(e)) => Err(e),
+        .map(|(transaction, validation_result)| {
+            load_transaction(
+                callbacks,
+                transaction,
+                validation_result,
+                error_metrics,
+                account_overrides,
+                feature_set,
+                rent_collector,
+                loaded_programs,
+            )
         })
         .collect()
 }
 
-fn load_transaction_accounts<CB: TransactionProcessingCallback>(
+fn load_transaction<CB: TransactionProcessingCallback>(
     callbacks: &CB,
     message: &impl SVMMessage,
-    tx_details: ValidatedTransactionDetails,
+    validation_result: TransactionValidationResult,
     error_metrics: &mut TransactionErrorMetrics,
     account_overrides: Option<&AccountOverrides>,
     feature_set: &FeatureSet,
     rent_collector: &RentCollector,
     loaded_programs: &ProgramCacheForTxBatch,
-) -> Result<LoadedTransaction> {
+) -> TransactionLoadResult {
+    match validation_result {
+        Err(e) => TransactionLoadResult::NotLoaded(e),
+        Ok(tx_details) => {
+            let load_result = load_transaction_accounts(
+                callbacks,
+                message,
+                tx_details.fee_payer_account,
+                tx_details.fee_payer_rent_debit,
+                &tx_details.compute_budget_limits,
+                error_metrics,
+                account_overrides,
+                feature_set,
+                rent_collector,
+                loaded_programs,
+            );
+
+            match load_result {
+                Ok(loaded_tx_accounts) => TransactionLoadResult::Loaded(LoadedTransaction {
+                    accounts: loaded_tx_accounts.accounts,
+                    program_indices: loaded_tx_accounts.program_indices,
+                    fee_details: tx_details.fee_details,
+                    rent: loaded_tx_accounts.rent,
+                    rent_debits: loaded_tx_accounts.rent_debits,
+                    rollback_accounts: tx_details.rollback_accounts,
+                    compute_budget_limits: tx_details.compute_budget_limits,
+                    loaded_accounts_data_size: loaded_tx_accounts.loaded_accounts_data_size,
+                }),
+                Err(err) => TransactionLoadResult::FeesOnly(FeesOnlyTransaction {
+                    load_error: err,
+                    fee_details: tx_details.fee_details,
+                    rollback_accounts: tx_details.rollback_accounts,
+                }),
+            }
+        }
+    }
+}
+
+#[derive(PartialEq, Eq, Debug, Clone)]
+struct LoadedTransactionAccounts {
+    pub accounts: Vec<TransactionAccount>,
+    pub program_indices: TransactionProgramIndices,
+    pub rent: TransactionRent,
+    pub rent_debits: RentDebits,
+    pub loaded_accounts_data_size: u32,
+}
+
+#[allow(clippy::too_many_arguments)]
+fn load_transaction_accounts<CB: TransactionProcessingCallback>(
+    callbacks: &CB,
+    message: &impl SVMMessage,
+    fee_payer_account: AccountSharedData,
+    fee_payer_rent_debit: u64,
+    compute_budget_limits: &ComputeBudgetLimits,
+    error_metrics: &mut TransactionErrorMetrics,
+    account_overrides: Option<&AccountOverrides>,
+    feature_set: &FeatureSet,
+    rent_collector: &RentCollector,
+    loaded_programs: &ProgramCacheForTxBatch,
+) -> Result<LoadedTransactionAccounts> {
     let mut tx_rent: TransactionRent = 0;
     let account_keys = message.account_keys();
     let mut accounts = Vec::with_capacity(account_keys.len());
@@ -214,7 +288,7 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
             accumulate_and_check_loaded_account_data_size(
                 &mut accumulated_accounts_data_size,
                 account_size,
-                tx_details.compute_budget_limits.loaded_accounts_bytes,
+                compute_budget_limits.loaded_accounts_bytes,
                 error_metrics,
             )?;
 
@@ -232,9 +306,9 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
     // overrides again.
     collect_account(
         message.fee_payer(),
-        tx_details.fee_payer_account.data().len(),
-        tx_details.fee_payer_account,
-        tx_details.fee_payer_rent_debit,
+        fee_payer_account.data().len(),
+        fee_payer_account,
+        fee_payer_rent_debit,
         true, // account_found
     )?;
 
@@ -345,7 +419,7 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
                     accumulate_and_check_loaded_account_data_size(
                         &mut accumulated_accounts_data_size,
                         owner_account.data().len(),
-                        tx_details.compute_budget_limits.loaded_accounts_bytes,
+                        compute_budget_limits.loaded_accounts_bytes,
                         error_metrics,
                     )?;
                     accounts.push((*owner_id, owner_account));
@@ -358,12 +432,9 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
         })
         .collect::<Result<Vec<Vec<IndexOfAccount>>>>()?;
 
-    Ok(LoadedTransaction {
+    Ok(LoadedTransactionAccounts {
         accounts,
         program_indices,
-        fee_details: tx_details.fee_details,
-        rollback_accounts: tx_details.rollback_accounts,
-        compute_budget_limits: tx_details.compute_budget_limits,
         rent: tx_rent,
         rent_debits,
         loaded_accounts_data_size: accumulated_accounts_data_size,
@@ -587,14 +658,17 @@ mod tests {
             instructions,
         );
 
-        let loaded_accounts = load_accounts_aux_test(tx, &accounts, &mut error_metrics);
+        let load_results = load_accounts_aux_test(tx, &accounts, &mut error_metrics);
 
         assert_eq!(error_metrics.account_not_found, 1);
-        assert_eq!(loaded_accounts.len(), 1);
-        assert_eq!(
-            loaded_accounts[0],
-            Err(TransactionError::ProgramAccountNotFound)
-        );
+        assert_eq!(load_results.len(), 1);
+        assert!(matches!(
+            load_results[0],
+            TransactionLoadResult::FeesOnly(FeesOnlyTransaction {
+                load_error: TransactionError::ProgramAccountNotFound,
+                ..
+            }),
+        ));
     }
 
     #[test]
@@ -629,13 +703,14 @@ mod tests {
         assert_eq!(error_metrics.account_not_found, 0);
         assert_eq!(loaded_accounts.len(), 1);
         match &loaded_accounts[0] {
-            Ok(loaded_transaction) => {
+            TransactionLoadResult::Loaded(loaded_transaction) => {
                 assert_eq!(loaded_transaction.accounts.len(), 3);
                 assert_eq!(loaded_transaction.accounts[0].1, accounts[0].1);
                 assert_eq!(loaded_transaction.program_indices.len(), 1);
                 assert_eq!(loaded_transaction.program_indices[0].len(), 0);
             }
-            Err(e) => panic!("{e}"),
+            TransactionLoadResult::FeesOnly(fees_only_tx) => panic!("{}", fees_only_tx.load_error),
+            TransactionLoadResult::NotLoaded(e) => panic!("{e}"),
         }
     }
 
@@ -665,14 +740,17 @@ mod tests {
             instructions,
         );
 
-        let loaded_accounts = load_accounts_aux_test(tx, &accounts, &mut error_metrics);
+        let load_results = load_accounts_aux_test(tx, &accounts, &mut error_metrics);
 
         assert_eq!(error_metrics.account_not_found, 1);
-        assert_eq!(loaded_accounts.len(), 1);
-        assert_eq!(
-            loaded_accounts[0],
-            Err(TransactionError::ProgramAccountNotFound)
-        );
+        assert_eq!(load_results.len(), 1);
+        assert!(matches!(
+            load_results[0],
+            TransactionLoadResult::FeesOnly(FeesOnlyTransaction {
+                load_error: TransactionError::ProgramAccountNotFound,
+                ..
+            }),
+        ));
     }
 
     #[test]
@@ -699,14 +777,17 @@ mod tests {
             instructions,
         );
 
-        let loaded_accounts = load_accounts_aux_test(tx, &accounts, &mut error_metrics);
+        let load_results = load_accounts_aux_test(tx, &accounts, &mut error_metrics);
 
         assert_eq!(error_metrics.invalid_program_for_execution, 1);
-        assert_eq!(loaded_accounts.len(), 1);
-        assert_eq!(
-            loaded_accounts[0],
-            Err(TransactionError::InvalidProgramForExecution)
-        );
+        assert_eq!(load_results.len(), 1);
+        assert!(matches!(
+            load_results[0],
+            TransactionLoadResult::FeesOnly(FeesOnlyTransaction {
+                load_error: TransactionError::InvalidProgramForExecution,
+                ..
+            }),
+        ));
     }
 
     #[test]
@@ -753,14 +834,15 @@ mod tests {
         assert_eq!(error_metrics.account_not_found, 0);
         assert_eq!(loaded_accounts.len(), 1);
         match &loaded_accounts[0] {
-            Ok(loaded_transaction) => {
+            TransactionLoadResult::Loaded(loaded_transaction) => {
                 assert_eq!(loaded_transaction.accounts.len(), 4);
                 assert_eq!(loaded_transaction.accounts[0].1, accounts[0].1);
                 assert_eq!(loaded_transaction.program_indices.len(), 2);
                 assert_eq!(loaded_transaction.program_indices[0], &[1]);
                 assert_eq!(loaded_transaction.program_indices[1], &[2]);
             }
-            Err(e) => panic!("{e}"),
+            TransactionLoadResult::FeesOnly(fees_only_tx) => panic!("{}", fees_only_tx.load_error),
+            TransactionLoadResult::NotLoaded(e) => panic!("{e}"),
         }
     }
 
@@ -803,9 +885,15 @@ mod tests {
             instructions,
         );
 
-        let loaded_accounts = load_accounts_no_store(&[], tx, None);
-        assert_eq!(loaded_accounts.len(), 1);
-        assert!(loaded_accounts[0].is_err());
+        let load_results = load_accounts_no_store(&[], tx, None);
+        assert_eq!(load_results.len(), 1);
+        assert!(matches!(
+            load_results[0],
+            TransactionLoadResult::FeesOnly(FeesOnlyTransaction {
+                load_error: TransactionError::ProgramAccountNotFound,
+                ..
+            }),
+        ));
     }
 
     #[test]
@@ -831,10 +919,15 @@ mod tests {
         let loaded_accounts =
             load_accounts_no_store(&[(keypair.pubkey(), account)], tx, Some(&account_overrides));
         assert_eq!(loaded_accounts.len(), 1);
-        let loaded_transaction = loaded_accounts[0].as_ref().unwrap();
-        assert_eq!(loaded_transaction.accounts[0].0, keypair.pubkey());
-        assert_eq!(loaded_transaction.accounts[1].0, slot_history_id);
-        assert_eq!(loaded_transaction.accounts[1].1.lamports(), 42);
+        match &loaded_accounts[0] {
+            TransactionLoadResult::Loaded(loaded_transaction) => {
+                assert_eq!(loaded_transaction.accounts[0].0, keypair.pubkey());
+                assert_eq!(loaded_transaction.accounts[1].0, slot_history_id);
+                assert_eq!(loaded_transaction.accounts[1].1.lamports(), 42);
+            }
+            TransactionLoadResult::FeesOnly(fees_only_tx) => panic!("{}", fees_only_tx.load_error),
+            TransactionLoadResult::NotLoaded(e) => panic!("{e}"),
+        }
     }
 
     #[test]
@@ -1059,11 +1152,9 @@ mod tests {
         let result = load_transaction_accounts(
             &mock_bank,
             sanitized_transaction.message(),
-            ValidatedTransactionDetails {
-                fee_payer_account: fee_payer_account_data.clone(),
-                fee_payer_rent_debit,
-                ..ValidatedTransactionDetails::default()
-            },
+            fee_payer_account_data.clone(),
+            fee_payer_rent_debit,
+            &ComputeBudgetLimits::default(),
             &mut error_metrics,
             None,
             &FeatureSet::default(),
@@ -1078,12 +1169,9 @@ mod tests {
         };
         assert_eq!(
             result.unwrap(),
-            LoadedTransaction {
+            LoadedTransactionAccounts {
                 accounts: vec![(fee_payer_address, fee_payer_account_data),],
                 program_indices: vec![],
-                fee_details: FeeDetails::default(),
-                rollback_accounts: RollbackAccounts::default(),
-                compute_budget_limits: ComputeBudgetLimits::default(),
                 rent: fee_payer_rent_debit,
                 rent_debits: expected_rent_debits,
                 loaded_accounts_data_size: 0,
@@ -1127,10 +1215,9 @@ mod tests {
         let result = load_transaction_accounts(
             &mock_bank,
             sanitized_transaction.message(),
-            ValidatedTransactionDetails {
-                fee_payer_account: fee_payer_account_data.clone(),
-                ..ValidatedTransactionDetails::default()
-            },
+            fee_payer_account_data.clone(),
+            0, // fee_payer_rent_debit
+            &ComputeBudgetLimits::default(),
             &mut error_metrics,
             None,
             &FeatureSet::default(),
@@ -1140,7 +1227,7 @@ mod tests {
 
         assert_eq!(
             result.unwrap(),
-            LoadedTransaction {
+            LoadedTransactionAccounts {
                 accounts: vec![
                     (key1.pubkey(), fee_payer_account_data),
                     (
@@ -1149,9 +1236,6 @@ mod tests {
                     )
                 ],
                 program_indices: vec![vec![]],
-                fee_details: FeeDetails::default(),
-                rollback_accounts: RollbackAccounts::default(),
-                compute_budget_limits: ComputeBudgetLimits::default(),
                 rent: 0,
                 rent_debits: RentDebits::default(),
                 loaded_accounts_data_size: 0,
@@ -1193,7 +1277,9 @@ mod tests {
         let result = load_transaction_accounts(
             &mock_bank,
             sanitized_transaction.message(),
-            ValidatedTransactionDetails::default(),
+            AccountSharedData::default(), // fee_payer_account
+            0,                            // fee_payer_rent_debit
+            &ComputeBudgetLimits::default(),
             &mut error_metrics,
             None,
             &FeatureSet::default(),
@@ -1237,7 +1323,9 @@ mod tests {
         let result = load_transaction_accounts(
             &mock_bank,
             sanitized_transaction.message(),
-            ValidatedTransactionDetails::default(),
+            AccountSharedData::default(), // fee_payer_account
+            0,                            // fee_payer_rent_debit
+            &ComputeBudgetLimits::default(),
             &mut error_metrics,
             None,
             &FeatureSet::default(),
@@ -1281,7 +1369,9 @@ mod tests {
         let result = load_transaction_accounts(
             &mock_bank,
             sanitized_transaction.message(),
-            ValidatedTransactionDetails::default(),
+            AccountSharedData::default(), // fee_payer_account
+            0,                            // fee_payer_rent_debit
+            &ComputeBudgetLimits::default(),
             &mut error_metrics,
             None,
             &FeatureSet::default(),
@@ -1334,10 +1424,9 @@ mod tests {
         let result = load_transaction_accounts(
             &mock_bank,
             sanitized_transaction.message(),
-            ValidatedTransactionDetails {
-                fee_payer_account: fee_payer_account_data.clone(),
-                ..ValidatedTransactionDetails::default()
-            },
+            fee_payer_account_data.clone(),
+            0, // fee_payer_rent_debit
+            &ComputeBudgetLimits::default(),
             &mut error_metrics,
             None,
             &FeatureSet::default(),
@@ -1347,7 +1436,7 @@ mod tests {
 
         assert_eq!(
             result.unwrap(),
-            LoadedTransaction {
+            LoadedTransactionAccounts {
                 accounts: vec![
                     (key2.pubkey(), fee_payer_account_data),
                     (
@@ -1355,9 +1444,6 @@ mod tests {
                         mock_bank.accounts_map[&key1.pubkey()].clone()
                     ),
                 ],
-                fee_details: FeeDetails::default(),
-                rollback_accounts: RollbackAccounts::default(),
-                compute_budget_limits: ComputeBudgetLimits::default(),
                 program_indices: vec![vec![1]],
                 rent: 0,
                 rent_debits: RentDebits::default(),
@@ -1402,7 +1488,9 @@ mod tests {
         let result = load_transaction_accounts(
             &mock_bank,
             sanitized_transaction.message(),
-            ValidatedTransactionDetails::default(),
+            AccountSharedData::default(), // fee_payer_account
+            0,                            // fee_payer_rent_debit
+            &ComputeBudgetLimits::default(),
             &mut error_metrics,
             None,
             &FeatureSet::default(),
@@ -1455,7 +1543,9 @@ mod tests {
         let result = load_transaction_accounts(
             &mock_bank,
             sanitized_transaction.message(),
-            ValidatedTransactionDetails::default(),
+            AccountSharedData::default(), // fee_payer_account
+            0,                            // fee_payer_rent_debit
+            &ComputeBudgetLimits::default(),
             &mut error_metrics,
             None,
             &FeatureSet::default(),
@@ -1515,10 +1605,9 @@ mod tests {
         let result = load_transaction_accounts(
             &mock_bank,
             sanitized_transaction.message(),
-            ValidatedTransactionDetails {
-                fee_payer_account: fee_payer_account_data.clone(),
-                ..ValidatedTransactionDetails::default()
-            },
+            fee_payer_account_data.clone(),
+            0, // fee_payer_rent_debit
+            &ComputeBudgetLimits::default(),
             &mut error_metrics,
             None,
             &FeatureSet::default(),
@@ -1528,7 +1617,7 @@ mod tests {
 
         assert_eq!(
             result.unwrap(),
-            LoadedTransaction {
+            LoadedTransactionAccounts {
                 accounts: vec![
                     (key2.pubkey(), fee_payer_account_data),
                     (
@@ -1541,9 +1630,6 @@ mod tests {
                     ),
                 ],
                 program_indices: vec![vec![1]],
-                fee_details: FeeDetails::default(),
-                rollback_accounts: RollbackAccounts::default(),
-                compute_budget_limits: ComputeBudgetLimits::default(),
                 rent: 0,
                 rent_debits: RentDebits::default(),
                 loaded_accounts_data_size: 0,
@@ -1605,10 +1691,9 @@ mod tests {
         let result = load_transaction_accounts(
             &mock_bank,
             sanitized_transaction.message(),
-            ValidatedTransactionDetails {
-                fee_payer_account: fee_payer_account_data.clone(),
-                ..ValidatedTransactionDetails::default()
-            },
+            fee_payer_account_data.clone(),
+            0, // fee_payer_rent_debit
+            &ComputeBudgetLimits::default(),
             &mut error_metrics,
             None,
             &FeatureSet::default(),
@@ -1620,7 +1705,7 @@ mod tests {
         account_data.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH);
         assert_eq!(
             result.unwrap(),
-            LoadedTransaction {
+            LoadedTransactionAccounts {
                 accounts: vec![
                     (key2.pubkey(), fee_payer_account_data),
                     (
@@ -1634,9 +1719,6 @@ mod tests {
                     ),
                 ],
                 program_indices: vec![vec![1], vec![1]],
-                fee_details: FeeDetails::default(),
-                rollback_accounts: RollbackAccounts::default(),
-                compute_budget_limits: ComputeBudgetLimits::default(),
                 rent: 0,
                 rent_debits: RentDebits::default(),
                 loaded_accounts_data_size: 0,
@@ -1673,7 +1755,7 @@ mod tests {
         let num_accounts = tx.message().account_keys.len();
         let sanitized_tx = SanitizedTransaction::from_transaction_for_tests(tx);
         let mut error_metrics = TransactionErrorMetrics::default();
-        let loaded_txs = load_accounts(
+        let mut load_results = load_accounts(
             &bank,
             &[sanitized_tx.clone()],
             vec![Ok(ValidatedTransactionDetails::default())],
@@ -1684,11 +1766,15 @@ mod tests {
             &ProgramCacheForTxBatch::default(),
         );
 
+        let TransactionLoadResult::Loaded(loaded_transaction) = load_results.swap_remove(0) else {
+            panic!("transaction loading failed");
+        };
+
         let compute_budget = ComputeBudget::new(u64::from(
             compute_budget_limits::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT,
         ));
         let transaction_context = TransactionContext::new(
-            loaded_txs[0].as_ref().unwrap().accounts.clone(),
+            loaded_transaction.accounts,
             Rent::default(),
             compute_budget.max_instruction_stack_depth,
             compute_budget.max_instruction_trace_length,
@@ -1761,7 +1847,7 @@ mod tests {
             ..ValidatedTransactionDetails::default()
         });
 
-        let results = load_accounts(
+        let mut load_results = load_accounts(
             &mock_bank,
             &[sanitized_transaction],
             vec![validation_result],
@@ -1775,10 +1861,12 @@ mod tests {
         let mut account_data = AccountSharedData::default();
         account_data.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH);
 
-        assert_eq!(results.len(), 1);
-        let loaded_result = results[0].clone();
+        assert_eq!(load_results.len(), 1);
+        let TransactionLoadResult::Loaded(loaded_transaction) = load_results.swap_remove(0) else {
+            panic!("transaction loading failed");
+        };
         assert_eq!(
-            loaded_result.unwrap(),
+            loaded_transaction,
             LoadedTransaction {
                 accounts: vec![
                     (
@@ -1831,7 +1919,7 @@ mod tests {
         );
 
         let validation_result = Ok(ValidatedTransactionDetails::default());
-        let result = load_accounts(
+        let load_results = load_accounts(
             &mock_bank,
             &[sanitized_transaction.clone()],
             vec![validation_result.clone()],
@@ -1842,14 +1930,17 @@ mod tests {
             &ProgramCacheForTxBatch::default(),
         );
 
-        assert_eq!(
-            result,
-            vec![Err(TransactionError::InvalidProgramForExecution)]
-        );
+        assert!(matches!(
+            load_results[0],
+            TransactionLoadResult::FeesOnly(FeesOnlyTransaction {
+                load_error: TransactionError::InvalidProgramForExecution,
+                ..
+            }),
+        ));
 
         let validation_result = Err(TransactionError::InvalidWritableAccount);
 
-        let result = load_accounts(
+        let load_results = load_accounts(
             &mock_bank,
             &[sanitized_transaction.clone()],
             vec![validation_result],
@@ -1860,7 +1951,10 @@ mod tests {
             &ProgramCacheForTxBatch::default(),
         );
 
-        assert_eq!(result, vec![Err(TransactionError::InvalidWritableAccount)]);
+        assert!(matches!(
+            load_results[0],
+            TransactionLoadResult::NotLoaded(TransactionError::InvalidWritableAccount),
+        ));
     }
 
     #[test]

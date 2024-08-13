@@ -5,7 +5,7 @@ use {
         account_loader::{
             collect_rent_from_account, load_accounts, validate_fee_payer,
             CheckedTransactionDetails, LoadedTransaction, TransactionCheckResult,
-            TransactionValidationResult, ValidatedTransactionDetails,
+            TransactionLoadResult, TransactionValidationResult, ValidatedTransactionDetails,
         },
         account_overrides::AccountOverrides,
         message_processor::MessageProcessor,
@@ -298,8 +298,9 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                 .into_iter()
                 .zip(sanitized_txs.iter())
                 .map(|(load_result, tx)| match load_result {
-                    Err(e) => Err(e.clone()),
-                    Ok(loaded_transaction) => {
+                    TransactionLoadResult::NotLoaded(err) => Err(err),
+                    TransactionLoadResult::FeesOnly(fees_only_tx) => Err(fees_only_tx.load_error),
+                    TransactionLoadResult::Loaded(loaded_transaction) => {
                         let executed_tx = self.execute_loaded_transaction(
                             tx,
                             loaded_transaction,
