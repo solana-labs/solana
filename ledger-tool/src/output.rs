@@ -12,7 +12,11 @@ use {
         display::writeln_transaction, CliAccount, CliAccountNewConfig, OutputFormat, QuietDisplay,
         VerboseDisplay,
     },
-    solana_ledger::blockstore::{Blockstore, BlockstoreError},
+    solana_ledger::{
+        blockstore::{Blockstore, BlockstoreError},
+        blockstore_meta::{DuplicateSlotProof, ErasureMeta},
+        shred::{Shred, ShredType},
+    },
     solana_runtime::bank::{Bank, TotalAccountsStats},
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
@@ -293,6 +297,116 @@ impl fmt::Display for CliBlockWithEntries {
             }
         }
         Ok(())
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliDuplicateSlotProof {
+    shred1: CliDuplicateShred,
+    shred2: CliDuplicateShred,
+    erasure_consistency: Option<bool>,
+}
+
+impl QuietDisplay for CliDuplicateSlotProof {}
+
+impl VerboseDisplay for CliDuplicateSlotProof {
+    fn write_str(&self, w: &mut dyn std::fmt::Write) -> std::fmt::Result {
+        write!(w, "    Shred1 ")?;
+        VerboseDisplay::write_str(&self.shred1, w)?;
+        write!(w, "    Shred2 ")?;
+        VerboseDisplay::write_str(&self.shred2, w)?;
+        if let Some(erasure_consistency) = self.erasure_consistency {
+            writeln!(w, "    Erasure consistency {}", erasure_consistency)?;
+        }
+        Ok(())
+    }
+}
+
+impl fmt::Display for CliDuplicateSlotProof {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "    Shred1 {}", self.shred1)?;
+        write!(f, "    Shred2 {}", self.shred2)?;
+        if let Some(erasure_consistency) = self.erasure_consistency {
+            writeln!(f, "    Erasure consistency {}", erasure_consistency)?;
+        }
+        Ok(())
+    }
+}
+
+impl From<DuplicateSlotProof> for CliDuplicateSlotProof {
+    fn from(proof: DuplicateSlotProof) -> Self {
+        let shred1 = Shred::new_from_serialized_shred(proof.shred1).unwrap();
+        let shred2 = Shred::new_from_serialized_shred(proof.shred2).unwrap();
+        let erasure_consistency = (shred1.shred_type() == ShredType::Code
+            && shred2.shred_type() == ShredType::Code)
+            .then(|| ErasureMeta::check_erasure_consistency(&shred1, &shred2));
+
+        Self {
+            shred1: CliDuplicateShred::from(shred1),
+            shred2: CliDuplicateShred::from(shred2),
+            erasure_consistency,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliDuplicateShred {
+    fec_set_index: u32,
+    index: u32,
+    shred_type: ShredType,
+    version: u16,
+    merkle_root: Option<Hash>,
+    chained_merkle_root: Option<Hash>,
+    last_in_slot: bool,
+    payload: Vec<u8>,
+}
+
+impl CliDuplicateShred {
+    fn write_common(&self, w: &mut dyn std::fmt::Write) -> std::fmt::Result {
+        writeln!(
+            w,
+            "fec_set_index {}, index {}, shred_type {:?}\n       \
+             version {}, merkle_root {:?}, chained_merkle_root {:?}, last_in_slot {}",
+            self.fec_set_index,
+            self.index,
+            self.shred_type,
+            self.version,
+            self.merkle_root,
+            self.chained_merkle_root,
+            self.last_in_slot,
+        )
+    }
+}
+
+impl QuietDisplay for CliDuplicateShred {}
+
+impl VerboseDisplay for CliDuplicateShred {
+    fn write_str(&self, w: &mut dyn std::fmt::Write) -> std::fmt::Result {
+        self.write_common(w)?;
+        writeln!(w, "       payload: {:?}", self.payload)
+    }
+}
+
+impl fmt::Display for CliDuplicateShred {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        self.write_common(f)
+    }
+}
+
+impl From<Shred> for CliDuplicateShred {
+    fn from(shred: Shred) -> Self {
+        Self {
+            fec_set_index: shred.fec_set_index(),
+            index: shred.index(),
+            shred_type: shred.shred_type(),
+            version: shred.version(),
+            merkle_root: shred.merkle_root().ok(),
+            chained_merkle_root: shred.chained_merkle_root().ok(),
+            last_in_slot: shred.last_in_slot(),
+            payload: shred.payload().clone(),
+        }
     }
 }
 

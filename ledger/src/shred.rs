@@ -348,7 +348,7 @@ impl Shred {
     dispatch!(fn set_signature(&mut self, signature: Signature));
     dispatch!(fn signed_data(&self) -> Result<SignedData, Error>);
 
-    dispatch!(pub(crate) fn chained_merkle_root(&self) -> Result<Hash, Error>);
+    dispatch!(pub fn chained_merkle_root(&self) -> Result<Hash, Error>);
     // Returns the portion of the shred's payload which is erasure coded.
     dispatch!(pub(crate) fn erasure_shard(self) -> Result<Vec<u8>, Error>);
     // Like Shred::erasure_shard but returning a slice.
