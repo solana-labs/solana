@@ -222,7 +222,6 @@ impl Tpu {
             exit.clone(),
             cluster_info.clone(),
             gossip_vote_sender,
-            poh_recorder.clone(),
             vote_tracker,
             bank_forks.clone(),
             subscriptions.clone(),
