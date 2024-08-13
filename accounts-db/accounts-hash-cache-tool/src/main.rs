@@ -21,6 +21,7 @@ use {
         mem::size_of,
         num::Saturating,
         path::{Path, PathBuf},
+        str,
         sync::RwLock,
         time::Instant,
     },
@@ -143,6 +144,20 @@ fn main() {
                                      Must be a power of two, greater than 0, \
                                      and less-than-or-equal-to 16,777,216 (2^24)"
                                 ),
+                        )
+                        .arg(
+                            Arg::with_name("bin_of_interest")
+                                .long("bin-of-interest")
+                                .takes_value(true)
+                                .value_name("INDEX")
+                                .help("Specifies a single bin to diff")
+                                .long_help(
+                                    "Specifies a single bin to diff. \
+                                     When diffing large state that does not fit in memory, \
+                                     it may be neccessary to diff a subset at a time. \
+                                     Use this arg to limit the state to a single bin. \
+                                     The INDEX must be less than --bins."
+                                ),
                         ),
                 ),
         )
@@ -210,7 +225,22 @@ fn cmd_diff_state(
     let path1 = value_t_or_exit!(subcommand_matches, "path1", String);
     let path2 = value_t_or_exit!(subcommand_matches, "path2", String);
     let num_bins = value_t_or_exit!(subcommand_matches, "bins", usize);
-    do_diff_state(path1, path2, num_bins)
+    let bin_of_interest =
+        if let Some(bin_of_interest) = subcommand_matches.value_of("bin_of_interest") {
+            let bin_of_interest = bin_of_interest
+                .parse()
+                .map_err(|err| format!("argument 'bin-of-interest' is not a valid value: {err}"))?;
+            if bin_of_interest >= num_bins {
+                return Err(format!(
+                    "argument 'bin-of-interest' must be less than 'bins', \
+                     bins: {num_bins}, bin-of-interest: {bin_of_interest}",
+                ));
+            }
+            Some(bin_of_interest)
+        } else {
+            None
+        };
+    do_diff_state(path1, path2, num_bins, bin_of_interest)
 }
 
 fn do_inspect(file: impl AsRef<Path>, force: bool) -> Result<(), String> {
@@ -480,6 +510,7 @@ fn do_diff_state(
     dir1: impl AsRef<Path>,
     dir2: impl AsRef<Path>,
     num_bins: usize,
+    bin_of_interest: Option<usize>,
 ) -> Result<(), String> {
     let extract = |dir: &Path| -> Result<_, String> {
         let files =
@@ -487,8 +518,12 @@ fn do_diff_state(
         let BinnedLatestEntriesInfo {
             latest_entries,
             capitalization,
-        } = extract_binned_latest_entries_in(files.iter().map(|file| &file.path), num_bins)
-            .map_err(|err| format!("failed to extract entries: {err}"))?;
+        } = extract_binned_latest_entries_in(
+            files.iter().map(|file| &file.path),
+            num_bins,
+            bin_of_interest,
+        )
+        .map_err(|err| format!("failed to extract entries: {err}"))?;
         let num_accounts: usize = latest_entries.iter().map(|bin| bin.len()).sum();
         let entries = Vec::from(latest_entries);
         let state: Box<_> = entries.into_iter().map(RwLock::new).collect();
@@ -664,7 +699,7 @@ fn extract_latest_entries_in(file: impl AsRef<Path>) -> Result<LatestEntriesInfo
     let BinnedLatestEntriesInfo {
         latest_entries,
         capitalization,
-    } = extract_binned_latest_entries_in(iter::once(file), NUM_BINS)?;
+    } = extract_binned_latest_entries_in(iter::once(file), NUM_BINS, None)?;
     assert_eq!(latest_entries.len(), NUM_BINS);
     let mut latest_entries = Vec::from(latest_entries);
     let latest_entries = latest_entries.pop().unwrap();
@@ -679,14 +714,23 @@ fn extract_latest_entries_in(file: impl AsRef<Path>) -> Result<LatestEntriesInfo
 ///
 /// If there are multiple entries for a pubkey, only the latest is returned.
 ///
+/// - `num_bins` specifies the number of bins to split the entries into.
+/// - `bin_of_interest`, if Some, only returns entries from that bin.
+///   Otherwise, returns all entries.  Must be less than `num_bins`.
+///
 /// Note: `files` must be sorted in ascending order, as insertion order is
 /// relied on to guarantee the latest entry is returned.
 fn extract_binned_latest_entries_in(
     files: impl IntoIterator<Item = impl AsRef<Path>>,
-    bins: usize,
+    num_bins: usize,
+    bin_of_interest: Option<usize>,
 ) -> Result<BinnedLatestEntriesInfo, String> {
-    let binner = PubkeyBinCalculator24::new(bins);
-    let mut entries: Box<_> = iter::repeat_with(HashMap::default).take(bins).collect();
+    if let Some(bin_of_interest) = bin_of_interest {
+        assert!(bin_of_interest < num_bins);
+    }
+
+    let binner = PubkeyBinCalculator24::new(num_bins);
+    let mut entries: Box<_> = iter::repeat_with(HashMap::default).take(num_bins).collect();
     let mut capitalization = Saturating(0);
 
     for file in files.into_iter() {
@@ -699,8 +743,15 @@ fn extract_binned_latest_entries_in(
         })?;
 
         let num_entries = scan_mmap(&mmap, |entry| {
-            capitalization += entry.lamports;
             let bin = binner.bin_from_pubkey(&entry.pubkey);
+            if let Some(bin_of_interest) = bin_of_interest {
+                // Is this the bin of interest? If not, skip it.
+                if bin != bin_of_interest {
+                    return;
+                }
+            }
+
+            capitalization += entry.lamports;
             let old_value = entries[bin].insert(entry.pubkey, (entry.hash, entry.lamports));
             if let Some((_, old_lamports)) = old_value {
                 // back out the old value's lamports, so we only keep the latest's for capitalization
