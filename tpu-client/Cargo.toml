@@ -19,7 +19,6 @@ log = { workspace = true }
 rayon = { workspace = true }
 solana-connection-cache = { workspace = true }
 solana-measure = { workspace = true }
-solana-metrics = { workspace = true }
 solana-pubsub-client = { workspace = true }
 solana-rpc-client = { workspace = true }
 solana-rpc-client-api = { workspace = true }

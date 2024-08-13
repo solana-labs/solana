@@ -18,7 +18,6 @@ solana-client = { workspace = true }
 solana-ledger = { workspace = true }
 solana-measure = { workspace = true }
 solana-merkle-tree = { workspace = true }
-solana-metrics = { workspace = true }
 solana-perf = { workspace = true }
 solana-pubsub-client = { workspace = true }
 solana-rayon-threadlimit = { workspace = true }

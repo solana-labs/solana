@@ -7,8 +7,6 @@ pub mod thin_client;
 pub mod tpu_client;
 pub mod transaction_executor;
 
-extern crate solana_metrics;
-
 pub use solana_rpc_client::mock_sender_for_cli;
 
 pub mod blockhash_query {
