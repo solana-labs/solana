@@ -480,7 +480,7 @@ fn main() {
             accounts_to_clone,
             cluster_rpc_client
                 .as_ref()
-                .expect("bug: --url argument missing?"),
+                .expect("--clone-account requires --json-rpc-url argument"),
             false,
         ) {
             println!("Error: clone_accounts failed: {e}");
@@ -493,7 +493,7 @@ fn main() {
             accounts_to_maybe_clone,
             cluster_rpc_client
                 .as_ref()
-                .expect("bug: --url argument missing?"),
+                .expect("--maybe-clone requires --json-rpc-url argument"),
             true,
         ) {
             println!("Error: clone_accounts failed: {e}");
@@ -506,7 +506,7 @@ fn main() {
             upgradeable_programs_to_clone,
             cluster_rpc_client
                 .as_ref()
-                .expect("bug: --url argument missing?"),
+                .expect("--clone-upgradeable-program requires --json-rpc-url argument"),
         ) {
             println!("Error: clone_upgradeable_programs failed: {e}");
             exit(1);
@@ -517,7 +517,7 @@ fn main() {
         if let Err(e) = genesis.clone_feature_set(
             cluster_rpc_client
                 .as_ref()
-                .expect("bug: --url argument missing?"),
+                .expect("--clone-feature-set requires --json-rpc-url argument"),
         ) {
             println!("Error: clone_feature_set failed: {e}");
             exit(1);
