@@ -171,7 +171,8 @@ impl<T> COption<T> {
     /// assert_eq!(x.expect("the world is ending"), "value");
     /// ```
     ///
-    /// ```ignore{.should_panic}
+    /// ```should_panic
+    /// # use solana_program::program_option::COption;
     /// let x: COption<&str> = COption::None;
     /// x.expect("the world is ending"); // panics with `the world is ending`
     /// ```
@@ -203,7 +204,8 @@ impl<T> COption<T> {
     /// assert_eq!(x.unwrap(), "air");
     /// ```
     ///
-    /// ```ignore{.should_panic}
+    /// ```should_panic
+    /// # use solana_program::program_option::COption;
     /// let x: COption<&str> = COption::None;
     /// assert_eq!(x.unwrap(), "air"); // fails
     /// ```
