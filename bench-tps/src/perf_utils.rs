@@ -1,6 +1,6 @@
 use {
     log::*,
-    solana_sdk::{commitment_config::CommitmentConfig, timing::duration_as_s},
+    solana_sdk::commitment_config::CommitmentConfig,
     solana_tps_client::TpsClient,
     std::{
         sync::{
@@ -60,7 +60,7 @@ pub fn sample_txs<T>(
         let sample_txs = txs - last_txs;
         last_txs = txs;
 
-        let tps = sample_txs as f32 / duration_as_s(&elapsed);
+        let tps = sample_txs as f32 / elapsed.as_secs_f32();
         if tps > max_tps {
             max_tps = tps;
         }

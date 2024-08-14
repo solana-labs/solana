@@ -85,7 +85,7 @@ macro_rules! measure_us {
     ($val:expr) => {{
         let start = std::time::Instant::now();
         let result = $val;
-        (result, solana_sdk::timing::duration_as_us(&start.elapsed()))
+        (result, start.elapsed().as_micros() as u64)
     }};
 }
 

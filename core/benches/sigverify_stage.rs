@@ -26,7 +26,6 @@ use {
         packet::PacketFlags,
         signature::{Keypair, Signer},
         system_transaction,
-        timing::duration_as_ms,
     },
     std::time::{Duration, Instant},
     test::Bencher,
@@ -167,7 +166,7 @@ fn bench_sigverify_stage(bencher: &mut Bencher, use_same_tx: bool) {
         let batches = gen_batches(use_same_tx);
         trace!(
             "starting... generation took: {} ms batches: {}",
-            duration_as_ms(&now.elapsed()),
+            now.elapsed().as_millis(),
             batches.len()
         );
 

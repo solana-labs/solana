@@ -31,7 +31,7 @@ use {
         pubkey::{self, Pubkey},
         signature::{Keypair, Signature, Signer},
         system_instruction, system_transaction,
-        timing::{duration_as_us, timestamp},
+        timing::timestamp,
         transaction::Transaction,
     },
     solana_streamer::socket::SocketAddrSpace,
@@ -534,7 +534,7 @@ fn main() {
                 bank.slot(),
                 bank.transaction_count(),
             );
-            tx_total_us += duration_as_us(&now.elapsed());
+            tx_total_us += now.elapsed().as_micros() as u64;
 
             let mut poh_time = Measure::start("poh_time");
             poh_recorder
@@ -578,14 +578,14 @@ fn main() {
                 bank.slot(),
                 bank.transaction_count(),
             );
-            tx_total_us += duration_as_us(&now.elapsed());
+            tx_total_us += now.elapsed().as_micros() as u64;
         }
 
         // This signature clear may not actually clear the signatures
         // in this chunk, but since we rotate between CHUNKS then
         // we should clear them by the time we come around again to re-use that chunk.
         bank.clear_signatures();
-        total_us += duration_as_us(&now.elapsed());
+        total_us += now.elapsed().as_micros() as u64;
         total_sent += sent;
 
         if current_iteration_index % num_chunks == 0 {

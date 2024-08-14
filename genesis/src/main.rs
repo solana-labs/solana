@@ -32,7 +32,7 @@ use {
         signature::{Keypair, Signer},
         signer::keypair::read_keypair_file,
         stake::state::StakeStateV2,
-        system_program, timing,
+        system_program,
     },
     solana_stake_program::stake_state,
     solana_vote_program::vote_state::{self, VoteState},
@@ -144,8 +144,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         .max(rent.minimum_balance(StakeStateV2::size_of()))
         .to_string();
 
-    let default_target_tick_duration =
-        timing::duration_as_us(&PohConfig::default().target_tick_duration);
+    let default_target_tick_duration = PohConfig::default().target_tick_duration;
     let default_ticks_per_slot = &clock::DEFAULT_TICKS_PER_SLOT.to_string();
     let default_cluster_type = "mainnet-beta";
     let default_genesis_archive_unpacked_size = MAX_GENESIS_ARCHIVE_UNPACKED_SIZE.to_string();
@@ -473,7 +472,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         target_tick_duration: if matches.is_present("target_tick_duration") {
             Duration::from_micros(value_t_or_exit!(matches, "target_tick_duration", u64))
         } else {
-            Duration::from_micros(default_target_tick_duration)
+            default_target_tick_duration
         },
         ..PohConfig::default()
     };

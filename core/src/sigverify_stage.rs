@@ -466,10 +466,7 @@ impl SigVerifyStage {
 mod tests {
     use {
         super::*,
-        crate::{
-            banking_trace::BankingTracer, sigverify::TransactionSigVerifier,
-            sigverify_stage::timing::duration_as_ms,
-        },
+        crate::{banking_trace::BankingTracer, sigverify::TransactionSigVerifier},
         crossbeam_channel::unbounded,
         solana_perf::{
             packet::{to_packet_batches, Packet},
@@ -563,7 +560,7 @@ mod tests {
         let batches = gen_batches(use_same_tx, packets_per_batch, total_packets);
         trace!(
             "starting... generation took: {} ms batches: {}",
-            duration_as_ms(&now.elapsed()),
+            now.elapsed().as_millis(),
             batches.len()
         );
 

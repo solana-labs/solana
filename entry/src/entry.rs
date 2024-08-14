@@ -24,7 +24,6 @@ use {
     solana_sdk::{
         hash::Hash,
         packet::Meta,
-        timing,
         transaction::{
             Result, SanitizedTransaction, Transaction, TransactionError,
             TransactionVerificationMode, VersionedTransaction,
@@ -670,7 +669,7 @@ impl EntrySlice for [Entry] {
                 r
             })
         });
-        let poh_duration_us = timing::duration_as_us(&now.elapsed());
+        let poh_duration_us = now.elapsed().as_micros() as u64;
         EntryVerificationState {
             verification_status: if res {
                 EntryVerificationStatus::Success
@@ -756,7 +755,7 @@ impl EntrySlice for [Entry] {
                         })
                 })
         });
-        let poh_duration_us = timing::duration_as_us(&now.elapsed());
+        let poh_duration_us = now.elapsed().as_micros() as u64;
         EntryVerificationState {
             verification_status: if res {
                 EntryVerificationStatus::Success
@@ -849,9 +848,9 @@ impl EntrySlice for [Entry] {
                 assert!(res == 0, "GPU PoH verify many failed");
                 inc_new_counter_info!(
                     "entry_verify-gpu_thread",
-                    timing::duration_as_us(&gpu_wait.elapsed()) as usize
+                    gpu_wait.elapsed().as_micros() as usize
                 );
-                timing::duration_as_us(&gpu_wait.elapsed())
+                gpu_wait.elapsed().as_micros() as u64
             })
             .unwrap();
 
@@ -879,7 +878,7 @@ impl EntrySlice for [Entry] {
         });
         EntryVerificationState {
             verification_status: EntryVerificationStatus::Pending,
-            poh_duration_us: timing::duration_as_us(&start.elapsed()),
+            poh_duration_us: start.elapsed().as_micros() as u64,
             device_verification_data,
         }
     }

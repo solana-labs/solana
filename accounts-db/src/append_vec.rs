@@ -1206,7 +1206,6 @@ pub mod tests {
         solana_sdk::{
             account::{Account, AccountSharedData},
             clock::Slot,
-            timing::duration_as_ms,
         },
         std::{mem::ManuallyDrop, time::Instant},
         test_case::test_case,
@@ -1535,7 +1534,7 @@ pub mod tests {
             indexes.push(pos);
             assert_eq!(sizes, av.get_account_sizes(&indexes));
         }
-        trace!("append time: {} ms", duration_as_ms(&now.elapsed()),);
+        trace!("append time: {} ms", now.elapsed().as_millis());
 
         let now = Instant::now();
         for _ in 0..size {
@@ -1543,7 +1542,7 @@ pub mod tests {
             let account = create_test_account(sample + 1);
             assert_eq!(av.get_account_test(indexes[sample]).unwrap(), account);
         }
-        trace!("random read time: {} ms", duration_as_ms(&now.elapsed()),);
+        trace!("random read time: {} ms", now.elapsed().as_millis());
 
         let now = Instant::now();
         assert_eq!(indexes.len(), size);
@@ -1556,10 +1555,7 @@ pub mod tests {
             assert_eq!(recovered, account.1);
             sample += 1;
         });
-        trace!(
-            "sequential read time: {} ms",
-            duration_as_ms(&now.elapsed()),
-        );
+        trace!("sequential read time: {} ms", now.elapsed().as_millis());
     }
 
     #[test_case(StorageAccess::Mmap)]

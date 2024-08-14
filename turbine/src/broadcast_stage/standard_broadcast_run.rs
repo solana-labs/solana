@@ -12,10 +12,7 @@ use {
         shred::{shred_code, ProcessShredsStats, ReedSolomonCache, Shred, ShredFlags, Shredder},
     },
     solana_sdk::{
-        genesis_config::ClusterType,
-        hash::Hash,
-        signature::Keypair,
-        timing::{duration_as_us, AtomicInterval},
+        genesis_config::ClusterType, hash::Hash, signature::Keypair, timing::AtomicInterval,
     },
     std::{sync::RwLock, time::Duration},
     tokio::sync::mpsc::Sender as AsyncSender,
@@ -344,8 +341,8 @@ impl StandardBroadcastRun {
 
         process_stats.shredding_elapsed = to_shreds_time.as_us();
         process_stats.get_leader_schedule_elapsed = get_leader_schedule_time.as_us();
-        process_stats.receive_elapsed = duration_as_us(&receive_elapsed);
-        process_stats.coalesce_elapsed = duration_as_us(&coalesce_elapsed);
+        process_stats.receive_elapsed = receive_elapsed.as_micros() as u64;
+        process_stats.coalesce_elapsed = coalesce_elapsed.as_micros() as u64;
         process_stats.coding_send_elapsed = coding_send_time.as_us();
 
         self.process_shreds_stats += process_stats;
@@ -382,7 +379,7 @@ impl StandardBroadcastRun {
             .expect("Failed to insert shreds in blockstore");
         let insert_shreds_elapsed = insert_shreds_start.elapsed();
         let new_insert_shreds_stats = InsertShredsStats {
-            insert_shreds_elapsed: duration_as_us(&insert_shreds_elapsed),
+            insert_shreds_elapsed: insert_shreds_elapsed.as_micros() as u64,
             num_shreds,
         };
         self.update_insertion_metrics(&new_insert_shreds_stats, &broadcast_shred_batch_info);

@@ -92,7 +92,7 @@ use {
             MAX_PERMITTED_DATA_LENGTH,
         },
         system_program, system_transaction, sysvar,
-        timing::{duration_as_s, years_as_slots},
+        timing::years_as_slots,
         transaction::{
             Result, SanitizedTransaction, Transaction, TransactionError,
             TransactionVerificationMode,
@@ -268,9 +268,9 @@ fn test_bank_unix_timestamp_from_genesis() {
         genesis_config.creation_time,
         bank.unix_timestamp_from_genesis()
     );
-    let slots_per_sec = 1.0
-        / (duration_as_s(&genesis_config.poh_config.target_tick_duration)
-            * genesis_config.ticks_per_slot as f32);
+    let slots_per_sec = (genesis_config.poh_config.target_tick_duration.as_secs_f32()
+        * genesis_config.ticks_per_slot as f32)
+        .recip();
 
     for _i in 0..slots_per_sec as usize + 1 {
         bank = Arc::new(new_from_parent(bank));

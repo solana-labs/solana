@@ -50,7 +50,6 @@ use {
         pubkey::Pubkey,
         saturating_add_assign,
         signature::{Keypair, Signature},
-        timing,
         transaction::{
             Result, SanitizedTransaction, TransactionError, TransactionVerificationMode,
             VersionedTransaction,
@@ -1572,8 +1571,7 @@ fn confirm_slot_entries(
         recyclers.clone(),
         Arc::new(verify_transaction),
     );
-    let transaction_cpu_duration_us =
-        timing::duration_as_us(&transaction_verification_start.elapsed());
+    let transaction_cpu_duration_us = transaction_verification_start.elapsed().as_micros() as u64;
 
     let mut transaction_verification_result = match transaction_verification_result {
         Ok(transaction_verification_result) => transaction_verification_result,

@@ -30,7 +30,7 @@ use {
         pubkey::Pubkey,
         signature::{Keypair, Signature, Signer},
         system_transaction,
-        timing::{duration_as_ms, timestamp},
+        timing::timestamp,
         transaction::Transaction,
         transport::TransportError,
     },
@@ -231,7 +231,7 @@ pub fn sleep_n_epochs(
     ticks_per_slot: u64,
     slots_per_epoch: u64,
 ) {
-    let num_ticks_per_second = (1000 / duration_as_ms(&config.target_tick_duration)) as f64;
+    let num_ticks_per_second = config.target_tick_duration.as_secs_f64().recip();
     let num_ticks_to_sleep = num_epochs * ticks_per_slot as f64 * slots_per_epoch as f64;
     let secs = ((num_ticks_to_sleep + num_ticks_per_second - 1.0) / num_ticks_per_second) as u64;
     warn!("sleep_n_epochs: {} seconds", secs);

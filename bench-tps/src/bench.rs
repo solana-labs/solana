@@ -25,7 +25,7 @@ use {
         pubkey::Pubkey,
         signature::{Keypair, Signer},
         system_instruction,
-        timing::{duration_as_ms, duration_as_s, duration_as_us, timestamp},
+        timing::timestamp,
         transaction::Transaction,
     },
     solana_tps_client::*,
@@ -233,12 +233,12 @@ where
             "Done. {:.2} thousand signatures per second, {:.2} us per signature, {} ms total time, {:?}",
             bsps * 1_000_000_f64,
             nsps / 1_000_f64,
-            duration_as_ms(&duration),
+            duration.as_millis(),
             blockhash,
         );
         datapoint_info!(
             "bench-tps-generate_txs",
-            ("duration", duration_as_us(&duration), i64)
+            ("duration", duration.as_micros() as i64, i64)
         );
 
         transactions
@@ -1029,12 +1029,12 @@ fn do_tx_transfers<T: TpsClient + ?Sized>(
             total_tx_sent_count.fetch_add(num_txs, Ordering::Relaxed);
             info!(
                 "Tx send done. {} ms {} tps",
-                duration_as_ms(&transfer_start.elapsed()),
-                num_txs as f32 / duration_as_s(&transfer_start.elapsed()),
+                transfer_start.elapsed().as_millis(),
+                num_txs as f32 / transfer_start.elapsed().as_secs_f32(),
             );
             datapoint_info!(
                 "bench-tps-do_tx_transfers",
-                ("duration", duration_as_us(&transfer_start.elapsed()), i64),
+                ("duration", transfer_start.elapsed().as_micros() as i64, i64),
                 ("count", num_txs, i64)
             );
         }
@@ -1107,7 +1107,7 @@ fn compute_and_report_stats(
     );
     info!(
         "\tAverage TPS: {}",
-        max_tx_count as f32 / duration_as_s(tx_send_elapsed)
+        max_tx_count as f32 / tx_send_elapsed.as_secs_f32()
     );
 }
 

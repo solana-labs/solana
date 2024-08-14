@@ -27,7 +27,6 @@ use {
         signature::{Keypair, Signature, Signer},
         signers::Signers,
         system_instruction,
-        timing::duration_as_ms,
         transaction::{self, Transaction, VersionedTransaction},
         transport::Result as TransportResult,
     },
@@ -480,7 +479,8 @@ where
         let now = Instant::now();
         match self.rpc_client().get_transaction_count() {
             Ok(transaction_count) => {
-                self.optimizer.report(index, duration_as_ms(&now.elapsed()));
+                self.optimizer
+                    .report(index, now.elapsed().as_millis() as u64);
                 Ok(transaction_count)
             }
             Err(e) => {
@@ -501,7 +501,8 @@ where
             .get_transaction_count_with_commitment(commitment_config)
         {
             Ok(transaction_count) => {
-                self.optimizer.report(index, duration_as_ms(&now.elapsed()));
+                self.optimizer
+                    .report(index, now.elapsed().as_millis() as u64);
                 Ok(transaction_count)
             }
             Err(e) => {
@@ -542,7 +543,8 @@ where
         let now = Instant::now();
         match self.rpc_clients[index].get_latest_blockhash_with_commitment(commitment_config) {
             Ok((blockhash, last_valid_block_height)) => {
-                self.optimizer.report(index, duration_as_ms(&now.elapsed()));
+                self.optimizer
+                    .report(index, now.elapsed().as_millis() as u64);
                 Ok((blockhash, last_valid_block_height))
             }
             Err(e) => {

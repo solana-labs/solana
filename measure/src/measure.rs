@@ -1,9 +1,6 @@
-use {
-    solana_sdk::timing::{duration_as_ms, duration_as_ns, duration_as_s, duration_as_us},
-    std::{
-        fmt,
-        time::{Duration, Instant},
-    },
+use std::{
+    fmt,
+    time::{Duration, Instant},
 };
 
 #[derive(Debug)]
@@ -23,7 +20,7 @@ impl Measure {
     }
 
     pub fn stop(&mut self) {
-        self.duration = duration_as_ns(&self.start.elapsed());
+        self.duration = self.start.elapsed().as_nanos() as u64;
     }
 
     pub fn as_ns(&self) -> u64 {
@@ -47,19 +44,19 @@ impl Measure {
     }
 
     pub fn end_as_ns(self) -> u64 {
-        duration_as_ns(&self.start.elapsed())
+        self.start.elapsed().as_nanos() as u64
     }
 
     pub fn end_as_us(self) -> u64 {
-        duration_as_us(&self.start.elapsed())
+        self.start.elapsed().as_micros() as u64
     }
 
     pub fn end_as_ms(self) -> u64 {
-        duration_as_ms(&self.start.elapsed())
+        self.start.elapsed().as_millis() as u64
     }
 
     pub fn end_as_s(self) -> f32 {
-        duration_as_s(&self.start.elapsed())
+        self.start.elapsed().as_secs_f32()
     }
 
     pub fn end_as_duration(self) -> Duration {

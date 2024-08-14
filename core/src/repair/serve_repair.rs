@@ -41,7 +41,7 @@ use {
         pubkey::{Pubkey, PUBKEY_BYTES},
         signature::{Signable, Signature, Signer, SIGNATURE_BYTES},
         signer::keypair::Keypair,
-        timing::{duration_as_ms, timestamp},
+        timing::timestamp,
     },
     solana_streamer::{
         sendmmsg::{batch_send, SendPktsError},
@@ -517,7 +517,7 @@ impl ServeRepair {
     }
 
     fn report_time_spent(label: &str, time: &Duration, extra: &str) {
-        let count = duration_as_ms(time);
+        let count = time.as_millis();
         if count > 5 {
             info!("{} took: {} ms {}", label, count, extra);
         }

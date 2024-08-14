@@ -4,28 +4,32 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
+#[deprecated(since = "2.1.0", note = "Use `Duration::as_nanos()` directly")]
 pub fn duration_as_ns(d: &Duration) -> u64 {
     d.as_nanos() as u64
 }
 
+#[deprecated(since = "2.1.0", note = "Use `Duration::as_micros()` directly")]
 pub fn duration_as_us(d: &Duration) -> u64 {
     d.as_micros() as u64
 }
 
+#[deprecated(since = "2.1.0", note = "Use `Duration::as_millis()` directly")]
 pub fn duration_as_ms(d: &Duration) -> u64 {
     d.as_millis() as u64
 }
 
+#[deprecated(since = "2.1.0", note = "Use `Duration::as_secs_f32()` directly")]
 pub fn duration_as_s(d: &Duration) -> f32 {
     d.as_secs_f32()
 }
 
 /// return timestamp as ms
 pub fn timestamp() -> u64 {
-    let now = SystemTime::now()
+    SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .expect("create timestamp in timing");
-    duration_as_ms(&now)
+        .expect("create timestamp in timing")
+        .as_millis() as u64
 }
 
 pub const SECONDS_PER_YEAR: f64 = 365.242_199 * 24.0 * 60.0 * 60.0;
@@ -37,7 +41,7 @@ pub fn years_as_slots(years: f64, tick_duration: &Duration, ticks_per_slot: u64)
     //  slots/year  is  seconds/year ...
         SECONDS_PER_YEAR
     //  * (ns/s)/(ns/tick) / ticks/slot = 1/s/1/tick = ticks/s
-        * (1_000_000_000.0 / duration_as_ns(tick_duration) as f64)
+        * (1_000_000_000.0 / tick_duration.as_nanos() as f64)
     //  / ticks/slot
         / ticks_per_slot as f64
 }

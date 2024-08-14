@@ -16,7 +16,6 @@ use {
     solana_sdk::{
         clock::{Epoch, Slot},
         hash::Hash,
-        timing,
     },
     std::{
         collections::{hash_map::Entry, HashMap, HashSet},
@@ -494,7 +493,7 @@ impl BankForks {
             "bank-forks_set_root",
             (
                 "elapsed_ms",
-                timing::duration_as_ms(&set_root_start.elapsed()) as usize,
+                set_root_start.elapsed().as_millis() as usize,
                 i64
             ),
             ("slot", root, i64),
@@ -569,7 +568,7 @@ impl BankForks {
             ),
             (
                 "program_cache_prune_ms",
-                timing::duration_as_ms(&program_cache_prune_start.elapsed()),
+                program_cache_prune_start.elapsed().as_millis() as i64,
                 i64
             ),
             ("dropped_banks_len", set_root_metrics.dropped_banks_len, i64),
