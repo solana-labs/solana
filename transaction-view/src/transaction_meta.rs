@@ -2,7 +2,7 @@ use {
     crate::{
         address_table_lookup_meta::AddressTableLookupMeta,
         bytes::advance_offset_for_type,
-        instructions_meta::InstructionsMeta,
+        instructions_meta::{InstructionsIterator, InstructionsMeta},
         message_header_meta::{MessageHeaderMeta, TransactionVersion},
         result::{Result, TransactionParsingError},
         signature_meta::SignatureMeta,
@@ -142,6 +142,19 @@ impl TransactionMeta {
             .as_ptr()
             .add(usize::from(self.recent_blockhash_offset)) as *const Hash)
     }
+
+    /// Return an iterator over the instructions in the transaction.
+    /// # Safety
+    /// - This function must be called with the same `bytes` slice that was
+    ///   used to create the `TransactionMeta` instance.
+    pub unsafe fn instructions_iter<'a>(&self, bytes: &'a [u8]) -> InstructionsIterator<'a> {
+        InstructionsIterator {
+            bytes,
+            offset: usize::from(self.instructions.offset),
+            num_instructions: self.instructions.num_instructions,
+            index: 0,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -153,7 +166,7 @@ mod tests {
             message::{v0, Message, MessageHeader, VersionedMessage},
             pubkey::Pubkey,
             signature::Signature,
-            system_instruction,
+            system_instruction::{self, SystemInstruction},
             transaction::VersionedTransaction,
         },
     };
@@ -389,6 +402,26 @@ mod tests {
 
             let recent_blockhash = meta.recent_blockhash(&bytes);
             assert_eq!(recent_blockhash, tx.message.recent_blockhash());
+        }
+    }
+
+    #[test]
+    fn test_instructions_iter() {
+        let tx = simple_transfer();
+        let bytes = bincode::serialize(&tx).unwrap();
+        let meta = TransactionMeta::try_new(&bytes).unwrap();
+
+        // SAFETY: `bytes` is the same slice used to create `meta`.
+        unsafe {
+            let mut iter = meta.instructions_iter(&bytes);
+            let ix = iter.next().unwrap();
+            assert_eq!(ix.program_id_index, 2);
+            assert_eq!(ix.accounts, &[0, 1]);
+            assert_eq!(
+                ix.data,
+                &bincode::serialize(&SystemInstruction::Transfer { lamports: 1 }).unwrap()
+            );
+            assert!(iter.next().is_none());
         }
     }
 }

@@ -227,6 +227,7 @@ dependencies = [
  "bincode",
  "criterion",
  "solana-sdk",
+ "solana-svm-transaction",
 ]
 
 [[package]]

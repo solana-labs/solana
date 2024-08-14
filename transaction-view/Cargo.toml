@@ -11,6 +11,7 @@ edition = { workspace = true }
 
 [dependencies]
 solana-sdk = { workspace = true }
+solana-svm-transaction = { workspace = true }
 
 [dev-dependencies]
 # See order-crates-for-publishing.py for using this unusual `path = "."`

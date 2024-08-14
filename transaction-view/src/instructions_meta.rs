@@ -1,6 +1,11 @@
-use crate::{
-    bytes::{advance_offset_for_array, check_remaining, optimized_read_compressed_u16, read_byte},
-    result::Result,
+use {
+    crate::{
+        bytes::{
+            advance_offset_for_array, check_remaining, optimized_read_compressed_u16, read_byte,
+        },
+        result::Result,
+    },
+    solana_svm_transaction::instruction::SVMInstruction,
 };
 
 /// Contains metadata about the instructions in a transaction packet.
@@ -61,6 +66,68 @@ impl InstructionsMeta {
             num_instructions,
             offset: instructions_offset,
         })
+    }
+}
+
+pub struct InstructionsIterator<'a> {
+    pub(crate) bytes: &'a [u8],
+    pub(crate) offset: usize,
+    pub(crate) num_instructions: u16,
+    pub(crate) index: u16,
+}
+
+impl<'a> Iterator for InstructionsIterator<'a> {
+    type Item = SVMInstruction<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index < self.num_instructions {
+            // Each instruction has 3 pieces:
+            // 1. Program ID index (u8)
+            // 2. Accounts indexes ([u8])
+            // 3. Data ([u8])
+
+            // Read the program ID index.
+            let program_id_index = read_byte(self.bytes, &mut self.offset).ok()?;
+
+            // Read the number of account indexes, and then update the offset
+            // to skip over the account indexes.
+            let num_accounts = optimized_read_compressed_u16(self.bytes, &mut self.offset).ok()?;
+            // SAFETY: Only returned after we check that there are enough bytes.
+            let accounts = unsafe {
+                core::slice::from_raw_parts(
+                    self.bytes.as_ptr().add(self.offset),
+                    usize::from(num_accounts),
+                )
+            };
+            advance_offset_for_array::<u8>(self.bytes, &mut self.offset, num_accounts).ok()?;
+
+            // Read the length of the data, and then update the offset to skip
+            // over the data.
+            let data_len = optimized_read_compressed_u16(self.bytes, &mut self.offset).ok()?;
+            // SAFETY: Only returned after we check that there are enough bytes.
+            let data = unsafe {
+                core::slice::from_raw_parts(
+                    self.bytes.as_ptr().add(self.offset),
+                    usize::from(data_len),
+                )
+            };
+            advance_offset_for_array::<u8>(self.bytes, &mut self.offset, data_len).ok()?;
+            self.index = self.index.wrapping_add(1);
+
+            Some(SVMInstruction {
+                program_id_index,
+                accounts,
+                data,
+            })
+        } else {
+            None
+        }
+    }
+}
+
+impl ExactSizeIterator for InstructionsIterator<'_> {
+    fn len(&self) -> usize {
+        usize::from(self.num_instructions.wrapping_sub(self.index))
     }
 }
 
