@@ -7404,9 +7404,11 @@ name = "solana-runtime-transaction"
 version = "2.1.0"
 dependencies = [
  "bincode",
+ "criterion",
  "log",
  "rand 0.8.5",
  "rustc_version 0.4.0",
+ "solana-builtins-default-costs",
  "solana-compute-budget",
  "solana-program",
  "solana-sdk",
