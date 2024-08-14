@@ -16,6 +16,7 @@ crossbeam-channel = { workspace = true }
 dashmap = { workspace = true }
 futures  = { workspace = true }
 futures-util = { workspace = true }
+governor = { workspace = true }
 histogram = { workspace = true }
 indexmap = { workspace = true }
 itertools = { workspace = true }

@@ -253,7 +253,7 @@ async fn run_server(
     coalesce: Duration,
 ) {
     let rate_limiter = ConnectionRateLimiter::new(max_connections_per_ipaddr_per_min);
-    let mut overall_connection_rate_limiter =
+    let overall_connection_rate_limiter =
         TotalConnectionRateLimiter::new(TOTAL_CONNECTIONS_PER_SECOND);
 
     const WAIT_FOR_CONNECTION_TIMEOUT: Duration = Duration::from_secs(1);
@@ -340,9 +340,9 @@ async fn run_server(
             stats
                 .connection_rate_limiter_length
                 .store(rate_limiter.len(), Ordering::Relaxed);
-            info!("Got a connection {remote_address:?}");
+            debug!("Got a connection {remote_address:?}");
             if !rate_limiter.is_allowed(&remote_address.ip()) {
-                info!(
+                debug!(
                     "Reject connection from {:?} -- rate limiting exceeded",
                     remote_address
                 );
@@ -351,6 +351,7 @@ async fn run_server(
                     .fetch_add(1, Ordering::Relaxed);
                 continue;
             }
+
             stats
                 .outstanding_incoming_connection_attempts
                 .fetch_add(1, Ordering::Relaxed);
