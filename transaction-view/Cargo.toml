@@ -25,3 +25,7 @@ dev-context-only-utils = []
 [[bench]]
 name = "bytes"
 harness = false
+
+[[bench]]
+name = "transaction_meta"
+harness = false
