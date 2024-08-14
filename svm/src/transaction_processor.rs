@@ -4,8 +4,9 @@ use {
     crate::{
         account_loader::{
             collect_rent_from_account, load_accounts, validate_fee_payer,
-            CheckedTransactionDetails, LoadedTransaction, TransactionCheckResult,
-            TransactionLoadResult, TransactionValidationResult, ValidatedTransactionDetails,
+            CheckedTransactionDetails, LoadedTransaction, LoadedTransactionAccount,
+            TransactionCheckResult, TransactionLoadResult, TransactionValidationResult,
+            ValidatedTransactionDetails,
         },
         account_overrides::AccountOverrides,
         message_processor::MessageProcessor,
@@ -467,10 +468,13 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
 
         Ok(ValidatedTransactionDetails {
             fee_details,
-            fee_payer_account,
-            fee_payer_rent_debit,
             rollback_accounts,
             compute_budget_limits,
+            loaded_fee_payer_account: LoadedTransactionAccount {
+                loaded_size: fee_payer_account.data().len(),
+                account: fee_payer_account,
+                rent_collected: fee_payer_rent_debit,
+            },
         })
     }
 
@@ -1874,8 +1878,11 @@ mod tests {
                 ),
                 compute_budget_limits,
                 fee_details: FeeDetails::new(transaction_fee, priority_fee, false),
-                fee_payer_rent_debit,
-                fee_payer_account: post_validation_fee_payer_account,
+                loaded_fee_payer_account: LoadedTransactionAccount {
+                    loaded_size: fee_payer_account.data().len(),
+                    account: post_validation_fee_payer_account,
+                    rent_collected: fee_payer_rent_debit,
+                },
             })
         );
     }
@@ -1947,8 +1954,11 @@ mod tests {
                 ),
                 compute_budget_limits,
                 fee_details: FeeDetails::new(transaction_fee, 0, false),
-                fee_payer_rent_debit,
-                fee_payer_account: post_validation_fee_payer_account,
+                loaded_fee_payer_account: LoadedTransactionAccount {
+                    loaded_size: fee_payer_account.data().len(),
+                    account: post_validation_fee_payer_account,
+                    rent_collected: fee_payer_rent_debit,
+                }
             })
         );
     }
@@ -2194,8 +2204,11 @@ mod tests {
                     ),
                     compute_budget_limits,
                     fee_details: FeeDetails::new(transaction_fee, priority_fee, false),
-                    fee_payer_rent_debit: 0, // rent due
-                    fee_payer_account: post_validation_fee_payer_account,
+                    loaded_fee_payer_account: LoadedTransactionAccount {
+                        loaded_size: fee_payer_account.data().len(),
+                        account: post_validation_fee_payer_account,
+                        rent_collected: 0,
+                    }
                 })
             );
         }
