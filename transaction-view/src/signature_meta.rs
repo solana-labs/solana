@@ -27,6 +27,7 @@ pub(crate) struct SignatureMeta {
 impl SignatureMeta {
     /// Get the number of signatures and the offset to the first signature in
     /// the transaction packet, starting at the given `offset`.
+    #[inline(always)]
     pub(crate) fn try_new(bytes: &[u8], offset: &mut usize) -> Result<Self> {
         // Maximum number of signatures should be represented by a single byte,
         // thus the MSB should not be set.

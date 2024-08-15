@@ -33,6 +33,7 @@ pub(crate) struct MessageHeaderMeta {
 }
 
 impl MessageHeaderMeta {
+    #[inline(always)]
     pub fn try_new(bytes: &[u8], offset: &mut usize) -> Result<Self> {
         // Get the message offset.
         // We know the offset does not exceed packet length, and our packet

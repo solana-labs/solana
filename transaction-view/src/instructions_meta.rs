@@ -24,6 +24,7 @@ impl InstructionsMeta {
     /// This function will parse each individual instruction to ensure the
     /// instruction data is well-formed, but will not cache data related to
     /// these instructions.
+    #[inline(always)]
     pub fn try_new(bytes: &[u8], offset: &mut usize) -> Result<Self> {
         // Read the number of instructions at the current offset.
         // Each instruction needs at least 3 bytes, so do a sanity check here to

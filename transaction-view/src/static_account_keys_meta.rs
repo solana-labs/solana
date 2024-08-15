@@ -23,6 +23,7 @@ pub struct StaticAccountKeysMeta {
 }
 
 impl StaticAccountKeysMeta {
+    #[inline(always)]
     pub fn try_new(bytes: &[u8], offset: &mut usize) -> Result<Self> {
         // Max size must not have the MSB set so that it is size 1.
         const _: () = assert!(MAX_STATIC_ACCOUNTS_PER_PACKET & 0b1000_0000 == 0);

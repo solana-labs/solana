@@ -57,6 +57,7 @@ impl AddressTableLookupMeta {
     /// ATL.
     /// This function will parse each ATL to ensure the data is well-formed,
     /// but will not cache data related to these ATLs.
+    #[inline(always)]
     pub fn try_new(bytes: &[u8], offset: &mut usize) -> Result<Self> {
         // Maximum number of ATLs should be represented by a single byte,
         // thus the MSB should not be set.
