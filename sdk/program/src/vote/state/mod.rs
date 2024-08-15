@@ -52,9 +52,6 @@ pub const VOTE_CREDITS_GRACE_SLOTS: u8 = 2;
 // Maximum number of credits to award for a vote; this number of credits is awarded to votes on slots that land within the grace period. After that grace period, vote credits are reduced.
 pub const VOTE_CREDITS_MAXIMUM_PER_SLOT: u8 = 16;
 
-// Previous max per slot
-pub const VOTE_CREDITS_MAXIMUM_PER_SLOT_OLD: u8 = 8;
-
 #[cfg_attr(
     feature = "frozen-abi",
     frozen_abi(digest = "Ch2vVEwos2EjAVqSHCyJjnN2MNX1yrpapZTGhMSCjWUH"),
@@ -668,7 +665,6 @@ impl VoteState {
         epoch: Epoch,
         current_slot: Slot,
         timely_vote_credits: bool,
-        deprecate_unused_legacy_vote_plumbing: bool,
     ) {
         // Ignore votes for slots earlier than we already have votes for
         if self
@@ -681,7 +677,7 @@ impl VoteState {
         self.pop_expired_votes(next_vote_slot);
 
         let landed_vote = LandedVote {
-            latency: if timely_vote_credits || !deprecate_unused_legacy_vote_plumbing {
+            latency: if timely_vote_credits {
                 Self::compute_vote_latency(next_vote_slot, current_slot)
             } else {
                 0
@@ -691,11 +687,7 @@ impl VoteState {
 
         // Once the stack is full, pop the oldest lockout and distribute rewards
         if self.votes.len() == MAX_LOCKOUT_HISTORY {
-            let credits = self.credits_for_vote_at_index(
-                0,
-                timely_vote_credits,
-                deprecate_unused_legacy_vote_plumbing,
-            );
+            let credits = self.credits_for_vote_at_index(0, timely_vote_credits);
             let landed_vote = self.votes.pop_front().unwrap();
             self.root_slot = Some(landed_vote.slot());
 
@@ -740,37 +732,27 @@ impl VoteState {
     }
 
     /// Returns the credits to award for a vote at the given lockout slot index
-    pub fn credits_for_vote_at_index(
-        &self,
-        index: usize,
-        timely_vote_credits: bool,
-        deprecate_unused_legacy_vote_plumbing: bool,
-    ) -> u64 {
+    pub fn credits_for_vote_at_index(&self, index: usize, timely_vote_credits: bool) -> u64 {
         let latency = self
             .votes
             .get(index)
             .map_or(0, |landed_vote| landed_vote.latency);
-        let max_credits = if deprecate_unused_legacy_vote_plumbing {
-            VOTE_CREDITS_MAXIMUM_PER_SLOT
-        } else {
-            VOTE_CREDITS_MAXIMUM_PER_SLOT_OLD
-        };
 
         // If latency is 0, this means that the Lockout was created and stored from a software version that did not
         // store vote latencies; in this case, 1 credit is awarded
-        if latency == 0 || (deprecate_unused_legacy_vote_plumbing && !timely_vote_credits) {
+        if latency == 0 || !timely_vote_credits {
             1
         } else {
             match latency.checked_sub(VOTE_CREDITS_GRACE_SLOTS) {
                 None | Some(0) => {
                     // latency was <= VOTE_CREDITS_GRACE_SLOTS, so maximum credits are awarded
-                    max_credits as u64
+                    VOTE_CREDITS_MAXIMUM_PER_SLOT as u64
                 }
 
                 Some(diff) => {
                     // diff = latency - VOTE_CREDITS_GRACE_SLOTS, and diff > 0
                     // Subtract diff from VOTE_CREDITS_MAXIMUM_PER_SLOT which is the number of credits to award
-                    match max_credits.checked_sub(diff) {
+                    match VOTE_CREDITS_MAXIMUM_PER_SLOT.checked_sub(diff) {
                         // If diff >= VOTE_CREDITS_MAXIMUM_PER_SLOT, 1 credit is awarded
                         None | Some(0) => 1,
 
