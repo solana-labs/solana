@@ -68,6 +68,7 @@ solana-runtime-transaction = { workspace = true }
 solana-sdk = { workspace = true }
 solana-stake-program = { workspace = true }
 solana-svm = { workspace = true }
+solana-svm-transaction = { workspace = true }
 solana-system-program = { workspace = true }
 solana-timings = { workspace = true }
 solana-transaction-status = { workspace = true }

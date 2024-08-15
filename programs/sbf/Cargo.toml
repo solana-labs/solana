@@ -55,6 +55,7 @@ solana-sbf-rust-realloc-invoke-dep = { path = "rust/realloc_invoke_dep", version
 solana-sdk = { path = "../../sdk", version = "=2.1.0" }
 solana-secp256k1-recover = { path = "../../curves/secp256k1-recover", version = "=2.1.0" }
 solana-svm = { path = "../../svm", version = "=2.1.0" }
+solana-svm-transaction = { path = "../../svm-transaction", version = "=2.1.0" }
 solana-timings = { path = "../../timings", version = "=2.1.0" }
 solana-transaction-status = { path = "../../transaction-status", version = "=2.1.0" }
 solana-type-overrides = { path = "../../type-overrides", version = "=2.1.0" }
@@ -117,6 +118,7 @@ solana-sbf-rust-realloc-dep = { workspace = true }
 solana-sbf-rust-realloc-invoke-dep = { workspace = true }
 solana-sdk = { workspace = true, features = ["dev-context-only-utils"] }
 solana-svm = { workspace = true }
+solana-svm-transaction = { workspace = true }
 solana-timings = { workspace = true }
 solana-transaction-status = { workspace = true }
 solana-type-overrides = { workspace = true }

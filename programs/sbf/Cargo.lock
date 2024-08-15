@@ -4933,6 +4933,7 @@ dependencies = [
  "solana-short-vec",
  "solana-streamer",
  "solana-svm",
+ "solana-svm-transaction",
  "solana-timings",
  "solana-tpu-client",
  "solana-transaction-status",
@@ -4964,6 +4965,7 @@ dependencies = [
  "solana-metrics",
  "solana-runtime-transaction",
  "solana-sdk",
+ "solana-svm-transaction",
  "solana-vote-program",
 ]
 
@@ -5715,6 +5717,7 @@ dependencies = [
  "solana-sdk",
  "solana-stake-program",
  "solana-svm",
+ "solana-svm-transaction",
  "solana-system-program",
  "solana-timings",
  "solana-transaction-status",
@@ -5742,6 +5745,7 @@ dependencies = [
  "log",
  "solana-compute-budget",
  "solana-sdk",
+ "solana-svm-transaction",
  "thiserror",
 ]
 
@@ -5781,6 +5785,7 @@ dependencies = [
  "solana-sbf-rust-realloc-invoke-dep",
  "solana-sdk",
  "solana-svm",
+ "solana-svm-transaction",
  "solana-timings",
  "solana-transaction-status",
  "solana-type-overrides",

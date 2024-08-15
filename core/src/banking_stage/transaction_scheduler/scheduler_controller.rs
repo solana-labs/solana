@@ -36,6 +36,7 @@ use {
         transaction::SanitizedTransaction,
     },
     solana_svm::transaction_error_metrics::TransactionErrorMetrics,
+    solana_svm_transaction::svm_message::SVMMessage,
     std::{
         sync::{Arc, RwLock},
         time::{Duration, Instant},
@@ -534,7 +535,7 @@ impl SchedulerController {
                     .is_ok()
                 })
                 .filter_map(|(packet, tx)| {
-                    process_compute_budget_instructions(tx.message().program_instructions_iter())
+                    process_compute_budget_instructions(SVMMessage::program_instructions_iter(&tx))
                         .map(|compute_budget| (packet, tx, compute_budget.into()))
                         .ok()
                 })

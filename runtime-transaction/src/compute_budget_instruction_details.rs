@@ -3,11 +3,12 @@ use {
     solana_sdk::{
         borsh1::try_from_slice_unchecked,
         compute_budget::{self, ComputeBudgetInstruction},
-        instruction::{CompiledInstruction, InstructionError},
+        instruction::InstructionError,
         pubkey::Pubkey,
         saturating_add_assign,
         transaction::{Result, TransactionError},
     },
+    solana_svm_transaction::instruction::SVMInstruction,
     std::num::NonZeroU32,
 };
 
@@ -25,14 +26,14 @@ pub(crate) struct ComputeBudgetInstructionDetails {
 
 impl ComputeBudgetInstructionDetails {
     pub fn try_from<'a>(
-        instructions: impl Iterator<Item = (&'a Pubkey, &'a CompiledInstruction)>,
+        instructions: impl Iterator<Item = (&'a Pubkey, SVMInstruction<'a>)>,
     ) -> Result<Self> {
         let mut compute_budget_instruction_details = ComputeBudgetInstructionDetails::default();
         for (i, (program_id, instruction)) in instructions.enumerate() {
             compute_budget_instruction_details.process_instruction(
                 i as u8,
                 program_id,
-                instruction,
+                &instruction,
             )?;
         }
 
@@ -93,18 +94,18 @@ impl ComputeBudgetInstructionDetails {
         })
     }
 
-    fn process_instruction<'a>(
+    fn process_instruction(
         &mut self,
         index: u8,
-        program_id: &'a Pubkey,
-        instruction: &'a CompiledInstruction,
+        program_id: &Pubkey,
+        instruction: &SVMInstruction,
     ) -> Result<()> {
         if compute_budget::check_id(program_id) {
             let invalid_instruction_data_error =
                 TransactionError::InstructionError(index, InstructionError::InvalidInstructionData);
             let duplicate_instruction_error = TransactionError::DuplicateInstruction(index);
 
-            match try_from_slice_unchecked(&instruction.data) {
+            match try_from_slice_unchecked(instruction.data) {
                 Ok(ComputeBudgetInstruction::RequestHeapFrame(bytes)) => {
                     if self.requested_heap_size.is_some() {
                         return Err(duplicate_instruction_error);
@@ -145,7 +146,10 @@ impl ComputeBudgetInstructionDetails {
 
 #[cfg(test)]
 mod test {
-    use {super::*, solana_sdk::instruction::Instruction};
+    use {
+        super::*,
+        solana_sdk::instruction::{CompiledInstruction, Instruction},
+    };
 
     fn setup_test_instruction(
         index: u8,
@@ -174,7 +178,7 @@ mod test {
             Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
         );
         assert!(compute_budget_instruction_details
-            .process_instruction(index, &program_id, &ix)
+            .process_instruction(index, &program_id, &SVMInstruction::from(&ix))
             .is_ok());
         expected_details.num_non_compute_budget_instructions = 1;
         assert_eq!(compute_budget_instruction_details, expected_details);
@@ -187,7 +191,7 @@ mod test {
         );
         expected_details.requested_heap_size = Some((index, 40 * 1024));
         assert!(compute_budget_instruction_details
-            .process_instruction(index, &program_id, &ix)
+            .process_instruction(index, &program_id, &SVMInstruction::from(&ix))
             .is_ok());
         assert_eq!(compute_budget_instruction_details, expected_details);
 
@@ -199,7 +203,11 @@ mod test {
             ComputeBudgetInstruction::request_heap_frame(50 * 1024),
         );
         assert_eq!(
-            compute_budget_instruction_details.process_instruction(index, &program_id, &ix),
+            compute_budget_instruction_details.process_instruction(
+                index,
+                &program_id,
+                &SVMInstruction::from(&ix)
+            ),
             expected_err
         );
         assert_eq!(compute_budget_instruction_details, expected_details);
@@ -211,7 +219,7 @@ mod test {
             Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
         );
         assert!(compute_budget_instruction_details
-            .process_instruction(index, &program_id, &ix)
+            .process_instruction(index, &program_id, &SVMInstruction::from(&ix))
             .is_ok());
         expected_details.num_non_compute_budget_instructions += 1;
         assert_eq!(compute_budget_instruction_details, expected_details);
@@ -229,7 +237,7 @@ mod test {
             Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
         );
         assert!(compute_budget_instruction_details
-            .process_instruction(index, &program_id, &ix)
+            .process_instruction(index, &program_id, &SVMInstruction::from(&ix))
             .is_ok());
         expected_details.num_non_compute_budget_instructions = 1;
         assert_eq!(compute_budget_instruction_details, expected_details);
@@ -242,7 +250,7 @@ mod test {
         );
         expected_details.requested_compute_unit_limit = Some((index, u32::MAX));
         assert!(compute_budget_instruction_details
-            .process_instruction(index, &program_id, &ix)
+            .process_instruction(index, &program_id, &SVMInstruction::from(&ix))
             .is_ok());
         assert_eq!(compute_budget_instruction_details, expected_details);
 
@@ -254,7 +262,11 @@ mod test {
             ComputeBudgetInstruction::set_compute_unit_limit(MAX_COMPUTE_UNIT_LIMIT),
         );
         assert_eq!(
-            compute_budget_instruction_details.process_instruction(index, &program_id, &ix),
+            compute_budget_instruction_details.process_instruction(
+                index,
+                &program_id,
+                &SVMInstruction::from(&ix)
+            ),
             expected_err
         );
         assert_eq!(compute_budget_instruction_details, expected_details);
@@ -266,7 +278,7 @@ mod test {
             Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
         );
         assert!(compute_budget_instruction_details
-            .process_instruction(index, &program_id, &ix)
+            .process_instruction(index, &program_id, &SVMInstruction::from(&ix))
             .is_ok());
         expected_details.num_non_compute_budget_instructions += 1;
         assert_eq!(compute_budget_instruction_details, expected_details);
@@ -284,7 +296,7 @@ mod test {
             Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
         );
         assert!(compute_budget_instruction_details
-            .process_instruction(index, &program_id, &ix)
+            .process_instruction(index, &program_id, &SVMInstruction::from(&ix))
             .is_ok());
         expected_details.num_non_compute_budget_instructions = 1;
         assert_eq!(compute_budget_instruction_details, expected_details);
@@ -297,7 +309,7 @@ mod test {
         );
         expected_details.requested_compute_unit_price = Some((index, u64::MAX));
         assert!(compute_budget_instruction_details
-            .process_instruction(index, &program_id, &ix)
+            .process_instruction(index, &program_id, &SVMInstruction::from(&ix))
             .is_ok());
         assert_eq!(compute_budget_instruction_details, expected_details);
 
@@ -307,7 +319,11 @@ mod test {
         let (program_id, ix) =
             setup_test_instruction(index, ComputeBudgetInstruction::set_compute_unit_price(0));
         assert_eq!(
-            compute_budget_instruction_details.process_instruction(index, &program_id, &ix),
+            compute_budget_instruction_details.process_instruction(
+                index,
+                &program_id,
+                &SVMInstruction::from(&ix)
+            ),
             expected_err
         );
         assert_eq!(compute_budget_instruction_details, expected_details);
@@ -319,7 +335,7 @@ mod test {
             Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
         );
         assert!(compute_budget_instruction_details
-            .process_instruction(index, &program_id, &ix)
+            .process_instruction(index, &program_id, &SVMInstruction::from(&ix))
             .is_ok());
         expected_details.num_non_compute_budget_instructions += 1;
         assert_eq!(compute_budget_instruction_details, expected_details);
@@ -337,7 +353,7 @@ mod test {
             Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
         );
         assert!(compute_budget_instruction_details
-            .process_instruction(index, &program_id, &ix)
+            .process_instruction(index, &program_id, &SVMInstruction::from(&ix))
             .is_ok());
         expected_details.num_non_compute_budget_instructions = 1;
         assert_eq!(compute_budget_instruction_details, expected_details);
@@ -350,7 +366,7 @@ mod test {
         );
         expected_details.requested_loaded_accounts_data_size_limit = Some((index, u32::MAX));
         assert!(compute_budget_instruction_details
-            .process_instruction(index, &program_id, &ix)
+            .process_instruction(index, &program_id, &SVMInstruction::from(&ix))
             .is_ok());
         assert_eq!(compute_budget_instruction_details, expected_details);
 
@@ -362,7 +378,11 @@ mod test {
             ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(0),
         );
         assert_eq!(
-            compute_budget_instruction_details.process_instruction(index, &program_id, &ix),
+            compute_budget_instruction_details.process_instruction(
+                index,
+                &program_id,
+                &SVMInstruction::from(&ix)
+            ),
             expected_err
         );
         assert_eq!(compute_budget_instruction_details, expected_details);
@@ -374,7 +394,7 @@ mod test {
             Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
         );
         assert!(compute_budget_instruction_details
-            .process_instruction(index, &program_id, &ix)
+            .process_instruction(index, &program_id, &SVMInstruction::from(&ix))
             .is_ok());
         expected_details.num_non_compute_budget_instructions += 1;
         assert_eq!(compute_budget_instruction_details, expected_details);

@@ -167,6 +167,7 @@ use {
             TransactionProcessingConfig, TransactionProcessingEnvironment,
         },
     },
+    solana_svm_transaction::svm_message::SVMMessage,
     solana_timings::{ExecuteTimingType, ExecuteTimings},
     solana_vote::vote_account::{VoteAccount, VoteAccountsHashMap},
     solana_vote_program::vote_state::VoteState,
@@ -3036,7 +3037,7 @@ impl Bank {
 
     pub fn get_fee_for_message_with_lamports_per_signature(
         &self,
-        message: &SanitizedMessage,
+        message: &impl SVMMessage,
         lamports_per_signature: u64,
     ) -> u64 {
         let fee_budget_limits = FeeBudgetLimits::from(

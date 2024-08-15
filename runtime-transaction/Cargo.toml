@@ -13,6 +13,7 @@ edition = { workspace = true }
 log = { workspace = true }
 solana-compute-budget = { workspace = true }
 solana-sdk = { workspace = true }
+solana-svm-transaction = { workspace = true }
 thiserror = { workspace = true }
 
 [lib]

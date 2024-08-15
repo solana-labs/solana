@@ -1,7 +1,8 @@
 use {
     crate::compute_budget_instruction_details::*,
     solana_compute_budget::compute_budget_limits::*,
-    solana_sdk::{instruction::CompiledInstruction, pubkey::Pubkey, transaction::TransactionError},
+    solana_sdk::{pubkey::Pubkey, transaction::TransactionError},
+    solana_svm_transaction::instruction::SVMInstruction,
 };
 
 /// Processing compute_budget could be part of tx sanitizing, failed to process
@@ -10,7 +11,7 @@ use {
 /// If succeeded, the transaction's specific limits/requests (could be default)
 /// are retrieved and returned,
 pub fn process_compute_budget_instructions<'a>(
-    instructions: impl Iterator<Item = (&'a Pubkey, &'a CompiledInstruction)>,
+    instructions: impl Iterator<Item = (&'a Pubkey, SVMInstruction<'a>)>,
 ) -> Result<ComputeBudgetLimits, TransactionError> {
     ComputeBudgetInstructionDetails::try_from(instructions)?
         .sanitize_and_convert_to_compute_budget_limits()
@@ -31,6 +32,7 @@ mod tests {
             system_instruction::{self},
             transaction::{SanitizedTransaction, Transaction, TransactionError},
         },
+        solana_svm_transaction::svm_message::SVMMessage,
         std::num::NonZeroU32,
     };
 
@@ -43,7 +45,7 @@ mod tests {
                 Hash::default(),
             ));
             let result =
-                process_compute_budget_instructions(tx.message().program_instructions_iter());
+                process_compute_budget_instructions(SVMMessage::program_instructions_iter(&tx));
             assert_eq!($expected_result, result);
         };
     }
@@ -350,8 +352,9 @@ mod tests {
                 Hash::default(),
             ));
 
-        let result =
-            process_compute_budget_instructions(transaction.message().program_instructions_iter());
+        let result = process_compute_budget_instructions(SVMMessage::program_instructions_iter(
+            &transaction,
+        ));
 
         // assert process_instructions will be successful with default,
         // and the default compute_unit_limit is 2 times default: one for bpf ix, one for

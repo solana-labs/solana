@@ -25,6 +25,7 @@ use {
         system_program,
         transaction::SanitizedTransaction,
     },
+    solana_svm_transaction::svm_message::SVMMessage,
 };
 
 pub struct CostModel;
@@ -150,7 +151,7 @@ impl CostModel {
 
     fn get_transaction_cost(
         tx_cost: &mut UsageCostDetails,
-        transaction: &SanitizedTransaction,
+        transaction: &impl SVMMessage,
         feature_set: &FeatureSet,
     ) {
         let mut programs_execution_costs = 0u64;
@@ -159,7 +160,7 @@ impl CostModel {
         let mut compute_unit_limit_is_set = false;
         let mut has_user_space_instructions = false;
 
-        for (program_id, instruction) in transaction.message().program_instructions_iter() {
+        for (program_id, instruction) in transaction.program_instructions_iter() {
             let ix_execution_cost =
                 if let Some(builtin_cost) = BUILTIN_INSTRUCTION_COSTS.get(program_id) {
                     *builtin_cost
@@ -177,7 +178,7 @@ impl CostModel {
 
             if compute_budget::check_id(program_id) {
                 if let Ok(ComputeBudgetInstruction::SetComputeUnitLimit(_)) =
-                    try_from_slice_unchecked(&instruction.data)
+                    try_from_slice_unchecked(instruction.data)
                 {
                     compute_unit_limit_is_set = true;
                 }
@@ -186,8 +187,7 @@ impl CostModel {
 
         // if failed to process compute_budget instructions, the transaction will not be executed
         // by `bank`, therefore it should be considered as no execution cost by cost model.
-        match process_compute_budget_instructions(transaction.message().program_instructions_iter())
-        {
+        match process_compute_budget_instructions(transaction.program_instructions_iter()) {
             Ok(compute_budget_limits) => {
                 // if tx contained user-space instructions and a more accurate estimate available correct it,
                 // where "user-space instructions" must be specifically checked by

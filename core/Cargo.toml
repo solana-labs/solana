@@ -75,6 +75,7 @@ solana-send-transaction-service = { workspace = true }
 solana-short-vec = { workspace = true }
 solana-streamer = { workspace = true }
 solana-svm = { workspace = true }
+solana-svm-transaction = { workspace = true }
 solana-timings = { workspace = true }
 solana-tpu-client = { workspace = true }
 solana-transaction-status = { workspace = true }

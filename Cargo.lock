@@ -6236,6 +6236,7 @@ dependencies = [
  "solana-stake-program",
  "solana-streamer",
  "solana-svm",
+ "solana-svm-transaction",
  "solana-timings",
  "solana-tpu-client",
  "solana-transaction-status",
@@ -6276,6 +6277,7 @@ dependencies = [
  "solana-metrics",
  "solana-runtime-transaction",
  "solana-sdk",
+ "solana-svm-transaction",
  "solana-system-program",
  "solana-vote-program",
  "static_assertions",
@@ -7392,6 +7394,7 @@ dependencies = [
  "solana-sdk",
  "solana-stake-program",
  "solana-svm",
+ "solana-svm-transaction",
  "solana-system-program",
  "solana-timings",
  "solana-transaction-status",
@@ -7426,6 +7429,7 @@ dependencies = [
  "solana-compute-budget",
  "solana-program",
  "solana-sdk",
+ "solana-svm-transaction",
  "thiserror",
 ]
 

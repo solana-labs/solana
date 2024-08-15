@@ -105,6 +105,7 @@ use {
         transaction_commit_result::TransactionCommitResultExtensions,
         transaction_execution_result::ExecutedTransaction,
     },
+    solana_svm_transaction::svm_message::SVMMessage,
     solana_timings::ExecuteTimings,
     solana_vote_program::{
         vote_instruction,
@@ -9930,7 +9931,7 @@ fn test_call_precomiled_program() {
 }
 
 fn calculate_test_fee(
-    message: &SanitizedMessage,
+    message: &impl SVMMessage,
     lamports_per_signature: u64,
     fee_structure: &FeeStructure,
 ) -> u64 {

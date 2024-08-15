@@ -37,6 +37,7 @@ use {
         transaction_processing_result::TransactionProcessingResultExtensions,
         transaction_processor::{ExecutionRecordingConfig, TransactionProcessingConfig},
     },
+    solana_svm_transaction::svm_message::SVMMessage,
     solana_timings::ExecuteTimings,
     std::{
         sync::{atomic::Ordering, Arc},
@@ -555,9 +556,9 @@ impl Consumer {
             .sanitized_transactions()
             .iter()
             .filter_map(|transaction| {
-                process_compute_budget_instructions(
-                    transaction.message().program_instructions_iter(),
-                )
+                process_compute_budget_instructions(SVMMessage::program_instructions_iter(
+                    transaction,
+                ))
                 .ok()
                 .map(|limits| limits.compute_unit_price)
             })
@@ -751,7 +752,7 @@ impl Consumer {
     ) -> Result<(), TransactionError> {
         let fee_payer = message.fee_payer();
         let fee_budget_limits = FeeBudgetLimits::from(process_compute_budget_instructions(
-            message.program_instructions_iter(),
+            SVMMessage::program_instructions_iter(message),
         )?);
         let fee = solana_fee::calculate_fee(
             message,

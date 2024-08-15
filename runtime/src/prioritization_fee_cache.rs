@@ -10,6 +10,7 @@ use {
         pubkey::Pubkey,
         transaction::SanitizedTransaction,
     },
+    solana_svm_transaction::svm_message::SVMMessage,
     std::{
         collections::{BTreeMap, HashMap},
         sync::{
@@ -204,7 +205,7 @@ impl PrioritizationFeeCache {
                 }
 
                 let compute_budget_limits = process_compute_budget_instructions(
-                    sanitized_transaction.message().program_instructions_iter(),
+                    SVMMessage::program_instructions_iter(sanitized_transaction),
                 );
 
                 let message = sanitized_transaction.message();

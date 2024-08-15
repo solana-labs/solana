@@ -15,6 +15,7 @@ use {
         },
     },
     solana_short_vec::decode_shortu16_len,
+    solana_svm_transaction::instruction::SVMInstruction,
     std::{cmp::Ordering, collections::HashSet, mem::size_of},
     thiserror::Error,
 };
@@ -64,7 +65,8 @@ impl ImmutableDeserializedPacket {
         } = process_compute_budget_instructions(
             sanitized_transaction
                 .get_message()
-                .program_instructions_iter(),
+                .program_instructions_iter()
+                .map(|(pubkey, ix)| (pubkey, SVMInstruction::from(ix))),
         )
         .map_err(|_| DeserializedPacketError::PrioritizationFailure)?;
 

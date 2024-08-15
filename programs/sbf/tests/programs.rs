@@ -66,6 +66,7 @@ use {
         transaction_execution_result::InnerInstruction,
         transaction_processor::ExecutionRecordingConfig,
     },
+    solana_svm_transaction::svm_message::SVMMessage,
     solana_timings::ExecuteTimings,
     solana_transaction_status::{
         map_inner_instructions, ConfirmedTransactionWithStatusMeta, TransactionStatusMeta,
@@ -3874,8 +3875,10 @@ fn test_program_fees() {
     )
     .unwrap();
     let fee_budget_limits = FeeBudgetLimits::from(
-        process_compute_budget_instructions(sanitized_message.program_instructions_iter())
-            .unwrap_or_default(),
+        process_compute_budget_instructions(SVMMessage::program_instructions_iter(
+            &sanitized_message,
+        ))
+        .unwrap_or_default(),
     );
     let expected_normal_fee = solana_fee::calculate_fee(
         &sanitized_message,
@@ -3904,8 +3907,10 @@ fn test_program_fees() {
     )
     .unwrap();
     let fee_budget_limits = FeeBudgetLimits::from(
-        process_compute_budget_instructions(sanitized_message.program_instructions_iter())
-            .unwrap_or_default(),
+        process_compute_budget_instructions(SVMMessage::program_instructions_iter(
+            &sanitized_message,
+        ))
+        .unwrap_or_default(),
     );
     let expected_prioritized_fee = solana_fee::calculate_fee(
         &sanitized_message,
