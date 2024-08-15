@@ -1148,6 +1148,7 @@ pub(crate) mod tests {
 
         let mut dest_crds = Crds::default();
         let new_id = solana_sdk::pubkey::new_rand();
+        let same_key = ContactInfo::new_localhost(&new_id, 0);
         let new = ContactInfo::new_localhost(&new_id, 1);
         ping_cache.mock_pong(*new.pubkey(), new.gossip().unwrap(), Instant::now());
         let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(new));
@@ -1157,7 +1158,6 @@ pub(crate) mod tests {
         let dest_crds = RwLock::new(dest_crds);
 
         // node contains a key from the dest node, but at an older local timestamp
-        let same_key = ContactInfo::new_localhost(&new_id, 0);
         ping_cache.mock_pong(
             *same_key.pubkey(),
             same_key.gossip().unwrap(),

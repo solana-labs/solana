@@ -196,12 +196,19 @@ impl Default for Crds {
 // Both values should have the same key/label.
 fn overrides(value: &CrdsValue, other: &VersionedCrdsValue) -> bool {
     assert_eq!(value.label(), other.value.label(), "labels mismatch!");
-    // Node instances are special cased so that if there are two running
-    // instances of the same node, the more recent start is propagated through
-    // gossip regardless of wallclocks.
+    // Contact-infos and node instances are special cased so that if there are
+    // two running instances of the same node, the more recent start is
+    // propagated through gossip regardless of wallclocks.
     if let CrdsData::NodeInstance(value) = &value.data {
         if let Some(out) = value.overrides(&other.value) {
             return out;
+        }
+    }
+    if let CrdsData::ContactInfo(value) = &value.data {
+        if let CrdsData::ContactInfo(other) = &other.value.data {
+            if let Some(out) = value.overrides(other) {
+                return out;
+            }
         }
     }
     match value.wallclock().cmp(&other.value.wallclock()) {
@@ -1334,15 +1341,17 @@ mod tests {
         let mut node = ContactInfo::new_rand(&mut rng, Some(pubkey));
         let wallclock = node.wallclock();
         node.set_shred_version(42);
-        let node = CrdsData::ContactInfo(node);
-        let node = CrdsValue::new_unsigned(node);
-        assert_eq!(
-            crds.insert(node, timestamp(), GossipRoute::LocalMessage),
-            Ok(())
-        );
+        {
+            let node = CrdsData::ContactInfo(node.clone());
+            let node = CrdsValue::new_unsigned(node);
+            assert_eq!(
+                crds.insert(node, timestamp(), GossipRoute::LocalMessage),
+                Ok(())
+            );
+        }
         assert_eq!(crds.get_shred_version(&pubkey), Some(42));
         // An outdated  value should not update shred-version:
-        let mut node = ContactInfo::new_rand(&mut rng, Some(pubkey));
+        let mut node = node.clone();
         node.set_wallclock(wallclock - 1); // outdated.
         node.set_shred_version(8);
         let node = CrdsData::ContactInfo(node);
@@ -1481,20 +1490,17 @@ mod tests {
     #[test]
     #[allow(clippy::neg_cmp_op_on_partial_ord)]
     fn test_hash_order() {
+        let mut node = ContactInfo::new_localhost(&Pubkey::default(), 0);
         let v1 = VersionedCrdsValue::new(
-            CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-                &Pubkey::default(),
-                0,
-            ))),
+            CrdsValue::new_unsigned(CrdsData::ContactInfo(node.clone())),
             Cursor::default(),
             1, // local_timestamp
             GossipRoute::LocalMessage,
         );
         let v2 = VersionedCrdsValue::new(
             {
-                let mut contact_info = ContactInfo::new_localhost(&Pubkey::default(), 0);
-                contact_info.set_rpc((Ipv4Addr::LOCALHOST, 1244)).unwrap();
-                CrdsValue::new_unsigned(CrdsData::ContactInfo(contact_info))
+                node.set_rpc((Ipv4Addr::LOCALHOST, 1244)).unwrap();
+                CrdsValue::new_unsigned(CrdsData::ContactInfo(node))
             },
             Cursor::default(),
             1, // local_timestamp
@@ -1517,20 +1523,16 @@ mod tests {
     #[test]
     #[allow(clippy::neg_cmp_op_on_partial_ord)]
     fn test_wallclock_order() {
+        let mut node = ContactInfo::new_localhost(&Pubkey::default(), 1);
         let v1 = VersionedCrdsValue::new(
-            CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-                &Pubkey::default(),
-                1,
-            ))),
+            CrdsValue::new_unsigned(CrdsData::ContactInfo(node.clone())),
             Cursor::default(),
             1, // local_timestamp
             GossipRoute::LocalMessage,
         );
+        node.set_wallclock(0);
         let v2 = VersionedCrdsValue::new(
-            CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-                &Pubkey::default(),
-                0,
-            ))),
+            CrdsValue::new_unsigned(CrdsData::ContactInfo(node)),
             Cursor::default(),
             1, // local_timestamp
             GossipRoute::LocalMessage,
