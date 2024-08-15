@@ -23,6 +23,8 @@ solana-cli-config = { workspace = true }
 solana-entry = { workspace = true }
 solana-ledger = { workspace = true }
 solana-logger = { workspace = true }
+solana-rpc-client = { workspace = true }
+solana-rpc-client-api = { workspace = true }
 solana-runtime = { workspace = true }
 solana-sdk = { workspace = true }
 solana-stake-program = { workspace = true }

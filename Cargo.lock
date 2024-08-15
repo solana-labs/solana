@@ -6461,6 +6461,8 @@ dependencies = [
  "solana-entry",
  "solana-ledger",
  "solana-logger",
+ "solana-rpc-client",
+ "solana-rpc-client-api",
  "solana-runtime",
  "solana-sdk",
  "solana-stake-program",
