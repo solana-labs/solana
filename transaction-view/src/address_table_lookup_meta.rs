@@ -88,12 +88,12 @@ impl AddressTableLookupMeta {
             advance_offset_for_type::<Pubkey>(bytes, offset)?;
 
             // Read the number of write indexes, and then update the offset.
-            let num_accounts = optimized_read_compressed_u16(bytes, offset)?;
-            advance_offset_for_array::<u8>(bytes, offset, num_accounts)?;
+            let num_write_accounts = optimized_read_compressed_u16(bytes, offset)?;
+            advance_offset_for_array::<u8>(bytes, offset, num_write_accounts)?;
 
             // Read the number of read indexes, and then update the offset.
-            let data_len = optimized_read_compressed_u16(bytes, offset)?;
-            advance_offset_for_array::<u8>(bytes, offset, data_len)?
+            let num_read_accounts = optimized_read_compressed_u16(bytes, offset)?;
+            advance_offset_for_array::<u8>(bytes, offset, num_read_accounts)?
         }
 
         Ok(Self {
