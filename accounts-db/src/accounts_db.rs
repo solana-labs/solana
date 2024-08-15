@@ -3258,6 +3258,7 @@ impl AccountsDb {
         let _guard = self.active_stats.activate(ActiveStatItem::Clean);
 
         let ancient_account_cleans = AtomicU64::default();
+        let purges_old_accounts_count = AtomicU64::default();
 
         let mut measure_all = Measure::start("clean_accounts");
         let max_clean_root_inclusive = self.max_clean_root(max_clean_root_inclusive);
@@ -3287,6 +3288,7 @@ impl AccountsDb {
                 let mut not_found_on_fork = 0;
                 let mut missing = 0;
                 let mut useful = 0;
+                let mut purges_old_accounts_local = 0;
                 let mut candidates_bin = candidates_bin.write().unwrap();
                 // Iterate over each HashMap entry to
                 // avoid capturing the HashMap in the
@@ -3337,6 +3339,7 @@ impl AccountsDb {
                                                 if slot_list.len() > 1 {
                                                     // no need to purge old accounts if there is only 1 slot in the slot list
                                                     candidate_info.should_purge = true;
+                                                    purges_old_accounts_local += 1;
                                                     useless = false;
                                                 } else {
                                                     self.clean_accounts_stats
@@ -3354,6 +3357,7 @@ impl AccountsDb {
                                             // touched in must be unrooted.
                                             not_found_on_fork += 1;
                                             candidate_info.should_purge = true;
+                                            purges_old_accounts_local += 1;
                                             useless = false;
                                         }
                                     }
@@ -3373,6 +3377,7 @@ impl AccountsDb {
                 not_found_on_fork_accum.fetch_add(not_found_on_fork, Ordering::Relaxed);
                 missing_accum.fetch_add(missing, Ordering::Relaxed);
                 useful_accum.fetch_add(useful, Ordering::Relaxed);
+                purges_old_accounts_count.fetch_add(purges_old_accounts_local, Ordering::Relaxed);
             });
         };
         if is_startup {
@@ -3649,6 +3654,11 @@ impl AccountsDb {
             (
                 "ancient_account_cleans",
                 ancient_account_cleans.load(Ordering::Relaxed),
+                i64
+            ),
+            (
+                "purges_old_accounts_count",
+                purges_old_accounts_count.load(Ordering::Relaxed),
                 i64
             ),
             ("next_store_id", self.next_id.load(Ordering::Relaxed), i64),
