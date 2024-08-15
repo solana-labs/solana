@@ -4367,7 +4367,7 @@ pub mod tests {
         },
         solana_vote_program::{
             vote_instruction,
-            vote_state::{self, Vote, VoteInit, VoteStateVersions, MAX_LOCKOUT_HISTORY},
+            vote_state::{self, TowerSync, VoteInit, VoteStateVersions, MAX_LOCKOUT_HISTORY},
         },
         spl_pod::optional_keys::OptionalNonZeroPubkey,
         spl_token_2022::{
@@ -7239,23 +7239,15 @@ pub mod tests {
 
             // Votes
             let instructions = [
-                vote_instruction::vote(
+                vote_instruction::tower_sync(
                     &leader_vote_keypair.pubkey(),
                     &leader_vote_keypair.pubkey(),
-                    Vote {
-                        slots: vec![bank.slot()],
-                        hash: bank.hash(),
-                        timestamp: None,
-                    },
+                    TowerSync::new_from_slot(bank.slot(), bank.hash()),
                 ),
-                vote_instruction::vote(
+                vote_instruction::tower_sync(
                     &alice_vote_keypair.pubkey(),
                     &alice_vote_keypair.pubkey(),
-                    Vote {
-                        slots: vec![bank.slot()],
-                        hash: bank.hash(),
-                        timestamp: None,
-                    },
+                    TowerSync::new_from_slot(bank.slot(), bank.hash()),
                 ),
             ];
 

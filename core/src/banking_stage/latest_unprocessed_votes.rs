@@ -424,8 +424,7 @@ mod tests {
         },
         solana_sdk::{hash::Hash, signature::Signer, system_transaction::transfer},
         solana_vote_program::{
-            vote_state::TowerSync,
-            vote_transaction::{new_tower_sync_transaction, new_vote_transaction},
+            vote_state::TowerSync, vote_transaction::new_tower_sync_transaction,
         },
         std::{sync::Arc, thread::Builder},
     };
@@ -467,40 +466,8 @@ mod tests {
     #[test]
     fn test_deserialize_vote_packets() {
         let keypairs = ValidatorVoteKeypairs::new_rand();
-        let bankhash = Hash::new_unique();
         let blockhash = Hash::new_unique();
         let switch_proof = Hash::new_unique();
-        let mut vote = Packet::from_data(
-            None,
-            new_vote_transaction(
-                vec![0, 1, 2],
-                bankhash,
-                blockhash,
-                &keypairs.node_keypair,
-                &keypairs.vote_keypair,
-                &keypairs.vote_keypair,
-                None,
-            ),
-        )
-        .unwrap();
-        vote.meta_mut().flags.set(PacketFlags::SIMPLE_VOTE_TX, true);
-        let mut vote_switch = Packet::from_data(
-            None,
-            new_vote_transaction(
-                vec![0, 1, 2],
-                bankhash,
-                blockhash,
-                &keypairs.node_keypair,
-                &keypairs.vote_keypair,
-                &keypairs.vote_keypair,
-                Some(switch_proof),
-            ),
-        )
-        .unwrap();
-        vote_switch
-            .meta_mut()
-            .flags
-            .set(PacketFlags::SIMPLE_VOTE_TX, true);
         let mut tower_sync = Packet::from_data(
             None,
             new_tower_sync_transaction(
@@ -543,13 +510,8 @@ mod tests {
             ),
         )
         .unwrap();
-        let packet_batch = PacketBatch::new(vec![
-            vote,
-            vote_switch,
-            tower_sync,
-            tower_sync_switch,
-            random_transaction,
-        ]);
+        let packet_batch =
+            PacketBatch::new(vec![tower_sync, tower_sync_switch, random_transaction]);
 
         let deserialized_packets = deserialize_packets(
             &packet_batch,

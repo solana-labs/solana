@@ -277,7 +277,10 @@ mod tests {
         solana_sdk::{account::Account, pubkey::Pubkey, signature::Signer},
         solana_stake_program::stake_state,
         solana_vote_program::{
-            vote_state::{self, process_slot_vote_unchecked, VoteStateVersions},
+            vote_state::{
+                self, process_slot_vote_unchecked, TowerSync, VoteStateVersions,
+                MAX_LOCKOUT_HISTORY,
+            },
             vote_transaction,
         },
     };
@@ -568,9 +571,9 @@ mod tests {
                 &Pubkey::default(),
                 x + 1,
             );
-            let vote = vote_transaction::new_vote_transaction(
-                vec![x],
-                previous_bank.hash(),
+            let tower_sync = TowerSync::new_from_slot(x, previous_bank.hash());
+            let vote = vote_transaction::new_tower_sync_transaction(
+                tower_sync,
                 previous_bank.last_blockhash(),
                 &validator_vote_keypairs.node_keypair,
                 &validator_vote_keypairs.vote_keypair,
@@ -601,9 +604,9 @@ mod tests {
             &Pubkey::default(),
             34,
         );
-        let vote33 = vote_transaction::new_vote_transaction(
-            vec![33],
-            bank33.hash(),
+        let tower_sync = TowerSync::new_from_slot(33, bank33.hash());
+        let vote33 = vote_transaction::new_tower_sync_transaction(
+            tower_sync,
             bank33.last_blockhash(),
             &validator_vote_keypairs.node_keypair,
             &validator_vote_keypairs.vote_keypair,
@@ -683,9 +686,13 @@ mod tests {
                 &Pubkey::default(),
                 x + 1,
             );
-            let vote = vote_transaction::new_vote_transaction(
-                vec![x],
-                previous_bank.hash(),
+            // Skip 34 as it is not part of this fork.
+            let lowest_slot = x - MAX_LOCKOUT_HISTORY as u64;
+            let slots: Vec<_> = (lowest_slot..(x + 1)).filter(|s| *s != 34).collect();
+            let tower_sync =
+                TowerSync::new_from_slots(slots, previous_bank.hash(), Some(lowest_slot - 1));
+            let vote = vote_transaction::new_tower_sync_transaction(
+                tower_sync,
                 previous_bank.last_blockhash(),
                 &validator_vote_keypairs.node_keypair,
                 &validator_vote_keypairs.vote_keypair,

@@ -315,7 +315,7 @@ mod tests {
             system_instruction, system_transaction,
             transaction::{SimpleAddressLoader, Transaction},
         },
-        solana_vote_program::vote_transaction,
+        solana_vote_program::{vote_state::TowerSync, vote_transaction},
     };
 
     fn simple_deserialized_packet() -> DeserializedPacket {
@@ -467,9 +467,8 @@ mod tests {
         let keypair = Keypair::new();
         let transfer_tx =
             system_transaction::transfer(&keypair, &keypair.pubkey(), 1, Hash::default());
-        let vote_tx = vote_transaction::new_vote_transaction(
-            vec![42],
-            Hash::default(),
+        let vote_tx = vote_transaction::new_tower_sync_transaction(
+            TowerSync::from(vec![(42, 1)]),
             Hash::default(),
             &keypair,
             &keypair,

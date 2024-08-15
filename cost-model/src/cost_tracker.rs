@@ -396,7 +396,7 @@ mod tests {
                 MessageHash, SanitizedTransaction, SimpleAddressLoader, VersionedTransaction,
             },
         },
-        solana_vote_program::vote_transaction,
+        solana_vote_program::{vote_state::TowerSync, vote_transaction},
         std::cmp,
     };
 
@@ -438,9 +438,8 @@ mod tests {
         start_hash: &Hash,
     ) -> (SanitizedTransaction, TransactionCost) {
         let keypair = Keypair::new();
-        let transaction = vote_transaction::new_vote_transaction(
-            vec![42],
-            Hash::default(),
+        let transaction = vote_transaction::new_tower_sync_transaction(
+            TowerSync::from(vec![(42, 1)]),
             *start_hash,
             mint_keypair,
             &keypair,

@@ -133,6 +133,15 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
             )
         }
         VoteInstruction::Vote(vote) | VoteInstruction::VoteSwitch(vote, _) => {
+            if invoke_context
+                .get_feature_set()
+                .is_active(&feature_set::deprecate_legacy_vote_ixs::id())
+                && invoke_context
+                    .get_feature_set()
+                    .is_active(&feature_set::enable_tower_sync_ix::id())
+            {
+                return Err(InstructionError::InvalidInstructionData);
+            }
             let slot_hashes =
                 get_sysvar_with_account_check::slot_hashes(invoke_context, instruction_context, 1)?;
             let clock =
@@ -148,6 +157,15 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
         }
         VoteInstruction::UpdateVoteState(vote_state_update)
         | VoteInstruction::UpdateVoteStateSwitch(vote_state_update, _) => {
+            if invoke_context
+                .get_feature_set()
+                .is_active(&feature_set::deprecate_legacy_vote_ixs::id())
+                && invoke_context
+                    .get_feature_set()
+                    .is_active(&feature_set::enable_tower_sync_ix::id())
+            {
+                return Err(InstructionError::InvalidInstructionData);
+            }
             let sysvar_cache = invoke_context.get_sysvar_cache();
             let slot_hashes = sysvar_cache.get_slot_hashes()?;
             let clock = sysvar_cache.get_clock()?;
@@ -162,6 +180,15 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
         }
         VoteInstruction::CompactUpdateVoteState(vote_state_update)
         | VoteInstruction::CompactUpdateVoteStateSwitch(vote_state_update, _) => {
+            if invoke_context
+                .get_feature_set()
+                .is_active(&feature_set::deprecate_legacy_vote_ixs::id())
+                && invoke_context
+                    .get_feature_set()
+                    .is_active(&feature_set::enable_tower_sync_ix::id())
+            {
+                return Err(InstructionError::InvalidInstructionData);
+            }
             let sysvar_cache = invoke_context.get_sysvar_cache();
             let slot_hashes = sysvar_cache.get_slot_hashes()?;
             let clock = sysvar_cache.get_clock()?;
@@ -451,7 +478,7 @@ mod tests {
         (vote_pubkey, vote_account_with_epoch_credits)
     }
 
-    /// Returns Vec of serialized VoteInstruction and flag indicating if it is a vote state proposal
+    /// Returns Vec of serialized VoteInstruction and flag indicating if it is a tower sync
     /// variant, along with the original vote
     fn create_serialized_votes() -> (Vote, Vec<(Vec<u8>, bool)>) {
         let vote = Vote::new(vec![1], Hash::default());
@@ -464,11 +491,11 @@ mod tests {
                 (
                     serialize(&VoteInstruction::UpdateVoteState(vote_state_update.clone()))
                         .unwrap(),
-                    true,
+                    false,
                 ),
                 (
                     serialize(&VoteInstruction::CompactUpdateVoteState(vote_state_update)).unwrap(),
-                    true,
+                    false,
                 ),
                 (
                     serialize(&VoteInstruction::TowerSync(tower_sync)).unwrap(),
@@ -744,12 +771,20 @@ mod tests {
             },
         ];
 
-        for (instruction_data, is_vote_state_update) in instruction_datas {
+        for (instruction_data, is_tower_sync) in instruction_datas {
             let mut transaction_accounts = vec![
                 (vote_pubkey, vote_account.clone()),
                 (sysvar::slot_hashes::id(), slot_hashes_account.clone()),
                 (sysvar::clock::id(), create_default_clock_account()),
             ];
+
+            let error = |err| {
+                if !is_tower_sync {
+                    Err(InstructionError::InvalidInstructionData)
+                } else {
+                    Err(err)
+                }
+            };
 
             // should fail, unsigned
             instruction_accounts[0].is_signer = false;
@@ -757,7 +792,7 @@ mod tests {
                 &instruction_data,
                 transaction_accounts.clone(),
                 instruction_accounts.clone(),
-                Err(InstructionError::MissingRequiredSignature),
+                error(InstructionError::MissingRequiredSignature),
             );
             instruction_accounts[0].is_signer = true;
 
@@ -766,18 +801,24 @@ mod tests {
                 &instruction_data,
                 transaction_accounts.clone(),
                 instruction_accounts.clone(),
-                Ok(()),
+                if is_tower_sync {
+                    Ok(())
+                } else {
+                    Err(InstructionError::InvalidInstructionData)
+                },
             );
-            let vote_state: VoteState = StateMut::<VoteStateVersions>::state(&accounts[0])
-                .unwrap()
-                .convert_to_current();
-            assert_eq!(
-                vote_state.votes,
-                vec![vote_state::LandedVote::from(Lockout::new(
-                    *vote.slots.last().unwrap()
-                ))]
-            );
-            assert_eq!(vote_state.credits(), 0);
+            if is_tower_sync {
+                let vote_state: VoteState = StateMut::<VoteStateVersions>::state(&accounts[0])
+                    .unwrap()
+                    .convert_to_current();
+                assert_eq!(
+                    vote_state.votes,
+                    vec![vote_state::LandedVote::from(Lockout::new(
+                        *vote.slots.last().unwrap()
+                    ))]
+                );
+                assert_eq!(vote_state.credits(), 0);
+            }
 
             // should fail, wrong hash
             transaction_accounts[1] = (
@@ -791,7 +832,7 @@ mod tests {
                 &instruction_data,
                 transaction_accounts.clone(),
                 instruction_accounts.clone(),
-                Err(VoteError::SlotHashMismatch.into()),
+                error(VoteError::SlotHashMismatch.into()),
             );
 
             // should fail, wrong slot
@@ -803,7 +844,7 @@ mod tests {
                 &instruction_data,
                 transaction_accounts.clone(),
                 instruction_accounts.clone(),
-                Err(VoteError::SlotsMismatch.into()),
+                error(VoteError::SlotsMismatch.into()),
             );
 
             // should fail, empty slot_hashes
@@ -815,12 +856,7 @@ mod tests {
                 &instruction_data,
                 transaction_accounts.clone(),
                 instruction_accounts.clone(),
-                Err((if is_vote_state_update {
-                    VoteError::SlotsMismatch
-                } else {
-                    VoteError::VoteTooOld
-                })
-                .into()),
+                error(VoteError::SlotsMismatch.into()),
             );
             transaction_accounts[1] = (sysvar::slot_hashes::id(), slot_hashes_account.clone());
 
@@ -831,7 +867,7 @@ mod tests {
                 &instruction_data,
                 transaction_accounts.clone(),
                 instruction_accounts.clone(),
-                Err(InstructionError::UninitializedAccount),
+                error(InstructionError::UninitializedAccount),
             );
         }
     }
@@ -941,12 +977,16 @@ mod tests {
             is_writable: false,
         });
 
-        for (instruction_data, _) in instruction_datas {
+        for (instruction_data, is_tower_sync) in instruction_datas {
             process_instruction(
                 &instruction_data,
                 transaction_accounts.clone(),
                 instruction_accounts.clone(),
-                Err(InstructionError::MissingRequiredSignature),
+                Err(if is_tower_sync {
+                    InstructionError::MissingRequiredSignature
+                } else {
+                    InstructionError::InvalidInstructionData
+                }),
             );
 
             // should pass, signed by authorized voter
@@ -954,7 +994,11 @@ mod tests {
                 &instruction_data,
                 transaction_accounts.clone(),
                 authorized_instruction_accounts.clone(),
-                Ok(()),
+                if is_tower_sync {
+                    Ok(())
+                } else {
+                    Err(InstructionError::InvalidInstructionData)
+                },
             );
         }
     }
@@ -1815,7 +1859,7 @@ mod tests {
                 &Pubkey::new_unique(),
                 Vote::default(),
             ),
-            Err(InstructionError::InvalidAccountData),
+            Err(InstructionError::InvalidInstructionData),
         );
         process_instruction_as_one_arg(
             &vote_switch(
@@ -1824,7 +1868,7 @@ mod tests {
                 Vote::default(),
                 Hash::default(),
             ),
-            Err(InstructionError::InvalidAccountData),
+            Err(InstructionError::InvalidInstructionData),
         );
         process_instruction_as_one_arg(
             &authorize(
@@ -1841,7 +1885,7 @@ mod tests {
                 &Pubkey::default(),
                 VoteStateUpdate::default(),
             ),
-            Err(InstructionError::InvalidAccountData),
+            Err(InstructionError::InvalidInstructionData),
         );
 
         process_instruction_as_one_arg(
@@ -1851,7 +1895,7 @@ mod tests {
                 VoteStateUpdate::default(),
                 Hash::default(),
             ),
-            Err(InstructionError::InvalidAccountData),
+            Err(InstructionError::InvalidInstructionData),
         );
         process_instruction_as_one_arg(
             &compact_update_vote_state(
@@ -1859,7 +1903,7 @@ mod tests {
                 &Pubkey::default(),
                 VoteStateUpdate::default(),
             ),
-            Err(InstructionError::InvalidAccountData),
+            Err(InstructionError::InvalidInstructionData),
         );
         process_instruction_as_one_arg(
             &compact_update_vote_state_switch(
@@ -1868,7 +1912,7 @@ mod tests {
                 VoteStateUpdate::default(),
                 Hash::default(),
             ),
-            Err(InstructionError::InvalidAccountData),
+            Err(InstructionError::InvalidInstructionData),
         );
         process_instruction_as_one_arg(
             &tower_sync(&Pubkey::default(), &Pubkey::default(), TowerSync::default()),

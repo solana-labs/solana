@@ -282,7 +282,10 @@ mod tests {
             transaction::Transaction,
             vote::state::{VoteStateVersions, MAX_LOCKOUT_HISTORY},
         },
-        solana_vote_program::{vote_state, vote_transaction},
+        solana_vote_program::{
+            vote_state::{self, TowerSync},
+            vote_transaction,
+        },
     };
 
     impl PartitionedStakeReward {
@@ -769,9 +772,9 @@ mod tests {
 
             // Fill bank_forks with banks with votes landing in the next slot
             // So that rewards will be paid out at the epoch boundary, i.e. slot = 32
-            let vote = vote_transaction::new_vote_transaction(
-                vec![slot - 1],
-                previous_bank.hash(),
+            let tower_sync = TowerSync::new_from_slot(slot - 1, previous_bank.hash());
+            let vote = vote_transaction::new_tower_sync_transaction(
+                tower_sync,
                 previous_bank.last_blockhash(),
                 &validator_vote_keypairs.node_keypair,
                 &validator_vote_keypairs.vote_keypair,

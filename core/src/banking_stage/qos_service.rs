@@ -598,7 +598,7 @@ mod tests {
             signature::{Keypair, Signer},
             system_transaction,
         },
-        solana_vote_program::vote_transaction,
+        solana_vote_program::{vote_state::TowerSync, vote_transaction},
         std::sync::Arc,
     };
 
@@ -612,9 +612,8 @@ mod tests {
             system_transaction::transfer(&keypair, &keypair.pubkey(), 1, Hash::default()),
         );
         let vote_tx = SanitizedTransaction::from_transaction_for_tests(
-            vote_transaction::new_vote_transaction(
-                vec![42],
-                Hash::default(),
+            vote_transaction::new_tower_sync_transaction(
+                TowerSync::from(vec![(42, 1)]),
                 Hash::default(),
                 &keypair,
                 &keypair,
@@ -656,9 +655,8 @@ mod tests {
             system_transaction::transfer(&keypair, &keypair.pubkey(), 1, Hash::default()),
         );
         let vote_tx = SanitizedTransaction::from_transaction_for_tests(
-            vote_transaction::new_vote_transaction(
-                vec![42],
-                Hash::default(),
+            vote_transaction::new_tower_sync_transaction(
+                TowerSync::from(vec![(42, 1)]),
                 Hash::default(),
                 &keypair,
                 &keypair,

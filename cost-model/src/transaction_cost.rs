@@ -207,7 +207,7 @@ mod tests {
             signer::keypair::Keypair,
             transaction::{MessageHash, SanitizedTransaction, VersionedTransaction},
         },
-        solana_vote_program::vote_transaction,
+        solana_vote_program::{vote_state::TowerSync, vote_transaction},
     };
 
     #[test]
@@ -216,9 +216,8 @@ mod tests {
         let node_keypair = Keypair::new();
         let vote_keypair = Keypair::new();
         let auth_keypair = Keypair::new();
-        let transaction = vote_transaction::new_vote_transaction(
-            vec![],
-            Hash::default(),
+        let transaction = vote_transaction::new_tower_sync_transaction(
+            TowerSync::default(),
             Hash::default(),
             &node_keypair,
             &vote_keypair,
@@ -249,7 +248,7 @@ mod tests {
         // expected vote tx cost: 2 write locks, 1 sig, 1 vote ix, 8cu of loaded accounts size,
         let expected_vote_cost = SIMPLE_VOTE_USAGE_COST;
         // expected non-vote tx cost would include default loaded accounts size cost (16384) additionally
-        let expected_none_vote_cost = 20535;
+        let expected_none_vote_cost = 20543;
 
         let vote_cost = CostModel::calculate_cost(&vote_transaction, &FeatureSet::all_enabled());
         let none_vote_cost =

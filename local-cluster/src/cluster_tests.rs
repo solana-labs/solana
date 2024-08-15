@@ -37,7 +37,7 @@ use {
     solana_streamer::socket::SocketAddrSpace,
     solana_tpu_client::tpu_client::{TpuClient, TpuClientConfig, TpuSenderError},
     solana_vote::vote_transaction::VoteTransaction,
-    solana_vote_program::vote_transaction,
+    solana_vote_program::{vote_state::TowerSync, vote_transaction},
     std::{
         collections::{HashMap, HashSet, VecDeque},
         net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener},
@@ -677,9 +677,9 @@ pub fn submit_vote_to_cluster_gossip(
     gossip_addr: SocketAddr,
     socket_addr_space: &SocketAddrSpace,
 ) -> Result<(), GossipError> {
-    let vote_tx = vote_transaction::new_vote_transaction(
-        vec![vote_slot],
-        vote_hash,
+    let tower_sync = TowerSync::new_from_slots(vec![vote_slot], vote_hash, None);
+    let vote_tx = vote_transaction::new_tower_sync_transaction(
+        tower_sync,
         blockhash,
         node_keypair,
         vote_keypair,

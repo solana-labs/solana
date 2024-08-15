@@ -845,6 +845,10 @@ pub mod enable_turbine_extended_fanout_experiments {
     solana_sdk::declare_id!("BZn14Liea52wtBwrXUxTv6vojuTTmfc7XGEDTXrvMD7b");
 }
 
+pub mod deprecate_legacy_vote_ixs {
+    solana_sdk::declare_id!("depVvnQ2UysGrhwdiwU42tCadZL8GcBb1i2GYhMopQv");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -1051,6 +1055,7 @@ lazy_static! {
         (ed25519_precompile_verify_strict::id(), "Use strict verification in ed25519 precompile SIMD-0152"),
         (vote_only_retransmitter_signed_fec_sets::id(), "vote only on retransmitter signed fec sets"),
         (enable_turbine_extended_fanout_experiments::id(), "enable turbine extended fanout experiments #"),
+        (deprecate_legacy_vote_ixs::id(), "Deprecate legacy vote instructions"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

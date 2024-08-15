@@ -10,7 +10,7 @@ use {
         system_program, system_transaction,
         transaction::Transaction,
     },
-    solana_vote_program::vote_transaction,
+    solana_vote_program::{vote_state::TowerSync, vote_transaction},
 };
 
 pub fn test_tx() -> Transaction {
@@ -60,9 +60,9 @@ where
     slots.sort_unstable();
     slots.dedup();
     let switch_proof_hash = rng.gen_bool(0.5).then(Hash::new_unique);
-    vote_transaction::new_vote_transaction(
-        slots,
-        Hash::new_unique(), // bank_hash
+    let tower_sync = TowerSync::new_from_slots(slots, Hash::default(), None);
+    vote_transaction::new_tower_sync_transaction(
+        tower_sync,
         Hash::new_unique(), // blockhash
         &Keypair::new(),    // node_keypair
         &Keypair::new(),    // vote_keypair

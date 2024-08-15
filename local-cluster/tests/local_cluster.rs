@@ -2698,12 +2698,11 @@ fn test_oc_bad_signatures() {
                 // Add all recent vote slots on this fork to allow cluster to pass
                 // vote threshold checks in replay. Note this will instantly force a
                 // root by this validator.
-                let vote_slots: Vec<Slot> = vec![vote_slot];
+                let tower_sync = TowerSync::new_from_slots(vec![vote_slot], vote_hash, None);
 
                 let bad_authorized_signer_keypair = Keypair::new();
-                let mut vote_tx = vote_transaction::new_vote_transaction(
-                    vote_slots,
-                    vote_hash,
+                let mut vote_tx = vote_transaction::new_tower_sync_transaction(
+                    tower_sync,
                     leader_vote_tx.message.recent_blockhash,
                     &node_keypair,
                     &vote_keypair,

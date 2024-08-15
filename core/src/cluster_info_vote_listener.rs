@@ -734,7 +734,7 @@ mod tests {
             signature::{Keypair, Signature, Signer},
         },
         solana_vote_program::{
-            vote_state::{TowerSync, Vote},
+            vote_state::{TowerSync, Vote, MAX_LOCKOUT_HISTORY},
             vote_transaction,
         },
         std::{
@@ -749,11 +749,9 @@ mod tests {
         solana_logger::setup();
         let node_keypair = Keypair::new();
         let vote_keypair = Keypair::new();
-        let slots: Vec<_> = (0..31).collect();
-
-        let vote_tx = vote_transaction::new_vote_transaction(
-            slots,
-            Hash::default(),
+        let tower_sync = TowerSync::new_from_slot(MAX_LOCKOUT_HISTORY as u64, Hash::default());
+        let vote_tx = vote_transaction::new_tower_sync_transaction(
+            tower_sync,
             Hash::default(),
             &node_keypair,
             &vote_keypair,
@@ -918,12 +916,12 @@ mod tests {
         votes_sender: &VerifiedVoteTransactionsSender,
         replay_votes_sender: &ReplayVoteSender,
     ) {
+        let tower_sync = TowerSync::new_from_slots(gossip_vote_slots, Hash::default(), None);
         validator_voting_keypairs.iter().for_each(|keypairs| {
             let node_keypair = &keypairs.node_keypair;
             let vote_keypair = &keypairs.vote_keypair;
-            let vote_tx = vote_transaction::new_vote_transaction(
-                gossip_vote_slots.clone(),
-                Hash::default(),
+            let vote_tx = vote_transaction::new_tower_sync_transaction(
+                tower_sync.clone(),
                 Hash::default(),
                 node_keypair,
                 vote_keypair,
@@ -1121,9 +1119,10 @@ mod tests {
                     let node_keypair = &keypairs.node_keypair;
                     let vote_keypair = &keypairs.vote_keypair;
                     expected_votes.push((vote_keypair.pubkey(), vec![i as Slot + 1]));
-                    vote_transaction::new_vote_transaction(
-                        vec![i as u64 + 1],
-                        bank_hash,
+                    let tower_sync =
+                        TowerSync::new_from_slots(vec![(i as u64 + 1)], bank_hash, None);
+                    vote_transaction::new_tower_sync_transaction(
+                        tower_sync,
                         Hash::default(),
                         node_keypair,
                         vote_keypair,
@@ -1218,9 +1217,10 @@ mod tests {
             for &e in &events {
                 if e == 0 || e == 2 {
                     // Create vote transaction
-                    let vote_tx = vote_transaction::new_vote_transaction(
-                        vec![vote_slot],
-                        vote_bank_hash,
+                    let tower_sync =
+                        TowerSync::new_from_slots(vec![(vote_slot)], vote_bank_hash, None);
+                    let vote_tx = vote_transaction::new_tower_sync_transaction(
+                        tower_sync,
                         Hash::default(),
                         node_keypair,
                         vote_keypair,
@@ -1315,10 +1315,9 @@ mod tests {
         // in the tracker
         let validator0_keypairs = &validator_keypairs[0];
         let voted_slot = bank.slot() + 1;
-        let vote_tx = vec![vote_transaction::new_vote_transaction(
+        let vote_tx = vec![vote_transaction::new_tower_sync_transaction(
             // Must vote > root to be processed
-            vec![voted_slot],
-            Hash::default(),
+            TowerSync::from(vec![(voted_slot, 1)]),
             Hash::default(),
             &validator0_keypairs.node_keypair,
             &validator0_keypairs.vote_keypair,
@@ -1362,10 +1361,9 @@ mod tests {
         let vote_txs: Vec<_> = [first_slot_in_new_epoch - 1, first_slot_in_new_epoch]
             .iter()
             .map(|slot| {
-                vote_transaction::new_vote_transaction(
+                vote_transaction::new_tower_sync_transaction(
                     // Must vote > root to be processed
-                    vec![*slot],
-                    Hash::default(),
+                    TowerSync::from(vec![(*slot, 1)]),
                     Hash::default(),
                     &validator0_keypairs.node_keypair,
                     &validator0_keypairs.vote_keypair,
@@ -1462,9 +1460,8 @@ mod tests {
         let validator_vote_keypair = validator_vote_keypairs.unwrap_or(&other);
         // TODO authorized_voter_keypair should be different from vote-keypair
         // but that is what create_genesis_... currently generates.
-        vote_transaction::new_vote_transaction(
-            vec![0],
-            Hash::default(),
+        vote_transaction::new_tower_sync_transaction(
+            TowerSync::from(vec![(0, 1)]),
             Hash::default(),
             &validator_vote_keypair.node_keypair,
             &validator_vote_keypair.vote_keypair,
