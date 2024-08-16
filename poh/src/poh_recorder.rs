@@ -734,9 +734,14 @@ impl PohRecorder {
         self.set_bank(BankWithScheduler::new_without_scheduler(bank), false)
     }
 
-    #[cfg(test)]
+    #[cfg(feature = "dev-context-only-utils")]
     pub fn set_bank_with_transaction_index_for_test(&mut self, bank: Arc<Bank>) {
         self.set_bank(BankWithScheduler::new_without_scheduler(bank), true)
+    }
+
+    #[cfg(feature = "dev-context-only-utils")]
+    pub fn clear_bank_for_test(&mut self) {
+        self.clear_bank();
     }
 
     // Flush cache will delay flushing the cache for a bank until it past the WorkingBank::min_tick_height
