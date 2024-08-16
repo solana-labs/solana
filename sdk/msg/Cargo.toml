@@ -14,3 +14,6 @@ solana-define-syscall = { workspace = true }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
+
+[lints]
+workspace = true

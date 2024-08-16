@@ -36,3 +36,6 @@ rustc_version = { workspace = true, optional = true }
 [[bench]]
 name = "process_compute_budget_instructions"
 harness = false
+
+[lints]
+workspace = true

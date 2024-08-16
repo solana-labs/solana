@@ -159,6 +159,15 @@ homepage = "https://anza.xyz/"
 license = "Apache-2.0"
 edition = "2021"
 
+[workspace.lints.rust.unexpected_cfgs]
+level = "warn"
+check-cfg = [
+    'cfg(target_os, values("solana"))',
+    'cfg(feature, values("frozen-abi", "no-entrypoint"))',
+    'cfg(RUSTC_WITH_SPECIALIZATION)',
+    'cfg(RUSTC_WITHOUT_SPECIALIZATION)',
+]
+
 [workspace.dependencies]
 Inflector = "0.11.4"
 agave-transaction-view = { path = "transaction-view", version = "=2.1.0" }

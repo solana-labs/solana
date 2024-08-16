@@ -70,11 +70,11 @@ RUN \
   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs/ | sh -s -- --no-modify-path --profile minimal --default-toolchain $RUST_VERSION -y && \
   rustup component add rustfmt && \
   rustup component add clippy && \
-  rustup component add llvm-tools-preview && \
   rustup install $RUST_NIGHTLY_VERSION && \
   rustup component add clippy --toolchain=$RUST_NIGHTLY_VERSION && \
   rustup component add rustfmt --toolchain=$RUST_NIGHTLY_VERSION && \
   rustup component add miri --toolchain=$RUST_NIGHTLY_VERSION && \
+  rustup component add llvm-tools-preview --toolchain=$RUST_NIGHTLY_VERSION && \
   rustup target add wasm32-unknown-unknown && \
   cargo install cargo-audit && \
   cargo install cargo-hack && \

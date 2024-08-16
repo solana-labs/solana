@@ -28,6 +28,14 @@ fi
 # shellcheck source=ci/rust-version.sh
 source "$here/../ci/rust-version.sh" nightly
 
+# Check llvm path
+llvm_profdata="$(find "$(rustc +"$rust_nightly" --print sysroot)" -name llvm-profdata)"
+if [ -z "$llvm_profdata" ]; then
+  echo "Error: couldn't find llvm-profdata. Try installing the llvm-tools component with \`rustup component add llvm-tools-preview --toolchain=$rust_nightly\`"
+  exit 1
+fi
+llvm_path="$(dirname "$llvm_profdata")"
+
 # get commit hash. it will be used to name output folder
 if [ -z "$COMMIT_HASH" ]; then
   COMMIT_HASH=$(git rev-parse --short=9 HEAD)
@@ -66,6 +74,7 @@ grcov_common_args=(
   --source-dir "$here/.."
   --binary-path "$here/../target/cov/debug"
   --llvm
+  --llvm-path "$llvm_path"
   --ignore \*.cargo\*
   --ignore \*build.rs
   --ignore bench-tps\*

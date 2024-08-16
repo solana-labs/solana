@@ -59,3 +59,6 @@ frozen-abi = [
     "solana-sdk/frozen-abi",
 ]
 shuttle-test = ["solana-type-overrides/shuttle-test", "solana_rbpf/shuttle-test"]
+
+[lints]
+workspace = true

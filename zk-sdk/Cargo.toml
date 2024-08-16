@@ -39,3 +39,6 @@ zeroize = { workspace = true, features = ["zeroize_derive"] }
 
 [lib]
 crate-type = ["cdylib", "rlib"]
+
+[lints]
+workspace = true

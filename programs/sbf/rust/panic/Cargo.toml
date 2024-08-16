@@ -17,3 +17,6 @@ custom-panic = []
 
 [lib]
 crate-type = ["cdylib"]
+
+[lints]
+workspace = true

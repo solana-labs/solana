@@ -37,3 +37,6 @@ frozen-abi = ["dep:rustc_version", "dep:solana-frozen-abi", "dep:solana-frozen-a
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
+
+[lints]
+workspace = true

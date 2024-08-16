@@ -32,3 +32,6 @@ name = "solana_address_lookup_table_program"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
+
+[lints]
+workspace = true

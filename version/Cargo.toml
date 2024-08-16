@@ -36,3 +36,6 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [build-dependencies]
 rustc_version = { workspace = true, optional = true }
+
+[lints]
+workspace = true

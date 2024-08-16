@@ -7,6 +7,10 @@ homepage = "https://anza.xyz"
 license = "Apache-2.0"
 edition = "2021"
 
+[workspace.lints.rust.unexpected_cfgs]
+level = "warn"
+check-cfg = ['cfg(target_os, values("solana"))']
+
 [workspace.dependencies]
 array-bytes = "=1.4.1"
 bincode = { version = "1.1.4", default-features = false }

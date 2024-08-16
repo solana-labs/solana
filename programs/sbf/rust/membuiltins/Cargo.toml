@@ -14,3 +14,6 @@ solana-sbf-rust-mem-dep = { workspace = true }
 
 [lib]
 crate-type = ["cdylib"]
+
+[lints]
+workspace = true

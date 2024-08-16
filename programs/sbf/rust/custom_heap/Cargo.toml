@@ -17,3 +17,6 @@ custom-heap = []
 
 [lib]
 crate-type = ["cdylib"]
+
+[lints]
+workspace = true

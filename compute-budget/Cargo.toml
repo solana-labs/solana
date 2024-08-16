@@ -22,3 +22,6 @@ frozen-abi = [
     "dep:solana-frozen-abi",
     "solana-sdk/frozen-abi",
 ]
+
+[lints]
+workspace = true

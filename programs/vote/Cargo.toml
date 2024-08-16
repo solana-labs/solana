@@ -48,3 +48,6 @@ frozen-abi = [
     "solana-program-runtime/frozen-abi",
     "solana-sdk/frozen-abi",
 ]
+
+[lints]
+workspace = true

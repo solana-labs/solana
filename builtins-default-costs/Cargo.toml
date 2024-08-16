@@ -44,3 +44,6 @@ frozen-abi = [
     "dep:solana-frozen-abi",
     "solana-vote-program/frozen-abi",
 ]
+
+[lints]
+workspace = true

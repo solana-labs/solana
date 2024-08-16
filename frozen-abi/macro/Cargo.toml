@@ -24,3 +24,6 @@ rustc_version = { workspace = true }
 default = ["frozen-abi"]
 # no reason to deactivate this. It's needed because the build.rs is reused elsewhere
 frozen-abi = []
+
+[lints]
+workspace = true

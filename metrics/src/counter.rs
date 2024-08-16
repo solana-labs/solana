@@ -58,7 +58,10 @@ macro_rules! create_counter {
 #[macro_export]
 macro_rules! inc_counter {
     ($name:expr, $level:expr, $count:expr) => {
-        unsafe { $name.inc($level, $count) };
+        #[allow(clippy::macro_metavars_in_unsafe)]
+        unsafe {
+            $name.inc($level, $count)
+        };
     };
 }
 

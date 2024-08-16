@@ -104,3 +104,6 @@ frozen-abi = [
     "dep:solana-frozen-abi-macro",
     "solana-short-vec/frozen-abi",
 ]
+
+[lints]
+workspace = true

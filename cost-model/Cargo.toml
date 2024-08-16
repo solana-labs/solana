@@ -54,3 +54,6 @@ frozen-abi = [
 
 [[bench]]
 name = "cost_tracker"
+
+[lints]
+workspace = true
