@@ -25,11 +25,11 @@ Expect a response as fast as possible in the advisory, typically within 72 hours
 --
 
 If you do not receive a response in the advisory, send an email to
-security@solana.com with the full URL of the advisory you have created.  DO NOT
+security@anza.xyz with the full URL of the advisory you have created.  DO NOT
 include attachments or provide detail sufficient for exploitation regarding the
 security issue in this email. **Only provide such details in the advisory**.
 
-If you do not receive a response from security@solana.com please followup with
+If you do not receive a response from security@anza.xyz please followup with
 the team directly. You can do this in the `#core-technology` channel of the
 [Solana Tech discord server](https://solana.com/discord), by pinging the `Anza`
 role in the channel and referencing the fact that you submitted a security problem.
