@@ -398,6 +398,98 @@ impl LeaderSlotPacketCountMetrics {
     }
 }
 
+fn report_transaction_error_metrics(errors: &TransactionErrorMetrics, id: &str, slot: Slot) {
+    datapoint_info!(
+        "banking_stage-leader_slot_transaction_errors",
+        "id" => id,
+        ("slot", slot as i64, i64),
+        ("total", errors.total as i64, i64),
+        ("account_in_use", errors.account_in_use as i64, i64),
+        (
+            "too_many_account_locks",
+            errors.too_many_account_locks as i64,
+            i64
+        ),
+        (
+            "account_loaded_twice",
+            errors.account_loaded_twice as i64,
+            i64
+        ),
+        ("account_not_found", errors.account_not_found as i64, i64),
+        ("blockhash_not_found", errors.blockhash_not_found as i64, i64),
+        ("blockhash_too_old", errors.blockhash_too_old as i64, i64),
+        ("call_chain_too_deep", errors.call_chain_too_deep as i64, i64),
+        ("already_processed", errors.already_processed as i64, i64),
+        ("instruction_error", errors.instruction_error as i64, i64),
+        ("insufficient_funds", errors.insufficient_funds as i64, i64),
+        (
+            "invalid_account_for_fee",
+            errors.invalid_account_for_fee as i64,
+            i64
+        ),
+        (
+            "invalid_account_index",
+            errors.invalid_account_index as i64,
+            i64
+        ),
+        (
+            "invalid_program_for_execution",
+            errors.invalid_program_for_execution as i64,
+            i64
+        ),
+        (
+            "invalid_compute_budget",
+            errors.invalid_compute_budget as i64,
+            i64
+        ),
+        (
+            "not_allowed_during_cluster_maintenance",
+            errors.not_allowed_during_cluster_maintenance as i64,
+            i64
+        ),
+        (
+            "invalid_writable_account",
+            errors.invalid_writable_account as i64,
+            i64
+        ),
+        (
+            "invalid_rent_paying_account",
+            errors.invalid_rent_paying_account as i64,
+            i64
+        ),
+        (
+            "would_exceed_max_block_cost_limit",
+            errors.would_exceed_max_block_cost_limit as i64,
+            i64
+        ),
+        (
+            "would_exceed_max_account_cost_limit",
+            errors.would_exceed_max_account_cost_limit as i64,
+            i64
+        ),
+        (
+            "would_exceed_max_vote_cost_limit",
+            errors.would_exceed_max_vote_cost_limit as i64,
+            i64
+        ),
+        (
+            "would_exceed_account_data_block_limit",
+            errors.would_exceed_account_data_block_limit as i64,
+            i64
+        ),
+        (
+            "max_loaded_accounts_data_size_exceeded",
+            errors.max_loaded_accounts_data_size_exceeded as i64,
+            i64
+        ),
+        (
+            "program_execution_temporarily_restricted",
+            errors.program_execution_temporarily_restricted as i64,
+            i64
+        ),
+    );
+}
+
 #[derive(Debug)]
 pub(crate) struct LeaderSlotMetrics {
     // banking_stage creates one QosService instance per working threads, that is uniquely
@@ -447,7 +539,7 @@ impl LeaderSlotMetrics {
         self.is_reported = true;
 
         self.timing_metrics.report(&self.id, self.slot);
-        self.transaction_error_metrics.report(&self.id, self.slot);
+        report_transaction_error_metrics(&self.transaction_error_metrics, &self.id, self.slot);
         self.packet_count_metrics.report(&self.id, self.slot);
         self.vote_packet_count_metrics.report(&self.id, self.slot);
         self.prioritization_fees_metric.report(&self.id, self.slot);

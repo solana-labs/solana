@@ -1,4 +1,4 @@
-use solana_sdk::{clock::Slot, saturating_add_assign};
+use solana_sdk::saturating_add_assign;
 
 #[derive(Debug, Default)]
 pub struct TransactionErrorMetrics {
@@ -87,98 +87,6 @@ impl TransactionErrorMetrics {
         saturating_add_assign!(
             self.program_execution_temporarily_restricted,
             other.program_execution_temporarily_restricted
-        );
-    }
-
-    pub fn report(&self, id: &str, slot: Slot) {
-        datapoint_info!(
-            "banking_stage-leader_slot_transaction_errors",
-            "id" => id,
-            ("slot", slot as i64, i64),
-            ("total", self.total as i64, i64),
-            ("account_in_use", self.account_in_use as i64, i64),
-            (
-                "too_many_account_locks",
-                self.too_many_account_locks as i64,
-                i64
-            ),
-            (
-                "account_loaded_twice",
-                self.account_loaded_twice as i64,
-                i64
-            ),
-            ("account_not_found", self.account_not_found as i64, i64),
-            ("blockhash_not_found", self.blockhash_not_found as i64, i64),
-            ("blockhash_too_old", self.blockhash_too_old as i64, i64),
-            ("call_chain_too_deep", self.call_chain_too_deep as i64, i64),
-            ("already_processed", self.already_processed as i64, i64),
-            ("instruction_error", self.instruction_error as i64, i64),
-            ("insufficient_funds", self.insufficient_funds as i64, i64),
-            (
-                "invalid_account_for_fee",
-                self.invalid_account_for_fee as i64,
-                i64
-            ),
-            (
-                "invalid_account_index",
-                self.invalid_account_index as i64,
-                i64
-            ),
-            (
-                "invalid_program_for_execution",
-                self.invalid_program_for_execution as i64,
-                i64
-            ),
-            (
-                "invalid_compute_budget",
-                self.invalid_compute_budget as i64,
-                i64
-            ),
-            (
-                "not_allowed_during_cluster_maintenance",
-                self.not_allowed_during_cluster_maintenance as i64,
-                i64
-            ),
-            (
-                "invalid_writable_account",
-                self.invalid_writable_account as i64,
-                i64
-            ),
-            (
-                "invalid_rent_paying_account",
-                self.invalid_rent_paying_account as i64,
-                i64
-            ),
-            (
-                "would_exceed_max_block_cost_limit",
-                self.would_exceed_max_block_cost_limit as i64,
-                i64
-            ),
-            (
-                "would_exceed_max_account_cost_limit",
-                self.would_exceed_max_account_cost_limit as i64,
-                i64
-            ),
-            (
-                "would_exceed_max_vote_cost_limit",
-                self.would_exceed_max_vote_cost_limit as i64,
-                i64
-            ),
-            (
-                "would_exceed_account_data_block_limit",
-                self.would_exceed_account_data_block_limit as i64,
-                i64
-            ),
-            (
-                "max_loaded_accounts_data_size_exceeded",
-                self.max_loaded_accounts_data_size_exceeded as i64,
-                i64
-            ),
-            (
-                "program_execution_temporarily_restricted",
-                self.program_execution_temporarily_restricted as i64,
-                i64
-            ),
         );
     }
 }
