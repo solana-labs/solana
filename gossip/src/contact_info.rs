@@ -182,11 +182,7 @@ impl ContactInfo {
         Self {
             pubkey,
             wallclock,
-            outset: {
-                let now = SystemTime::now();
-                let elapsed = now.duration_since(UNIX_EPOCH).unwrap();
-                u64::try_from(elapsed.as_micros()).unwrap()
-            },
+            outset: get_node_outset(),
             shred_version,
             version: solana_version::Version::default(),
             addrs: Vec::<IpAddr>::default(),
@@ -216,8 +212,11 @@ impl ContactInfo {
         &self.version
     }
 
-    pub fn set_pubkey(&mut self, pubkey: Pubkey) {
-        self.pubkey = pubkey
+    pub(crate) fn hot_swap_pubkey(&mut self, pubkey: Pubkey) {
+        self.pubkey = pubkey;
+        // Need to update ContactInfo.outset so that this node's contact-info
+        // will override older node with the same pubkey.
+        self.outset = get_node_outset();
     }
 
     pub fn set_wallclock(&mut self, wallclock: u64) {
@@ -464,6 +463,12 @@ impl ContactInfo {
     }
 }
 
+fn get_node_outset() -> u64 {
+    let now = SystemTime::now();
+    let elapsed = now.duration_since(UNIX_EPOCH).unwrap();
+    u64::try_from(elapsed.as_micros()).unwrap()
+}
+
 impl Default for ContactInfo {
     fn default() -> Self {
         Self::new(
@@ -649,6 +654,7 @@ mod tests {
             iter::repeat_with,
             net::{Ipv4Addr, Ipv6Addr},
             ops::Range,
+            time::Duration,
         },
     };
 
@@ -1101,9 +1107,21 @@ mod tests {
             assert!(!other.check_duplicate(&node));
             assert_eq!(node.overrides(&other), None);
             assert_eq!(other.overrides(&node), None);
+
+            // Need to sleep here so that get_node_outset
+            // returns a larger value.
+            std::thread::sleep(Duration::from_millis(1));
+
+            node.hot_swap_pubkey(*other.pubkey());
+            assert!(node.outset > other.outset);
+            assert!(!node.check_duplicate(&other));
+            assert!(other.check_duplicate(&node));
+            assert_eq!(node.overrides(&other), Some(true));
+            assert_eq!(other.overrides(&node), Some(false));
         }
         // Same pubkey, more recent outset timestamp is a duplicate instance.
         {
+            std::thread::sleep(Duration::from_millis(1));
             let other = ContactInfo::new(
                 node.pubkey,
                 rng.gen(), // wallclock

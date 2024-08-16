@@ -679,7 +679,7 @@ impl ClusterInfo {
             *instance = NodeInstance::new(&mut thread_rng(), id, timestamp());
         }
         *self.keypair.write().unwrap() = new_keypair;
-        self.my_contact_info.write().unwrap().set_pubkey(id);
+        self.my_contact_info.write().unwrap().hot_swap_pubkey(id);
 
         self.refresh_my_gossip_contact_info();
         self.push_message(CrdsValue::new_signed(
