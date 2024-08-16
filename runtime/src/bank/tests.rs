@@ -110,7 +110,8 @@ use {
     solana_vote_program::{
         vote_instruction,
         vote_state::{
-            self, BlockTimestamp, Vote, VoteInit, VoteState, VoteStateVersions, MAX_LOCKOUT_HISTORY,
+            self, create_account_with_authorized, BlockTimestamp, Vote, VoteInit, VoteState,
+            VoteStateVersions, MAX_LOCKOUT_HISTORY,
         },
     },
     std::{
@@ -12996,7 +12997,7 @@ fn test_bank_epoch_stakes() {
         create_genesis_config_with_vote_accounts(1_000_000_000, &voting_keypairs, stakes.clone());
 
     let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
-    let bank1 = Bank::new_from_parent(
+    let mut bank1 = Bank::new_from_parent(
         bank0.clone(),
         &Pubkey::default(),
         bank0.get_slots_in_epoch(0) + 1,
@@ -13021,6 +13022,35 @@ fn test_bank_epoch_stakes() {
         assert_eq!(
             bank1.epoch_node_id_to_stake(1, &keypair.node_keypair.pubkey()),
             Some(stakes[i])
+        );
+    }
+
+    let new_epoch_stakes = EpochStakes::new_for_tests(
+        voting_keypairs
+            .iter()
+            .map(|keypair| {
+                let node_id = keypair.node_keypair.pubkey();
+                let authorized_voter = keypair.vote_keypair.pubkey();
+                let vote_account = VoteAccount::try_from(create_account_with_authorized(
+                    &node_id,
+                    &authorized_voter,
+                    &node_id,
+                    0,
+                    100,
+                ))
+                .unwrap();
+                (authorized_voter, (100_u64, vote_account))
+            })
+            .collect::<HashMap<_, _>>(),
+        1,
+    );
+    bank1.set_epoch_stakes_for_test(1, new_epoch_stakes);
+    assert_eq!(bank1.epoch_total_stake(1), Some(100 * num_of_nodes));
+    assert_eq!(bank1.epoch_node_id_to_stake(1, &Pubkey::new_unique()), None);
+    for keypair in voting_keypairs.iter() {
+        assert_eq!(
+            bank1.epoch_node_id_to_stake(1, &keypair.node_keypair.pubkey()),
+            Some(100)
         );
     }
 }
