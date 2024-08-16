@@ -42,14 +42,13 @@ use {
         hash::Hash,
         inner_instruction::{InnerInstruction, InnerInstructionsList},
         instruction::{CompiledInstruction, TRANSACTION_LEVEL_STACK_HEIGHT},
-        message::SanitizedMessage,
         pubkey::Pubkey,
         rent_collector::RentCollector,
         saturating_add_assign,
-        transaction::{self, SanitizedTransaction, TransactionError},
+        transaction::{self, TransactionError},
         transaction_context::{ExecutionRecord, TransactionContext},
     },
-    solana_svm_transaction::svm_message::SVMMessage,
+    solana_svm_transaction::{svm_message::SVMMessage, svm_transaction::SVMTransaction},
     solana_timings::{ExecuteTimingType, ExecuteTimings},
     solana_type_overrides::sync::{atomic::Ordering, Arc, RwLock, RwLockReadGuard},
     solana_vote::vote_account::VoteAccountsHashMap,
@@ -227,7 +226,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
     pub fn load_and_execute_sanitized_transactions<CB: TransactionProcessingCallback>(
         &self,
         callbacks: &CB,
-        sanitized_txs: &[SanitizedTransaction],
+        sanitized_txs: &[impl SVMTransaction],
         check_results: Vec<TransactionCheckResult>,
         environment: &TransactionProcessingEnvironment,
         config: &TransactionProcessingConfig,
@@ -360,11 +359,11 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         }
     }
 
-    fn validate_fees<CB: TransactionProcessingCallback>(
+    fn validate_fees<CB: TransactionProcessingCallback, T: SVMMessage>(
         &self,
         callbacks: &CB,
         account_overrides: Option<&AccountOverrides>,
-        sanitized_txs: &[impl core::borrow::Borrow<SanitizedTransaction>],
+        sanitized_txs: &[impl core::borrow::Borrow<T>],
         check_results: Vec<TransactionCheckResult>,
         feature_set: &FeatureSet,
         fee_structure: &FeeStructure,
@@ -376,7 +375,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
             .zip(check_results)
             .map(|(sanitized_tx, check_result)| {
                 check_result.and_then(|checked_details| {
-                    let message = sanitized_tx.borrow().message();
+                    let message = sanitized_tx.borrow();
                     self.validate_transaction_fee_payer(
                         callbacks,
                         account_overrides,
@@ -483,15 +482,14 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
     /// to their usage counters, for the transactions with a valid blockhash or nonce.
     fn filter_executable_program_accounts<CB: TransactionProcessingCallback>(
         callbacks: &CB,
-        txs: &[SanitizedTransaction],
+        txs: &[impl SVMMessage],
         validation_results: &[TransactionValidationResult],
         program_owners: &[Pubkey],
     ) -> HashMap<Pubkey, u64> {
         let mut result: HashMap<Pubkey, u64> = HashMap::new();
         validation_results.iter().zip(txs).for_each(|etx| {
             if let (Ok(_), tx) = etx {
-                tx.message()
-                    .account_keys()
+                tx.account_keys()
                     .iter()
                     .for_each(|key| match result.entry(*key) {
                         Entry::Occupied(mut entry) => {
@@ -697,7 +695,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
     #[allow(clippy::too_many_arguments)]
     fn execute_loaded_transaction(
         &self,
-        tx: &SanitizedTransaction,
+        tx: &impl SVMTransaction,
         mut loaded_transaction: LoadedTransaction,
         execute_timings: &mut ExecuteTimings,
         error_metrics: &mut TransactionErrorMetrics,
@@ -709,7 +707,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
 
         fn transaction_accounts_lamports_sum(
             accounts: &[(Pubkey, AccountSharedData)],
-            message: &SanitizedMessage,
+            message: &impl SVMMessage,
         ) -> Option<u128> {
             let mut lamports_sum = 0u128;
             for i in 0..message.account_keys().len() {
@@ -725,7 +723,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
             .unwrap_or_default();
 
         let lamports_before_tx =
-            transaction_accounts_lamports_sum(&transaction_accounts, tx.message()).unwrap_or(0);
+            transaction_accounts_lamports_sum(&transaction_accounts, tx).unwrap_or(0);
 
         let compute_budget = config
             .compute_budget
@@ -741,7 +739,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         transaction_context.set_signature(tx.signature());
 
         let pre_account_state_info =
-            TransactionAccountStateInfo::new(&rent, &transaction_context, tx.message());
+            TransactionAccountStateInfo::new(&rent, &transaction_context, tx);
 
         let log_collector = if config.recording_config.enable_log_recording {
             match config.log_messages_bytes_limit {
@@ -777,7 +775,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
 
         let mut process_message_time = Measure::start("process_message_time");
         let process_result = MessageProcessor::process_message(
-            tx.message(),
+            tx,
             &loaded_transaction.program_indices,
             &mut invoke_context,
             execute_timings,
@@ -795,7 +793,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         let mut status = process_result
             .and_then(|info| {
                 let post_account_state_info =
-                    TransactionAccountStateInfo::new(&rent, &transaction_context, tx.message());
+                    TransactionAccountStateInfo::new(&rent, &transaction_context, tx);
                 TransactionAccountStateInfo::verify_changes(
                     &pre_account_state_info,
                     &post_account_state_info,
@@ -842,7 +840,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         } = transaction_context.into();
 
         if status.is_ok()
-            && transaction_accounts_lamports_sum(&accounts, tx.message())
+            && transaction_accounts_lamports_sum(&accounts, tx)
                 .filter(|lamports_after_tx| lamports_before_tx == *lamports_after_tx)
                 .is_none()
         {
@@ -993,7 +991,7 @@ mod tests {
             fee::FeeDetails,
             fee_calculator::FeeCalculator,
             hash::Hash,
-            message::{LegacyMessage, Message, MessageHeader},
+            message::{LegacyMessage, Message, MessageHeader, SanitizedMessage},
             nonce,
             rent_collector::{RentCollector, RENT_EXEMPT_RENT_EPOCH},
             rent_debits::RentDebits,

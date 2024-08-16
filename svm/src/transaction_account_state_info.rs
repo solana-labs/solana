@@ -2,12 +2,12 @@ use {
     crate::account_rent_state::RentState,
     solana_sdk::{
         account::ReadableAccount,
-        message::SanitizedMessage,
         native_loader,
         rent::Rent,
         transaction::Result,
         transaction_context::{IndexOfAccount, TransactionContext},
     },
+    solana_svm_transaction::svm_message::SVMMessage,
 };
 
 #[derive(PartialEq, Debug)]
@@ -19,7 +19,7 @@ impl TransactionAccountStateInfo {
     pub(crate) fn new(
         rent: &Rent,
         transaction_context: &TransactionContext,
-        message: &SanitizedMessage,
+        message: &impl SVMMessage,
     ) -> Vec<Self> {
         (0..message.account_keys().len())
             .map(|i| {
