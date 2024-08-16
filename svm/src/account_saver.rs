@@ -7,15 +7,16 @@ use {
     },
     solana_sdk::{
         account::AccountSharedData, nonce::state::DurableNonce, pubkey::Pubkey,
-        transaction::SanitizedTransaction, transaction_context::TransactionAccount,
+        transaction_context::TransactionAccount,
     },
+    solana_svm_transaction::svm_message::SVMMessage,
 };
 
 // Used to approximate how many accounts will be calculated for storage so that
 // vectors are allocated with an appropriate capacity. Doesn't account for some
 // optimization edge cases where some write locked accounts have skip storage.
 fn max_number_of_accounts_to_collect(
-    txs: &[SanitizedTransaction],
+    txs: &[impl SVMMessage],
     processing_results: &[TransactionProcessingResult],
 ) -> usize {
     processing_results
@@ -28,22 +29,19 @@ fn max_number_of_accounts_to_collect(
         })
         .map(
             |(processed_tx, tx)| match processed_tx.execution_details.status {
-                Ok(_) => tx.message().num_write_locks() as usize,
+                Ok(_) => tx.num_write_locks() as usize,
                 Err(_) => processed_tx.loaded_transaction.rollback_accounts.count(),
             },
         )
         .sum()
 }
 
-pub fn collect_accounts_to_store<'a>(
-    txs: &'a [SanitizedTransaction],
+pub fn collect_accounts_to_store<'a, T: SVMMessage>(
+    txs: &'a [T],
     processing_results: &'a mut [TransactionProcessingResult],
     durable_nonce: &DurableNonce,
     lamports_per_signature: u64,
-) -> (
-    Vec<(&'a Pubkey, &'a AccountSharedData)>,
-    Vec<Option<&'a SanitizedTransaction>>,
-) {
+) -> (Vec<(&'a Pubkey, &'a AccountSharedData)>, Vec<Option<&'a T>>) {
     let collect_capacity = max_number_of_accounts_to_collect(txs, processing_results);
     let mut accounts = Vec::with_capacity(collect_capacity);
     let mut transactions = Vec::with_capacity(collect_capacity);
@@ -74,22 +72,21 @@ pub fn collect_accounts_to_store<'a>(
     (accounts, transactions)
 }
 
-fn collect_accounts_for_successful_tx<'a>(
+fn collect_accounts_for_successful_tx<'a, T: SVMMessage>(
     collected_accounts: &mut Vec<(&'a Pubkey, &'a AccountSharedData)>,
-    collected_account_transactions: &mut Vec<Option<&'a SanitizedTransaction>>,
-    transaction: &'a SanitizedTransaction,
+    collected_account_transactions: &mut Vec<Option<&'a T>>,
+    transaction: &'a T,
     transaction_accounts: &'a [TransactionAccount],
 ) {
-    let message = transaction.message();
-    for (_, (address, account)) in (0..message.account_keys().len())
+    for (_, (address, account)) in (0..transaction.account_keys().len())
         .zip(transaction_accounts)
         .filter(|(i, _)| {
-            message.is_writable(*i) && {
+            transaction.is_writable(*i) && {
                 // Accounts that are invoked and also not passed as an instruction
                 // account to a program don't need to be stored because it's assumed
                 // to be impossible for a committable transaction to modify an
                 // invoked account if said account isn't passed to some program.
-                !message.is_invoked(*i) || message.is_instruction_account(*i)
+                !transaction.is_invoked(*i) || transaction.is_instruction_account(*i)
             }
         })
     {
@@ -98,16 +95,15 @@ fn collect_accounts_for_successful_tx<'a>(
     }
 }
 
-fn collect_accounts_for_failed_tx<'a>(
+fn collect_accounts_for_failed_tx<'a, T: SVMMessage>(
     collected_accounts: &mut Vec<(&'a Pubkey, &'a AccountSharedData)>,
-    collected_account_transactions: &mut Vec<Option<&'a SanitizedTransaction>>,
-    transaction: &'a SanitizedTransaction,
+    collected_account_transactions: &mut Vec<Option<&'a T>>,
+    transaction: &'a T,
     rollback_accounts: &'a mut RollbackAccounts,
     durable_nonce: &DurableNonce,
     lamports_per_signature: u64,
 ) {
-    let message = transaction.message();
-    let fee_payer_address = message.fee_payer();
+    let fee_payer_address = transaction.fee_payer();
     match rollback_accounts {
         RollbackAccounts::FeePayerOnly { fee_payer_account } => {
             collected_accounts.push((fee_payer_address, &*fee_payer_account));
@@ -165,7 +161,7 @@ mod tests {
             rent_debits::RentDebits,
             signature::{keypair_from_seed, signers::Signers, Keypair, Signer},
             system_instruction, system_program,
-            transaction::{Result, Transaction, TransactionError},
+            transaction::{Result, SanitizedTransaction, Transaction, TransactionError},
         },
         std::collections::HashMap,
     };
