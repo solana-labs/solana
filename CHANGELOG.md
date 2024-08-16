@@ -20,10 +20,13 @@ Release channels have their own copy of this changelog:
        Use `cargo-build-sbf` and `cargo-test-sbf` instead.
   * Stake:
     * removed the unreleased `redelegate` instruction processor and CLI commands (#2213)
+  * Banks-client:
+    * relax functions to use `&self` instead of `&mut self` (#2591)
 * Changes
   * SDK: removed the `respan` macro. This was marked as "internal use only" and was no longer used internally.
   * `agave-validator`: Update PoH speed check to compare against current hash rate from a Bank (#2447)
   * `solana-test-validator`: Add `--clone-feature-set` flag to mimic features from a target cluster (#2480)
+  * `solana-genesis`: the `--cluster-type` parameter now clones the feature set from the target cluster (#2587)
 
 ## [2.0.0]
 * Breaking
