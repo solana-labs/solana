@@ -129,7 +129,7 @@ async fn cpi() {
         processor!(invoked_process_instruction),
     );
 
-    let mut context = program_test.start_with_context().await;
+    let context = program_test.start_with_context().await;
     let instructions = vec![Instruction::new_with_bincode(
         invoker_program_id,
         &[0],
@@ -165,7 +165,7 @@ async fn cpi_dupes() {
         processor!(invoked_process_instruction),
     );
 
-    let mut context = program_test.start_with_context().await;
+    let context = program_test.start_with_context().await;
     let instructions = vec![Instruction::new_with_bincode(
         invoker_program_id,
         &[0],
@@ -201,7 +201,7 @@ async fn cpi_create_account() {
     );
 
     let create_account_keypair = Keypair::new();
-    let mut context = program_test.start_with_context().await;
+    let context = program_test.start_with_context().await;
     let instructions = vec![Instruction::new_with_bincode(
         create_account_program_id,
         &[0],
@@ -272,7 +272,7 @@ async fn stack_height() {
         processor!(invoked_stack_height),
     );
 
-    let mut context = program_test.start_with_context().await;
+    let context = program_test.start_with_context().await;
     let instructions = vec![Instruction::new_with_bytes(
         invoker_stack_height_program_id,
         &[],

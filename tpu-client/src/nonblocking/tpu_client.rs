@@ -3,7 +3,7 @@ use {
     crate::tpu_client::{RecentLeaderSlots, TpuClientConfig, MAX_FANOUT_SLOTS},
     bincode::serialize,
     futures_util::{
-        future::{join_all, FutureExt, TryFutureExt},
+        future::{join_all, FutureExt},
         stream::StreamExt,
     },
     log::*,
@@ -308,11 +308,12 @@ where
 //
 // Useful for end-users who don't need a persistent connection to each validator,
 // and want to abort more quickly.
-fn timeout_future<'a, Fut: Future<Output = TransportResult<()>> + 'a>(
+async fn timeout_future<Fut: Future<Output = TransportResult<()>>>(
     timeout_duration: Duration,
     future: Fut,
-) -> impl Future<Output = TransportResult<()>> + 'a {
+) -> TransportResult<()> {
     timeout(timeout_duration, future)
+        .await
         .unwrap_or_else(|_| Err(TransportError::Custom("Timed out".to_string())))
 }
 

@@ -42,7 +42,7 @@ async fn move_lamports() {
 
     let lamports = 1_000_000_000;
     let source = Keypair::new();
-    let mut context = program_test.start_with_context().await;
+    let context = program_test.start_with_context().await;
     let instructions = vec![
         system_instruction::create_account(
             &context.payer.pubkey(),

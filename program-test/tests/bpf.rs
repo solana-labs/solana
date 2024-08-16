@@ -14,7 +14,7 @@ async fn test_add_bpf_program() {
     program_test.prefer_bpf(true);
     program_test.add_program("noop_program", program_id, None);
 
-    let mut context = program_test.start_with_context().await;
+    let context = program_test.start_with_context().await;
 
     // Assert the program is a BPF Loader 2 program.
     let program_account = context

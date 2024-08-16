@@ -14,7 +14,7 @@ async fn test_add_bpf_program() {
     let mut program_test = ProgramTest::default();
     program_test.add_upgradeable_program_to_genesis("noop_program", &program_id);
 
-    let mut context = program_test.start_with_context().await;
+    let context = program_test.start_with_context().await;
 
     // Assert the program is a BPF Loader Upgradeable program.
     let program_account = context

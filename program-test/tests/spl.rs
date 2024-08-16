@@ -14,7 +14,7 @@ use {
 
 #[tokio::test]
 async fn programs_present() {
-    let (mut banks_client, _, _) = ProgramTest::default().start().await;
+    let (banks_client, _, _) = ProgramTest::default().start().await;
     let rent = banks_client.get_rent().await.unwrap();
     let token_2022_id = solana_inline_spl::token_2022::id();
     let (token_2022_programdata_id, _) =
@@ -32,7 +32,7 @@ async fn programs_present() {
 
 #[tokio::test]
 async fn token_2022() {
-    let (mut banks_client, payer, recent_blockhash) = ProgramTest::default().start().await;
+    let (banks_client, payer, recent_blockhash) = ProgramTest::default().start().await;
 
     let token_2022_id = solana_inline_spl::token_2022::id();
     let mint = Keypair::new();

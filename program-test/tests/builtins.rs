@@ -13,7 +13,7 @@ use {
 #[tokio::test]
 async fn test_bpf_loader_upgradeable_present() {
     // Arrange
-    let (mut banks_client, payer, recent_blockhash) = ProgramTest::default().start().await;
+    let (banks_client, payer, recent_blockhash) = ProgramTest::default().start().await;
 
     let buffer_keypair = Keypair::new();
     let upgrade_authority_keypair = Keypair::new();
@@ -50,7 +50,7 @@ async fn test_bpf_loader_upgradeable_present() {
 #[tokio::test]
 async fn versioned_transaction() {
     let program_test = ProgramTest::default();
-    let mut context = program_test.start_with_context().await;
+    let context = program_test.start_with_context().await;
 
     let program_id = Pubkey::new_unique();
     let account = Keypair::new();

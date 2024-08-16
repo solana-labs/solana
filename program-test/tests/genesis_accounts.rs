@@ -30,7 +30,7 @@ async fn genesis_accounts() {
         program_test.add_genesis_account(*pubkey, account.clone());
     }
 
-    let mut context = program_test.start_with_context().await;
+    let context = program_test.start_with_context().await;
 
     // Verify the accounts are present.
     for (pubkey, account) in my_genesis_accounts.iter() {

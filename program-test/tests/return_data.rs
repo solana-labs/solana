@@ -69,7 +69,7 @@ async fn return_data() {
         processor!(set_return_data_process_instruction),
     );
 
-    let mut context = program_test.start_with_context().await;
+    let context = program_test.start_with_context().await;
     let instructions = vec![Instruction {
         program_id: get_return_data_program_id,
         accounts: vec![AccountMeta::new_readonly(set_return_data_program_id, false)],
@@ -109,7 +109,7 @@ async fn simulation_return_data() {
         processor!(error_set_return_data_process_instruction),
     );
 
-    let mut context = program_test.start_with_context().await;
+    let context = program_test.start_with_context().await;
     let expected_data = vec![240, 159, 166, 150];
     let instructions = vec![Instruction {
         program_id: error_set_return_data_program_id,

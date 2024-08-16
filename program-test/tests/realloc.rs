@@ -50,7 +50,7 @@ async fn realloc_smaller_in_cpi() {
         program_id,
         processor!(process_instruction),
     );
-    let mut context = program_test.start_with_context().await;
+    let context = program_test.start_with_context().await;
 
     let token_2022_id = solana_inline_spl::token_2022::id();
     let mint = Keypair::new();

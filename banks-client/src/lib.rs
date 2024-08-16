@@ -11,7 +11,7 @@ pub use {
 };
 use {
     borsh::BorshDeserialize,
-    futures::{future::join_all, Future, FutureExt, TryFutureExt},
+    futures::future::join_all,
     solana_banks_interface::{
         BanksRequest, BanksResponse, BanksTransactionResultWithMetadata,
         BanksTransactionResultWithSimulation,
@@ -58,175 +58,185 @@ impl BanksClient {
         TarpcClient::new(config, transport)
     }
 
-    pub fn send_transaction_with_context(
-        &mut self,
+    pub async fn send_transaction_with_context(
+        &self,
         ctx: Context,
         transaction: impl Into<VersionedTransaction>,
-    ) -> impl Future<Output = Result<(), BanksClientError>> + '_ {
+    ) -> Result<(), BanksClientError> {
         self.inner
             .send_transaction_with_context(ctx, transaction.into())
+            .await
             .map_err(Into::into)
     }
 
-    pub fn get_transaction_status_with_context(
-        &mut self,
+    pub async fn get_transaction_status_with_context(
+        &self,
         ctx: Context,
         signature: Signature,
-    ) -> impl Future<Output = Result<Option<TransactionStatus>, BanksClientError>> + '_ {
+    ) -> Result<Option<TransactionStatus>, BanksClientError> {
         self.inner
             .get_transaction_status_with_context(ctx, signature)
+            .await
             .map_err(Into::into)
     }
 
-    pub fn get_slot_with_context(
-        &mut self,
+    pub async fn get_slot_with_context(
+        &self,
         ctx: Context,
         commitment: CommitmentLevel,
-    ) -> impl Future<Output = Result<Slot, BanksClientError>> + '_ {
+    ) -> Result<Slot, BanksClientError> {
         self.inner
             .get_slot_with_context(ctx, commitment)
+            .await
             .map_err(Into::into)
     }
 
-    pub fn get_block_height_with_context(
-        &mut self,
+    pub async fn get_block_height_with_context(
+        &self,
         ctx: Context,
         commitment: CommitmentLevel,
-    ) -> impl Future<Output = Result<Slot, BanksClientError>> + '_ {
+    ) -> Result<Slot, BanksClientError> {
         self.inner
             .get_block_height_with_context(ctx, commitment)
+            .await
             .map_err(Into::into)
     }
 
-    pub fn process_transaction_with_commitment_and_context(
-        &mut self,
+    pub async fn process_transaction_with_commitment_and_context(
+        &self,
         ctx: Context,
         transaction: impl Into<VersionedTransaction>,
         commitment: CommitmentLevel,
-    ) -> impl Future<Output = Result<Option<transaction::Result<()>>, BanksClientError>> + '_ {
+    ) -> Result<Option<transaction::Result<()>>, BanksClientError> {
         self.inner
             .process_transaction_with_commitment_and_context(ctx, transaction.into(), commitment)
+            .await
             .map_err(Into::into)
     }
 
-    pub fn process_transaction_with_preflight_and_commitment_and_context(
-        &mut self,
+    pub async fn process_transaction_with_preflight_and_commitment_and_context(
+        &self,
         ctx: Context,
         transaction: impl Into<VersionedTransaction>,
         commitment: CommitmentLevel,
-    ) -> impl Future<Output = Result<BanksTransactionResultWithSimulation, BanksClientError>> + '_
-    {
+    ) -> Result<BanksTransactionResultWithSimulation, BanksClientError> {
         self.inner
             .process_transaction_with_preflight_and_commitment_and_context(
                 ctx,
                 transaction.into(),
                 commitment,
             )
+            .await
             .map_err(Into::into)
     }
 
-    pub fn process_transaction_with_metadata_and_context(
-        &mut self,
+    pub async fn process_transaction_with_metadata_and_context(
+        &self,
         ctx: Context,
         transaction: impl Into<VersionedTransaction>,
-    ) -> impl Future<Output = Result<BanksTransactionResultWithMetadata, BanksClientError>> + '_
-    {
+    ) -> Result<BanksTransactionResultWithMetadata, BanksClientError> {
         self.inner
             .process_transaction_with_metadata_and_context(ctx, transaction.into())
+            .await
             .map_err(Into::into)
     }
 
-    pub fn simulate_transaction_with_commitment_and_context(
-        &mut self,
+    pub async fn simulate_transaction_with_commitment_and_context(
+        &self,
         ctx: Context,
         transaction: impl Into<VersionedTransaction>,
         commitment: CommitmentLevel,
-    ) -> impl Future<Output = Result<BanksTransactionResultWithSimulation, BanksClientError>> + '_
-    {
+    ) -> Result<BanksTransactionResultWithSimulation, BanksClientError> {
         self.inner
             .simulate_transaction_with_commitment_and_context(ctx, transaction.into(), commitment)
+            .await
             .map_err(Into::into)
     }
 
-    pub fn get_account_with_commitment_and_context(
-        &mut self,
+    pub async fn get_account_with_commitment_and_context(
+        &self,
         ctx: Context,
         address: Pubkey,
         commitment: CommitmentLevel,
-    ) -> impl Future<Output = Result<Option<Account>, BanksClientError>> + '_ {
+    ) -> Result<Option<Account>, BanksClientError> {
         self.inner
             .get_account_with_commitment_and_context(ctx, address, commitment)
+            .await
             .map_err(Into::into)
     }
 
     /// Send a transaction and return immediately. The server will resend the
     /// transaction until either it is accepted by the cluster or the transaction's
     /// blockhash expires.
-    pub fn send_transaction(
-        &mut self,
+    pub async fn send_transaction(
+        &self,
         transaction: impl Into<VersionedTransaction>,
-    ) -> impl Future<Output = Result<(), BanksClientError>> + '_ {
+    ) -> Result<(), BanksClientError> {
         self.send_transaction_with_context(context::current(), transaction.into())
+            .await
     }
 
     /// Return the cluster Sysvar
-    pub fn get_sysvar<T: Sysvar>(
-        &mut self,
-    ) -> impl Future<Output = Result<T, BanksClientError>> + '_ {
-        self.get_account(T::id()).map(|result| {
-            let sysvar = result?.ok_or(BanksClientError::ClientError("Sysvar not present"))?;
-            from_account::<T, _>(&sysvar).ok_or(BanksClientError::ClientError(
-                "Failed to deserialize sysvar",
-            ))
-        })
+    pub async fn get_sysvar<T: Sysvar>(&self) -> Result<T, BanksClientError> {
+        let sysvar = self
+            .get_account(T::id())
+            .await?
+            .ok_or(BanksClientError::ClientError("Sysvar not present"))?;
+        from_account::<T, _>(&sysvar).ok_or(BanksClientError::ClientError(
+            "Failed to deserialize sysvar",
+        ))
     }
 
     /// Return the cluster rent
-    pub fn get_rent(&mut self) -> impl Future<Output = Result<Rent, BanksClientError>> + '_ {
-        self.get_sysvar::<Rent>()
+    pub async fn get_rent(&self) -> Result<Rent, BanksClientError> {
+        self.get_sysvar::<Rent>().await
     }
 
     /// Send a transaction and return after the transaction has been rejected or
     /// reached the given level of commitment.
-    pub fn process_transaction_with_commitment(
-        &mut self,
+    pub async fn process_transaction_with_commitment(
+        &self,
         transaction: impl Into<VersionedTransaction>,
         commitment: CommitmentLevel,
-    ) -> impl Future<Output = Result<(), BanksClientError>> + '_ {
+    ) -> Result<(), BanksClientError> {
         let ctx = context::current();
-        self.process_transaction_with_commitment_and_context(ctx, transaction, commitment)
-            .map(|result| match result? {
-                None => Err(BanksClientError::ClientError(
-                    "invalid blockhash or fee-payer",
-                )),
-                Some(transaction_result) => Ok(transaction_result?),
-            })
+        match self
+            .process_transaction_with_commitment_and_context(ctx, transaction, commitment)
+            .await?
+        {
+            None => Err(BanksClientError::ClientError(
+                "invalid blockhash or fee-payer",
+            )),
+            Some(transaction_result) => Ok(transaction_result?),
+        }
     }
 
     /// Process a transaction and return the result with metadata.
-    pub fn process_transaction_with_metadata(
-        &mut self,
+    pub async fn process_transaction_with_metadata(
+        &self,
         transaction: impl Into<VersionedTransaction>,
-    ) -> impl Future<Output = Result<BanksTransactionResultWithMetadata, BanksClientError>> + '_
-    {
+    ) -> Result<BanksTransactionResultWithMetadata, BanksClientError> {
         let ctx = context::current();
         self.process_transaction_with_metadata_and_context(ctx, transaction.into())
+            .await
     }
 
     /// Send a transaction and return any preflight (sanitization or simulation) errors, or return
     /// after the transaction has been rejected or reached the given level of commitment.
-    pub fn process_transaction_with_preflight_and_commitment(
-        &mut self,
+    pub async fn process_transaction_with_preflight_and_commitment(
+        &self,
         transaction: impl Into<VersionedTransaction>,
         commitment: CommitmentLevel,
-    ) -> impl Future<Output = Result<(), BanksClientError>> + '_ {
+    ) -> Result<(), BanksClientError> {
         let ctx = context::current();
-        self.process_transaction_with_preflight_and_commitment_and_context(
-            ctx,
-            transaction,
-            commitment,
-        )
-        .map(|result| match result? {
+        match self
+            .process_transaction_with_preflight_and_commitment_and_context(
+                ctx,
+                transaction,
+                commitment,
+            )
+            .await?
+        {
             BanksTransactionResultWithSimulation {
                 result: None,
                 simulation_details: _,
@@ -246,31 +256,33 @@ impl BanksClient {
                 result: Some(result),
                 simulation_details: _,
             } => result.map_err(Into::into),
-        })
+        }
     }
 
     /// Send a transaction and return any preflight (sanitization or simulation) errors, or return
     /// after the transaction has been finalized or rejected.
-    pub fn process_transaction_with_preflight(
-        &mut self,
+    pub async fn process_transaction_with_preflight(
+        &self,
         transaction: impl Into<VersionedTransaction>,
-    ) -> impl Future<Output = Result<(), BanksClientError>> + '_ {
+    ) -> Result<(), BanksClientError> {
         self.process_transaction_with_preflight_and_commitment(
             transaction,
             CommitmentLevel::default(),
         )
+        .await
     }
 
     /// Send a transaction and return until the transaction has been finalized or rejected.
-    pub fn process_transaction(
-        &mut self,
+    pub async fn process_transaction(
+        &self,
         transaction: impl Into<VersionedTransaction>,
-    ) -> impl Future<Output = Result<(), BanksClientError>> + '_ {
+    ) -> Result<(), BanksClientError> {
         self.process_transaction_with_commitment(transaction, CommitmentLevel::default())
+            .await
     }
 
     pub async fn process_transactions_with_commitment<T: Into<VersionedTransaction>>(
-        &mut self,
+        &self,
         transactions: Vec<T>,
         commitment: CommitmentLevel,
     ) -> Result<(), BanksClientError> {
@@ -286,112 +298,115 @@ impl BanksClient {
     }
 
     /// Send transactions and return until the transaction has been finalized or rejected.
-    pub fn process_transactions<'a, T: Into<VersionedTransaction> + 'a>(
-        &'a mut self,
+    pub async fn process_transactions<'a, T: Into<VersionedTransaction> + 'a>(
+        &'a self,
         transactions: Vec<T>,
-    ) -> impl Future<Output = Result<(), BanksClientError>> + '_ {
+    ) -> Result<(), BanksClientError> {
         self.process_transactions_with_commitment(transactions, CommitmentLevel::default())
+            .await
     }
 
     /// Simulate a transaction at the given commitment level
-    pub fn simulate_transaction_with_commitment(
-        &mut self,
+    pub async fn simulate_transaction_with_commitment(
+        &self,
         transaction: impl Into<VersionedTransaction>,
         commitment: CommitmentLevel,
-    ) -> impl Future<Output = Result<BanksTransactionResultWithSimulation, BanksClientError>> + '_
-    {
+    ) -> Result<BanksTransactionResultWithSimulation, BanksClientError> {
         self.simulate_transaction_with_commitment_and_context(
             context::current(),
             transaction,
             commitment,
         )
+        .await
     }
 
     /// Simulate a transaction at the default commitment level
-    pub fn simulate_transaction(
-        &mut self,
+    pub async fn simulate_transaction(
+        &self,
         transaction: impl Into<VersionedTransaction>,
-    ) -> impl Future<Output = Result<BanksTransactionResultWithSimulation, BanksClientError>> + '_
-    {
+    ) -> Result<BanksTransactionResultWithSimulation, BanksClientError> {
         self.simulate_transaction_with_commitment(transaction, CommitmentLevel::default())
+            .await
     }
 
     /// Return the most recent rooted slot. All transactions at or below this slot
     /// are said to be finalized. The cluster will not fork to a higher slot.
-    pub fn get_root_slot(&mut self) -> impl Future<Output = Result<Slot, BanksClientError>> + '_ {
+    pub async fn get_root_slot(&self) -> Result<Slot, BanksClientError> {
         self.get_slot_with_context(context::current(), CommitmentLevel::default())
+            .await
     }
 
     /// Return the most recent rooted block height. All transactions at or below this height
     /// are said to be finalized. The cluster will not fork to a higher block height.
-    pub fn get_root_block_height(
-        &mut self,
-    ) -> impl Future<Output = Result<Slot, BanksClientError>> + '_ {
+    pub async fn get_root_block_height(&self) -> Result<Slot, BanksClientError> {
         self.get_block_height_with_context(context::current(), CommitmentLevel::default())
+            .await
     }
 
     /// Return the account at the given address at the slot corresponding to the given
     /// commitment level. If the account is not found, None is returned.
-    pub fn get_account_with_commitment(
-        &mut self,
+    pub async fn get_account_with_commitment(
+        &self,
         address: Pubkey,
         commitment: CommitmentLevel,
-    ) -> impl Future<Output = Result<Option<Account>, BanksClientError>> + '_ {
+    ) -> Result<Option<Account>, BanksClientError> {
         self.get_account_with_commitment_and_context(context::current(), address, commitment)
+            .await
     }
 
     /// Return the account at the given address at the time of the most recent root slot.
     /// If the account is not found, None is returned.
-    pub fn get_account(
-        &mut self,
-        address: Pubkey,
-    ) -> impl Future<Output = Result<Option<Account>, BanksClientError>> + '_ {
+    pub async fn get_account(&self, address: Pubkey) -> Result<Option<Account>, BanksClientError> {
         self.get_account_with_commitment(address, CommitmentLevel::default())
+            .await
     }
 
     /// Return the unpacked account data at the given address
     /// If the account is not found, an error is returned
-    pub fn get_packed_account_data<T: Pack>(
-        &mut self,
+    pub async fn get_packed_account_data<T: Pack>(
+        &self,
         address: Pubkey,
-    ) -> impl Future<Output = Result<T, BanksClientError>> + '_ {
-        self.get_account(address).map(|result| {
-            let account = result?.ok_or(BanksClientError::ClientError("Account not found"))?;
-            T::unpack_from_slice(&account.data)
-                .map_err(|_| BanksClientError::ClientError("Failed to deserialize account"))
-        })
+    ) -> Result<T, BanksClientError> {
+        let account = self
+            .get_account(address)
+            .await?
+            .ok_or(BanksClientError::ClientError("Account not found"))?;
+        T::unpack_from_slice(&account.data)
+            .map_err(|_| BanksClientError::ClientError("Failed to deserialize account"))
     }
 
     /// Return the unpacked account data at the given address
     /// If the account is not found, an error is returned
-    pub fn get_account_data_with_borsh<T: BorshDeserialize>(
-        &mut self,
+    pub async fn get_account_data_with_borsh<T: BorshDeserialize>(
+        &self,
         address: Pubkey,
-    ) -> impl Future<Output = Result<T, BanksClientError>> + '_ {
-        self.get_account(address).map(|result| {
-            let account = result?.ok_or(BanksClientError::ClientError("Account not found"))?;
-            T::try_from_slice(&account.data).map_err(Into::into)
-        })
+    ) -> Result<T, BanksClientError> {
+        let account = self
+            .get_account(address)
+            .await?
+            .ok_or(BanksClientError::ClientError("Account not found"))?;
+        T::try_from_slice(&account.data).map_err(Into::into)
     }
 
     /// Return the balance in lamports of an account at the given address at the slot
     /// corresponding to the given commitment level.
-    pub fn get_balance_with_commitment(
-        &mut self,
+    pub async fn get_balance_with_commitment(
+        &self,
         address: Pubkey,
         commitment: CommitmentLevel,
-    ) -> impl Future<Output = Result<u64, BanksClientError>> + '_ {
-        self.get_account_with_commitment_and_context(context::current(), address, commitment)
-            .map(|result| Ok(result?.map(|x| x.lamports).unwrap_or(0)))
+    ) -> Result<u64, BanksClientError> {
+        Ok(self
+            .get_account_with_commitment_and_context(context::current(), address, commitment)
+            .await?
+            .map(|x| x.lamports)
+            .unwrap_or(0))
     }
 
     /// Return the balance in lamports of an account at the given address at the time
     /// of the most recent root slot.
-    pub fn get_balance(
-        &mut self,
-        address: Pubkey,
-    ) -> impl Future<Output = Result<u64, BanksClientError>> + '_ {
+    pub async fn get_balance(&self, address: Pubkey) -> Result<u64, BanksClientError> {
         self.get_balance_with_commitment(address, CommitmentLevel::default())
+            .await
     }
 
     /// Return the status of a transaction with a signature matching the transaction's first
@@ -399,16 +414,17 @@ impl BanksClient {
     /// blockhash was expired or the fee-paying account had insufficient funds to pay the
     /// transaction fee. Note that servers rarely store the full transaction history. This
     /// method may return None if the transaction status has been discarded.
-    pub fn get_transaction_status(
-        &mut self,
+    pub async fn get_transaction_status(
+        &self,
         signature: Signature,
-    ) -> impl Future<Output = Result<Option<TransactionStatus>, BanksClientError>> + '_ {
+    ) -> Result<Option<TransactionStatus>, BanksClientError> {
         self.get_transaction_status_with_context(context::current(), signature)
+            .await
     }
 
     /// Same as get_transaction_status, but for multiple transactions.
     pub async fn get_transaction_statuses(
-        &mut self,
+        &self,
         signatures: Vec<Signature>,
     ) -> Result<Vec<Option<TransactionStatus>>, BanksClientError> {
         // tarpc futures oddly hold a mutable reference back to the client so clone the client upfront
@@ -427,66 +443,67 @@ impl BanksClient {
         statuses.into_iter().collect()
     }
 
-    pub fn get_latest_blockhash(
-        &mut self,
-    ) -> impl Future<Output = Result<Hash, BanksClientError>> + '_ {
+    pub async fn get_latest_blockhash(&self) -> Result<Hash, BanksClientError> {
         self.get_latest_blockhash_with_commitment(CommitmentLevel::default())
-            .map(|result| {
-                result?
-                    .map(|x| x.0)
-                    .ok_or(BanksClientError::ClientError("valid blockhash not found"))
-                    .map_err(Into::into)
-            })
-    }
-
-    pub fn get_latest_blockhash_with_commitment(
-        &mut self,
-        commitment: CommitmentLevel,
-    ) -> impl Future<Output = Result<Option<(Hash, u64)>, BanksClientError>> + '_ {
-        self.get_latest_blockhash_with_commitment_and_context(context::current(), commitment)
-    }
-
-    pub fn get_latest_blockhash_with_commitment_and_context(
-        &mut self,
-        ctx: Context,
-        commitment: CommitmentLevel,
-    ) -> impl Future<Output = Result<Option<(Hash, u64)>, BanksClientError>> + '_ {
-        self.inner
-            .get_latest_blockhash_with_commitment_and_context(ctx, commitment)
+            .await?
+            .map(|x| x.0)
+            .ok_or(BanksClientError::ClientError("valid blockhash not found"))
             .map_err(Into::into)
     }
 
-    pub fn get_fee_for_message(
-        &mut self,
+    pub async fn get_latest_blockhash_with_commitment(
+        &self,
+        commitment: CommitmentLevel,
+    ) -> Result<Option<(Hash, u64)>, BanksClientError> {
+        self.get_latest_blockhash_with_commitment_and_context(context::current(), commitment)
+            .await
+    }
+
+    pub async fn get_latest_blockhash_with_commitment_and_context(
+        &self,
+        ctx: Context,
+        commitment: CommitmentLevel,
+    ) -> Result<Option<(Hash, u64)>, BanksClientError> {
+        self.inner
+            .get_latest_blockhash_with_commitment_and_context(ctx, commitment)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub async fn get_fee_for_message(
+        &self,
         message: Message,
-    ) -> impl Future<Output = Result<Option<u64>, BanksClientError>> + '_ {
+    ) -> Result<Option<u64>, BanksClientError> {
         self.get_fee_for_message_with_commitment_and_context(
             context::current(),
             message,
             CommitmentLevel::default(),
         )
+        .await
     }
 
-    pub fn get_fee_for_message_with_commitment(
-        &mut self,
+    pub async fn get_fee_for_message_with_commitment(
+        &self,
         message: Message,
         commitment: CommitmentLevel,
-    ) -> impl Future<Output = Result<Option<u64>, BanksClientError>> + '_ {
+    ) -> Result<Option<u64>, BanksClientError> {
         self.get_fee_for_message_with_commitment_and_context(
             context::current(),
             message,
             commitment,
         )
+        .await
     }
 
-    pub fn get_fee_for_message_with_commitment_and_context(
-        &mut self,
+    pub async fn get_fee_for_message_with_commitment_and_context(
+        &self,
         ctx: Context,
         message: Message,
         commitment: CommitmentLevel,
-    ) -> impl Future<Output = Result<Option<u64>, BanksClientError>> + '_ {
+    ) -> Result<Option<u64>, BanksClientError> {
         self.inner
             .get_fee_for_message_with_commitment_and_context(ctx, message, commitment)
+            .await
             .map_err(Into::into)
     }
 }
@@ -557,7 +574,7 @@ mod tests {
             let client_transport =
                 start_local_server(bank_forks, block_commitment_cache, Duration::from_millis(1))
                     .await;
-            let mut banks_client = start_client(client_transport).await?;
+            let banks_client = start_client(client_transport).await?;
 
             let recent_blockhash = banks_client.get_latest_blockhash().await?;
             let transaction = Transaction::new(&[&genesis.mint_keypair], message, recent_blockhash);
@@ -596,7 +613,7 @@ mod tests {
             let client_transport =
                 start_local_server(bank_forks, block_commitment_cache, Duration::from_millis(1))
                     .await;
-            let mut banks_client = start_client(client_transport).await?;
+            let banks_client = start_client(client_transport).await?;
             let (recent_blockhash, last_valid_block_height) = banks_client
                 .get_latest_blockhash_with_commitment(CommitmentLevel::default())
                 .await?
