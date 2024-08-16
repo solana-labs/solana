@@ -2,28 +2,15 @@
 
 use {
     crate::{
-        mock_bank::{deploy_program, MockBankCallback},
+        mock_bank::{
+            create_executable_environment, deploy_program, register_builtins, MockBankCallback,
+            MockForkGraph,
+        },
         transaction_builder::SanitizedTransactionBuilder,
-    },
-    solana_bpf_loader_program::syscalls::{
-        SyscallAbort, SyscallGetClockSysvar, SyscallInvokeSignedRust, SyscallLog, SyscallMemcpy,
-        SyscallMemset, SyscallSetReturnData,
-    },
-    solana_compute_budget::compute_budget::ComputeBudget,
-    solana_program_runtime::{
-        invoke_context::InvokeContext,
-        loaded_programs::{
-            BlockRelation, ForkGraph, ProgramCache, ProgramCacheEntry, ProgramRuntimeEnvironments,
-        },
-        solana_rbpf::{
-            program::{BuiltinFunction, BuiltinProgram, FunctionRegistry},
-            vm::Config,
-        },
     },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
-        bpf_loader_upgradeable::{self},
-        clock::{Clock, Epoch, Slot, UnixTimestamp},
+        clock::Clock,
         hash::Hash,
         instruction::AccountMeta,
         pubkey::Pubkey,
@@ -40,165 +27,20 @@ use {
             TransactionProcessingEnvironment,
         },
     },
-    std::{
-        cmp::Ordering,
-        collections::{HashMap, HashSet},
-        sync::{Arc, RwLock},
-        time::{SystemTime, UNIX_EPOCH},
-    },
+    solana_type_overrides::sync::{Arc, RwLock},
+    std::collections::{HashMap, HashSet},
 };
 
 // This module contains the implementation of TransactionProcessingCallback
 mod mock_bank;
 mod transaction_builder;
 
-const BPF_LOADER_NAME: &str = "solana_bpf_loader_upgradeable_program";
-const SYSTEM_PROGRAM_NAME: &str = "system_program";
 const DEPLOYMENT_SLOT: u64 = 0;
 const EXECUTION_SLOT: u64 = 5; // The execution slot must be greater than the deployment slot
-const DEPLOYMENT_EPOCH: u64 = 0;
 const EXECUTION_EPOCH: u64 = 2; // The execution epoch must be greater than the deployment epoch
 
-struct MockForkGraph {}
-
-impl ForkGraph for MockForkGraph {
-    fn relationship(&self, a: Slot, b: Slot) -> BlockRelation {
-        match a.cmp(&b) {
-            Ordering::Less => BlockRelation::Ancestor,
-            Ordering::Equal => BlockRelation::Equal,
-            Ordering::Greater => BlockRelation::Descendant,
-        }
-    }
-
-    fn slot_epoch(&self, _slot: Slot) -> Option<Epoch> {
-        Some(0)
-    }
-}
-
-fn create_custom_environment<'a>() -> BuiltinProgram<InvokeContext<'a>> {
-    let compute_budget = ComputeBudget::default();
-    let vm_config = Config {
-        max_call_depth: compute_budget.max_call_depth,
-        stack_frame_size: compute_budget.stack_frame_size,
-        enable_address_translation: true,
-        enable_stack_frame_gaps: true,
-        instruction_meter_checkpoint_distance: 10000,
-        enable_instruction_meter: true,
-        enable_instruction_tracing: true,
-        enable_symbol_and_section_labels: true,
-        reject_broken_elfs: true,
-        noop_instruction_rate: 256,
-        sanitize_user_provided_values: true,
-        external_internal_function_hash_collision: false,
-        reject_callx_r10: false,
-        enable_sbpf_v1: true,
-        enable_sbpf_v2: false,
-        optimize_rodata: false,
-        aligned_memory_mapping: true,
-    };
-
-    // These functions are system calls the compile contract calls during execution, so they
-    // need to be registered.
-    let mut function_registry = FunctionRegistry::<BuiltinFunction<InvokeContext>>::default();
-    function_registry
-        .register_function_hashed(*b"abort", SyscallAbort::vm)
-        .expect("Registration failed");
-    function_registry
-        .register_function_hashed(*b"sol_log_", SyscallLog::vm)
-        .expect("Registration failed");
-    function_registry
-        .register_function_hashed(*b"sol_memcpy_", SyscallMemcpy::vm)
-        .expect("Registration failed");
-    function_registry
-        .register_function_hashed(*b"sol_memset_", SyscallMemset::vm)
-        .expect("Registration failed");
-
-    function_registry
-        .register_function_hashed(*b"sol_invoke_signed_rust", SyscallInvokeSignedRust::vm)
-        .expect("Registration failed");
-
-    function_registry
-        .register_function_hashed(*b"sol_set_return_data", SyscallSetReturnData::vm)
-        .expect("Registration failed");
-
-    function_registry
-        .register_function_hashed(*b"sol_get_clock_sysvar", SyscallGetClockSysvar::vm)
-        .expect("Registration failed");
-
-    BuiltinProgram::new_loader(vm_config, function_registry)
-}
-
-fn create_executable_environment(
-    fork_graph: Arc<RwLock<MockForkGraph>>,
-    mock_bank: &mut MockBankCallback,
-    program_cache: &mut ProgramCache<MockForkGraph>,
-) {
-    program_cache.environments = ProgramRuntimeEnvironments {
-        program_runtime_v1: Arc::new(create_custom_environment()),
-        // We are not using program runtime v2
-        program_runtime_v2: Arc::new(BuiltinProgram::new_loader(
-            Config::default(),
-            FunctionRegistry::default(),
-        )),
-    };
-
-    program_cache.fork_graph = Some(Arc::downgrade(&fork_graph));
-
-    // We must fill in the sysvar cache entries
-    let time_now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("Time went backwards")
-        .as_secs() as i64;
-    let clock = Clock {
-        slot: DEPLOYMENT_SLOT,
-        epoch_start_timestamp: time_now.saturating_sub(10) as UnixTimestamp,
-        epoch: DEPLOYMENT_EPOCH,
-        leader_schedule_epoch: DEPLOYMENT_EPOCH,
-        unix_timestamp: time_now as UnixTimestamp,
-    };
-
-    let mut account_data = AccountSharedData::default();
-    account_data.set_data(bincode::serialize(&clock).unwrap());
-    mock_bank
-        .account_shared_data
-        .write()
-        .unwrap()
-        .insert(Clock::id(), account_data);
-}
-
-fn register_builtins(
-    mock_bank: &MockBankCallback,
-    batch_processor: &TransactionBatchProcessor<MockForkGraph>,
-) {
-    // We must register the bpf loader account as a loadable account, otherwise programs
-    // won't execute.
-    batch_processor.add_builtin(
-        mock_bank,
-        bpf_loader_upgradeable::id(),
-        BPF_LOADER_NAME,
-        ProgramCacheEntry::new_builtin(
-            DEPLOYMENT_SLOT,
-            BPF_LOADER_NAME.len(),
-            solana_bpf_loader_program::Entrypoint::vm,
-        ),
-    );
-
-    // In order to perform a transference of native tokens using the system instruction,
-    // the system program builtin must be registered.
-    batch_processor.add_builtin(
-        mock_bank,
-        solana_system_program::id(),
-        SYSTEM_PROGRAM_NAME,
-        ProgramCacheEntry::new_builtin(
-            DEPLOYMENT_SLOT,
-            SYSTEM_PROGRAM_NAME.len(),
-            solana_system_program::system_processor::Entrypoint::vm,
-        ),
-    );
-}
-
 fn prepare_transactions(
-    mock_bank: &mut MockBankCallback,
+    mock_bank: &MockBankCallback,
 ) -> (Vec<SanitizedTransaction>, Vec<TransactionCheckResult>) {
     let mut transaction_builder = SanitizedTransactionBuilder::default();
     let mut all_transactions = Vec::new();
@@ -392,8 +234,8 @@ fn prepare_transactions(
 
 #[test]
 fn svm_integration() {
-    let mut mock_bank = MockBankCallback::default();
-    let (transactions, check_results) = prepare_transactions(&mut mock_bank);
+    let mock_bank = MockBankCallback::default();
+    let (transactions, check_results) = prepare_transactions(&mock_bank);
     let batch_processor = TransactionBatchProcessor::<MockForkGraph>::new(
         EXECUTION_SLOT,
         EXECUTION_EPOCH,
@@ -404,7 +246,7 @@ fn svm_integration() {
 
     create_executable_environment(
         fork_graph.clone(),
-        &mut mock_bank,
+        &mock_bank,
         &mut batch_processor.program_cache.write().unwrap(),
     );
 

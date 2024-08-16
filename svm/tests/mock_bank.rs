@@ -1,15 +1,33 @@
 use {
-    solana_program_runtime::loaded_programs::{BlockRelation, ForkGraph},
+    solana_bpf_loader_program::syscalls::{
+        SyscallAbort, SyscallGetClockSysvar, SyscallInvokeSignedRust, SyscallLog, SyscallMemcpy,
+        SyscallMemset, SyscallSetReturnData,
+    },
+    solana_compute_budget::compute_budget::ComputeBudget,
+    solana_program_runtime::{
+        invoke_context::InvokeContext,
+        loaded_programs::{
+            BlockRelation, ForkGraph, ProgramCache, ProgramCacheEntry, ProgramRuntimeEnvironments,
+        },
+        solana_rbpf::{
+            program::{BuiltinFunction, BuiltinProgram, FunctionRegistry},
+            vm::Config,
+        },
+    },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-        clock::Epoch,
+        clock::{Clock, Epoch, UnixTimestamp},
         feature_set::FeatureSet,
         native_loader,
         pubkey::Pubkey,
         slot_hashes::Slot,
+        sysvar::SysvarId,
     },
-    solana_svm::transaction_processing_callback::TransactionProcessingCallback,
+    solana_svm::{
+        transaction_processing_callback::TransactionProcessingCallback,
+        transaction_processor::TransactionBatchProcessor,
+    },
     solana_type_overrides::sync::{Arc, RwLock},
     std::{
         cmp::Ordering,
@@ -17,6 +35,7 @@ use {
         env,
         fs::{self, File},
         io::Read,
+        time::{SystemTime, UNIX_EPOCH},
     },
 };
 
@@ -97,11 +116,7 @@ fn load_program(name: String) -> Vec<u8> {
 }
 
 #[allow(unused)]
-pub fn deploy_program(
-    name: String,
-    deployment_slot: Slot,
-    mock_bank: &mut MockBankCallback,
-) -> Pubkey {
+pub fn deploy_program(name: String, deployment_slot: Slot, mock_bank: &MockBankCallback) -> Pubkey {
     let program_account = Pubkey::new_unique();
     let program_data_account = Pubkey::new_unique();
     let state = UpgradeableLoaderState::Program {
@@ -143,4 +158,135 @@ pub fn deploy_program(
         .insert(program_data_account, account_data);
 
     program_account
+}
+
+#[allow(unused)]
+pub fn create_executable_environment(
+    fork_graph: Arc<RwLock<MockForkGraph>>,
+    mock_bank: &MockBankCallback,
+    program_cache: &mut ProgramCache<MockForkGraph>,
+) {
+    const DEPLOYMENT_EPOCH: u64 = 0;
+    const DEPLOYMENT_SLOT: u64 = 0;
+
+    program_cache.environments = ProgramRuntimeEnvironments {
+        program_runtime_v1: Arc::new(create_custom_environment()),
+        // We are not using program runtime v2
+        program_runtime_v2: Arc::new(BuiltinProgram::new_loader(
+            Config::default(),
+            FunctionRegistry::default(),
+        )),
+    };
+
+    program_cache.fork_graph = Some(Arc::downgrade(&fork_graph));
+
+    // We must fill in the sysvar cache entries
+    let time_now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("Time went backwards")
+        .as_secs() as i64;
+    let clock = Clock {
+        slot: DEPLOYMENT_SLOT,
+        epoch_start_timestamp: time_now.saturating_sub(10) as UnixTimestamp,
+        epoch: DEPLOYMENT_EPOCH,
+        leader_schedule_epoch: DEPLOYMENT_EPOCH,
+        unix_timestamp: time_now as UnixTimestamp,
+    };
+
+    let mut account_data = AccountSharedData::default();
+    account_data.set_data(bincode::serialize(&clock).unwrap());
+    mock_bank
+        .account_shared_data
+        .write()
+        .unwrap()
+        .insert(Clock::id(), account_data);
+}
+
+#[allow(unused)]
+pub fn register_builtins(
+    mock_bank: &MockBankCallback,
+    batch_processor: &TransactionBatchProcessor<MockForkGraph>,
+) {
+    const DEPLOYMENT_SLOT: u64 = 0;
+    // We must register the bpf loader account as a loadable account, otherwise programs
+    // won't execute.
+    let bpf_loader_name = "solana_bpf_loader_upgradeable_program";
+    batch_processor.add_builtin(
+        mock_bank,
+        bpf_loader_upgradeable::id(),
+        bpf_loader_name,
+        ProgramCacheEntry::new_builtin(
+            DEPLOYMENT_SLOT,
+            bpf_loader_name.len(),
+            solana_bpf_loader_program::Entrypoint::vm,
+        ),
+    );
+
+    // In order to perform a transference of native tokens using the system instruction,
+    // the system program builtin must be registered.
+    let system_program_name = "system_program";
+    batch_processor.add_builtin(
+        mock_bank,
+        solana_system_program::id(),
+        system_program_name,
+        ProgramCacheEntry::new_builtin(
+            DEPLOYMENT_SLOT,
+            system_program_name.len(),
+            solana_system_program::system_processor::Entrypoint::vm,
+        ),
+    );
+}
+
+#[allow(unused)]
+fn create_custom_environment<'a>() -> BuiltinProgram<InvokeContext<'a>> {
+    let compute_budget = ComputeBudget::default();
+    let vm_config = Config {
+        max_call_depth: compute_budget.max_call_depth,
+        stack_frame_size: compute_budget.stack_frame_size,
+        enable_address_translation: true,
+        enable_stack_frame_gaps: true,
+        instruction_meter_checkpoint_distance: 10000,
+        enable_instruction_meter: true,
+        enable_instruction_tracing: true,
+        enable_symbol_and_section_labels: true,
+        reject_broken_elfs: true,
+        noop_instruction_rate: 256,
+        sanitize_user_provided_values: true,
+        external_internal_function_hash_collision: false,
+        reject_callx_r10: false,
+        enable_sbpf_v1: true,
+        enable_sbpf_v2: false,
+        optimize_rodata: false,
+        aligned_memory_mapping: true,
+    };
+
+    // These functions are system calls the compile contract calls during execution, so they
+    // need to be registered.
+    let mut function_registry = FunctionRegistry::<BuiltinFunction<InvokeContext>>::default();
+    function_registry
+        .register_function_hashed(*b"abort", SyscallAbort::vm)
+        .expect("Registration failed");
+    function_registry
+        .register_function_hashed(*b"sol_log_", SyscallLog::vm)
+        .expect("Registration failed");
+    function_registry
+        .register_function_hashed(*b"sol_memcpy_", SyscallMemcpy::vm)
+        .expect("Registration failed");
+    function_registry
+        .register_function_hashed(*b"sol_memset_", SyscallMemset::vm)
+        .expect("Registration failed");
+
+    function_registry
+        .register_function_hashed(*b"sol_invoke_signed_rust", SyscallInvokeSignedRust::vm)
+        .expect("Registration failed");
+
+    function_registry
+        .register_function_hashed(*b"sol_set_return_data", SyscallSetReturnData::vm)
+        .expect("Registration failed");
+
+    function_registry
+        .register_function_hashed(*b"sol_get_clock_sysvar", SyscallGetClockSysvar::vm)
+        .expect("Registration failed");
+
+    BuiltinProgram::new_loader(vm_config, function_registry)
 }
