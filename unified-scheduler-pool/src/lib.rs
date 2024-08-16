@@ -1530,7 +1530,7 @@ mod tests {
     }
 
     const SHORTENED_POOL_CLEANER_INTERVAL: Duration = Duration::from_millis(1);
-    const SHORTENED_MAX_POOLING_DURATION: Duration = Duration::from_millis(10);
+    const SHORTENED_MAX_POOLING_DURATION: Duration = Duration::from_millis(100);
 
     #[test]
     fn test_scheduler_drop_idle() {
@@ -1575,6 +1575,13 @@ mod tests {
 
         // See the old (= idle) scheduler gone only after solScCleaner did its job...
         sleepless_testing::at(&TestCheckPoint::AfterIdleSchedulerCleaned);
+
+        // The following assertion is racy.
+        //
+        // We need to make sure new_scheduler isn't treated as idle up to now since being returned
+        // to the pool after sleep(SHORTENED_MAX_POOLING_DURATION * 10).
+        // Removing only old_scheduler is the expected behavior. So, make
+        // SHORTENED_MAX_POOLING_DURATION rather long...
         assert_eq!(pool_raw.scheduler_inners.lock().unwrap().len(), 1);
         assert_eq!(
             pool_raw
@@ -2065,7 +2072,14 @@ mod tests {
         let context = SchedulingContext::new(bank.clone());
         let scheduler = pool.do_take_scheduler(context);
 
-        for i in 0..10 {
+        // This test is racy.
+        //
+        // That's because the scheduler needs to be aborted quickly as an expected behavior,
+        // leaving some readily-available work untouched. So, schedule rather large number of tasks
+        // to make the short-cutting abort code-path win the race easily.
+        const MAX_TASK_COUNT: usize = 100;
+
+        for i in 0..MAX_TASK_COUNT {
             let tx =
                 &SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
                     &mint_keypair,
@@ -2080,7 +2094,8 @@ mod tests {
         sleepless_testing::at(TestCheckPoint::BeforeThreadManagerDrop);
         drop::<PooledScheduler<_>>(scheduler);
         sleepless_testing::at(TestCheckPoint::AfterSchedulerThreadAborted);
-        assert!(*TASK_COUNT.lock().unwrap() < 10);
+        // All of handler threads should have been aborted before processing MAX_TASK_COUNT tasks.
+        assert!(*TASK_COUNT.lock().unwrap() < MAX_TASK_COUNT);
     }
 
     #[test]
