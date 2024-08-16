@@ -63,13 +63,34 @@ def is_self_dev_dep_with_dev_context_only_utils(package, dependency, wrong_self_
 
     return is_special_cased
 
+
+# `cargo publish` is fine with circular dev-dependencies if
+# they are path deps.
+# However, cargo still fails if deps are path deps with versions
+# (this when you use `workspace = true`): https://github.com/rust-lang/cargo/issues/4242
+# Unlike in is_self_dev_dep_with_dev_context_only_utils(),
+# we don't have a clean way of checking if someone used a workspace dev
+# dep when they probably meant to use a path dev dep,
+# so this function just checks if a dev dep is a path dep
+# and provides no special warnings.
+def is_path_dev_dep(dependency):
+    no_explicit_version = '*'
+    return (
+        dependency['kind'] == 'dev'
+        and 'path' in dependency
+        and dependency['req'] == no_explicit_version
+    )
+
 def should_add(package, dependency, wrong_self_dev_dependencies):
     related_to_solana = dependency['name'].startswith('solana')
     self_dev_dep_with_dev_context_only_utils = is_self_dev_dep_with_dev_context_only_utils(
         package, dependency, wrong_self_dev_dependencies
     )
-
-    return related_to_solana and not self_dev_dep_with_dev_context_only_utils
+    return (
+        related_to_solana
+        and not self_dev_dep_with_dev_context_only_utils
+        and not is_path_dev_dep(dependency)
+    )
 
 def get_packages():
     metadata = load_metadata()
