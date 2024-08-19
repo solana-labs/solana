@@ -148,256 +148,135 @@ impl ComputeBudgetInstructionDetails {
 mod test {
     use {
         super::*,
-        solana_sdk::instruction::{CompiledInstruction, Instruction},
+        solana_sdk::{
+            instruction::Instruction,
+            message::Message,
+            pubkey::Pubkey,
+            signature::Keypair,
+            signer::Signer,
+            transaction::{SanitizedTransaction, Transaction},
+        },
+        solana_svm_transaction::svm_message::SVMMessage,
     };
 
-    fn setup_test_instruction(
-        index: u8,
-        instruction: Instruction,
-    ) -> (Pubkey, CompiledInstruction) {
-        (
-            instruction.program_id,
-            CompiledInstruction {
-                program_id_index: index,
-                data: instruction.data.clone(),
-                accounts: vec![],
-            },
-        )
+    fn build_sanitized_transaction(instructions: &[Instruction]) -> SanitizedTransaction {
+        let payer_keypair = Keypair::new();
+        SanitizedTransaction::from_transaction_for_tests(Transaction::new_unsigned(Message::new(
+            instructions,
+            Some(&payer_keypair.pubkey()),
+        )))
     }
 
     #[test]
-    fn test_process_instruction_request_heap() {
-        let mut index = 0;
-        let mut expected_details = ComputeBudgetInstructionDetails::default();
-        let mut compute_budget_instruction_details = ComputeBudgetInstructionDetails::default();
-
-        // irrelevant instruction makes no change
-        index += 1;
-        let (program_id, ix) = setup_test_instruction(
-            index,
-            Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
-        );
-        assert!(compute_budget_instruction_details
-            .process_instruction(index, &program_id, &SVMInstruction::from(&ix))
-            .is_ok());
-        expected_details.num_non_compute_budget_instructions = 1;
-        assert_eq!(compute_budget_instruction_details, expected_details);
-
-        // valid instruction
-        index += 1;
-        let (program_id, ix) = setup_test_instruction(
-            index,
+    fn test_try_from_request_heap() {
+        let tx = build_sanitized_transaction(&[
+            Instruction::new_with_bincode(Pubkey::new_unique(), &(), vec![]),
             ComputeBudgetInstruction::request_heap_frame(40 * 1024),
-        );
-        expected_details.requested_heap_size = Some((index, 40 * 1024));
-        assert!(compute_budget_instruction_details
-            .process_instruction(index, &program_id, &SVMInstruction::from(&ix))
-            .is_ok());
-        assert_eq!(compute_budget_instruction_details, expected_details);
-
-        // duplicate instruction results error
-        index += 1;
-        let expected_err = Err(TransactionError::DuplicateInstruction(index));
-        let (program_id, ix) = setup_test_instruction(
-            index,
-            ComputeBudgetInstruction::request_heap_frame(50 * 1024),
-        );
+            Instruction::new_with_bincode(Pubkey::new_unique(), &(), vec![]),
+        ]);
+        let expected_details = ComputeBudgetInstructionDetails {
+            requested_heap_size: Some((1, 40 * 1024)),
+            num_non_compute_budget_instructions: 2,
+            ..ComputeBudgetInstructionDetails::default()
+        };
         assert_eq!(
-            compute_budget_instruction_details.process_instruction(
-                index,
-                &program_id,
-                &SVMInstruction::from(&ix)
-            ),
-            expected_err
+            ComputeBudgetInstructionDetails::try_from(SVMMessage::program_instructions_iter(&tx)),
+            Ok(expected_details)
         );
-        assert_eq!(compute_budget_instruction_details, expected_details);
 
-        // irrelevant instruction makes no change
-        index += 1;
-        let (program_id, ix) = setup_test_instruction(
-            index,
-            Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+        let tx = build_sanitized_transaction(&[
+            Instruction::new_with_bincode(Pubkey::new_unique(), &(), vec![]),
+            ComputeBudgetInstruction::request_heap_frame(40 * 1024),
+            ComputeBudgetInstruction::request_heap_frame(41 * 1024),
+        ]);
+        assert_eq!(
+            ComputeBudgetInstructionDetails::try_from(SVMMessage::program_instructions_iter(&tx)),
+            Err(TransactionError::DuplicateInstruction(2))
         );
-        assert!(compute_budget_instruction_details
-            .process_instruction(index, &program_id, &SVMInstruction::from(&ix))
-            .is_ok());
-        expected_details.num_non_compute_budget_instructions += 1;
-        assert_eq!(compute_budget_instruction_details, expected_details);
     }
 
     #[test]
-    fn test_process_instruction_compute_unit_limit() {
-        let mut index = 0;
-        let mut expected_details = ComputeBudgetInstructionDetails::default();
-        let mut compute_budget_instruction_details = ComputeBudgetInstructionDetails::default();
-
-        // irrelevant instruction makes no change
-        let (program_id, ix) = setup_test_instruction(
-            index,
-            Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
-        );
-        assert!(compute_budget_instruction_details
-            .process_instruction(index, &program_id, &SVMInstruction::from(&ix))
-            .is_ok());
-        expected_details.num_non_compute_budget_instructions = 1;
-        assert_eq!(compute_budget_instruction_details, expected_details);
-
-        // valid instruction,
-        index += 1;
-        let (program_id, ix) = setup_test_instruction(
-            index,
+    fn test_try_from_compute_unit_limit() {
+        let tx = build_sanitized_transaction(&[
+            Instruction::new_with_bincode(Pubkey::new_unique(), &(), vec![]),
             ComputeBudgetInstruction::set_compute_unit_limit(u32::MAX),
-        );
-        expected_details.requested_compute_unit_limit = Some((index, u32::MAX));
-        assert!(compute_budget_instruction_details
-            .process_instruction(index, &program_id, &SVMInstruction::from(&ix))
-            .is_ok());
-        assert_eq!(compute_budget_instruction_details, expected_details);
-
-        // duplicate instruction results error
-        index += 1;
-        let expected_err = Err(TransactionError::DuplicateInstruction(index));
-        let (program_id, ix) = setup_test_instruction(
-            index,
-            ComputeBudgetInstruction::set_compute_unit_limit(MAX_COMPUTE_UNIT_LIMIT),
-        );
+            Instruction::new_with_bincode(Pubkey::new_unique(), &(), vec![]),
+        ]);
+        let expected_details = ComputeBudgetInstructionDetails {
+            requested_compute_unit_limit: Some((1, u32::MAX)),
+            num_non_compute_budget_instructions: 2,
+            ..ComputeBudgetInstructionDetails::default()
+        };
         assert_eq!(
-            compute_budget_instruction_details.process_instruction(
-                index,
-                &program_id,
-                &SVMInstruction::from(&ix)
-            ),
-            expected_err
+            ComputeBudgetInstructionDetails::try_from(SVMMessage::program_instructions_iter(&tx)),
+            Ok(expected_details)
         );
-        assert_eq!(compute_budget_instruction_details, expected_details);
 
-        // irrelevant instruction makes no change
-        index += 1;
-        let (program_id, ix) = setup_test_instruction(
-            index,
-            Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+        let tx = build_sanitized_transaction(&[
+            Instruction::new_with_bincode(Pubkey::new_unique(), &(), vec![]),
+            ComputeBudgetInstruction::set_compute_unit_limit(0),
+            ComputeBudgetInstruction::set_compute_unit_limit(u32::MAX),
+        ]);
+        assert_eq!(
+            ComputeBudgetInstructionDetails::try_from(SVMMessage::program_instructions_iter(&tx)),
+            Err(TransactionError::DuplicateInstruction(2))
         );
-        assert!(compute_budget_instruction_details
-            .process_instruction(index, &program_id, &SVMInstruction::from(&ix))
-            .is_ok());
-        expected_details.num_non_compute_budget_instructions += 1;
-        assert_eq!(compute_budget_instruction_details, expected_details);
     }
 
     #[test]
-    fn test_process_instruction_compute_unit_price() {
-        let mut index = 0;
-        let mut expected_details = ComputeBudgetInstructionDetails::default();
-        let mut compute_budget_instruction_details = ComputeBudgetInstructionDetails::default();
-
-        // irrelevant instruction makes no change
-        let (program_id, ix) = setup_test_instruction(
-            index,
-            Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
-        );
-        assert!(compute_budget_instruction_details
-            .process_instruction(index, &program_id, &SVMInstruction::from(&ix))
-            .is_ok());
-        expected_details.num_non_compute_budget_instructions = 1;
-        assert_eq!(compute_budget_instruction_details, expected_details);
-
-        // valid instruction,
-        index += 1;
-        let (program_id, ix) = setup_test_instruction(
-            index,
+    fn test_try_from_compute_unit_price() {
+        let tx = build_sanitized_transaction(&[
+            Instruction::new_with_bincode(Pubkey::new_unique(), &(), vec![]),
             ComputeBudgetInstruction::set_compute_unit_price(u64::MAX),
-        );
-        expected_details.requested_compute_unit_price = Some((index, u64::MAX));
-        assert!(compute_budget_instruction_details
-            .process_instruction(index, &program_id, &SVMInstruction::from(&ix))
-            .is_ok());
-        assert_eq!(compute_budget_instruction_details, expected_details);
-
-        // duplicate instruction results error
-        index += 1;
-        let expected_err = Err(TransactionError::DuplicateInstruction(index));
-        let (program_id, ix) =
-            setup_test_instruction(index, ComputeBudgetInstruction::set_compute_unit_price(0));
+            Instruction::new_with_bincode(Pubkey::new_unique(), &(), vec![]),
+        ]);
+        let expected_details = ComputeBudgetInstructionDetails {
+            requested_compute_unit_price: Some((1, u64::MAX)),
+            num_non_compute_budget_instructions: 2,
+            ..ComputeBudgetInstructionDetails::default()
+        };
         assert_eq!(
-            compute_budget_instruction_details.process_instruction(
-                index,
-                &program_id,
-                &SVMInstruction::from(&ix)
-            ),
-            expected_err
+            ComputeBudgetInstructionDetails::try_from(SVMMessage::program_instructions_iter(&tx)),
+            Ok(expected_details)
         );
-        assert_eq!(compute_budget_instruction_details, expected_details);
 
-        // irrelevant instruction makes no change
-        index += 1;
-        let (program_id, ix) = setup_test_instruction(
-            index,
-            Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+        let tx = build_sanitized_transaction(&[
+            Instruction::new_with_bincode(Pubkey::new_unique(), &(), vec![]),
+            ComputeBudgetInstruction::set_compute_unit_price(0),
+            ComputeBudgetInstruction::set_compute_unit_price(u64::MAX),
+        ]);
+        assert_eq!(
+            ComputeBudgetInstructionDetails::try_from(SVMMessage::program_instructions_iter(&tx)),
+            Err(TransactionError::DuplicateInstruction(2))
         );
-        assert!(compute_budget_instruction_details
-            .process_instruction(index, &program_id, &SVMInstruction::from(&ix))
-            .is_ok());
-        expected_details.num_non_compute_budget_instructions += 1;
-        assert_eq!(compute_budget_instruction_details, expected_details);
     }
 
     #[test]
-    fn test_process_instruction_loaded_accounts_data_size_limit() {
-        let mut index = 0;
-        let mut expected_details = ComputeBudgetInstructionDetails::default();
-        let mut compute_budget_instruction_details = ComputeBudgetInstructionDetails::default();
-
-        // irrelevant instruction makes no change
-        let (program_id, ix) = setup_test_instruction(
-            index,
-            Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
-        );
-        assert!(compute_budget_instruction_details
-            .process_instruction(index, &program_id, &SVMInstruction::from(&ix))
-            .is_ok());
-        expected_details.num_non_compute_budget_instructions = 1;
-        assert_eq!(compute_budget_instruction_details, expected_details);
-
-        // valid instruction,
-        index += 1;
-        let (program_id, ix) = setup_test_instruction(
-            index,
+    fn test_try_from_loaded_accounts_data_size_limit() {
+        let tx = build_sanitized_transaction(&[
+            Instruction::new_with_bincode(Pubkey::new_unique(), &(), vec![]),
             ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(u32::MAX),
-        );
-        expected_details.requested_loaded_accounts_data_size_limit = Some((index, u32::MAX));
-        assert!(compute_budget_instruction_details
-            .process_instruction(index, &program_id, &SVMInstruction::from(&ix))
-            .is_ok());
-        assert_eq!(compute_budget_instruction_details, expected_details);
-
-        // duplicate instruction results error
-        index += 1;
-        let expected_err = Err(TransactionError::DuplicateInstruction(index));
-        let (program_id, ix) = setup_test_instruction(
-            index,
-            ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(0),
-        );
+            Instruction::new_with_bincode(Pubkey::new_unique(), &(), vec![]),
+        ]);
+        let expected_details = ComputeBudgetInstructionDetails {
+            requested_loaded_accounts_data_size_limit: Some((1, u32::MAX)),
+            num_non_compute_budget_instructions: 2,
+            ..ComputeBudgetInstructionDetails::default()
+        };
         assert_eq!(
-            compute_budget_instruction_details.process_instruction(
-                index,
-                &program_id,
-                &SVMInstruction::from(&ix)
-            ),
-            expected_err
+            ComputeBudgetInstructionDetails::try_from(SVMMessage::program_instructions_iter(&tx)),
+            Ok(expected_details)
         );
-        assert_eq!(compute_budget_instruction_details, expected_details);
 
-        // irrelevant instruction makes no change
-        index += 1;
-        let (program_id, ix) = setup_test_instruction(
-            index,
-            Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+        let tx = build_sanitized_transaction(&[
+            Instruction::new_with_bincode(Pubkey::new_unique(), &(), vec![]),
+            ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(0),
+            ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(u32::MAX),
+        ]);
+        assert_eq!(
+            ComputeBudgetInstructionDetails::try_from(SVMMessage::program_instructions_iter(&tx)),
+            Err(TransactionError::DuplicateInstruction(2))
         );
-        assert!(compute_budget_instruction_details
-            .process_instruction(index, &program_id, &SVMInstruction::from(&ix))
-            .is_ok());
-        expected_details.num_non_compute_budget_instructions += 1;
-        assert_eq!(compute_budget_instruction_details, expected_details);
     }
 
     #[test]
