@@ -1811,6 +1811,17 @@ impl Blockstore {
                 );
                 return true;
             };
+            if let Err(e) = self.store_duplicate_slot(
+                slot,
+                conflicting_shred.clone(),
+                shred.clone().into_payload(),
+            ) {
+                warn!(
+                    "Unable to store conflicting merkle root duplicate proof for {slot} \
+                     {:?} {e}",
+                    shred.erasure_set(),
+                );
+            }
             duplicate_shreds.push(PossibleDuplicateShred::MerkleRootConflict(
                 shred.clone(),
                 conflicting_shred,

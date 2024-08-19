@@ -166,21 +166,8 @@ fn run_check_duplicate(
         );
         let (shred1, shred2) = match shred {
             PossibleDuplicateShred::LastIndexConflict(shred, conflict)
-            | PossibleDuplicateShred::ErasureConflict(shred, conflict) => (shred, conflict),
-            PossibleDuplicateShred::MerkleRootConflict(shred, conflict) => {
-                // Although this proof can be immediately stored on detection, we wait until
-                // here in order to check the feature flag, as storage in blockstore can
-                // preclude the detection of other duplicate proofs in this slot
-                if blockstore.has_duplicate_shreds_in_slot(shred_slot) {
-                    return Ok(());
-                }
-                blockstore.store_duplicate_slot(
-                    shred_slot,
-                    conflict.clone(),
-                    shred.clone().into_payload(),
-                )?;
-                (shred, conflict)
-            }
+            | PossibleDuplicateShred::ErasureConflict(shred, conflict)
+            | PossibleDuplicateShred::MerkleRootConflict(shred, conflict) => (shred, conflict),
             PossibleDuplicateShred::ChainedMerkleRootConflict(shred, conflict) => {
                 if chained_merkle_conflict_duplicate_proofs {
                     // Although this proof can be immediately stored on detection, we wait until
