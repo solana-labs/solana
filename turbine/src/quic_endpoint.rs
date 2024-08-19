@@ -200,7 +200,7 @@ async fn run_server(
 ) {
     let stats = Arc::<TurbineQuicStats>::default();
     let report_metrics_task =
-        tokio::task::spawn(report_metrics_task("repair_quic_server", stats.clone()));
+        tokio::task::spawn(report_metrics_task("turbine_quic_server", stats.clone()));
     while let Some(connecting) = endpoint.accept().await {
         tokio::task::spawn(handle_connecting_task(
             endpoint.clone(),
@@ -227,7 +227,7 @@ async fn run_client(
 ) {
     let stats = Arc::<TurbineQuicStats>::default();
     let report_metrics_task =
-        tokio::task::spawn(report_metrics_task("repair_quic_client", stats.clone()));
+        tokio::task::spawn(report_metrics_task("turbine_quic_client", stats.clone()));
     while let Some((remote_address, bytes)) = receiver.recv().await {
         let Some(bytes) = try_route_bytes(&remote_address, bytes, &*router.read().await, &stats)
         else {
