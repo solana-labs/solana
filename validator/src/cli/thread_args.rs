@@ -18,10 +18,11 @@ pub struct DefaultThreadArgs {
 impl Default for DefaultThreadArgs {
     fn default() -> Self {
         Self {
-            ip_echo_server_threads: IpEchoServerThreadsArg::default().to_string(),
-            replay_forks_threads: ReplayForksThreadsArg::default().to_string(),
-            replay_transactions_threads: ReplayTransactionsThreadsArg::default().to_string(),
-            tvu_receive_threads: TvuReceiveThreadsArg::default().to_string(),
+            ip_echo_server_threads: IpEchoServerThreadsArg::bounded_default().to_string(),
+            replay_forks_threads: ReplayForksThreadsArg::bounded_default().to_string(),
+            replay_transactions_threads: ReplayTransactionsThreadsArg::bounded_default()
+                .to_string(),
+            tvu_receive_threads: TvuReceiveThreadsArg::bounded_default().to_string(),
         }
     }
 }
@@ -85,6 +86,12 @@ trait ThreadArg {
 
     /// The default number of threads
     fn default() -> usize;
+    /// The default number of threads, bounded by Self::max()
+    /// This prevents potential CLAP issues on low core count machines where
+    /// a fixed value in Self::default() could be greater than Self::max()
+    fn bounded_default() -> usize {
+        std::cmp::min(Self::default(), Self::max())
+    }
     /// The minimum allowed number of threads (inclusive)
     fn min() -> usize {
         1
