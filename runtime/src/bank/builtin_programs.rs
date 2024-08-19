@@ -75,13 +75,14 @@ mod tests_core_bpf_migration {
             tests::{create_genesis_config, new_bank_from_parent_with_bank_forks},
             Bank,
         },
+        solana_program_runtime::loaded_programs::ProgramCacheEntry,
         solana_sdk::{
             account::{AccountSharedData, ReadableAccount, WritableAccount},
             bpf_loader_upgradeable::{self, get_program_data_address, UpgradeableLoaderState},
             epoch_schedule::EpochSchedule,
             feature::{self, Feature},
             feature_set::FeatureSet,
-            instruction::Instruction,
+            instruction::{AccountMeta, Instruction},
             message::Message,
             native_loader,
             native_token::LAMPORTS_PER_SOL,
@@ -92,6 +93,27 @@ mod tests_core_bpf_migration {
         std::{fs::File, io::Read, sync::Arc},
         test_case::test_case,
     };
+
+    // CPI mockup to test CPI to newly migrated programs.
+    mod cpi_mockup {
+        use {
+            solana_program_runtime::declare_process_instruction,
+            solana_sdk::instruction::Instruction,
+        };
+
+        declare_process_instruction!(Entrypoint, 0, |invoke_context| {
+            let transaction_context = &invoke_context.transaction_context;
+            let instruction_context = transaction_context.get_current_instruction_context()?;
+
+            let target_program_id = transaction_context.get_key_of_account_at_index(
+                instruction_context.get_index_of_instruction_account_in_transaction(0)?,
+            )?;
+
+            let instruction = Instruction::new_with_bytes(*target_program_id, &[], Vec::new());
+
+            invoke_context.native_invoke(instruction.into(), &[])
+        });
+    }
 
     fn test_elf() -> Vec<u8> {
         let mut elf = Vec::new();
@@ -143,6 +165,16 @@ mod tests_core_bpf_migration {
             EpochSchedule::custom(slots_per_epoch, slots_per_epoch, false);
 
         let mut root_bank = Bank::new_for_tests(&genesis_config);
+
+        // Set up the CPI mockup to test CPI'ing to the migrated program.
+        let cpi_program_id = Pubkey::new_unique();
+        let cpi_program_name = "mock_cpi_program";
+        root_bank.transaction_processor.add_builtin(
+            &root_bank,
+            cpi_program_id,
+            cpi_program_name,
+            ProgramCacheEntry::new_builtin(0, cpi_program_name.len(), cpi_mockup::Entrypoint::vm),
+        );
 
         let (builtin_id, config) = prototype.deconstruct();
         let feature_id = &config.feature_id;
@@ -219,6 +251,21 @@ mod tests_core_bpf_migration {
         ))
         .unwrap();
 
+        // Successfully invoke the new BPF builtin program via CPI.
+        bank.process_transaction(&Transaction::new(
+            &vec![&mint_keypair],
+            Message::new(
+                &[Instruction::new_with_bytes(
+                    cpi_program_id,
+                    &[],
+                    vec![AccountMeta::new_readonly(*builtin_id, false)],
+                )],
+                Some(&mint_keypair.pubkey()),
+            ),
+            bank.last_blockhash(),
+        ))
+        .unwrap();
+
         // Simulate crossing another epoch boundary for a new bank.
         goto_end_of_slot(bank.clone());
         first_slot_in_next_epoch += slots_per_epoch;
@@ -238,6 +285,21 @@ mod tests_core_bpf_migration {
             &vec![&mint_keypair],
             Message::new(
                 &[Instruction::new_with_bytes(*builtin_id, &[], Vec::new())],
+                Some(&mint_keypair.pubkey()),
+            ),
+            bank.last_blockhash(),
+        ))
+        .unwrap();
+
+        // Again, successfully invoke the new BPF builtin program via CPI.
+        bank.process_transaction(&Transaction::new(
+            &vec![&mint_keypair],
+            Message::new(
+                &[Instruction::new_with_bytes(
+                    cpi_program_id,
+                    &[],
+                    vec![AccountMeta::new_readonly(*builtin_id, false)],
+                )],
                 Some(&mint_keypair.pubkey()),
             ),
             bank.last_blockhash(),
