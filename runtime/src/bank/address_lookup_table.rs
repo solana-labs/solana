@@ -8,6 +8,7 @@ use {
         },
         transaction::AddressLoader,
     },
+    solana_svm_transaction::message_address_table_lookup::SVMMessageAddressTableLookup,
 };
 
 fn into_address_loader_error(err: AddressLookupError) -> AddressLoaderError {
@@ -26,6 +27,20 @@ impl AddressLoader for &Bank {
         self,
         address_table_lookups: &[MessageAddressTableLookup],
     ) -> Result<LoadedAddresses, AddressLoaderError> {
+        self.load_addresses_from_ref(
+            address_table_lookups
+                .iter()
+                .map(SVMMessageAddressTableLookup::from),
+        )
+    }
+}
+
+impl Bank {
+    /// Load addresses from an iterator of `SVMMessageAddressTableLookup`.
+    pub fn load_addresses_from_ref<'a>(
+        &self,
+        address_table_lookups: impl Iterator<Item = SVMMessageAddressTableLookup<'a>>,
+    ) -> Result<LoadedAddresses, AddressLoaderError> {
         let slot_hashes = self
             .transaction_processor
             .sysvar_cache()
@@ -33,7 +48,6 @@ impl AddressLoader for &Bank {
             .map_err(|_| AddressLoaderError::SlotHashesSysvarNotFound)?;
 
         address_table_lookups
-            .iter()
             .map(|address_table_lookup| {
                 self.rc
                     .accounts
