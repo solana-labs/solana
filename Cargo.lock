@@ -73,6 +73,7 @@ dependencies = [
  "memmap2",
  "rayon",
  "solana-accounts-db",
+ "solana-clap-utils",
  "solana-program",
  "solana-version",
 ]
