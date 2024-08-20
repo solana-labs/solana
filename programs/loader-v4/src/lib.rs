@@ -5,7 +5,7 @@ use {
     solana_program_runtime::{
         invoke_context::InvokeContext,
         loaded_programs::{
-            LoadProgramMetrics, ProgramCacheEntry, ProgramCacheEntryType,
+            LoadProgramMetrics, ProgramCacheEntry, ProgramCacheEntryOwner, ProgramCacheEntryType,
             DELAY_VISIBILITY_SLOT_OFFSET,
         },
         stable_log,
@@ -198,10 +198,6 @@ fn check_program_account(
     if !loader_v4::check_id(program.get_owner()) {
         ic_logger_msg!(log_collector, "Program not owned by loader");
         return Err(InstructionError::InvalidAccountOwner);
-    }
-    if program.get_data().is_empty() {
-        ic_logger_msg!(log_collector, "Program is uninitialized");
-        return Err(InstructionError::InvalidAccountData);
     }
     let state = get_state(program.get_data())?;
     if !program.is_writable() {
@@ -488,12 +484,22 @@ pub fn process_instruction_retract(
         );
         return Err(InstructionError::InvalidArgument);
     }
-    if matches!(state.status, LoaderV4Status::Retracted) {
+    if !matches!(state.status, LoaderV4Status::Deployed) {
         ic_logger_msg!(log_collector, "Program is not deployed");
         return Err(InstructionError::InvalidArgument);
     }
     let state = get_state_mut(program.get_data_mut()?)?;
     state.status = LoaderV4Status::Retracted;
+    invoke_context
+        .program_cache_for_tx_batch
+        .store_modified_entry(
+            *program.get_key(),
+            Arc::new(ProgramCacheEntry::new_tombstone(
+                current_slot,
+                ProgramCacheEntryOwner::LoaderV4,
+                ProgramCacheEntryType::Closed,
+            )),
+        );
     Ok(())
 }
 
@@ -518,12 +524,16 @@ pub fn process_instruction_transfer_authority(
         &program,
         authority_address,
     )?;
-    if new_authority_address.is_some() && !instruction_context.is_instruction_account_signer(2)? {
-        ic_logger_msg!(log_collector, "New authority did not sign");
-        return Err(InstructionError::MissingRequiredSignature);
-    }
     let state = get_state_mut(program.get_data_mut()?)?;
     if let Some(new_authority_address) = new_authority_address {
+        if !instruction_context.is_instruction_account_signer(2)? {
+            ic_logger_msg!(log_collector, "New authority did not sign");
+            return Err(InstructionError::MissingRequiredSignature);
+        }
+        if state.authority_address == new_authority_address {
+            ic_logger_msg!(log_collector, "No change");
+            return Err(InstructionError::InvalidArgument);
+        }
         state.authority_address = new_authority_address;
     } else if matches!(state.status, LoaderV4Status::Deployed) {
         state.status = LoaderV4Status::Finalized;
@@ -575,18 +585,10 @@ pub fn process_instruction_inner(
         .map_err(|err| Box::new(err) as Box<dyn std::error::Error>)
     } else {
         let program = instruction_context.try_borrow_last_program_account(transaction_context)?;
-        if !loader_v4::check_id(program.get_owner()) {
-            ic_logger_msg!(log_collector, "Program not owned by loader");
-            return Err(Box::new(InstructionError::InvalidAccountOwner));
-        }
-        if program.get_data().is_empty() {
-            ic_logger_msg!(log_collector, "Program is uninitialized");
-            return Err(Box::new(InstructionError::InvalidAccountData));
-        }
         let state = get_state(program.get_data())?;
         if matches!(state.status, LoaderV4Status::Retracted) {
-            ic_logger_msg!(log_collector, "Program is not deployed");
-            return Err(Box::new(InstructionError::InvalidArgument));
+            ic_logger_msg!(log_collector, "Program is retracted");
+            return Err(Box::new(InstructionError::UnsupportedProgramId));
         }
         let mut get_or_create_executor_time = Measure::start("get_or_create_executor_time");
         let loaded_program = invoke_context
@@ -594,7 +596,7 @@ pub fn process_instruction_inner(
             .find(program.get_key())
             .ok_or_else(|| {
                 ic_logger_msg!(log_collector, "Program is not cached");
-                InstructionError::InvalidAccountData
+                InstructionError::UnsupportedProgramId
             })?;
         get_or_create_executor_time.stop();
         saturating_add_assign!(
@@ -610,10 +612,12 @@ pub fn process_instruction_inner(
             | ProgramCacheEntryType::Closed
             | ProgramCacheEntryType::DelayVisibility => {
                 ic_logger_msg!(log_collector, "Program is not deployed");
-                Err(Box::new(InstructionError::InvalidAccountData) as Box<dyn std::error::Error>)
+                Err(Box::new(InstructionError::UnsupportedProgramId) as Box<dyn std::error::Error>)
             }
             ProgramCacheEntryType::Loaded(executable) => execute(invoke_context, executable),
-            _ => Err(Box::new(InstructionError::IncorrectProgramId) as Box<dyn std::error::Error>),
+            _ => {
+                Err(Box::new(InstructionError::UnsupportedProgramId) as Box<dyn std::error::Error>)
+            }
         }
     }
     .map(|_| 0)
@@ -1157,7 +1161,7 @@ mod tests {
             &bincode::serialize(&LoaderV4Instruction::Truncate { new_size: 0 }).unwrap(),
             transaction_accounts.clone(),
             &[(3, false, true), (1, true, false), (2, true, true)],
-            Err(InstructionError::InvalidAccountData),
+            Err(InstructionError::AccountDataTooSmall),
         );
 
         // Error: Program is not retracted
@@ -1331,7 +1335,7 @@ mod tests {
             &bincode::serialize(&LoaderV4Instruction::Deploy).unwrap(),
             transaction_accounts.clone(),
             &[(3, false, true), (1, true, false)],
-            Err(InstructionError::InvalidAccountData),
+            Err(InstructionError::AccountDataTooSmall),
         );
 
         // Error: Program fails verification
@@ -1410,7 +1414,7 @@ mod tests {
             &bincode::serialize(&LoaderV4Instruction::Retract).unwrap(),
             transaction_accounts.clone(),
             &[(2, false, true), (1, true, false)],
-            Err(InstructionError::InvalidAccountData),
+            Err(InstructionError::AccountDataTooSmall),
         );
 
         // Error: Program is not deployed
@@ -1520,16 +1524,25 @@ mod tests {
             &bincode::serialize(&LoaderV4Instruction::TransferAuthority).unwrap(),
             transaction_accounts.clone(),
             &[(2, false, true), (3, true, false), (4, true, false)],
-            Err(InstructionError::InvalidAccountData),
+            Err(InstructionError::AccountDataTooSmall),
         );
 
         // Error: New authority did not sign
         process_instruction(
             vec![],
             &bincode::serialize(&LoaderV4Instruction::TransferAuthority).unwrap(),
-            transaction_accounts,
+            transaction_accounts.clone(),
             &[(0, false, true), (3, true, false), (4, false, false)],
             Err(InstructionError::MissingRequiredSignature),
+        );
+
+        // Error: Authority did not change
+        process_instruction(
+            vec![],
+            &bincode::serialize(&LoaderV4Instruction::TransferAuthority).unwrap(),
+            transaction_accounts,
+            &[(0, false, true), (3, true, false), (3, true, false)],
+            Err(InstructionError::InvalidArgument),
         );
 
         test_loader_instruction_general_errors(LoaderV4Instruction::TransferAuthority);
@@ -1598,7 +1611,7 @@ mod tests {
             &[0, 1, 2, 3],
             transaction_accounts.clone(),
             &[(1, false, true)],
-            Err(InstructionError::InvalidAccountData),
+            Err(InstructionError::AccountDataTooSmall),
         );
 
         // Error: Program is not deployed
@@ -1607,7 +1620,7 @@ mod tests {
             &[0, 1, 2, 3],
             transaction_accounts.clone(),
             &[(1, false, true)],
-            Err(InstructionError::InvalidArgument),
+            Err(InstructionError::UnsupportedProgramId),
         );
 
         // Error: Program fails verification
@@ -1616,7 +1629,7 @@ mod tests {
             &[0, 1, 2, 3],
             transaction_accounts,
             &[(1, false, true)],
-            Err(InstructionError::InvalidAccountData),
+            Err(InstructionError::UnsupportedProgramId),
         );
     }
 }
