@@ -212,7 +212,7 @@ impl ContactInfo {
         &self.version
     }
 
-    pub(crate) fn hot_swap_pubkey(&mut self, pubkey: Pubkey) {
+    pub fn hot_swap_pubkey(&mut self, pubkey: Pubkey) {
         self.pubkey = pubkey;
         // Need to update ContactInfo.outset so that this node's contact-info
         // will override older node with the same pubkey.
