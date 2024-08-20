@@ -27,6 +27,7 @@ Release channels have their own copy of this changelog:
   * `agave-validator`: Update PoH speed check to compare against current hash rate from a Bank (#2447)
   * `solana-test-validator`: Add `--clone-feature-set` flag to mimic features from a target cluster (#2480)
   * `solana-genesis`: the `--cluster-type` parameter now clones the feature set from the target cluster (#2587)
+  * `unified-scheduler` as default option for `--block-verification-method` (#2653)
 
 ## [2.0.0]
 * Breaking

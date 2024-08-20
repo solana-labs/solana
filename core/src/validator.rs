@@ -138,7 +138,7 @@ use {
         time::{Duration, Instant},
     },
     strum::VariantNames,
-    strum_macros::{Display, EnumString, EnumVariantNames, IntoStaticStr},
+    strum_macros::{Display, EnumCount, EnumIter, EnumString, EnumVariantNames, IntoStaticStr},
     thiserror::Error,
     tokio::runtime::Runtime as TokioRuntime,
 };
@@ -151,11 +151,13 @@ const WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT: u64 = 80;
 const WAIT_FOR_WEN_RESTART_SUPERMAJORITY_THRESHOLD_PERCENT: u64 =
     WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT;
 
-#[derive(Clone, EnumString, EnumVariantNames, Default, IntoStaticStr, Display)]
+#[derive(
+    Clone, EnumCount, EnumIter, EnumString, EnumVariantNames, Default, IntoStaticStr, Display,
+)]
 #[strum(serialize_all = "kebab-case")]
 pub enum BlockVerificationMethod {
-    #[default]
     BlockstoreProcessor,
+    #[default]
     UnifiedScheduler,
 }
 

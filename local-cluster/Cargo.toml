@@ -37,6 +37,7 @@ solana-turbine = { workspace = true }
 solana-vote = { workspace = true }
 solana-vote-program = { workspace = true }
 static_assertions = { workspace = true }
+strum = { workspace = true, features = ["derive"] }
 tempfile = { workspace = true }
 trees = { workspace = true }
 

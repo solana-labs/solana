@@ -6707,6 +6707,7 @@ dependencies = [
  "solana-vote",
  "solana-vote-program",
  "static_assertions",
+ "strum",
  "tempfile",
  "trees",
 ]
