@@ -104,7 +104,6 @@ impl TransactionStatusService {
                         rent_debits,
                         ..
                     } = committed_tx;
-                    let tx_account_locks = transaction.get_account_locks_unchecked();
 
                     let fee = fee_details.total_fee();
                     let inner_instructions = inner_instructions.map(|inner_instructions| {
@@ -164,12 +163,18 @@ impl TransactionStatusService {
                                 .expect("Expect database write to succeed: TransactionMemos");
                         }
 
+                        let message = transaction.message();
+                        let keys_with_writable = message
+                            .account_keys()
+                            .iter()
+                            .enumerate()
+                            .map(|(index, key)| (key, message.is_writable(index)));
+
                         blockstore
                             .write_transaction_status(
                                 slot,
                                 *transaction.signature(),
-                                tx_account_locks.writable,
-                                tx_account_locks.readonly,
+                                keys_with_writable,
                                 transaction_status_meta,
                                 transaction_index,
                             )

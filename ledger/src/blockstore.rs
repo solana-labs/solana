@@ -2879,12 +2879,11 @@ impl Blockstore {
         }
     }
 
-    pub fn write_transaction_status(
+    pub fn write_transaction_status<'a>(
         &self,
         slot: Slot,
         signature: Signature,
-        writable_keys: Vec<&Pubkey>,
-        readonly_keys: Vec<&Pubkey>,
+        keys_with_writable: impl Iterator<Item = (&'a Pubkey, bool)>,
         status: TransactionStatusMeta,
         transaction_index: usize,
     ) -> Result<()> {
@@ -2893,18 +2892,14 @@ impl Blockstore {
             .map_err(|_| BlockstoreError::TransactionIndexOverflow)?;
         self.transaction_status_cf
             .put_protobuf((signature, slot), &status)?;
-        for address in writable_keys {
+
+        for (address, writeable) in keys_with_writable {
             self.address_signatures_cf.put(
                 (*address, slot, transaction_index, signature),
-                &AddressSignatureMeta { writeable: true },
+                &AddressSignatureMeta { writeable },
             )?;
         }
-        for address in readonly_keys {
-            self.address_signatures_cf.put(
-                (*address, slot, transaction_index, signature),
-                &AddressSignatureMeta { writeable: false },
-            )?;
-        }
+
         Ok(())
     }
 
@@ -8684,8 +8679,11 @@ pub mod tests {
             .write_transaction_status(
                 slot,
                 signature,
-                vec![&Pubkey::new_unique()],
-                vec![&Pubkey::new_unique()],
+                vec![
+                    (&Pubkey::new_unique(), true),
+                    (&Pubkey::new_unique(), false),
+                ]
+                .into_iter(),
                 TransactionStatusMeta {
                     fee: slot * 1_000,
                     ..TransactionStatusMeta::default()
@@ -9072,8 +9070,7 @@ pub mod tests {
             .write_transaction_status(
                 lowest_cleanup_slot,
                 signature1,
-                vec![&address0],
-                vec![],
+                vec![(&address0, true)].into_iter(),
                 TransactionStatusMeta::default(),
                 0,
             )
@@ -9082,8 +9079,7 @@ pub mod tests {
             .write_transaction_status(
                 lowest_available_slot,
                 signature2,
-                vec![&address1],
-                vec![],
+                vec![(&address1, true)].into_iter(),
                 TransactionStatusMeta::default(),
                 0,
             )
@@ -9451,8 +9447,7 @@ pub mod tests {
                 .write_transaction_status(
                     slot1,
                     signature,
-                    vec![&address0],
-                    vec![&address1],
+                    vec![(&address0, true), (&address1, false)].into_iter(),
                     TransactionStatusMeta::default(),
                     x as usize,
                 )
@@ -9465,8 +9460,7 @@ pub mod tests {
                 .write_transaction_status(
                     slot2,
                     signature,
-                    vec![&address0],
-                    vec![&address1],
+                    vec![(&address0, true), (&address1, false)].into_iter(),
                     TransactionStatusMeta::default(),
                     x as usize,
                 )
@@ -9478,8 +9472,7 @@ pub mod tests {
                 .write_transaction_status(
                     slot2,
                     signature,
-                    vec![&address0],
-                    vec![&address1],
+                    vec![(&address0, true), (&address1, false)].into_iter(),
                     TransactionStatusMeta::default(),
                     x as usize,
                 )
@@ -9492,8 +9485,7 @@ pub mod tests {
                 .write_transaction_status(
                     slot3,
                     signature,
-                    vec![&address0],
-                    vec![&address1],
+                    vec![(&address0, true), (&address1, false)].into_iter(),
                     TransactionStatusMeta::default(),
                     x as usize,
                 )
@@ -9576,8 +9568,11 @@ pub mod tests {
                         .write_transaction_status(
                             slot,
                             transaction.signatures[0],
-                            transaction.message.static_account_keys().iter().collect(),
-                            vec![],
+                            transaction
+                                .message
+                                .static_account_keys()
+                                .iter()
+                                .map(|key| (key, true)),
                             TransactionStatusMeta::default(),
                             counter,
                         )
@@ -9604,8 +9599,11 @@ pub mod tests {
                         .write_transaction_status(
                             slot,
                             transaction.signatures[0],
-                            transaction.message.static_account_keys().iter().collect(),
-                            vec![],
+                            transaction
+                                .message
+                                .static_account_keys()
+                                .iter()
+                                .map(|key| (key, true)),
                             TransactionStatusMeta::default(),
                             counter,
                         )

@@ -582,8 +582,11 @@ pub mod tests {
                 .write_transaction_status(
                     x,
                     Signature::from(random_bytes),
-                    vec![&Pubkey::try_from(&random_bytes[..32]).unwrap()],
-                    vec![&Pubkey::try_from(&random_bytes[32..]).unwrap()],
+                    vec![
+                        (&Pubkey::try_from(&random_bytes[..32]).unwrap(), true),
+                        (&Pubkey::try_from(&random_bytes[32..]).unwrap(), false),
+                    ]
+                    .into_iter(),
                     TransactionStatusMeta::default(),
                     0,
                 )
@@ -640,8 +643,11 @@ pub mod tests {
                 .write_transaction_status(
                     x,
                     signature,
-                    vec![&Pubkey::try_from(&random_bytes[..32]).unwrap()],
-                    vec![&Pubkey::try_from(&random_bytes[32..]).unwrap()],
+                    vec![
+                        (&Pubkey::try_from(&random_bytes[..32]).unwrap(), true),
+                        (&Pubkey::try_from(&random_bytes[32..]).unwrap(), false),
+                    ]
+                    .into_iter(),
                     TransactionStatusMeta::default(),
                     0,
                 )
@@ -715,8 +721,11 @@ pub mod tests {
                     .write_transaction_status(
                         slot,
                         transaction.signatures[0],
-                        transaction.message.static_account_keys().iter().collect(),
-                        vec![],
+                        transaction
+                            .message
+                            .static_account_keys()
+                            .iter()
+                            .map(|key| (key, true)),
                         TransactionStatusMeta::default(),
                         0,
                     )
