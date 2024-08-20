@@ -17,20 +17,18 @@ use {
     solana_compute_budget::compute_budget_limits::ComputeBudgetLimits,
     solana_sdk::{
         hash::Hash,
-        message::{AddressLoader, SanitizedMessage, SanitizedVersionedMessage},
+        message::AddressLoader,
         pubkey::Pubkey,
-        signature::Signature,
         simple_vote_transaction_checker::is_simple_vote_transaction,
-        transaction::{Result, SanitizedVersionedTransaction},
+        transaction::{Result, SanitizedTransaction, SanitizedVersionedTransaction},
     },
     solana_svm_transaction::instruction::SVMInstruction,
     std::collections::HashSet,
 };
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct RuntimeTransaction<M> {
-    signatures: Vec<Signature>,
-    message: M,
+pub struct RuntimeTransaction<T> {
+    transaction: T,
     // transaction meta is a collection of fields, it is updated
     // during message state transition
     meta: TransactionMeta,
@@ -44,11 +42,11 @@ trait DynamicMetaAccess: StaticMetaAccess {}
 
 // Implement the gate traits for the message types that should
 // have access to the static and dynamic metadata.
-impl StaticMetaAccess for SanitizedVersionedMessage {}
-impl StaticMetaAccess for SanitizedMessage {}
-impl DynamicMetaAccess for SanitizedMessage {}
+impl StaticMetaAccess for SanitizedVersionedTransaction {}
+impl StaticMetaAccess for SanitizedTransaction {}
+impl DynamicMetaAccess for SanitizedTransaction {}
 
-impl<M: StaticMetaAccess> StaticMeta for RuntimeTransaction<M> {
+impl<T: StaticMetaAccess> StaticMeta for RuntimeTransaction<T> {
     fn message_hash(&self) -> &Hash {
         &self.meta.message_hash
     }
@@ -68,7 +66,7 @@ impl<M: StaticMetaAccess> StaticMeta for RuntimeTransaction<M> {
 
 impl<M: DynamicMetaAccess> DynamicMeta for RuntimeTransaction<M> {}
 
-impl RuntimeTransaction<SanitizedVersionedMessage> {
+impl RuntimeTransaction<SanitizedVersionedTransaction> {
     pub fn try_from(
         sanitized_versioned_tx: SanitizedVersionedTransaction,
         message_hash: Option<Hash>,
@@ -80,8 +78,9 @@ impl RuntimeTransaction<SanitizedVersionedMessage> {
                 .unwrap_or_else(|| is_simple_vote_transaction(&sanitized_versioned_tx)),
         );
 
-        let (signatures, message) = sanitized_versioned_tx.destruct();
-        meta.set_message_hash(message_hash.unwrap_or_else(|| message.message.hash()));
+        meta.set_message_hash(
+            message_hash.unwrap_or_else(|| sanitized_versioned_tx.get_message().message.hash()),
+        );
 
         let ComputeBudgetLimits {
             compute_unit_limit,
@@ -89,7 +88,8 @@ impl RuntimeTransaction<SanitizedVersionedMessage> {
             loaded_accounts_bytes,
             ..
         } = process_compute_budget_instructions(
-            message
+            sanitized_versioned_tx
+                .get_message()
                 .program_instructions_iter()
                 .map(|(program_id, ix)| (program_id, SVMInstruction::from(ix))),
         )?;
@@ -98,26 +98,30 @@ impl RuntimeTransaction<SanitizedVersionedMessage> {
         meta.set_loaded_accounts_bytes(loaded_accounts_bytes.get());
 
         Ok(Self {
-            signatures,
-            message,
+            transaction: sanitized_versioned_tx,
             meta,
         })
     }
 }
 
-impl RuntimeTransaction<SanitizedMessage> {
+impl RuntimeTransaction<SanitizedTransaction> {
     pub fn try_from(
-        statically_loaded_runtime_tx: RuntimeTransaction<SanitizedVersionedMessage>,
+        statically_loaded_runtime_tx: RuntimeTransaction<SanitizedVersionedTransaction>,
         address_loader: impl AddressLoader,
         reserved_account_keys: &HashSet<Pubkey>,
     ) -> Result<Self> {
+        let hash = *statically_loaded_runtime_tx.message_hash();
+        let is_simple_vote_tx = statically_loaded_runtime_tx.is_simple_vote_tx();
+        let sanitized_transaction = SanitizedTransaction::try_new(
+            statically_loaded_runtime_tx.transaction,
+            hash,
+            is_simple_vote_tx,
+            address_loader,
+            reserved_account_keys,
+        )?;
+
         let mut tx = Self {
-            signatures: statically_loaded_runtime_tx.signatures,
-            message: SanitizedMessage::try_new(
-                statically_loaded_runtime_tx.message,
-                address_loader,
-                reserved_account_keys,
-            )?,
+            transaction: sanitized_transaction,
             meta: statically_loaded_runtime_tx.meta,
         };
         tx.load_dynamic_metadata()?;
@@ -222,7 +226,7 @@ mod tests {
             svt: SanitizedVersionedTransaction,
             is_simple_vote: Option<bool>,
         ) -> bool {
-            RuntimeTransaction::<SanitizedVersionedMessage>::try_from(svt, None, is_simple_vote)
+            RuntimeTransaction::<SanitizedVersionedTransaction>::try_from(svt, None, is_simple_vote)
                 .unwrap()
                 .meta
                 .is_simple_vote_tx
@@ -254,7 +258,7 @@ mod tests {
         let hash = Hash::new_unique();
 
         let statically_loaded_transaction =
-            RuntimeTransaction::<SanitizedVersionedMessage>::try_from(
+            RuntimeTransaction::<SanitizedVersionedTransaction>::try_from(
                 non_vote_sanitized_versioned_transaction(),
                 Some(hash),
                 None,
@@ -264,7 +268,7 @@ mod tests {
         assert_eq!(hash, *statically_loaded_transaction.message_hash());
         assert!(!statically_loaded_transaction.is_simple_vote_tx());
 
-        let dynamically_loaded_transaction = RuntimeTransaction::<SanitizedMessage>::try_from(
+        let dynamically_loaded_transaction = RuntimeTransaction::<SanitizedTransaction>::try_from(
             statically_loaded_transaction,
             SimpleAddressLoader::Disabled,
             &ReservedAccountKeys::empty_key_set(),
@@ -284,16 +288,17 @@ mod tests {
         let loaded_accounts_bytes = 1_024;
         let mut test_transaction = TestTransaction::new();
 
-        let runtime_transaction_static = RuntimeTransaction::<SanitizedVersionedMessage>::try_from(
-            test_transaction
-                .add_compute_unit_limit(compute_unit_limit)
-                .add_compute_unit_price(compute_unit_price)
-                .add_loaded_accounts_bytes(loaded_accounts_bytes)
-                .to_sanitized_versioned_transaction(),
-            Some(hash),
-            None,
-        )
-        .unwrap();
+        let runtime_transaction_static =
+            RuntimeTransaction::<SanitizedVersionedTransaction>::try_from(
+                test_transaction
+                    .add_compute_unit_limit(compute_unit_limit)
+                    .add_compute_unit_price(compute_unit_price)
+                    .add_loaded_accounts_bytes(loaded_accounts_bytes)
+                    .to_sanitized_versioned_transaction(),
+                Some(hash),
+                None,
+            )
+            .unwrap();
 
         assert_eq!(&hash, runtime_transaction_static.message_hash());
         assert!(!runtime_transaction_static.is_simple_vote_tx());
