@@ -1,8 +1,9 @@
 use {
+    crate::compute_budget_program_id_filter::ComputeBudgetProgramIdFilter,
     solana_compute_budget::compute_budget_limits::*,
     solana_sdk::{
         borsh1::try_from_slice_unchecked,
-        compute_budget::{self, ComputeBudgetInstruction},
+        compute_budget::ComputeBudgetInstruction,
         instruction::InstructionError,
         pubkey::Pubkey,
         saturating_add_assign,
@@ -28,13 +29,18 @@ impl ComputeBudgetInstructionDetails {
     pub fn try_from<'a>(
         instructions: impl Iterator<Item = (&'a Pubkey, SVMInstruction<'a>)>,
     ) -> Result<Self> {
+        let mut filter = ComputeBudgetProgramIdFilter::new();
+
         let mut compute_budget_instruction_details = ComputeBudgetInstructionDetails::default();
         for (i, (program_id, instruction)) in instructions.enumerate() {
-            compute_budget_instruction_details.process_instruction(
-                i as u8,
-                program_id,
-                &instruction,
-            )?;
+            if filter.is_compute_budget_program(instruction.program_id_index as usize, program_id) {
+                compute_budget_instruction_details.process_instruction(i as u8, &instruction)?;
+            } else {
+                saturating_add_assign!(
+                    compute_budget_instruction_details.num_non_compute_budget_instructions,
+                    1
+                );
+            }
         }
 
         Ok(compute_budget_instruction_details)
@@ -94,46 +100,37 @@ impl ComputeBudgetInstructionDetails {
         })
     }
 
-    fn process_instruction(
-        &mut self,
-        index: u8,
-        program_id: &Pubkey,
-        instruction: &SVMInstruction,
-    ) -> Result<()> {
-        if compute_budget::check_id(program_id) {
-            let invalid_instruction_data_error =
-                TransactionError::InstructionError(index, InstructionError::InvalidInstructionData);
-            let duplicate_instruction_error = TransactionError::DuplicateInstruction(index);
+    fn process_instruction(&mut self, index: u8, instruction: &SVMInstruction) -> Result<()> {
+        let invalid_instruction_data_error =
+            TransactionError::InstructionError(index, InstructionError::InvalidInstructionData);
+        let duplicate_instruction_error = TransactionError::DuplicateInstruction(index);
 
-            match try_from_slice_unchecked(instruction.data) {
-                Ok(ComputeBudgetInstruction::RequestHeapFrame(bytes)) => {
-                    if self.requested_heap_size.is_some() {
-                        return Err(duplicate_instruction_error);
-                    }
-                    self.requested_heap_size = Some((index, bytes));
+        match try_from_slice_unchecked(instruction.data) {
+            Ok(ComputeBudgetInstruction::RequestHeapFrame(bytes)) => {
+                if self.requested_heap_size.is_some() {
+                    return Err(duplicate_instruction_error);
                 }
-                Ok(ComputeBudgetInstruction::SetComputeUnitLimit(compute_unit_limit)) => {
-                    if self.requested_compute_unit_limit.is_some() {
-                        return Err(duplicate_instruction_error);
-                    }
-                    self.requested_compute_unit_limit = Some((index, compute_unit_limit));
-                }
-                Ok(ComputeBudgetInstruction::SetComputeUnitPrice(micro_lamports)) => {
-                    if self.requested_compute_unit_price.is_some() {
-                        return Err(duplicate_instruction_error);
-                    }
-                    self.requested_compute_unit_price = Some((index, micro_lamports));
-                }
-                Ok(ComputeBudgetInstruction::SetLoadedAccountsDataSizeLimit(bytes)) => {
-                    if self.requested_loaded_accounts_data_size_limit.is_some() {
-                        return Err(duplicate_instruction_error);
-                    }
-                    self.requested_loaded_accounts_data_size_limit = Some((index, bytes));
-                }
-                _ => return Err(invalid_instruction_data_error),
+                self.requested_heap_size = Some((index, bytes));
             }
-        } else {
-            saturating_add_assign!(self.num_non_compute_budget_instructions, 1);
+            Ok(ComputeBudgetInstruction::SetComputeUnitLimit(compute_unit_limit)) => {
+                if self.requested_compute_unit_limit.is_some() {
+                    return Err(duplicate_instruction_error);
+                }
+                self.requested_compute_unit_limit = Some((index, compute_unit_limit));
+            }
+            Ok(ComputeBudgetInstruction::SetComputeUnitPrice(micro_lamports)) => {
+                if self.requested_compute_unit_price.is_some() {
+                    return Err(duplicate_instruction_error);
+                }
+                self.requested_compute_unit_price = Some((index, micro_lamports));
+            }
+            Ok(ComputeBudgetInstruction::SetLoadedAccountsDataSizeLimit(bytes)) => {
+                if self.requested_loaded_accounts_data_size_limit.is_some() {
+                    return Err(duplicate_instruction_error);
+                }
+                self.requested_loaded_accounts_data_size_limit = Some((index, bytes));
+            }
+            _ => return Err(invalid_instruction_data_error),
         }
 
         Ok(())

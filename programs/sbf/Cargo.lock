@@ -74,6 +74,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "agave-transaction-view"
+version = "2.1.0"
+dependencies = [
+ "solana-sdk",
+ "solana-svm-transaction",
+]
+
+[[package]]
 name = "agave-validator"
 version = "2.1.0"
 dependencies = [
@@ -5736,7 +5744,9 @@ dependencies = [
 name = "solana-runtime-transaction"
 version = "2.1.0"
 dependencies = [
+ "agave-transaction-view",
  "log",
+ "solana-builtins-default-costs",
  "solana-compute-budget",
  "solana-sdk",
  "solana-svm-transaction",
