@@ -419,7 +419,11 @@ impl Sanitize for Protocol {
 
 // Retains only CRDS values associated with nodes with enough stake.
 // (some crds types are exempted)
-fn retain_staked(values: &mut Vec<CrdsValue>, stakes: &HashMap<Pubkey, u64>) {
+fn retain_staked(
+    values: &mut Vec<CrdsValue>,
+    stakes: &HashMap<Pubkey, u64>,
+    drop_unstaked_node_instance: bool,
+) {
     values.retain(|value| {
         match value.data {
             CrdsData::ContactInfo(_) => true,
@@ -434,6 +438,7 @@ fn retain_staked(values: &mut Vec<CrdsValue>, stakes: &HashMap<Pubkey, u64>) {
             // the various dashboards.
             CrdsData::Version(_) => true,
             CrdsData::AccountsHashes(_) => true,
+            CrdsData::NodeInstance(_) if !drop_unstaked_node_instance => true,
             CrdsData::LowestSlot(_, _)
             | CrdsData::LegacyVersion(_)
             | CrdsData::DuplicateShred(_, _)
@@ -1646,7 +1651,7 @@ impl ClusterInfo {
             .add_relaxed(num_nodes as u64);
         if self.require_stake_for_gossip(stakes) {
             push_messages.retain(|_, data| {
-                retain_staked(data, stakes);
+                retain_staked(data, stakes, /* drop_unstaked_node_instance */ false);
                 !data.is_empty()
             })
         }
@@ -2138,7 +2143,7 @@ impl ClusterInfo {
         };
         if self.require_stake_for_gossip(stakes) {
             for resp in &mut pull_responses {
-                retain_staked(resp, stakes);
+                retain_staked(resp, stakes, /* drop_unstaked_node_instance */ true);
             }
         }
         let (responses, scores): (Vec<_>, Vec<_>) = addrs
@@ -2544,9 +2549,13 @@ impl ClusterInfo {
             }
         }
         if self.require_stake_for_gossip(stakes) {
-            retain_staked(&mut pull_responses, stakes);
+            retain_staked(
+                &mut pull_responses,
+                stakes,
+                /* drop_unstaked_node_instance */ false,
+            );
             for (_, data) in &mut push_messages {
-                retain_staked(data, stakes);
+                retain_staked(data, stakes, /* drop_unstaked_node_instance */ false);
             }
             push_messages.retain(|(_, data)| !data.is_empty());
         }
