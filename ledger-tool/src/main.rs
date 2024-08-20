@@ -571,13 +571,13 @@ fn setup_slot_recording(
                 exit(1);
             });
 
-            let mut include_bank = false;
+            let mut include_bank_hash_components = false;
             let mut include_tx = false;
             if let Some(args) = arg_matches.values_of("record_slots_config") {
                 for arg in args {
                     match arg {
                         "tx" => include_tx = true,
-                        "accounts" => include_bank = true,
+                        "accounts" => include_bank_hash_components = true,
                         _ => unreachable!(),
                     }
                 }
@@ -603,16 +603,11 @@ fn setup_slot_recording(
             let slot_callback = Arc::new({
                 let slots = Arc::clone(&slot_details);
                 move |bank: &Bank| {
-                    let mut details = if include_bank {
-                        bank_hash_details::SlotDetails::try_from(bank).unwrap()
-                    } else {
-                        bank_hash_details::SlotDetails {
-                            slot: bank.slot(),
-                            bank_hash: bank.hash().to_string(),
-                            ..Default::default()
-                        }
-                    };
-
+                    let mut details = bank_hash_details::SlotDetails::new_from_bank(
+                        bank,
+                        include_bank_hash_components,
+                    )
+                    .unwrap();
                     let mut slots = slots.lock().unwrap();
 
                     if let Some(recorded_slot) = slots.iter_mut().find(|f| f.slot == details.slot) {
