@@ -76,18 +76,18 @@ nodes=(
   "multinode-demo/bootstrap-validator.sh \
     --no-restart \
     --init-complete-file init-complete-node0.log \
-    --dynamic-port-range 8000-8050"
+    --dynamic-port-range 8000-8200"
   "multinode-demo/validator.sh \
     --no-restart \
-    --dynamic-port-range 8050-8100
+    --dynamic-port-range 8200-8400
     --init-complete-file init-complete-node1.log \
     --rpc-port 18899"
 )
 
 if [[ extraNodes -gt 0 ]]; then
   for i in $(seq 1 $extraNodes); do
-    portStart=$((8100 + i * 50))
-    portEnd=$((portStart + 49))
+    portStart=$((8400 + i * 200))
+    portEnd=$((portStart + 200))
     nodes+=(
       "multinode-demo/validator.sh \
         --no-restart \
