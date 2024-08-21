@@ -1031,7 +1031,6 @@ fn do_blockstore_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) -
             let blockstore =
                 crate::open_blockstore(&ledger_path, arg_matches, AccessType::Secondary);
             for slot in slots {
-                println!("Slot {slot}");
                 output_slot(
                     &blockstore,
                     slot,

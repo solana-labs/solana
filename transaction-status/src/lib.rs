@@ -27,7 +27,7 @@ use {
         },
         transaction_context::TransactionReturnData,
     },
-    std::fmt,
+    std::{collections::HashSet, fmt},
     thiserror::Error,
 };
 
@@ -1136,6 +1136,38 @@ impl EncodableWithMeta for VersionedTransaction {
     }
 }
 
+impl Encodable for VersionedTransaction {
+    type Encoded = EncodedTransaction;
+    fn encode(&self, encoding: UiTransactionEncoding) -> Self::Encoded {
+        match encoding {
+            UiTransactionEncoding::Binary => EncodedTransaction::LegacyBinary(
+                bs58::encode(bincode::serialize(self).unwrap()).into_string(),
+            ),
+            UiTransactionEncoding::Base58 => EncodedTransaction::Binary(
+                bs58::encode(bincode::serialize(self).unwrap()).into_string(),
+                TransactionBinaryEncoding::Base58,
+            ),
+            UiTransactionEncoding::Base64 => EncodedTransaction::Binary(
+                BASE64_STANDARD.encode(bincode::serialize(self).unwrap()),
+                TransactionBinaryEncoding::Base64,
+            ),
+            UiTransactionEncoding::Json | UiTransactionEncoding::JsonParsed => {
+                EncodedTransaction::Json(UiTransaction {
+                    signatures: self.signatures.iter().map(ToString::to_string).collect(),
+                    message: match &self.message {
+                        VersionedMessage::Legacy(message) => {
+                            message.encode(UiTransactionEncoding::JsonParsed)
+                        }
+                        VersionedMessage::V0(message) => {
+                            message.encode(UiTransactionEncoding::JsonParsed)
+                        }
+                    },
+                })
+            }
+        }
+    }
+}
+
 impl Encodable for Transaction {
     type Encoded = EncodedTransaction;
     fn encode(&self, encoding: UiTransactionEncoding) -> Self::Encoded {
@@ -1216,6 +1248,40 @@ impl Encodable for Message {
             let account_keys = AccountKeys::new(&self.account_keys, None);
             UiMessage::Parsed(UiParsedMessage {
                 account_keys: parse_legacy_message_accounts(self),
+                recent_blockhash: self.recent_blockhash.to_string(),
+                instructions: self
+                    .instructions
+                    .iter()
+                    .map(|instruction| UiInstruction::parse(instruction, &account_keys, None))
+                    .collect(),
+                address_table_lookups: None,
+            })
+        } else {
+            UiMessage::Raw(UiRawMessage {
+                header: self.header,
+                account_keys: self.account_keys.iter().map(ToString::to_string).collect(),
+                recent_blockhash: self.recent_blockhash.to_string(),
+                instructions: self
+                    .instructions
+                    .iter()
+                    .map(|ix| UiCompiledInstruction::from(ix, None))
+                    .collect(),
+                address_table_lookups: None,
+            })
+        }
+    }
+}
+
+impl Encodable for v0::Message {
+    type Encoded = UiMessage;
+    fn encode(&self, encoding: UiTransactionEncoding) -> Self::Encoded {
+        if encoding == UiTransactionEncoding::JsonParsed {
+            let account_keys = AccountKeys::new(&self.account_keys, None);
+            let loaded_addresses = LoadedAddresses::default();
+            let loaded_message =
+                LoadedMessage::new_borrowed(self, &loaded_addresses, &HashSet::new());
+            UiMessage::Parsed(UiParsedMessage {
+                account_keys: parse_v0_message_accounts(&loaded_message),
                 recent_blockhash: self.recent_blockhash.to_string(),
                 instructions: self
                     .instructions
