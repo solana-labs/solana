@@ -1,8 +1,11 @@
 use {
     crate::{
-        account_overrides::AccountOverrides, account_rent_state::RentState, nonce_info::NonceInfo,
-        rollback_accounts::RollbackAccounts, transaction_error_metrics::TransactionErrorMetrics,
-        transaction_processing_callback::TransactionProcessingCallback,
+        account_overrides::AccountOverrides,
+        account_rent_state::RentState,
+        nonce_info::NonceInfo,
+        rollback_accounts::RollbackAccounts,
+        transaction_error_metrics::TransactionErrorMetrics,
+        transaction_processing_callback::{AccountState, TransactionProcessingCallback},
     },
     itertools::Itertools,
     solana_compute_budget::compute_budget_limits::ComputeBudgetLimits,
@@ -410,9 +413,11 @@ fn load_transaction_account<CB: TransactionProcessingCallback>(
     loaded_programs: &ProgramCacheForTxBatch,
 ) -> Result<(LoadedTransactionAccount, bool)> {
     let mut account_found = true;
+    let mut was_inspected = false;
     let is_instruction_account = u8::try_from(account_index)
         .map(|i| instruction_accounts.contains(&&i))
         .unwrap_or(false);
+    let is_writable = message.is_writable(account_index);
     let loaded_account = if solana_sdk::sysvar::instructions::check_id(account_key) {
         // Since the instructions sysvar is constructed by the SVM and modified
         // for each transaction instruction, it cannot be overridden.
@@ -429,7 +434,7 @@ fn load_transaction_account<CB: TransactionProcessingCallback>(
             account: account_override.clone(),
             rent_collected: 0,
         }
-    } else if let Some(program) = (!is_instruction_account && !message.is_writable(account_index))
+    } else if let Some(program) = (!is_instruction_account && !is_writable)
         .then_some(())
         .and_then(|_| loaded_programs.find(account_key))
     {
@@ -447,7 +452,17 @@ fn load_transaction_account<CB: TransactionProcessingCallback>(
         callbacks
             .get_account_shared_data(account_key)
             .map(|mut account| {
-                let rent_collected = if message.is_writable(account_index) {
+                let rent_collected = if is_writable {
+                    // Inspect the account prior to collecting rent, since
+                    // rent collection can modify the account.
+                    debug_assert!(!was_inspected);
+                    callbacks.inspect_account(
+                        account_key,
+                        AccountState::Alive(&account),
+                        is_writable,
+                    );
+                    was_inspected = true;
+
                     collect_rent_from_account(
                         feature_set,
                         rent_collector,
@@ -479,6 +494,15 @@ fn load_transaction_account<CB: TransactionProcessingCallback>(
                 }
             })
     };
+
+    if !was_inspected {
+        let account_state = if account_found {
+            AccountState::Alive(&loaded_account.account)
+        } else {
+            AccountState::Dead
+        };
+        callbacks.inspect_account(account_key, account_state, is_writable);
+    }
 
     Ok((loaded_account, account_found))
 }
