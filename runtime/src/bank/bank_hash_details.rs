@@ -121,6 +121,8 @@ pub struct BankHashComponents {
     pub accounts_delta_hash: String,
     pub signature_count: u64,
     pub last_blockhash: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub epoch_accounts_hash: Option<String>,
     pub accounts: AccountsDetails,
 }
 
@@ -149,6 +151,10 @@ impl SlotDetails {
                 accounts_delta_hash: accounts_delta_hash.to_string(),
                 signature_count: bank.signature_count(),
                 last_blockhash: bank.last_blockhash().to_string(),
+                // The bank is already frozen so this should not have to wait
+                epoch_accounts_hash: bank
+                    .wait_get_epoch_accounts_hash()
+                    .map(|hash| hash.as_ref().to_string()),
                 accounts: AccountsDetails { accounts },
             })
         } else {
@@ -327,6 +333,11 @@ pub mod tests {
                         accounts_delta_hash: "accounts_delta_hash".into(),
                         signature_count: slot + 10,
                         last_blockhash: "last_blockhash".into(),
+                        epoch_accounts_hash: if slot % 2 == 0 {
+                            Some("epoch_accounts_hash".into())
+                        } else {
+                            None
+                        },
                         accounts,
                     }),
                     transactions: vec![],
