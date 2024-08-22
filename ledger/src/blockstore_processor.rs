@@ -3801,13 +3801,14 @@ pub mod tests {
 
     #[test]
     fn test_update_transaction_statuses() {
-        // Make sure instruction errors still update the signature cache
         let GenesisConfigInfo {
             genesis_config,
             mint_keypair,
             ..
         } = create_genesis_config(11_000);
         let (bank, _bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
+
+        // Make sure instruction errors still update the signature cache
         let pubkey = solana_sdk::pubkey::new_rand();
         bank.transfer(1_000, &mint_keypair, &pubkey).unwrap();
         assert_eq!(bank.transaction_count(), 1);
@@ -3821,6 +3822,29 @@ pub mod tests {
         );
         assert_eq!(
             bank.transfer(10_001, &mint_keypair, &pubkey),
+            Err(TransactionError::AlreadyProcessed)
+        );
+
+        // Make sure fees-only transactions still update the signature cache
+        let missing_program_id = Pubkey::new_unique();
+        let tx = Transaction::new_signed_with_payer(
+            &[Instruction::new_with_bincode(
+                missing_program_id,
+                &10,
+                Vec::new(),
+            )],
+            Some(&mint_keypair.pubkey()),
+            &[&mint_keypair],
+            bank.last_blockhash(),
+        );
+        // First process attempt will fail but still update status cache
+        assert_eq!(
+            bank.process_transaction(&tx),
+            Err(TransactionError::ProgramAccountNotFound)
+        );
+        // Second attempt will be rejected since tx was already in status cache
+        assert_eq!(
+            bank.process_transaction(&tx),
             Err(TransactionError::AlreadyProcessed)
         );
 

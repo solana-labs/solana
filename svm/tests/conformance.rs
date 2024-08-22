@@ -336,9 +336,10 @@ fn run_fixture(fixture: InstrFixture, filename: OsString, execute_as_instr: bool
         return;
     }
 
-    let executed_tx = result.processing_results[0]
+    let processed_tx = result.processing_results[0]
         .processed_transaction()
         .unwrap();
+    let executed_tx = processed_tx.executed_transaction().unwrap();
     let execution_details = &executed_tx.execution_details;
     let loaded_accounts = &executed_tx.loaded_transaction.accounts;
     verify_accounts_and_data(

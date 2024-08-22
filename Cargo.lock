@@ -7682,6 +7682,7 @@ dependencies = [
 name = "solana-svm"
 version = "2.1.0"
 dependencies = [
+ "assert_matches",
  "bincode",
  "itertools 0.12.1",
  "lazy_static",

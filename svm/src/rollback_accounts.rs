@@ -79,6 +79,22 @@ impl RollbackAccounts {
             Self::SeparateNonceAndFeePayer { .. } => 2,
         }
     }
+
+    /// Size of accounts tracked for rollback, used when calculating the actual
+    /// cost of transaction processing in the cost model.
+    pub fn data_size(&self) -> usize {
+        match self {
+            Self::FeePayerOnly { fee_payer_account } => fee_payer_account.data().len(),
+            Self::SameNonceAndFeePayer { nonce } => nonce.account().data().len(),
+            Self::SeparateNonceAndFeePayer {
+                nonce,
+                fee_payer_account,
+            } => fee_payer_account
+                .data()
+                .len()
+                .saturating_add(nonce.account().data().len()),
+        }
+    }
 }
 
 #[cfg(test)]

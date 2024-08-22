@@ -16,7 +16,7 @@ use {
         transaction_error_metrics::TransactionErrorMetrics,
         transaction_execution_result::{ExecutedTransaction, TransactionExecutionDetails},
         transaction_processing_callback::TransactionProcessingCallback,
-        transaction_processing_result::TransactionProcessingResult,
+        transaction_processing_result::{ProcessedTransaction, TransactionProcessingResult},
     },
     log::debug,
     percentage::Percentage,
@@ -37,7 +37,7 @@ use {
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, PROGRAM_OWNERS},
         clock::{Epoch, Slot},
-        feature_set::{remove_rounding_in_fee_calculation, FeatureSet},
+        feature_set::{self, remove_rounding_in_fee_calculation, FeatureSet},
         fee::{FeeBudgetLimits, FeeStructure},
         hash::Hash,
         inner_instruction::{InnerInstruction, InnerInstructionsList},
@@ -269,12 +269,12 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
             );
 
             if program_cache_for_tx_batch.hit_max_limit {
-                const ERROR: TransactionError = TransactionError::ProgramCacheHitMaxLimit;
-                let processing_results = vec![Err(ERROR); sanitized_txs.len()];
                 return LoadAndExecuteSanitizedTransactionsOutput {
                     error_metrics,
                     execute_timings,
-                    processing_results,
+                    processing_results: (0..sanitized_txs.len())
+                        .map(|_| Err(TransactionError::ProgramCacheHitMaxLimit))
+                        .collect(),
                 };
             }
 
@@ -294,13 +294,22 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
             &program_cache_for_tx_batch,
         ));
 
+        let enable_transaction_loading_failure_fees = environment
+            .feature_set
+            .is_active(&feature_set::enable_transaction_loading_failure_fees::id());
         let (processing_results, execution_us): (Vec<TransactionProcessingResult>, u64) =
             measure_us!(loaded_transactions
                 .into_iter()
                 .zip(sanitized_txs.iter())
                 .map(|(load_result, tx)| match load_result {
                     TransactionLoadResult::NotLoaded(err) => Err(err),
-                    TransactionLoadResult::FeesOnly(fees_only_tx) => Err(fees_only_tx.load_error),
+                    TransactionLoadResult::FeesOnly(fees_only_tx) => {
+                        if enable_transaction_loading_failure_fees {
+                            Ok(ProcessedTransaction::FeesOnly(Box::new(fees_only_tx)))
+                        } else {
+                            Err(fees_only_tx.load_error)
+                        }
+                    }
                     TransactionLoadResult::Loaded(loaded_transaction) => {
                         let executed_tx = self.execute_loaded_transaction(
                             tx,
@@ -318,7 +327,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                             program_cache_for_tx_batch.merge(&executed_tx.programs_modified_by_tx);
                         }
 
-                        Ok(executed_tx)
+                        Ok(ProcessedTransaction::Executed(Box::new(executed_tx)))
                     }
                 })
                 .collect());

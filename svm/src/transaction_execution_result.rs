@@ -7,34 +7,14 @@ pub use solana_sdk::inner_instruction::{InnerInstruction, InnerInstructionsList}
 use {
     crate::account_loader::LoadedTransaction,
     solana_program_runtime::loaded_programs::ProgramCacheEntry,
-    solana_sdk::{
-        pubkey::Pubkey,
-        transaction::{self, TransactionError},
-        transaction_context::TransactionReturnData,
-    },
+    solana_sdk::{pubkey::Pubkey, transaction, transaction_context::TransactionReturnData},
     std::{collections::HashMap, sync::Arc},
 };
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub struct TransactionLoadedAccountsStats {
     pub loaded_accounts_data_size: u32,
     pub loaded_accounts_count: usize,
-}
-
-/// Type safe representation of a transaction execution attempt which
-/// differentiates between a transaction that was executed (will be
-/// committed to the ledger) and a transaction which wasn't executed
-/// and will be dropped.
-///
-/// Note: `Result<TransactionExecutionDetails, TransactionError>` is not
-/// used because it's easy to forget that the inner `details.status` field
-/// is what should be checked to detect a successful transaction. This
-/// enum provides a convenience method `Self::was_executed_successfully` to
-/// make such checks hard to do incorrectly.
-#[derive(Debug, Clone)]
-pub enum TransactionExecutionResult {
-    Executed(Box<ExecutedTransaction>),
-    NotExecuted(TransactionError),
 }
 
 #[derive(Debug, Clone)]
@@ -46,7 +26,7 @@ pub struct ExecutedTransaction {
 
 impl ExecutedTransaction {
     pub fn was_successful(&self) -> bool {
-        self.execution_details.status.is_ok()
+        self.execution_details.was_successful()
     }
 }
 

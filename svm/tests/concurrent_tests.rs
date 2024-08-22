@@ -7,6 +7,7 @@ use {
         },
         transaction_builder::SanitizedTransactionBuilder,
     },
+    assert_matches::assert_matches,
     mock_bank::MockBankCallback,
     shuttle::{
         sync::{Arc, RwLock},
@@ -22,7 +23,9 @@ use {
     },
     solana_svm::{
         account_loader::{CheckedTransactionDetails, TransactionCheckResult},
-        transaction_processing_result::TransactionProcessingResultExtensions,
+        transaction_processing_result::{
+            ProcessedTransaction, TransactionProcessingResultExtensions,
+        },
         transaction_processor::{
             ExecutionRecordingConfig, TransactionBatchProcessor, TransactionProcessingConfig,
             TransactionProcessingEnvironment,
@@ -251,10 +254,13 @@ fn svm_concurrent() {
                     &processing_config,
                 );
 
-                for (idx, item) in result.processing_results.iter().enumerate() {
-                    assert!(item.was_processed());
+                for (idx, processing_result) in result.processing_results.iter().enumerate() {
+                    assert!(processing_result.was_processed());
+                    let processed_tx = processing_result.processed_transaction().unwrap();
+                    assert_matches!(processed_tx, &ProcessedTransaction::Executed(_));
+                    let executed_tx = processed_tx.executed_transaction().unwrap();
                     let inserted_accounts = &check_tx_data[idx];
-                    for (key, account_data) in &item.as_ref().unwrap().loaded_transaction.accounts {
+                    for (key, account_data) in &executed_tx.loaded_transaction.accounts {
                         if *key == inserted_accounts.fee_payer {
                             assert_eq!(account_data.lamports(), BALANCE - 10000);
                         } else if *key == inserted_accounts.sender {

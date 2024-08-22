@@ -160,7 +160,8 @@ use {
         },
         transaction_processing_callback::TransactionProcessingCallback,
         transaction_processing_result::{
-            TransactionProcessingResult, TransactionProcessingResultExtensions,
+            ProcessedTransaction, TransactionProcessingResult,
+            TransactionProcessingResultExtensions,
         },
         transaction_processor::{
             ExecutionRecordingConfig, TransactionBatchProcessor, TransactionLogMessages,
@@ -328,6 +329,7 @@ pub struct LoadAndExecuteTransactionsOutput {
     pub processed_counts: ProcessedTransactionCounts,
 }
 
+#[derive(Debug, PartialEq)]
 pub struct TransactionSimulationResult {
     pub result: Result<()>,
     pub logs: TransactionLogMessages,
@@ -3098,14 +3100,13 @@ impl Bank {
         assert_eq!(sanitized_txs.len(), processing_results.len());
         for (tx, processing_result) in sanitized_txs.iter().zip(processing_results) {
             if let Ok(processed_tx) = &processing_result {
-                let details = &processed_tx.execution_details;
                 // Add the message hash to the status cache to ensure that this message
                 // won't be processed again with a different signature.
                 status_cache.insert(
                     tx.message().recent_blockhash(),
                     tx.message_hash(),
                     self.slot(),
-                    details.status.clone(),
+                    processed_tx.status(),
                 );
                 // Add the transaction signature to the status cache so that transaction status
                 // can be queried by transaction signature over RPC. In the future, this should
@@ -3114,7 +3115,7 @@ impl Bank {
                     tx.message().recent_blockhash(),
                     tx.signature(),
                     self.slot(),
-                    details.status.clone(),
+                    processed_tx.status(),
                 );
             }
         }
@@ -3364,30 +3365,35 @@ impl Bank {
         let processing_result = processing_results
             .pop()
             .unwrap_or(Err(TransactionError::InvalidProgramForExecution));
-        let flattened_result = processing_result.flattened_result();
-        let (post_simulation_accounts, logs, return_data, inner_instructions) =
+        let (post_simulation_accounts, result, logs, return_data, inner_instructions) =
             match processing_result {
-                Ok(processed_tx) => {
-                    let details = processed_tx.execution_details;
-                    let post_simulation_accounts = processed_tx
-                        .loaded_transaction
-                        .accounts
-                        .into_iter()
-                        .take(number_of_accounts)
-                        .collect::<Vec<_>>();
-                    (
-                        post_simulation_accounts,
-                        details.log_messages,
-                        details.return_data,
-                        details.inner_instructions,
-                    )
-                }
-                Err(_) => (vec![], None, None, None),
+                Ok(processed_tx) => match processed_tx {
+                    ProcessedTransaction::Executed(executed_tx) => {
+                        let details = executed_tx.execution_details;
+                        let post_simulation_accounts = executed_tx
+                            .loaded_transaction
+                            .accounts
+                            .into_iter()
+                            .take(number_of_accounts)
+                            .collect::<Vec<_>>();
+                        (
+                            post_simulation_accounts,
+                            details.status,
+                            details.log_messages,
+                            details.return_data,
+                            details.inner_instructions,
+                        )
+                    }
+                    ProcessedTransaction::FeesOnly(fees_only_tx) => {
+                        (vec![], Err(fees_only_tx.load_error), None, None, None)
+                    }
+                },
+                Err(error) => (vec![], Err(error), None, None, None),
             };
         let logs = logs.unwrap_or_default();
 
         TransactionSimulationResult {
-            result: flattened_result,
+            result,
             logs,
             post_simulation_accounts,
             units_consumed,
@@ -3567,7 +3573,8 @@ impl Bank {
             .filter_map(|(processing_result, transaction)| {
                 // Skip log collection for unprocessed transactions
                 let processed_tx = processing_result.processed_transaction()?;
-                let execution_details = &processed_tx.execution_details;
+                // Skip log collection for unexecuted transactions
+                let execution_details = processed_tx.execution_details()?;
                 Self::collect_transaction_logs(
                     &transaction_log_collector_config,
                     transaction,
@@ -3717,7 +3724,7 @@ impl Bank {
             .iter()
             .for_each(|processing_result| match processing_result {
                 Ok(processed_tx) => {
-                    fees += processed_tx.loaded_transaction.fee_details.total_fee();
+                    fees += processed_tx.fee_details().total_fee();
                 }
                 Err(_) => {}
             });
@@ -3736,8 +3743,7 @@ impl Bank {
             .iter()
             .for_each(|processing_result| match processing_result {
                 Ok(processed_tx) => {
-                    accumulated_fee_details
-                        .accumulate(&processed_tx.loaded_transaction.fee_details);
+                    accumulated_fee_details.accumulate(&processed_tx.fee_details());
                 }
                 Err(_) => {}
             });
@@ -3810,7 +3816,9 @@ impl Bank {
         let ((), update_executors_us) = measure_us!({
             let mut cache = None;
             for processing_result in &processing_results {
-                if let Some(executed_tx) = processing_result.processed_transaction() {
+                if let Some(ProcessedTransaction::Executed(executed_tx)) =
+                    processing_result.processed_transaction()
+                {
                     let programs_modified_by_tx = &executed_tx.programs_modified_by_tx;
                     if executed_tx.was_successful() && !programs_modified_by_tx.is_empty() {
                         cache
@@ -3826,7 +3834,7 @@ impl Bank {
         let accounts_data_len_delta = processing_results
             .iter()
             .filter_map(|processing_result| processing_result.processed_transaction())
-            .map(|processed_tx| &processed_tx.execution_details)
+            .filter_map(|processed_tx| processed_tx.execution_details())
             .filter_map(|details| {
                 details
                     .status
@@ -3864,37 +3872,52 @@ impl Bank {
     ) -> Vec<TransactionCommitResult> {
         processing_results
             .into_iter()
-            .map(|processing_result| {
-                let processed_tx = processing_result?;
-                let execution_details = processed_tx.execution_details;
-                let LoadedTransaction {
-                    rent_debits,
-                    accounts: loaded_accounts,
-                    loaded_accounts_data_size,
-                    fee_details,
-                    ..
-                } = processed_tx.loaded_transaction;
-
-                // Rent is only collected for successfully executed transactions
-                let rent_debits = if execution_details.was_successful() {
-                    rent_debits
-                } else {
-                    RentDebits::default()
-                };
-
-                Ok(CommittedTransaction {
-                    status: execution_details.status,
-                    log_messages: execution_details.log_messages,
-                    inner_instructions: execution_details.inner_instructions,
-                    return_data: execution_details.return_data,
-                    executed_units: execution_details.executed_units,
-                    fee_details,
-                    rent_debits,
-                    loaded_account_stats: TransactionLoadedAccountsStats {
-                        loaded_accounts_count: loaded_accounts.len(),
+            .map(|processing_result| match processing_result? {
+                ProcessedTransaction::Executed(executed_tx) => {
+                    let execution_details = executed_tx.execution_details;
+                    let LoadedTransaction {
+                        rent_debits,
+                        accounts: loaded_accounts,
                         loaded_accounts_data_size,
+                        fee_details,
+                        ..
+                    } = executed_tx.loaded_transaction;
+
+                    // Rent is only collected for successfully executed transactions
+                    let rent_debits = if execution_details.was_successful() {
+                        rent_debits
+                    } else {
+                        RentDebits::default()
+                    };
+
+                    Ok(CommittedTransaction {
+                        status: execution_details.status,
+                        log_messages: execution_details.log_messages,
+                        inner_instructions: execution_details.inner_instructions,
+                        return_data: execution_details.return_data,
+                        executed_units: execution_details.executed_units,
+                        fee_details,
+                        rent_debits,
+                        loaded_account_stats: TransactionLoadedAccountsStats {
+                            loaded_accounts_count: loaded_accounts.len(),
+                            loaded_accounts_data_size,
+                        },
+                    })
+                }
+                ProcessedTransaction::FeesOnly(fees_only_tx) => Ok(CommittedTransaction {
+                    status: Err(fees_only_tx.load_error),
+                    log_messages: None,
+                    inner_instructions: None,
+                    return_data: None,
+                    executed_units: 0,
+                    rent_debits: RentDebits::default(),
+                    fee_details: fees_only_tx.fee_details,
+                    loaded_account_stats: TransactionLoadedAccountsStats {
+                        loaded_accounts_count: fees_only_tx.rollback_accounts.count(),
+                        loaded_accounts_data_size: fees_only_tx.rollback_accounts.data_size()
+                            as u32,
                     },
-                })
+                }),
             })
             .collect()
     }
@@ -3903,6 +3926,7 @@ impl Bank {
         let collected_rent = processing_results
             .iter()
             .filter_map(|processing_result| processing_result.processed_transaction())
+            .filter_map(|processed_tx| processed_tx.executed_transaction())
             .filter(|executed_tx| executed_tx.was_successful())
             .map(|executed_tx| executed_tx.loaded_transaction.rent)
             .sum();
@@ -5852,6 +5876,11 @@ impl Bank {
                 processing_result
                     .processed_transaction()
                     .map(|processed_tx| (tx, processed_tx))
+            })
+            .filter_map(|(tx, processed_tx)| {
+                processed_tx
+                    .executed_transaction()
+                    .map(|executed_tx| (tx, executed_tx))
             })
             .filter(|(_, executed_tx)| executed_tx.was_successful())
             .flat_map(|(tx, executed_tx)| {

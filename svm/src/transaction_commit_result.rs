@@ -9,6 +9,7 @@ use {
 pub type TransactionCommitResult = TransactionResult<CommittedTransaction>;
 
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "dev-context-only-utils", derive(PartialEq))]
 pub struct CommittedTransaction {
     pub status: TransactionResult<()>,
     pub log_messages: Option<Vec<String>>,
