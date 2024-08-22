@@ -112,7 +112,27 @@ impl TransactionMeta {
     /// # Safety
     ///   - This function must be called with the same `bytes` slice that was
     ///     used to create the `TransactionMeta` instance.
-    pub unsafe fn signatures(&self, bytes: &[u8]) -> &[Signature] {
+    pub unsafe fn signatures<'a>(&self, bytes: &'a [u8]) -> &'a [Signature] {
+        // Verify at compile time there are no alignment constraints.
+        const _: () = assert!(
+            core::mem::align_of::<Signature>() == 1,
+            "Signature alignment"
+        );
+        // The length of the slice is not greater than isize::MAX.
+        const _: () =
+            assert!(u8::MAX as usize * core::mem::size_of::<Signature>() <= isize::MAX as usize);
+
+        // SAFETY:
+        // - If this `TransactionMeta` was created from `bytes`:
+        //     - the pointer is valid for the range and is properly aligned.
+        // - `num_signatures` has been verified against the bounds if
+        //   `TransactionMeta` was created successfully.
+        // - `Signature` are just byte arrays; there is no possibility the
+        //   `Signature` are not initialized properly.
+        // - The lifetime of the returned slice is the same as the input
+        //   `bytes`. This means it will not be mutated or deallocated while
+        //   holding the slice.
+        // - The length does not overflow `isize`.
         core::slice::from_raw_parts(
             bytes.as_ptr().add(usize::from(self.signature.offset)) as *const Signature,
             usize::from(self.signature.num_signatures),
@@ -124,7 +144,24 @@ impl TransactionMeta {
     /// # Safety
     ///  - This function must be called with the same `bytes` slice that was
     ///    used to create the `TransactionMeta` instance.
-    pub unsafe fn static_account_keys(&self, bytes: &[u8]) -> &[Pubkey] {
+    pub unsafe fn static_account_keys<'a>(&self, bytes: &'a [u8]) -> &'a [Pubkey] {
+        // Verify at compile time there are no alignment constraints.
+        const _: () = assert!(core::mem::align_of::<Pubkey>() == 1, "Pubkey alignment");
+        // The length of the slice is not greater than isize::MAX.
+        const _: () =
+            assert!(u8::MAX as usize * core::mem::size_of::<Pubkey>() <= isize::MAX as usize);
+
+        // SAFETY:
+        // - If this `TransactionMeta` was created from `bytes`:
+        //     - the pointer is valid for the range and is properly aligned.
+        // - `num_static_accounts` has been verified against the bounds if
+        //   `TransactionMeta` was created successfully.
+        // - `Pubkey` are just byte arrays; there is no possibility the
+        //   `Pubkey` are not initialized properly.
+        // - The lifetime of the returned slice is the same as the input
+        //   `bytes`. This means it will not be mutated or deallocated while
+        //   holding the slice.
+        // - The length does not overflow `isize`.
         core::slice::from_raw_parts(
             bytes
                 .as_ptr()
@@ -137,7 +174,16 @@ impl TransactionMeta {
     /// # Safety
     /// - This function must be called with the same `bytes` slice that was
     ///   used to create the `TransactionMeta` instance.
-    pub unsafe fn recent_blockhash(&self, bytes: &[u8]) -> &Hash {
+    pub unsafe fn recent_blockhash<'a>(&self, bytes: &'a [u8]) -> &'a Hash {
+        // Verify at compile time there are no alignment constraints.
+        const _: () = assert!(core::mem::align_of::<Hash>() == 1, "Hash alignment");
+
+        // SAFETY:
+        // - The pointer is correctly aligned (no alignment constraints).
+        // - `Hash` is just a byte array; there is no possibility the `Hash`
+        //   is not initialized properly.
+        // - Aliasing rules are respected because the lifetime of the returned
+        //   reference is the same as the input/source `bytes`.
         &*(bytes
             .as_ptr()
             .add(usize::from(self.recent_blockhash_offset)) as *const Hash)
