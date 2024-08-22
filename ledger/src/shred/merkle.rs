@@ -445,7 +445,7 @@ macro_rules! impl_merkle_shred {
             Ok(())
         }
 
-        fn retransmitter_signature_offset(&self) -> Result<usize, Error> {
+        pub(super) fn retransmitter_signature_offset(&self) -> Result<usize, Error> {
             let ShredVariant::$variant {
                 proof_size,
                 chained,

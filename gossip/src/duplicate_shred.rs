@@ -95,7 +95,8 @@ pub enum Error {
 ///     - Must match the expected shred version
 ///     - Must both sigverify for the correct leader
 ///     - Must have a merkle root conflict, otherwise `shred1` and `shred2` must have the same `shred_type`
-///     - If `shred1` and `shred2` share the same index they must be not equal
+///     - If `shred1` and `shred2` share the same index they must be not have equal payloads excluding the
+///       retransmitter signature
 ///     - If `shred1` and `shred2` do not share the same index and are data shreds
 ///       verify that they indicate an index conflict. One of them must be the
 ///       LAST_SHRED_IN_SLOT, however the other shred must have a higher index.
@@ -144,7 +145,7 @@ where
     }
 
     if shred1.index() == shred2.index() {
-        if shred1.payload() != shred2.payload() {
+        if shred1.is_shred_duplicate(shred2) {
             return Ok(());
         }
         return Err(Error::InvalidDuplicateShreds);
@@ -311,7 +312,7 @@ pub(crate) mod tests {
         solana_ledger::shred::{ProcessShredsStats, ReedSolomonCache, Shredder},
         solana_sdk::{
             hash::Hash,
-            signature::{Keypair, Signer},
+            signature::{Keypair, Signature, Signer},
             system_transaction,
         },
         std::sync::Arc,
@@ -1249,6 +1250,84 @@ pub(crate) mod tests {
                     .err()
                     .unwrap(),
                 Error::InvalidShredVersion(_)
+            );
+        }
+    }
+
+    #[test]
+    fn test_retransmitter_signature_invalid() {
+        let mut rng = rand::thread_rng();
+        let leader = Arc::new(Keypair::new());
+        let (slot, parent_slot, reference_tick, version) = (53084024, 53084023, 0, 0);
+        let shredder = Shredder::new(slot, parent_slot, reference_tick, version).unwrap();
+        let next_shred_index = rng.gen_range(0..32_000);
+        let leader_schedule = |s| {
+            if s == slot {
+                Some(leader.pubkey())
+            } else {
+                None
+            }
+        };
+        let data_shred =
+            new_rand_data_shred(&mut rng, next_shred_index, &shredder, &leader, true, true);
+        let coding_shred =
+            new_rand_coding_shreds(&mut rng, next_shred_index, 10, &shredder, &leader, true)[0]
+                .clone();
+        let mut data_shred_different_retransmitter_payload = data_shred.clone().into_payload();
+        shred::layout::set_retransmitter_signature(
+            &mut data_shred_different_retransmitter_payload,
+            &Signature::new_unique(),
+        )
+        .unwrap();
+        let data_shred_different_retransmitter =
+            Shred::new_from_serialized_shred(data_shred_different_retransmitter_payload).unwrap();
+        let mut coding_shred_different_retransmitter_payload = coding_shred.clone().into_payload();
+        shred::layout::set_retransmitter_signature(
+            &mut coding_shred_different_retransmitter_payload,
+            &Signature::new_unique(),
+        )
+        .unwrap();
+        let coding_shred_different_retransmitter =
+            Shred::new_from_serialized_shred(coding_shred_different_retransmitter_payload).unwrap();
+
+        let test_cases = vec![
+            // Same data shred from different retransmitter
+            (data_shred, data_shred_different_retransmitter),
+            // Same coding shred from different retransmitter
+            (coding_shred, coding_shred_different_retransmitter),
+        ];
+        for (shred1, shred2) in test_cases.iter().flat_map(|(a, b)| [(a, b), (b, a)]) {
+            assert_matches!(
+                from_shred(
+                    shred1.clone(),
+                    Pubkey::new_unique(), // self_pubkey
+                    shred2.payload().clone(),
+                    Some(leader_schedule),
+                    rng.gen(), // wallclock
+                    512,       // max_size
+                    version,
+                )
+                .err()
+                .unwrap(),
+                Error::InvalidDuplicateShreds
+            );
+
+            let chunks: Vec<_> = from_shred_bypass_checks(
+                shred1.clone(),
+                Pubkey::new_unique(), // self_pubkey
+                shred2.clone(),
+                rng.gen(), // wallclock
+                512,       // max_size
+            )
+            .unwrap()
+            .collect();
+            assert!(chunks.len() > 4);
+
+            assert_matches!(
+                into_shreds(&leader.pubkey(), chunks, version)
+                    .err()
+                    .unwrap(),
+                Error::InvalidDuplicateShreds
             );
         }
     }
