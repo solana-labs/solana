@@ -821,6 +821,7 @@ pub fn process_create_vote_account(
     let nonce_authority = config.signers[nonce_authority];
     let space = VoteStateVersions::vote_state_size_of(true) as u64;
 
+    let compute_unit_limit = ComputeUnitLimit::Default;
     let build_message = |lamports| {
         let vote_init = VoteInit {
             node_pubkey: identity_pubkey,
@@ -849,7 +850,7 @@ pub fn process_create_vote_account(
         .with_memo(memo)
         .with_compute_unit_config(&ComputeUnitConfig {
             compute_unit_price,
-            compute_unit_limit: ComputeUnitLimit::Default,
+            compute_unit_limit,
         });
 
         if let Some(nonce_account) = &nonce_account {
@@ -873,6 +874,7 @@ pub fn process_create_vote_account(
         &recent_blockhash,
         &config.signers[0].pubkey(),
         &fee_payer.pubkey(),
+        compute_unit_limit,
         build_message,
         config.commitment,
     )?;
@@ -1316,6 +1318,7 @@ pub fn process_withdraw_from_vote_account(
     let fee_payer = config.signers[fee_payer];
     let nonce_authority = config.signers[nonce_authority];
 
+    let compute_unit_limit = ComputeUnitLimit::Default;
     let build_message = |lamports| {
         let ixs = vec![withdraw(
             vote_account_pubkey,
@@ -1326,7 +1329,7 @@ pub fn process_withdraw_from_vote_account(
         .with_memo(memo)
         .with_compute_unit_config(&ComputeUnitConfig {
             compute_unit_price,
-            compute_unit_limit: ComputeUnitLimit::Default,
+            compute_unit_limit,
         });
 
         if let Some(nonce_account) = &nonce_account {
@@ -1348,6 +1351,7 @@ pub fn process_withdraw_from_vote_account(
         &recent_blockhash,
         vote_account_pubkey,
         &fee_payer.pubkey(),
+        compute_unit_limit,
         build_message,
         config.commitment,
     )?;

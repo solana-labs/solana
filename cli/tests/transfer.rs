@@ -12,15 +12,18 @@ use {
     solana_rpc_client_nonce_utils::blockhash_query::{self, BlockhashQuery},
     solana_sdk::{
         commitment_config::CommitmentConfig,
+        compute_budget::ComputeBudgetInstruction,
         fee::FeeStructure,
+        message::Message,
         native_token::sol_to_lamports,
         nonce::State as NonceState,
         pubkey::Pubkey,
         signature::{keypair_from_seed, Keypair, NullSigner, Signer},
-        stake,
+        stake, system_instruction,
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_test_validator::TestValidator,
+    test_case::test_case,
 };
 
 #[test]
@@ -474,16 +477,17 @@ fn test_transfer_multisession_signing() {
     check_balance!(sol_to_lamports(42.0), &rpc_client, &to_pubkey);
 }
 
-#[test]
-fn test_transfer_all() {
+#[test_case(None; "default")]
+#[test_case(Some(100_000); "with_compute_unit_price")]
+fn test_transfer_all(compute_unit_price: Option<u64>) {
     solana_logger::setup();
-    let fee = FeeStructure::default().get_max_fee(1, 0);
+    let lamports_per_signature = FeeStructure::default().get_max_fee(1, 0);
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
     let test_validator = TestValidator::with_custom_fees(
         mint_pubkey,
-        fee,
+        lamports_per_signature,
         Some(faucet_addr),
         SocketAddrSpace::Unspecified,
     );
@@ -492,13 +496,36 @@ fn test_transfer_all() {
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
 
     let default_signer = Keypair::new();
+    let recipient_pubkey = Pubkey::from([1u8; 32]);
+
+    let fee = {
+        let mut instructions = vec![system_instruction::transfer(
+            &default_signer.pubkey(),
+            &recipient_pubkey,
+            0,
+        )];
+        if let Some(compute_unit_price) = compute_unit_price {
+            // This is brittle and will need to be updated if the compute unit
+            // limit for the system program or compute budget program are changed,
+            // or if they're converted to BPF.
+            // See `solana_system_program::system_processor::DEFAULT_COMPUTE_UNITS`
+            // and `solana_compute_budget_program::DEFAULT_COMPUTE_UNITS`
+            instructions.push(ComputeBudgetInstruction::set_compute_unit_limit(450));
+            instructions.push(ComputeBudgetInstruction::set_compute_unit_price(
+                compute_unit_price,
+            ));
+        }
+        let blockhash = rpc_client.get_latest_blockhash().unwrap();
+        let sample_message =
+            Message::new_with_blockhash(&instructions, Some(&default_signer.pubkey()), &blockhash);
+        rpc_client.get_fee_for_message(&sample_message).unwrap()
+    };
 
     let mut config = CliConfig::recent_for_tests();
     config.json_rpc_url = test_validator.rpc_url();
     config.signers = vec![&default_signer];
 
     let sender_pubkey = config.signers[0].pubkey();
-    let recipient_pubkey = Pubkey::from([1u8; 32]);
 
     request_and_confirm_airdrop(&rpc_client, &config, &sender_pubkey, 500_000).unwrap();
     check_balance!(500_000, &rpc_client, &sender_pubkey);
@@ -522,7 +549,7 @@ fn test_transfer_all() {
         fee_payer: 0,
         derived_address_seed: None,
         derived_address_program_id: None,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config).unwrap();
     check_balance!(0, &rpc_client, &sender_pubkey);

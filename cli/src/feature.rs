@@ -10,7 +10,8 @@ use {
     console::style,
     serde::{Deserialize, Serialize},
     solana_clap_utils::{
-        fee_payer::*, hidden_unless_forced, input_parsers::*, input_validators::*, keypair::*,
+        compute_budget::ComputeUnitLimit, fee_payer::*, hidden_unless_forced, input_parsers::*,
+        input_validators::*, keypair::*,
     },
     solana_cli_output::{cli_version::CliVersion, QuietDisplay, VerboseDisplay},
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
@@ -972,6 +973,7 @@ fn process_activate(
         SpendAmount::Some(rent),
         &blockhash,
         &fee_payer.pubkey(),
+        ComputeUnitLimit::Default,
         |lamports| {
             Message::new(
                 &feature::activate_with_lamports(&feature_id, &fee_payer.pubkey(), lamports),

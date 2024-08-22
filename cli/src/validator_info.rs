@@ -349,6 +349,7 @@ pub fn process_set_validator_info(
         vec![config.signers[0]]
     };
 
+    let compute_unit_limit = ComputeUnitLimit::Default;
     let build_message = |lamports| {
         let keys = keys.clone();
         if balance == 0 {
@@ -364,7 +365,7 @@ pub fn process_set_validator_info(
             )
             .with_compute_unit_config(&ComputeUnitConfig {
                 compute_unit_price,
-                compute_unit_limit: ComputeUnitLimit::Default,
+                compute_unit_limit,
             });
             instructions.extend_from_slice(&[config_instruction::store(
                 &info_pubkey,
@@ -387,7 +388,7 @@ pub fn process_set_validator_info(
             )]
             .with_compute_unit_config(&ComputeUnitConfig {
                 compute_unit_price,
-                compute_unit_limit: ComputeUnitLimit::Default,
+                compute_unit_limit,
             });
             Message::new(&instructions, Some(&config.signers[0].pubkey()))
         }
@@ -401,6 +402,7 @@ pub fn process_set_validator_info(
         SpendAmount::Some(lamports),
         &latest_blockhash,
         &config.signers[0].pubkey(),
+        compute_unit_limit,
         build_message,
         config.commitment,
     )?;

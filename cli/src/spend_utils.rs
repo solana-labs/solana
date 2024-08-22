@@ -2,9 +2,12 @@ use {
     crate::{
         checks::{check_account_for_balance_with_commitment, get_fee_for_messages},
         cli::CliError,
+        compute_budget::{simulate_and_update_compute_unit_limit, UpdateComputeUnitLimitResult},
     },
     clap::ArgMatches,
-    solana_clap_utils::{input_parsers::lamports_of_sol, offline::SIGN_ONLY_ARG},
+    solana_clap_utils::{
+        compute_budget::ComputeUnitLimit, input_parsers::lamports_of_sol, offline::SIGN_ONLY_ARG,
+    },
     solana_rpc_client::rpc_client::RpcClient,
     solana_sdk::{
         commitment_config::CommitmentConfig, hash::Hash, message::Message,
@@ -52,6 +55,7 @@ pub fn resolve_spend_tx_and_check_account_balance<F>(
     amount: SpendAmount,
     blockhash: &Hash,
     from_pubkey: &Pubkey,
+    compute_unit_limit: ComputeUnitLimit,
     build_message: F,
     commitment: CommitmentConfig,
 ) -> Result<(Message, u64), CliError>
@@ -65,6 +69,7 @@ where
         blockhash,
         from_pubkey,
         from_pubkey,
+        compute_unit_limit,
         build_message,
         commitment,
     )
@@ -77,6 +82,7 @@ pub fn resolve_spend_tx_and_check_account_balances<F>(
     blockhash: &Hash,
     from_pubkey: &Pubkey,
     fee_pubkey: &Pubkey,
+    compute_unit_limit: ComputeUnitLimit,
     build_message: F,
     commitment: CommitmentConfig,
 ) -> Result<(Message, u64), CliError>
@@ -92,6 +98,7 @@ where
             from_pubkey,
             fee_pubkey,
             0,
+            compute_unit_limit,
             build_message,
         )?;
         Ok((message, spend))
@@ -113,6 +120,7 @@ where
             from_pubkey,
             fee_pubkey,
             from_rent_exempt_minimum,
+            compute_unit_limit,
             build_message,
         )?;
         if from_pubkey == fee_pubkey {
@@ -150,41 +158,57 @@ fn resolve_spend_message<F>(
     from_pubkey: &Pubkey,
     fee_pubkey: &Pubkey,
     from_rent_exempt_minimum: u64,
+    compute_unit_limit: ComputeUnitLimit,
     build_message: F,
 ) -> Result<(Message, SpendAndFee), CliError>
 where
     F: Fn(u64) -> Message,
 {
-    let fee = match blockhash {
+    let (fee, compute_unit_info) = match blockhash {
         Some(blockhash) => {
             let mut dummy_message = build_message(0);
             dummy_message.recent_blockhash = *blockhash;
-            get_fee_for_messages(rpc_client, &[&dummy_message])?
+            let compute_unit_info = if compute_unit_limit == ComputeUnitLimit::Simulated {
+                // Simulate for correct compute units
+                if let UpdateComputeUnitLimitResult::UpdatedInstructionIndex(ix_index) =
+                    simulate_and_update_compute_unit_limit(rpc_client, &mut dummy_message)?
+                {
+                    Some((ix_index, dummy_message.instructions[ix_index].data.clone()))
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+            (
+                get_fee_for_messages(rpc_client, &[&dummy_message])?,
+                compute_unit_info,
+            )
         }
-        None => 0, // Offline, cannot calculate fee
+        None => (0, None), // Offline, cannot calculate fee
     };
 
-    match amount {
-        SpendAmount::Some(lamports) => Ok((
+    let (mut message, spend_and_fee) = match amount {
+        SpendAmount::Some(lamports) => (
             build_message(lamports),
             SpendAndFee {
                 spend: lamports,
                 fee,
             },
-        )),
+        ),
         SpendAmount::All => {
             let lamports = if from_pubkey == fee_pubkey {
                 from_balance.saturating_sub(fee)
             } else {
                 from_balance
             };
-            Ok((
+            (
                 build_message(lamports),
                 SpendAndFee {
                     spend: lamports,
                     fee,
                 },
-            ))
+            )
         }
         SpendAmount::RentExempt => {
             let mut lamports = if from_pubkey == fee_pubkey {
@@ -193,13 +217,18 @@ where
                 from_balance
             };
             lamports = lamports.saturating_sub(from_rent_exempt_minimum);
-            Ok((
+            (
                 build_message(lamports),
                 SpendAndFee {
                     spend: lamports,
                     fee,
                 },
-            ))
+            )
         }
+    };
+    // After build message, update with correct compute units
+    if let Some((ix_index, ix_data)) = compute_unit_info {
+        message.instructions[ix_index].data = ix_data;
     }
+    Ok((message, spend_and_fee))
 }

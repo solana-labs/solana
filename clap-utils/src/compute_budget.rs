@@ -33,6 +33,7 @@ pub fn compute_unit_limit_arg<'a, 'b>() -> Arg<'a, 'b> {
         .help(COMPUTE_UNIT_LIMIT_ARG.help)
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ComputeUnitLimit {
     /// Do not include a compute unit limit instruction, which will give the
     /// transaction a compute unit limit of:
