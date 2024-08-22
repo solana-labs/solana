@@ -2030,6 +2030,7 @@ pub struct ShrinkStats {
     alive_accounts: AtomicU64,
     accounts_loaded: AtomicU64,
     purged_zero_lamports: AtomicU64,
+    accounts_not_found_in_index: AtomicU64,
 }
 
 impl ShrinkStats {
@@ -2131,6 +2132,11 @@ impl ShrinkStats {
                 (
                     "purged_zero_lamports_count",
                     self.purged_zero_lamports.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "accounts_not_found_in_index",
+                    self.accounts_not_found_in_index.swap(0, Ordering::Relaxed),
                     i64
                 ),
             );
@@ -2337,6 +2343,13 @@ impl ShrinkAncientStats {
                 "purged_zero_lamports_count",
                 self.shrink_stats
                     .purged_zero_lamports
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "accounts_not_found_in_index",
+                self.shrink_stats
+                    .accounts_not_found_in_index
                     .swap(0, Ordering::Relaxed),
                 i64
             ),
@@ -3928,6 +3941,10 @@ impl AccountsDb {
                         alive_accounts.add(ref_count, stored_account, slot_list);
                         alive += 1;
                     }
+                } else {
+                    stats
+                        .accounts_not_found_in_index
+                        .fetch_add(1, Ordering::Relaxed);
                 }
                 index += 1;
                 result
