@@ -129,7 +129,7 @@ macro_rules! entrypoint {
         pub unsafe extern "C" fn entrypoint(input: *mut u8) -> u64 {
             let (program_id, accounts, instruction_data) =
                 unsafe { $crate::entrypoint::deserialize(input) };
-            match $process_instruction(&program_id, &accounts, &instruction_data) {
+            match $process_instruction(program_id, &accounts, instruction_data) {
                 Ok(()) => $crate::entrypoint::SUCCESS,
                 Err(error) => error.into(),
             }
