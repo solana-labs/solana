@@ -4,7 +4,7 @@ use {
         cluster_info_vote_listener::VoteTracker,
         cluster_slots_service::cluster_slots::ClusterSlots,
         consensus::{
-            fork_choice::SelectVoteAndResetForkResult,
+            fork_choice::{select_vote_and_reset_forks, SelectVoteAndResetForkResult},
             heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
             latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
             progress_map::{ForkProgress, ProgressMap},
@@ -212,7 +212,7 @@ impl VoteSimulator {
         let SelectVoteAndResetForkResult {
             heaviest_fork_failures,
             ..
-        } = ReplayStage::select_vote_and_reset_forks(
+        } = select_vote_and_reset_forks(
             &vote_bank,
             None,
             &ancestors,
