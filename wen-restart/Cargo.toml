@@ -34,6 +34,7 @@ solana-entry = { workspace = true }
 solana-logger = { workspace = true }
 solana-runtime = { workspace = true, features = ["dev-context-only-utils"] }
 solana-streamer = { workspace = true }
+solana-vote = { workspace = true }
 tempfile = { workspace = true }
 
 [build-dependencies]

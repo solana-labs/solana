@@ -8152,6 +8152,7 @@ dependencies = [
  "solana-sdk",
  "solana-streamer",
  "solana-timings",
+ "solana-vote",
  "solana-vote-program",
  "tempfile",
 ]

@@ -21,9 +21,16 @@ message LastVotedForkSlotsAggregateRecord {
     optional LastVotedForkSlotsAggregateFinal final_result = 2;
 }
 
+message LastVotedForkSlotsEpochInfoRecord {
+    uint64 epoch = 1;
+    uint64 total_stake = 2;
+    uint64 actively_voting_stake = 3;
+    uint64 actively_voting_for_this_epoch_stake = 4;
+}
+
 message LastVotedForkSlotsAggregateFinal {
     map<uint64, uint64> slots_stake_map = 1;
-    uint64 total_active_stake = 2;
+    repeated LastVotedForkSlotsEpochInfoRecord epoch_infos = 2;
 }
 
 message HeaviestForkRecord {
