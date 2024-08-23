@@ -2,11 +2,12 @@ use {
     crate::{
         bytes::{
             advance_offset_for_array, advance_offset_for_type, check_remaining,
-            optimized_read_compressed_u16, read_byte,
+            optimized_read_compressed_u16, read_byte, read_slice_data, read_type,
         },
         result::Result,
     },
     solana_sdk::{hash::Hash, packet::PACKET_DATA_SIZE, pubkey::Pubkey, signature::Signature},
+    solana_svm_transaction::message_address_table_lookup::SVMMessageAddressTableLookup,
 };
 
 // Each ATL has at least a Pubkey, one byte for the number of write indexes,
@@ -46,7 +47,7 @@ const MAX_ATLS_PER_PACKET: usize = (PACKET_DATA_SIZE - MIN_SIZED_PACKET_WITH_ATL
 /// Contains metadata about the address table lookups in a transaction packet.
 pub struct AddressTableLookupMeta {
     /// The number of address table lookups in the transaction.
-    pub(crate) num_address_table_lookup: u8,
+    pub(crate) num_address_table_lookups: u8,
     /// The offset to the first address table lookup in the transaction.
     pub(crate) offset: u16,
 }
@@ -97,9 +98,81 @@ impl AddressTableLookupMeta {
         }
 
         Ok(Self {
-            num_address_table_lookup: num_address_table_lookups,
+            num_address_table_lookups,
             offset: address_table_lookups_offset,
         })
+    }
+}
+
+pub struct AddressTableLookupIterator<'a> {
+    pub(crate) bytes: &'a [u8],
+    pub(crate) offset: usize,
+    pub(crate) num_address_table_lookups: u8,
+    pub(crate) index: u8,
+}
+
+impl<'a> Iterator for AddressTableLookupIterator<'a> {
+    type Item = SVMMessageAddressTableLookup<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index < self.num_address_table_lookups {
+            self.index = self.index.wrapping_add(1);
+
+            // Each ATL has 3 pieces:
+            // 1. Address (Pubkey)
+            // 2. write indexes ([u8])
+            // 3. read indexes ([u8])
+
+            // Advance offset for address of the lookup table.
+            const _: () = assert!(core::mem::align_of::<Pubkey>() == 1, "Pubkey alignment");
+            // SAFETY:
+            // - The offset is checked to be valid in the slice.
+            // - The alignment of Pubkey is 1.
+            // - `Pubkey` is a byte array, it cannot be improperly initialized.
+            let account_key = unsafe { read_type::<Pubkey>(self.bytes, &mut self.offset) }.ok()?;
+
+            // Read the number of write indexes, and then update the offset.
+            let num_write_accounts =
+                optimized_read_compressed_u16(self.bytes, &mut self.offset).ok()?;
+
+            const _: () = assert!(core::mem::align_of::<u8>() == 1, "u8 alignment");
+            // SAFETY:
+            // - The offset is checked to be valid in the byte slice.
+            // - The alignment of u8 is 1.
+            // - The slice length is checked to be valid.
+            // - `u8` cannot be improperly initialized.
+            let writable_indexes =
+                unsafe { read_slice_data::<u8>(self.bytes, &mut self.offset, num_write_accounts) }
+                    .ok()?;
+
+            // Read the number of read indexes, and then update the offset.
+            let num_read_accounts =
+                optimized_read_compressed_u16(self.bytes, &mut self.offset).ok()?;
+
+            const _: () = assert!(core::mem::align_of::<u8>() == 1, "u8 alignment");
+            // SAFETY:
+            // - The offset is checked to be valid in the byte slice.
+            // - The alignment of u8 is 1.
+            // - The slice length is checked to be valid.
+            // - `u8` cannot be improperly initialized.
+            let readonly_indexes =
+                unsafe { read_slice_data::<u8>(self.bytes, &mut self.offset, num_read_accounts) }
+                    .ok()?;
+
+            Some(SVMMessageAddressTableLookup {
+                account_key,
+                writable_indexes,
+                readonly_indexes,
+            })
+        } else {
+            None
+        }
+    }
+}
+
+impl ExactSizeIterator for AddressTableLookupIterator<'_> {
+    fn len(&self) -> usize {
+        usize::from(self.num_address_table_lookups.wrapping_sub(self.index))
     }
 }
 
@@ -115,7 +188,7 @@ mod tests {
         let bytes = bincode::serialize(&ShortVec::<MessageAddressTableLookup>(vec![])).unwrap();
         let mut offset = 0;
         let meta = AddressTableLookupMeta::try_new(&bytes, &mut offset).unwrap();
-        assert_eq!(meta.num_address_table_lookup, 0);
+        assert_eq!(meta.num_address_table_lookups, 0);
         assert_eq!(meta.offset, 1);
         assert_eq!(offset, bytes.len());
     }
@@ -141,7 +214,7 @@ mod tests {
         .unwrap();
         let mut offset = 0;
         let meta = AddressTableLookupMeta::try_new(&bytes, &mut offset).unwrap();
-        assert_eq!(meta.num_address_table_lookup, 1);
+        assert_eq!(meta.num_address_table_lookups, 1);
         assert_eq!(meta.offset, 1);
         assert_eq!(offset, bytes.len());
     }
@@ -163,7 +236,7 @@ mod tests {
         .unwrap();
         let mut offset = 0;
         let meta = AddressTableLookupMeta::try_new(&bytes, &mut offset).unwrap();
-        assert_eq!(meta.num_address_table_lookup, 2);
+        assert_eq!(meta.num_address_table_lookups, 2);
         assert_eq!(meta.offset, 1);
         assert_eq!(offset, bytes.len());
     }

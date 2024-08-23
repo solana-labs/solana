@@ -2,6 +2,7 @@ use {
     crate::{
         bytes::{
             advance_offset_for_array, check_remaining, optimized_read_compressed_u16, read_byte,
+            read_slice_data,
         },
         result::Result,
     },
@@ -82,6 +83,8 @@ impl<'a> Iterator for InstructionsIterator<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.index < self.num_instructions {
+            self.index = self.index.wrapping_add(1);
+
             // Each instruction has 3 pieces:
             // 1. Program ID index (u8)
             // 2. Accounts indexes ([u8])
@@ -93,27 +96,29 @@ impl<'a> Iterator for InstructionsIterator<'a> {
             // Read the number of account indexes, and then update the offset
             // to skip over the account indexes.
             let num_accounts = optimized_read_compressed_u16(self.bytes, &mut self.offset).ok()?;
-            // SAFETY: Only returned after we check that there are enough bytes.
-            let accounts = unsafe {
-                core::slice::from_raw_parts(
-                    self.bytes.as_ptr().add(self.offset),
-                    usize::from(num_accounts),
-                )
-            };
-            advance_offset_for_array::<u8>(self.bytes, &mut self.offset, num_accounts).ok()?;
+
+            const _: () = assert!(core::mem::align_of::<u8>() == 1, "u8 alignment");
+            // SAFETY:
+            // - The offset is checked to be valid in the byte slice.
+            // - The alignment of u8 is 1.
+            // - The slice length is checked to be valid.
+            // - `u8` cannot be improperly initialized.
+            let accounts =
+                unsafe { read_slice_data::<u8>(self.bytes, &mut self.offset, num_accounts) }
+                    .ok()?;
 
             // Read the length of the data, and then update the offset to skip
             // over the data.
             let data_len = optimized_read_compressed_u16(self.bytes, &mut self.offset).ok()?;
-            // SAFETY: Only returned after we check that there are enough bytes.
-            let data = unsafe {
-                core::slice::from_raw_parts(
-                    self.bytes.as_ptr().add(self.offset),
-                    usize::from(data_len),
-                )
-            };
-            advance_offset_for_array::<u8>(self.bytes, &mut self.offset, data_len).ok()?;
-            self.index = self.index.wrapping_add(1);
+
+            const _: () = assert!(core::mem::align_of::<u8>() == 1, "u8 alignment");
+            // SAFETY:
+            // - The offset is checked to be valid in the byte slice.
+            // - The alignment of u8 is 1.
+            // - The slice length is checked to be valid.
+            // - `u8` cannot be improperly initialized.
+            let data =
+                unsafe { read_slice_data::<u8>(self.bytes, &mut self.offset, data_len) }.ok()?;
 
             Some(SVMInstruction {
                 program_id_index,
