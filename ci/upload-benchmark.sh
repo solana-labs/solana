@@ -69,13 +69,13 @@ fi
 
 while IFS= read -r line; do
 
-  if [[ $line =~ ^test\ (.*)\ \.\.\.\ bench:\ *([0-9,]+)\ ns\/iter\ \(\+\/-\ *([0-9,]+)\) ]]; then
+  if [[ $line =~ ^test\ (.*)\ \.\.\.\ bench:\ *([0-9,\.]+)\ ns\/iter\ \(\+\/-\ *([0-9,\.]+)\) ]]; then
     test_name="${BASH_REMATCH[1]}"
     ns_iter="${BASH_REMATCH[2]}"
     plus_minus="${BASH_REMATCH[3]}"
 
-    ns_iter=$(echo "$ns_iter" | tr -d ',')
-    plus_minus=$(echo "$plus_minus" | tr -d ',')
+    ns_iter=$(echo "$ns_iter" | tr -d ',' | cut -d'.' -f1)
+    plus_minus=$(echo "$plus_minus" | tr -d ',' | cut -d'.' -f1)
 
     datapoint="${INFLUX_MEASUREMENT},commit=${COMMIT_HASH},test_suite=${TEST_SUITE},name=${test_name} median=${ns_iter}i,deviation=${plus_minus}i"
     echo "datapoint: $datapoint"
