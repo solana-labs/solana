@@ -2,7 +2,8 @@
 
 use {
     crate::encryption::{
-        pod::impl_from_str, DECRYPT_HANDLE_LEN, ELGAMAL_CIPHERTEXT_LEN, ELGAMAL_PUBKEY_LEN,
+        pod::{impl_from_bytes, impl_from_str},
+        DECRYPT_HANDLE_LEN, ELGAMAL_CIPHERTEXT_LEN, ELGAMAL_PUBKEY_LEN,
     },
     base64::{prelude::BASE64_STANDARD, Engine},
     bytemuck::Zeroable,
@@ -52,6 +53,11 @@ impl_from_str!(
     BASE64_LEN = ELGAMAL_CIPHERTEXT_MAX_BASE64_LEN
 );
 
+impl_from_bytes!(
+    TYPE = PodElGamalCiphertext,
+    BYTES_LEN = ELGAMAL_CIPHERTEXT_LEN
+);
+
 #[cfg(not(target_os = "solana"))]
 impl From<ElGamalCiphertext> for PodElGamalCiphertext {
     fn from(decoded_ciphertext: ElGamalCiphertext) -> Self {
@@ -90,6 +96,8 @@ impl_from_str!(
     BYTES_LEN = ELGAMAL_PUBKEY_LEN,
     BASE64_LEN = ELGAMAL_PUBKEY_MAX_BASE64_LEN
 );
+
+impl_from_bytes!(TYPE = PodElGamalPubkey, BYTES_LEN = ELGAMAL_PUBKEY_LEN);
 
 #[cfg(not(target_os = "solana"))]
 impl From<ElGamalPubkey> for PodElGamalPubkey {

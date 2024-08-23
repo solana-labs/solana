@@ -5,14 +5,24 @@ use crate::encryption::grouped_elgamal::GroupedElGamalCiphertext;
 use {
     crate::{
         encryption::{
-            pod::{elgamal::PodElGamalCiphertext, pedersen::PodPedersenCommitment},
+            pod::{
+                elgamal::PodElGamalCiphertext, impl_from_bytes, impl_from_str,
+                pedersen::PodPedersenCommitment,
+            },
             DECRYPT_HANDLE_LEN, ELGAMAL_CIPHERTEXT_LEN, PEDERSEN_COMMITMENT_LEN,
         },
         errors::ElGamalError,
     },
+    base64::{prelude::BASE64_STANDARD, Engine},
     bytemuck::Zeroable,
     std::fmt,
 };
+
+/// Maximum length of a base64 encoded grouped ElGamal ciphertext with 2 handles
+const GROUPED_ELGAMAL_CIPHERTEXT_2_HANDLES_MAX_BASE64_LEN: usize = 132;
+
+/// Maximum length of a base64 encoded grouped ElGamal ciphertext with 3 handles
+const GROUPED_ELGAMAL_CIPHERTEXT_3_HANDLES_MAX_BASE64_LEN: usize = 176;
 
 macro_rules! impl_extract {
     (TYPE = $type:ident) => {
@@ -78,6 +88,18 @@ impl Default for PodGroupedElGamalCiphertext2Handles {
         Self::zeroed()
     }
 }
+
+impl_from_str!(
+    TYPE = PodGroupedElGamalCiphertext2Handles,
+    BYTES_LEN = GROUPED_ELGAMAL_CIPHERTEXT_2_HANDLES,
+    BASE64_LEN = GROUPED_ELGAMAL_CIPHERTEXT_2_HANDLES_MAX_BASE64_LEN
+);
+
+impl_from_bytes!(
+    TYPE = PodGroupedElGamalCiphertext2Handles,
+    BYTES_LEN = GROUPED_ELGAMAL_CIPHERTEXT_2_HANDLES
+);
+
 #[cfg(not(target_os = "solana"))]
 impl From<GroupedElGamalCiphertext<2>> for PodGroupedElGamalCiphertext2Handles {
     fn from(decoded_ciphertext: GroupedElGamalCiphertext<2>) -> Self {
@@ -114,6 +136,17 @@ impl Default for PodGroupedElGamalCiphertext3Handles {
         Self::zeroed()
     }
 }
+
+impl_from_str!(
+    TYPE = PodGroupedElGamalCiphertext3Handles,
+    BYTES_LEN = GROUPED_ELGAMAL_CIPHERTEXT_3_HANDLES,
+    BASE64_LEN = GROUPED_ELGAMAL_CIPHERTEXT_3_HANDLES_MAX_BASE64_LEN
+);
+
+impl_from_bytes!(
+    TYPE = PodGroupedElGamalCiphertext3Handles,
+    BYTES_LEN = GROUPED_ELGAMAL_CIPHERTEXT_3_HANDLES
+);
 
 #[cfg(not(target_os = "solana"))]
 impl From<GroupedElGamalCiphertext<3>> for PodGroupedElGamalCiphertext3Handles {

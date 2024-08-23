@@ -26,3 +26,14 @@ macro_rules! impl_from_str {
     };
 }
 pub(crate) use impl_from_str;
+
+macro_rules! impl_from_bytes {
+    (TYPE = $type:ident, BYTES_LEN = $bytes_len:expr) => {
+        impl std::convert::From<[u8; $bytes_len]> for $type {
+            fn from(bytes: [u8; $bytes_len]) -> Self {
+                Self(bytes)
+            }
+        }
+    };
+}
+pub(crate) use impl_from_bytes;
