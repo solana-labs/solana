@@ -1255,6 +1255,16 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
                                     let slot_list = slot_list
                                         .take()
                                         .unwrap_or_else(|| v.slot_list.read().unwrap());
+                                    // Check the ref count and slot list one more time before flushing.
+                                    // It is possible the foreground has updated this entry since
+                                    // we last checked above in `should_evict_from_mem()`.
+                                    // If the entry *was* updated, re-mark it as dirty then
+                                    // skip to the next pubkey/entry.
+                                    let ref_count = v.ref_count();
+                                    if ref_count != 1 || slot_list.len() != 1 {
+                                        v.set_dirty(true);
+                                        break;
+                                    }
                                     disk.try_write(
                                         &k,
                                         (
@@ -1262,7 +1272,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
                                                 .iter()
                                                 .map(|(slot, info)| (*slot, (*info).into()))
                                                 .collect::<Vec<_>>(),
-                                            v.ref_count(),
+                                            ref_count,
                                         ),
                                     )
                                 };
