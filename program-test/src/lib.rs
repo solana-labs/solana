@@ -112,7 +112,6 @@ pub fn invoke_builtin_function(
 
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
-    let instruction_data = instruction_context.get_instruction_data();
     let instruction_account_indices = 0..instruction_context.get_number_of_instruction_accounts();
 
     // mock builtin program must consume units
@@ -131,19 +130,17 @@ pub fn invoke_builtin_function(
 
     // Serialize entrypoint parameters with SBF ABI
     let (mut parameter_bytes, _regions, _account_lengths) = serialize_parameters(
-        invoke_context.transaction_context,
-        invoke_context
-            .transaction_context
-            .get_current_instruction_context()?,
+        transaction_context,
+        instruction_context,
         true, // copy_account_data // There is no VM so direct mapping can not be implemented here
     )?;
 
     // Deserialize data back into instruction params
-    let (program_id, account_infos, _input) =
+    let (program_id, account_infos, input) =
         unsafe { deserialize(&mut parameter_bytes.as_slice_mut()[0] as *mut u8) };
 
     // Execute the program
-    builtin_function(program_id, &account_infos, instruction_data).map_err(|err| {
+    builtin_function(program_id, &account_infos, input).map_err(|err| {
         let err = InstructionError::from(u64::from(err));
         stable_log::program_failure(&log_collector, program_id, &err);
         let err: Box<dyn std::error::Error> = Box::new(err);
