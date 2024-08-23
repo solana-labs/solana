@@ -445,7 +445,7 @@ pub fn process_create_nonce_account(
     seed: Option<String>,
     nonce_authority: Option<Pubkey>,
     memo: Option<&String>,
-    amount: SpendAmount,
+    mut amount: SpendAmount,
     compute_unit_price: Option<u64>,
 ) -> ProcessResult {
     let nonce_account_pubkey = config.signers[nonce_account].pubkey();
@@ -459,6 +459,13 @@ pub fn process_create_nonce_account(
         (&config.signers[0].pubkey(), "cli keypair".to_string()),
         (&nonce_account_address, "nonce_account".to_string()),
     )?;
+
+    let minimum_balance = rpc_client.get_minimum_balance_for_rent_exemption(State::size())?;
+    if amount == SpendAmount::All {
+        amount = SpendAmount::AllForAccountCreation {
+            create_account_min_balance: minimum_balance,
+        };
+    }
 
     let nonce_authority = nonce_authority.unwrap_or_else(|| config.signers[0].pubkey());
 
@@ -516,7 +523,6 @@ pub fn process_create_nonce_account(
         return Err(CliError::BadParameter(err_msg).into());
     }
 
-    let minimum_balance = rpc_client.get_minimum_balance_for_rent_exemption(State::size())?;
     if lamports < minimum_balance {
         return Err(CliError::BadParameter(format!(
             "need at least {minimum_balance} lamports for nonce account to be rent exempt, \

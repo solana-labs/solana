@@ -1368,7 +1368,7 @@ pub fn process_create_stake_account(
     withdrawer: &Option<Pubkey>,
     withdrawer_signer: Option<SignerIndex>,
     lockup: &Lockup,
-    amount: SpendAmount,
+    mut amount: SpendAmount,
     sign_only: bool,
     dump_transaction_message: bool,
     blockhash_query: &BlockhashQuery,
@@ -1454,6 +1454,14 @@ pub fn process_create_stake_account(
 
     let recent_blockhash = blockhash_query.get_blockhash(rpc_client, config.commitment)?;
 
+    if !sign_only && amount == SpendAmount::All {
+        let minimum_balance =
+            rpc_client.get_minimum_balance_for_rent_exemption(StakeStateV2::size_of())?;
+        amount = SpendAmount::AllForAccountCreation {
+            create_account_min_balance: minimum_balance,
+        };
+    }
+
     let (message, lamports) = resolve_spend_tx_and_check_account_balances(
         rpc_client,
         sign_only,
@@ -1478,7 +1486,6 @@ pub fn process_create_stake_account(
 
         let minimum_balance =
             rpc_client.get_minimum_balance_for_rent_exemption(StakeStateV2::size_of())?;
-
         if lamports < minimum_balance {
             return Err(CliError::BadParameter(format!(
                 "need at least {minimum_balance} lamports for stake account to be rent exempt, \
