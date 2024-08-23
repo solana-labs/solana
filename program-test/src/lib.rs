@@ -56,6 +56,7 @@ use {
         fs::File,
         io::{self, Read},
         mem::transmute,
+        panic::AssertUnwindSafe,
         path::{Path, PathBuf},
         sync::{
             atomic::{AtomicBool, Ordering},
@@ -140,12 +141,25 @@ pub fn invoke_builtin_function(
         unsafe { deserialize(&mut parameter_bytes.as_slice_mut()[0] as *mut u8) };
 
     // Execute the program
-    builtin_function(program_id, &account_infos, input).map_err(|err| {
-        let err = InstructionError::from(u64::from(err));
-        stable_log::program_failure(&log_collector, program_id, &err);
-        let err: Box<dyn std::error::Error> = Box::new(err);
-        err
-    })?;
+    match std::panic::catch_unwind(AssertUnwindSafe(|| {
+        builtin_function(program_id, &account_infos, input)
+    })) {
+        Ok(program_result) => {
+            program_result.map_err(|program_error| {
+                let err = InstructionError::from(u64::from(program_error));
+                stable_log::program_failure(&log_collector, program_id, &err);
+                let err: Box<dyn std::error::Error> = Box::new(err);
+                err
+            })?;
+        }
+        Err(_panic_error) => {
+            let err = InstructionError::ProgramFailedToComplete;
+            stable_log::program_failure(&log_collector, program_id, &err);
+            let err: Box<dyn std::error::Error> = Box::new(err);
+            Err(err)?;
+        }
+    };
+
     stable_log::program_success(&log_collector, program_id);
 
     // Lookup table for AccountInfo
@@ -724,8 +738,6 @@ impl ProgramTest {
 
             // If SBF is not required (i.e., we were invoked with `test`), use the provided
             // processor function as is.
-            //
-            // TODO: figure out why tests hang if a processor panics when running native code.
             (false, _, Some(builtin_function)) => {
                 self.add_builtin_program(program_name, program_id, builtin_function)
             }
