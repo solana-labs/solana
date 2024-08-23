@@ -17,7 +17,7 @@ use {
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-        clock::{Clock, Epoch, UnixTimestamp},
+        clock::{Clock, UnixTimestamp},
         feature_set::FeatureSet,
         native_loader,
         pubkey::Pubkey,
@@ -48,10 +48,6 @@ impl ForkGraph for MockForkGraph {
             Ordering::Equal => BlockRelation::Equal,
             Ordering::Greater => BlockRelation::Descendant,
         }
-    }
-
-    fn slot_epoch(&self, _slot: Slot) -> Option<Epoch> {
-        Some(0)
     }
 }
 

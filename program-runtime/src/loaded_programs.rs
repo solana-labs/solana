@@ -55,11 +55,6 @@ pub enum BlockRelation {
 pub trait ForkGraph {
     /// Returns the BlockRelation of A to B
     fn relationship(&self, a: Slot, b: Slot) -> BlockRelation;
-
-    /// Returns the epoch of the given slot
-    fn slot_epoch(&self, _slot: Slot) -> Option<Epoch> {
-        Some(0)
-    }
 }
 
 /// The owner of a programs accounts, thus the loader of a program
