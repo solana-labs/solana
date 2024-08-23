@@ -1959,6 +1959,7 @@ struct CleanAccountsStats {
     remove_dead_accounts_shrink_us: AtomicU64,
     clean_stored_dead_slots_us: AtomicU64,
     uncleaned_roots_slot_list_1: AtomicU64,
+    get_account_sizes_us: AtomicU64,
 }
 
 impl CleanAccountsStats {
@@ -3590,6 +3591,13 @@ impl AccountsDb {
                 "uncleaned_roots_slot_list_1",
                 self.clean_accounts_stats
                     .uncleaned_roots_slot_list_1
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "get_account_sizes_us",
+                self.clean_accounts_stats
+                    .get_account_sizes_us
                     .swap(0, Ordering::Relaxed),
                 i64
             ),
@@ -8043,20 +8051,25 @@ impl AccountsDb {
                     dead_slots.insert(*slot);
                 }
                 else {
-                    let mut offsets = offsets.iter().cloned().collect::<Vec<_>>();
-                    // sort so offsets are in order. This improves efficiency of loading the accounts.
-                    offsets.sort_unstable();
-                    let dead_bytes = store.accounts.get_account_sizes(&offsets).iter().sum();
-                    store.remove_accounts(dead_bytes, reset_accounts, offsets.len());
-                    if Self::is_shrinking_productive(*slot, &store)
-                        && self.is_candidate_for_shrink(&store)
-                    {
-                        // Checking that this single storage entry is ready for shrinking,
-                        // should be a sufficient indication that the slot is ready to be shrunk
-                        // because slots should only have one storage entry, namely the one that was
-                        // created by `flush_slot_cache()`.
-                        new_shrink_candidates.insert(*slot);
-                    }
+                    let (_, us) = measure_us!({
+                        let mut offsets = offsets.iter().cloned().collect::<Vec<_>>();
+                        // sort so offsets are in order. This improves efficiency of loading the accounts.
+                        offsets.sort_unstable();
+                        let dead_bytes = store.accounts.get_account_sizes(&offsets).iter().sum();
+                        store.remove_accounts(dead_bytes, reset_accounts, offsets.len());
+                        if Self::is_shrinking_productive(*slot, &store)
+                            && self.is_candidate_for_shrink(&store)
+                        {
+                            // Checking that this single storage entry is ready for shrinking,
+                            // should be a sufficient indication that the slot is ready to be shrunk
+                            // because slots should only have one storage entry, namely the one that was
+                            // created by `flush_slot_cache()`.
+                            new_shrink_candidates.insert(*slot);
+                        }
+                    });
+                    self.clean_accounts_stats
+                        .get_account_sizes_us
+                        .fetch_add(us, Ordering::Relaxed);
                 }
             }
         });
