@@ -2485,17 +2485,6 @@ impl ReplayStage {
             Some(vote_account) => vote_account,
         };
         let vote_state = vote_account.vote_state();
-        let vote_state = match vote_state.as_ref() {
-            Err(_) => {
-                warn!(
-                    "Vote account {} is unreadable.  Unable to vote",
-                    vote_account_pubkey,
-                );
-                return GenerateVoteTxResult::Failed;
-            }
-            Ok(vote_state) => vote_state,
-        };
-
         if vote_state.node_pubkey != node_keypair.pubkey() {
             info!(
                 "Vote account node_pubkey mismatch: {} (expected: {}).  Unable to vote",
@@ -3473,9 +3462,7 @@ impl ReplayStage {
         let Some(vote_account) = bank.get_vote_account(my_vote_pubkey) else {
             return;
         };
-        let Ok(mut bank_vote_state) = vote_account.vote_state().cloned() else {
-            return;
-        };
+        let mut bank_vote_state = vote_account.vote_state().clone();
         if bank_vote_state.last_voted_slot() <= tower.vote_state.last_voted_slot() {
             return;
         }
@@ -7612,10 +7599,7 @@ pub(crate) mod tests {
         let vote_account = expired_bank_child
             .get_vote_account(&my_vote_pubkey)
             .unwrap();
-        assert_eq!(
-            vote_account.vote_state().as_ref().unwrap().tower(),
-            vec![0, 1]
-        );
+        assert_eq!(vote_account.vote_state().tower(), vec![0, 1]);
         expired_bank_child.fill_bank_with_ticks_for_tests();
         expired_bank_child.freeze();
 

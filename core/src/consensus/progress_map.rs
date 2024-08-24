@@ -420,19 +420,7 @@ impl ProgressMap {
 
 #[cfg(test)]
 mod test {
-    use {
-        super::*,
-        solana_sdk::account::{Account, AccountSharedData},
-        solana_vote::vote_account::VoteAccount,
-    };
-
-    fn new_test_vote_account() -> VoteAccount {
-        let account = AccountSharedData::from(Account {
-            owner: solana_vote_program::id(),
-            ..Account::default()
-        });
-        VoteAccount::try_from(account).unwrap()
-    }
+    use {super::*, solana_vote::vote_account::VoteAccount};
 
     #[test]
     fn test_add_vote_pubkey() {
@@ -467,7 +455,7 @@ mod test {
         let epoch_vote_accounts: HashMap<_, _> = vote_account_pubkeys
             .iter()
             .skip(num_vote_accounts - staked_vote_accounts)
-            .map(|pubkey| (*pubkey, (1, new_test_vote_account())))
+            .map(|pubkey| (*pubkey, (1, VoteAccount::new_random())))
             .collect();
 
         let mut stats = PropagatedStats::default();
@@ -509,7 +497,7 @@ mod test {
         let epoch_vote_accounts: HashMap<_, _> = vote_account_pubkeys
             .iter()
             .skip(num_vote_accounts - staked_vote_accounts)
-            .map(|pubkey| (*pubkey, (1, new_test_vote_account())))
+            .map(|pubkey| (*pubkey, (1, VoteAccount::new_random())))
             .collect();
         stats.add_node_pubkey_internal(&node_pubkey, &vote_account_pubkeys, &epoch_vote_accounts);
         assert!(stats.propagated_node_ids.contains(&node_pubkey));

@@ -4820,15 +4820,7 @@ mod tests {
         let mut vote_accounts_map = HashMap::new();
         vote_accounts_map.insert(
             vote_address,
-            (
-                expected_epoch_stake,
-                VoteAccount::try_from(AccountSharedData::new(
-                    0,
-                    0,
-                    &solana_sdk::vote::program::id(),
-                ))
-                .unwrap(),
-            ),
+            (expected_epoch_stake, VoteAccount::new_random()),
         );
 
         with_mock_invoke_context!(invoke_context, transaction_context, vec![]);

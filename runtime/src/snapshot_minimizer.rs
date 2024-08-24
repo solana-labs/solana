@@ -158,9 +158,8 @@ impl<'a> SnapshotMinimizer<'a> {
             .par_iter()
             .for_each(|(pubkey, (_stake, vote_account))| {
                 self.minimized_account_set.insert(*pubkey);
-                if let Ok(vote_state) = vote_account.vote_state().as_ref() {
-                    self.minimized_account_set.insert(vote_state.node_pubkey);
-                }
+                self.minimized_account_set
+                    .insert(*vote_account.node_pubkey());
             });
     }
 

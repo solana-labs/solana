@@ -1,6 +1,9 @@
 use {
     itertools::Itertools,
-    serde::ser::{Serialize, Serializer},
+    serde::{
+        de::{MapAccess, Visitor},
+        ser::{Serialize, Serializer},
+    },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         instruction::InstructionError,
@@ -10,6 +13,7 @@ use {
     std::{
         cmp::Ordering,
         collections::{hash_map::Entry, HashMap},
+        fmt,
         iter::FromIterator,
         mem,
         sync::{Arc, OnceLock},
@@ -18,8 +22,7 @@ use {
 };
 
 #[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
-#[derive(Clone, Debug, PartialEq, Deserialize)]
-#[serde(try_from = "AccountSharedData")]
+#[derive(Clone, Debug, PartialEq)]
 pub struct VoteAccount(Arc<VoteAccountInner>);
 
 #[derive(Debug, Error)]
@@ -34,17 +37,17 @@ pub enum Error {
 #[derive(Debug)]
 struct VoteAccountInner {
     account: AccountSharedData,
-    vote_state: OnceLock<Result<VoteState, Error>>,
+    vote_state: VoteState,
 }
 
 pub type VoteAccountsHashMap = HashMap<Pubkey, (/*stake:*/ u64, VoteAccount)>;
-
 #[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
-#[derive(Clone, Debug, Deserialize)]
-#[serde(from = "Arc<VoteAccountsHashMap>")]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct VoteAccounts {
+    #[serde(deserialize_with = "deserialize_accounts_hash_map")]
     vote_accounts: Arc<VoteAccountsHashMap>,
     // Inner Arc is meant to implement copy-on-write semantics.
+    #[serde(skip)]
     staked_nodes: OnceLock<
         Arc<
             HashMap<
@@ -68,22 +71,49 @@ impl VoteAccount {
         self.0.account.owner()
     }
 
-    pub fn vote_state(&self) -> Result<&VoteState, &Error> {
-        // VoteState::deserialize deserializes a VoteStateVersions and then
-        // calls VoteStateVersions::convert_to_current.
-        self.0
-            .vote_state
-            .get_or_init(|| VoteState::deserialize(self.0.account.data()).map_err(Error::from))
-            .as_ref()
-    }
-
-    pub fn is_deserialized(&self) -> bool {
-        self.0.vote_state.get().is_some()
+    pub fn vote_state(&self) -> &VoteState {
+        &self.0.vote_state
     }
 
     /// VoteState.node_pubkey of this vote-account.
-    pub fn node_pubkey(&self) -> Option<&Pubkey> {
-        self.vote_state().ok().map(|s| &s.node_pubkey)
+    pub fn node_pubkey(&self) -> &Pubkey {
+        &self.0.vote_state.node_pubkey
+    }
+
+    #[cfg(feature = "dev-context-only-utils")]
+    pub fn new_random() -> VoteAccount {
+        use {
+            rand::Rng as _,
+            solana_sdk::{
+                clock::Clock,
+                vote::state::{VoteInit, VoteStateVersions},
+            },
+        };
+
+        let mut rng = rand::thread_rng();
+
+        let vote_init = VoteInit {
+            node_pubkey: Pubkey::new_unique(),
+            authorized_voter: Pubkey::new_unique(),
+            authorized_withdrawer: Pubkey::new_unique(),
+            commission: rng.gen(),
+        };
+        let clock = Clock {
+            slot: rng.gen(),
+            epoch_start_timestamp: rng.gen(),
+            epoch: rng.gen(),
+            leader_schedule_epoch: rng.gen(),
+            unix_timestamp: rng.gen(),
+        };
+        let vote_state = VoteState::new(&vote_init, &clock);
+        let account = AccountSharedData::new_data(
+            rng.gen(), // lamports
+            &VoteStateVersions::new_current(vote_state.clone()),
+            &solana_sdk::vote::program::id(), // owner
+        )
+        .unwrap();
+
+        VoteAccount::try_from(account).unwrap()
     }
 }
 
@@ -103,9 +133,7 @@ impl VoteAccounts {
                     self.vote_accounts
                         .values()
                         .filter(|(stake, _)| *stake != 0u64)
-                        .filter_map(|(stake, vote_account)| {
-                            Some((*vote_account.node_pubkey()?, stake))
-                        })
+                        .map(|(stake, vote_account)| (*vote_account.node_pubkey(), stake))
                         .into_grouping_map()
                         .aggregate(|acc, _node_pubkey, stake| {
                             Some(acc.unwrap_or_default() + stake)
@@ -164,7 +192,7 @@ impl VoteAccounts {
                         // The node keys have changed, we move the stake from the old node to the
                         // new one
                         Self::do_sub_node_stake(staked_nodes, *stake, old_node_pubkey);
-                        Self::do_add_node_stake(staked_nodes, *stake, new_node_pubkey.copied());
+                        Self::do_add_node_stake(staked_nodes, *stake, *new_node_pubkey);
                     }
                 }
 
@@ -175,11 +203,7 @@ impl VoteAccounts {
                 // This is a new vote account. We don't know the stake yet, so we need to compute it.
                 let (stake, vote_account) = entry.insert((calculate_stake(), new_vote_account));
                 if let Some(staked_nodes) = self.staked_nodes.get_mut() {
-                    Self::do_add_node_stake(
-                        staked_nodes,
-                        *stake,
-                        vote_account.node_pubkey().copied(),
-                    );
+                    Self::do_add_node_stake(staked_nodes, *stake, *vote_account.node_pubkey());
                 }
                 None
             }
@@ -220,24 +244,22 @@ impl VoteAccounts {
             return;
         };
 
-        VoteAccounts::do_add_node_stake(staked_nodes, stake, vote_account.node_pubkey().copied());
+        VoteAccounts::do_add_node_stake(staked_nodes, stake, *vote_account.node_pubkey());
     }
 
     fn do_add_node_stake(
         staked_nodes: &mut Arc<HashMap<Pubkey, u64>>,
         stake: u64,
-        node_pubkey: Option<Pubkey>,
+        node_pubkey: Pubkey,
     ) {
         if stake == 0u64 {
             return;
         }
 
-        node_pubkey.map(|node_pubkey| {
-            Arc::make_mut(staked_nodes)
-                .entry(node_pubkey)
-                .and_modify(|s| *s += stake)
-                .or_insert(stake)
-        });
+        Arc::make_mut(staked_nodes)
+            .entry(node_pubkey)
+            .and_modify(|s| *s += stake)
+            .or_insert(stake);
     }
 
     fn sub_node_stake(&mut self, stake: u64, vote_account: &VoteAccount) {
@@ -251,24 +273,22 @@ impl VoteAccounts {
     fn do_sub_node_stake(
         staked_nodes: &mut Arc<HashMap<Pubkey, u64>>,
         stake: u64,
-        node_pubkey: Option<&Pubkey>,
+        node_pubkey: &Pubkey,
     ) {
         if stake == 0u64 {
             return;
         }
 
-        if let Some(node_pubkey) = node_pubkey {
-            let staked_nodes = Arc::make_mut(staked_nodes);
-            let current_stake = staked_nodes
-                .get_mut(node_pubkey)
-                .expect("this should not happen");
-            match (*current_stake).cmp(&stake) {
-                Ordering::Less => panic!("subtraction value exceeds node's stake"),
-                Ordering::Equal => {
-                    staked_nodes.remove(node_pubkey);
-                }
-                Ordering::Greater => *current_stake -= stake,
+        let staked_nodes = Arc::make_mut(staked_nodes);
+        let current_stake = staked_nodes
+            .get_mut(node_pubkey)
+            .expect("this should not happen");
+        match (*current_stake).cmp(&stake) {
+            Ordering::Less => panic!("subtraction value exceeds node's stake"),
+            Ordering::Equal => {
+                staked_nodes.remove(node_pubkey);
             }
+            Ordering::Greater => *current_stake -= stake,
         }
     }
 }
@@ -303,8 +323,8 @@ impl TryFrom<AccountSharedData> for VoteAccountInner {
             return Err(Error::InvalidOwner(*account.owner()));
         }
         Ok(Self {
+            vote_state: VoteState::deserialize(account.data()).map_err(Error::InstructionError)?,
             account,
-            vote_state: OnceLock::new(),
         })
     }
 }
@@ -368,13 +388,51 @@ impl FromIterator<(Pubkey, (/*stake:*/ u64, VoteAccount))> for VoteAccounts {
     }
 }
 
-impl Serialize for VoteAccounts {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        self.vote_accounts.serialize(serializer)
+// This custom deserializer is needed to ensure compatibility at snapshot loading with versions
+// before https://github.com/anza-xyz/agave/pull/2659 which would theoretically allow invalid vote
+// accounts in VoteAccounts.
+//
+// In the (near) future we should remove this custom deserializer and make it a hard error when we
+// find invalid vote accounts in snapshots.
+fn deserialize_accounts_hash_map<'de, D>(
+    deserializer: D,
+) -> Result<Arc<VoteAccountsHashMap>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    struct VoteAccountsVisitor;
+
+    impl<'de> Visitor<'de> for VoteAccountsVisitor {
+        type Value = Arc<VoteAccountsHashMap>;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("a map of vote accounts")
+        }
+
+        fn visit_map<M>(self, mut access: M) -> Result<Self::Value, M::Error>
+        where
+            M: MapAccess<'de>,
+        {
+            let mut accounts = HashMap::new();
+
+            while let Some((pubkey, (stake, account))) =
+                access.next_entry::<Pubkey, (u64, AccountSharedData)>()?
+            {
+                match VoteAccount::try_from(account) {
+                    Ok(vote_account) => {
+                        accounts.insert(pubkey, (stake, vote_account));
+                    }
+                    Err(e) => {
+                        log::warn!("failed to deserialize vote account: {e}");
+                    }
+                }
+            }
+
+            Ok(Arc::new(accounts))
+        }
     }
+
+    deserializer.deserialize_map(VoteAccountsVisitor)
 }
 
 #[cfg(test)]
@@ -441,12 +499,10 @@ mod tests {
             .into_iter()
             .filter(|(_, (stake, _))| *stake != 0)
         {
-            if let Some(node_pubkey) = vote_account.node_pubkey() {
-                staked_nodes
-                    .entry(*node_pubkey)
-                    .and_modify(|s| *s += *stake)
-                    .or_insert(*stake);
-            }
+            staked_nodes
+                .entry(*vote_account.node_pubkey())
+                .and_modify(|s| *s += *stake)
+                .or_insert(*stake);
         }
         staked_nodes
     }
@@ -458,9 +514,7 @@ mod tests {
         let lamports = account.lamports();
         let vote_account = VoteAccount::try_from(account).unwrap();
         assert_eq!(lamports, vote_account.lamports());
-        assert_eq!(vote_state, *vote_account.vote_state().unwrap());
-        // 2nd call to .vote_state() should return the cached value.
-        assert_eq!(vote_state, *vote_account.vote_state().unwrap());
+        assert_eq!(vote_state, *vote_account.vote_state());
     }
 
     #[test]
@@ -468,37 +522,12 @@ mod tests {
         let mut rng = rand::thread_rng();
         let (account, vote_state) = new_rand_vote_account(&mut rng, None);
         let vote_account = VoteAccount::try_from(account.clone()).unwrap();
-        assert_eq!(vote_state, *vote_account.vote_state().unwrap());
-        // Assert than VoteAccount has the same wire format as Account.
+        assert_eq!(vote_state, *vote_account.vote_state());
+        // Assert that VoteAccount has the same wire format as Account.
         assert_eq!(
             bincode::serialize(&account).unwrap(),
             bincode::serialize(&vote_account).unwrap()
         );
-    }
-
-    #[test]
-    fn test_vote_account_deserialize() {
-        let mut rng = rand::thread_rng();
-        let (account, vote_state) = new_rand_vote_account(&mut rng, None);
-        let data = bincode::serialize(&account).unwrap();
-        let vote_account = VoteAccount::try_from(account).unwrap();
-        assert_eq!(vote_state, *vote_account.vote_state().unwrap());
-        let other_vote_account: VoteAccount = bincode::deserialize(&data).unwrap();
-        assert_eq!(vote_account, other_vote_account);
-        assert_eq!(vote_state, *other_vote_account.vote_state().unwrap());
-    }
-
-    #[test]
-    fn test_vote_account_round_trip() {
-        let mut rng = rand::thread_rng();
-        let (account, vote_state) = new_rand_vote_account(&mut rng, None);
-        let vote_account = VoteAccount::try_from(account).unwrap();
-        assert_eq!(vote_state, *vote_account.vote_state().unwrap());
-        let data = bincode::serialize(&vote_account).unwrap();
-        let other_vote_account: VoteAccount = bincode::deserialize(&data).unwrap();
-        // Assert that serialize->deserialized returns the same VoteAccount.
-        assert_eq!(vote_account, other_vote_account);
-        assert_eq!(vote_state, *other_vote_account.vote_state().unwrap());
     }
 
     #[test]
@@ -534,6 +563,40 @@ mod tests {
             .unwrap();
         let vote_accounts: VoteAccounts = bincode::options().deserialize(&data).unwrap();
         assert_eq!(*vote_accounts.vote_accounts, vote_accounts_hash_map);
+    }
+
+    #[test]
+    fn test_vote_accounts_deserialize_invalid_account() {
+        let mut rng = rand::thread_rng();
+        // we'll populate the map with 1 valid and 2 invalid accounts, then ensure that we only get
+        // the valid one after deserialiation
+        let mut vote_accounts_hash_map = HashMap::<Pubkey, (u64, AccountSharedData)>::new();
+
+        let (valid_account, _) = new_rand_vote_account(&mut rng, None);
+        vote_accounts_hash_map.insert(Pubkey::new_unique(), (0xAA, valid_account.clone()));
+
+        // bad data
+        let invalid_account_data =
+            AccountSharedData::new_data(42, &vec![0xFF; 42], &solana_sdk::vote::program::id())
+                .unwrap();
+        vote_accounts_hash_map.insert(Pubkey::new_unique(), (0xBB, invalid_account_data));
+
+        // wrong owner
+        let invalid_account_key =
+            AccountSharedData::new_data(42, &valid_account.data().to_vec(), &Pubkey::new_unique())
+                .unwrap();
+        vote_accounts_hash_map.insert(Pubkey::new_unique(), (0xCC, invalid_account_key));
+
+        let data = bincode::serialize(&vote_accounts_hash_map).unwrap();
+        let options = bincode::options()
+            .with_fixint_encoding()
+            .allow_trailing_bytes();
+        let mut deserializer = bincode::de::Deserializer::from_slice(&data, options);
+        let vote_accounts = deserialize_accounts_hash_map(&mut deserializer).unwrap();
+
+        assert_eq!(vote_accounts.len(), 1);
+        let (stake, _account) = vote_accounts.values().next().unwrap();
+        assert_eq!(*stake, 0xAA);
     }
 
     #[test]
@@ -684,7 +747,7 @@ mod tests {
         let staked_nodes = vote_accounts.staked_nodes();
         let (pubkey, (more_stake, vote_account)) =
             accounts.find(|(_, (stake, _))| *stake != 0).unwrap();
-        let node_pubkey = *vote_account.node_pubkey().unwrap();
+        let node_pubkey = *vote_account.node_pubkey();
         vote_accounts.insert(pubkey, vote_account, || more_stake);
         assert_ne!(staked_nodes, vote_accounts.staked_nodes());
         assert_eq!(

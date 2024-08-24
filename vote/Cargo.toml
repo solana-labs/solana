@@ -12,6 +12,7 @@ edition = { workspace = true }
 [dependencies]
 itertools = { workspace = true }
 log = { workspace = true }
+rand = { workspace = true, optional = true }
 serde = { workspace = true, features = ["rc"] }
 serde_derive = { workspace = true }
 solana-frozen-abi = { workspace = true, optional = true }
@@ -34,7 +35,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 rustc_version = { workspace = true, optional = true }
 
 [features]
-dev-context-only-utils = []
+dev-context-only-utils = ["dep:rand"]
 frozen-abi = [
     "dep:rustc_version",
     "dep:solana-frozen-abi",

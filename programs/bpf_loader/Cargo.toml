@@ -34,7 +34,7 @@ assert_matches = { workspace = true }
 memoffset = { workspace = true }
 rand = { workspace = true }
 solana-sdk = { workspace = true, features = ["dev-context-only-utils"] }
-solana-vote = { workspace = true }
+solana-vote = { workspace = true, features = ["dev-context-only-utils"] }
 test-case = { workspace = true }
 
 [lib]

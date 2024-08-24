@@ -379,20 +379,7 @@ impl Tower {
                 continue;
             }
             trace!("{} {} with stake {}", vote_account_pubkey, key, voted_stake);
-            let mut vote_state = match account.vote_state().cloned() {
-                Err(_) => {
-                    datapoint_warn!(
-                        "tower_warn",
-                        (
-                            "warn",
-                            format!("Unable to get vote_state from account {key}"),
-                            String
-                        ),
-                    );
-                    continue;
-                }
-                Ok(vote_state) => vote_state,
-            };
+            let mut vote_state = account.vote_state().clone();
             for vote in &vote_state.votes {
                 lockout_intervals
                     .entry(vote.lockout.last_locked_out_slot())
@@ -591,7 +578,7 @@ impl Tower {
     pub fn last_voted_slot_in_bank(bank: &Bank, vote_account_pubkey: &Pubkey) -> Option<Slot> {
         let vote_account = bank.get_vote_account(vote_account_pubkey)?;
         let vote_state = vote_account.vote_state();
-        vote_state.as_ref().ok()?.last_voted_slot()
+        vote_state.last_voted_slot()
     }
 
     pub fn record_bank_vote(&mut self, bank: &Bank) -> Option<Slot> {
@@ -1576,10 +1563,7 @@ impl Tower {
         bank: &Bank,
     ) {
         if let Some(vote_account) = bank.get_vote_account(vote_account_pubkey) {
-            self.vote_state = vote_account
-                .vote_state()
-                .cloned()
-                .expect("vote_account isn't a VoteState?");
+            self.vote_state = vote_account.vote_state().clone();
             self.initialize_root(root);
             self.initialize_lockouts(|v| v.slot() > root);
             trace!(
@@ -2428,7 +2412,7 @@ pub mod test {
             .get_vote_account(&vote_pubkey)
             .unwrap();
         let state = observed.vote_state();
-        info!("observed tower: {:#?}", state.as_ref().unwrap().votes);
+        info!("observed tower: {:#?}", state.votes);
 
         let num_slots_to_try = 200;
         cluster_votes

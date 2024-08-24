@@ -202,19 +202,17 @@ impl AggregateCommitmentService {
             }
             let vote_state = if pubkey == node_vote_pubkey {
                 // Override old vote_state in bank with latest one for my own vote pubkey
-                Ok(node_vote_state)
+                node_vote_state
             } else {
                 account.vote_state()
             };
-            if let Ok(vote_state) = vote_state {
-                Self::aggregate_commitment_for_vote_account(
-                    &mut commitment,
-                    &mut rooted_stake,
-                    vote_state,
-                    ancestors,
-                    *lamports,
-                );
-            }
+            Self::aggregate_commitment_for_vote_account(
+                &mut commitment,
+                &mut rooted_stake,
+                vote_state,
+                ancestors,
+                *lamports,
+            );
         }
 
         (commitment, rooted_stake)
@@ -546,7 +544,7 @@ mod tests {
     fn test_highest_super_majority_root_advance() {
         fn get_vote_state(vote_pubkey: Pubkey, bank: &Bank) -> VoteState {
             let vote_account = bank.get_vote_account(&vote_pubkey).unwrap();
-            vote_account.vote_state().cloned().unwrap()
+            vote_account.vote_state().clone()
         }
 
         let block_commitment_cache = RwLock::new(BlockCommitmentCache::new_for_tests());

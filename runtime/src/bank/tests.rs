@@ -4012,12 +4012,8 @@ fn test_bank_epoch_vote_accounts() {
             accounts
                 .iter()
                 .filter_map(|(pubkey, (stake, account))| {
-                    if let Ok(vote_state) = account.vote_state().as_ref() {
-                        if vote_state.node_pubkey == leader_pubkey {
-                            Some((*pubkey, *stake))
-                        } else {
-                            None
-                        }
+                    if account.node_pubkey() == &leader_pubkey {
+                        Some((*pubkey, *stake))
                     } else {
                         None
                     }
