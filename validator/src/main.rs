@@ -34,7 +34,7 @@ use {
         tpu::DEFAULT_TPU_COALESCE,
         validator::{
             is_snapshot_config_valid, BlockProductionMethod, BlockVerificationMethod, Validator,
-            ValidatorConfig, ValidatorStartProgress,
+            ValidatorConfig, ValidatorError, ValidatorStartProgress,
         },
     },
     solana_gossip::{
@@ -2045,7 +2045,7 @@ pub fn main() {
     // the one pushed by bootstrap.
     node.info.hot_swap_pubkey(identity_keypair.pubkey());
 
-    let validator = Validator::new(
+    let validator = match Validator::new(
         node,
         identity_keypair,
         &ledger_path,
@@ -2062,11 +2062,19 @@ pub fn main() {
         tpu_enable_udp,
         tpu_max_connections_per_ipaddr_per_minute,
         admin_service_post_init,
-    )
-    .unwrap_or_else(|e| {
-        error!("Failed to start validator: {:?}", e);
-        exit(1);
-    });
+    ) {
+        Ok(validator) => validator,
+        Err(err) => match err.downcast_ref() {
+            Some(ValidatorError::WenRestartFinished) => {
+                error!("Please remove --wen_restart and use --wait_for_supermajority as instructed above");
+                exit(200);
+            }
+            _ => {
+                error!("Failed to start validator: {:?}", err);
+                exit(1);
+            }
+        },
+    };
 
     if let Some(filename) = init_complete_file {
         File::create(filename).unwrap_or_else(|_| {
