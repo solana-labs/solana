@@ -1784,10 +1784,7 @@ pub fn main() {
         BlockProductionMethod
     )
     .unwrap_or_default();
-    validator_config.enable_block_production_forwarding = staked_nodes_overrides_path
-        .as_ref()
-        .map(|_| !matches.is_present("disable_block_production_forwarding"))
-        .unwrap_or_default();
+    validator_config.enable_block_production_forwarding = staked_nodes_overrides_path.is_some();
     validator_config.unified_scheduler_handler_threads =
         value_t!(matches, "unified_scheduler_handler_threads", usize).ok();
 
