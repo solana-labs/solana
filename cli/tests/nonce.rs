@@ -20,46 +20,20 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_test_validator::TestValidator,
+    test_case::test_case,
 };
 
-#[test]
-fn test_nonce() {
+#[test_case(None, false, None; "base")]
+#[test_case(Some(String::from("seed")), false, None; "with_seed")]
+#[test_case(None, true, None; "with_authority")]
+#[test_case(None, false, Some(1_000_000); "with_compute_unit_price")]
+fn test_nonce(seed: Option<String>, use_nonce_authority: bool, compute_unit_price: Option<u64>) {
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
     let test_validator =
         TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr), SocketAddrSpace::Unspecified);
 
-    full_battery_tests(test_validator, None, false);
-}
-
-#[test]
-fn test_nonce_with_seed() {
-    let mint_keypair = Keypair::new();
-    let mint_pubkey = mint_keypair.pubkey();
-    let faucet_addr = run_local_faucet(mint_keypair, None);
-    let test_validator =
-        TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr), SocketAddrSpace::Unspecified);
-
-    full_battery_tests(test_validator, Some(String::from("seed")), false);
-}
-
-#[test]
-fn test_nonce_with_authority() {
-    let mint_keypair = Keypair::new();
-    let mint_pubkey = mint_keypair.pubkey();
-    let faucet_addr = run_local_faucet(mint_keypair, None);
-    let test_validator =
-        TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr), SocketAddrSpace::Unspecified);
-
-    full_battery_tests(test_validator, None, true);
-}
-
-fn full_battery_tests(
-    test_validator: TestValidator,
-    seed: Option<String>,
-    use_nonce_authority: bool,
-) {
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
     let json_rpc_url = test_validator.rpc_url();
@@ -113,7 +87,7 @@ fn full_battery_tests(
         nonce_authority: optional_authority,
         memo: None,
         amount: SpendAmount::Some(sol_to_lamports(1000.0)),
-        compute_unit_price: None,
+        compute_unit_price,
     };
 
     process_command(&config_payer).unwrap();
@@ -151,7 +125,7 @@ fn full_battery_tests(
         nonce_account,
         nonce_authority: index,
         memo: None,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config_payer).unwrap();
 
@@ -172,7 +146,7 @@ fn full_battery_tests(
         memo: None,
         destination_account_pubkey: payee_pubkey,
         lamports: sol_to_lamports(100.0),
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config_payer).unwrap();
     check_balance!(
@@ -197,7 +171,7 @@ fn full_battery_tests(
         nonce_authority: index,
         memo: None,
         new_authority: new_authority.pubkey(),
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config_payer).unwrap();
 
@@ -206,7 +180,7 @@ fn full_battery_tests(
         nonce_account,
         nonce_authority: index,
         memo: None,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config_payer).unwrap_err();
 
@@ -216,7 +190,7 @@ fn full_battery_tests(
         nonce_account,
         nonce_authority: 1,
         memo: None,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config_payer).unwrap();
 
@@ -227,7 +201,7 @@ fn full_battery_tests(
         memo: None,
         destination_account_pubkey: payee_pubkey,
         lamports: sol_to_lamports(100.0),
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config_payer).unwrap();
     check_balance!(
