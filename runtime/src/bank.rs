@@ -987,6 +987,7 @@ impl Bank {
         #[allow(unused)] collector_id_for_tests: Option<Pubkey>,
         exit: Arc<AtomicBool>,
         #[allow(unused)] genesis_hash: Option<Hash>,
+        #[allow(unused)] feature_set: Option<FeatureSet>,
     ) -> Self {
         let accounts_db = AccountsDb::new_with_config(
             paths,
@@ -1004,6 +1005,11 @@ impl Bank {
         bank.transaction_account_lock_limit = runtime_config.transaction_account_lock_limit;
         bank.transaction_debug_keys = debug_keys;
         bank.cluster_type = Some(genesis_config.cluster_type);
+
+        #[cfg(feature = "dev-context-only-utils")]
+        {
+            bank.feature_set = Arc::new(feature_set.unwrap_or_default());
+        }
 
         #[cfg(not(feature = "dev-context-only-utils"))]
         bank.process_genesis_config(genesis_config);
@@ -3157,7 +3163,6 @@ impl Bank {
             w_blockhash_queue
                 .register_hash(blockhash, self.fee_rate_governor.lamports_per_signature);
         }
-        self.update_recent_blockhashes_locked(&w_blockhash_queue);
     }
 
     /// Tell the bank which Entry IDs exist on the ledger. This function assumes subsequent calls
@@ -6631,6 +6636,7 @@ impl Bank {
             Some(Pubkey::new_unique()),
             Arc::default(),
             None,
+            None,
         )
     }
 
@@ -6654,6 +6660,7 @@ impl Bank {
             None,
             Some(Pubkey::new_unique()),
             Arc::default(),
+            None,
             None,
         )
     }
