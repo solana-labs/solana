@@ -1422,6 +1422,7 @@ pub fn main() {
                 "rpc_max_request_body_size",
                 usize
             )),
+            skip_preflight_health_check: matches.is_present("skip_preflight_health_check"),
         },
         on_start_geyser_plugin_config_files,
         rpc_addrs: value_t!(matches, "rpc_port", u16).ok().map(|rpc_port| {

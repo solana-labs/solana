@@ -146,6 +146,7 @@ pub struct JsonRpcConfig {
     pub enable_extended_tx_metadata_storage: bool,
     pub faucet_addr: Option<SocketAddr>,
     pub health_check_slot_distance: u64,
+    pub skip_preflight_health_check: bool,
     pub rpc_bigtable_config: Option<RpcBigtableConfig>,
     pub max_multiple_accounts: Option<usize>,
     pub account_indexes: AccountSecondaryIndexes,
@@ -3695,21 +3696,23 @@ pub mod rpc_full {
             if !skip_preflight {
                 verify_transaction(&transaction, &preflight_bank.feature_set)?;
 
-                match meta.health.check() {
-                    RpcHealthStatus::Ok => (),
-                    RpcHealthStatus::Unknown => {
-                        inc_new_counter_info!("rpc-send-tx_health-unknown", 1);
-                        return Err(RpcCustomError::NodeUnhealthy {
-                            num_slots_behind: None,
+                if !meta.config.skip_preflight_health_check {
+                    match meta.health.check() {
+                        RpcHealthStatus::Ok => (),
+                        RpcHealthStatus::Unknown => {
+                            inc_new_counter_info!("rpc-send-tx_health-unknown", 1);
+                            return Err(RpcCustomError::NodeUnhealthy {
+                                num_slots_behind: None,
+                            }
+                            .into());
                         }
-                        .into());
-                    }
-                    RpcHealthStatus::Behind { num_slots } => {
-                        inc_new_counter_info!("rpc-send-tx_health-behind", 1);
-                        return Err(RpcCustomError::NodeUnhealthy {
-                            num_slots_behind: Some(num_slots),
+                        RpcHealthStatus::Behind { num_slots } => {
+                            inc_new_counter_info!("rpc-send-tx_health-behind", 1);
+                            return Err(RpcCustomError::NodeUnhealthy {
+                                num_slots_behind: Some(num_slots),
+                            }
+                            .into());
                         }
-                        .into());
                     }
                 }
 

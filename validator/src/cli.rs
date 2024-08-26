@@ -287,6 +287,14 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 ),
         )
         .arg(
+            Arg::with_name("skip_preflight_health_check")
+                .long("skip-preflight-health-check")
+                .takes_value(false)
+                .help(
+                    "Skip health check when running a preflight check",
+                ),
+        )
+        .arg(
             Arg::with_name("rpc_faucet_addr")
                 .long("rpc-faucet-address")
                 .value_name("HOST:PORT")
