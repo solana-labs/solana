@@ -15,7 +15,7 @@ use {
 
 declare_id!("Sim1jD5C35odT8mzctm8BWnjic8xW5xgeb5MbcbErTo");
 
-solana_program::entrypoint!(process_instruction);
+solana_program::entrypoint_no_alloc!(process_instruction);
 
 pub fn process_instruction(
     _program_id: &Pubkey,

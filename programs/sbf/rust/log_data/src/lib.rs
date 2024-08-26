@@ -5,7 +5,7 @@ use solana_program::{
     program::set_return_data, pubkey::Pubkey,
 };
 
-solana_program::entrypoint!(process_instruction);
+solana_program::entrypoint_no_alloc!(process_instruction);
 #[allow(clippy::cognitive_complexity)]
 fn process_instruction(
     _program_id: &Pubkey,

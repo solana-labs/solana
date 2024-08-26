@@ -55,7 +55,7 @@ unsafe impl std::alloc::GlobalAlloc for BumpAllocator {
 #[global_allocator]
 static A: BumpAllocator = BumpAllocator;
 
-solana_program::entrypoint!(process_instruction);
+solana_program::entrypoint_no_alloc!(process_instruction);
 pub fn process_instruction(
     _program_id: &Pubkey,
     _accounts: &[AccountInfo],

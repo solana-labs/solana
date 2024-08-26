@@ -33,7 +33,7 @@ struct OutputData {
     many_args_2: i64,
 }
 
-solana_program::entrypoint!(entry);
+solana_program::entrypoint_no_alloc!(entry);
 
 pub fn entry(_program_id: &Pubkey, _accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
     // This code is supposed to occupy stack space. The purpose of this test is to make sure

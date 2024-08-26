@@ -23,7 +23,9 @@ Release channels have their own copy of this changelog:
   * Banks-client:
     * relax functions to use `&self` instead of `&mut self` (#2591)
 * Changes
-  * SDK: removed the `respan` macro. This was marked as "internal use only" and was no longer used internally.
+  * SDK:
+    * removed the `respan` macro. This was marked as "internal use only" and was no longer used internally.
+    * add `entrypoint_no_alloc!`, a more performant program entrypoint that avoids allocations, saving 20-30 CUs per unique account
   * `agave-validator`: Update PoH speed check to compare against current hash rate from a Bank (#2447)
   * `solana-test-validator`: Add `--clone-feature-set` flag to mimic features from a target cluster (#2480)
   * `solana-genesis`: the `--cluster-type` parameter now clones the feature set from the target cluster (#2587)

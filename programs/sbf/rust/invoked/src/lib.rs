@@ -17,7 +17,7 @@ use {
     solana_sbf_rust_invoked_dep::*,
 };
 
-solana_program::entrypoint!(process_instruction);
+solana_program::entrypoint_no_alloc!(process_instruction);
 #[allow(clippy::cognitive_complexity)]
 fn process_instruction(
     program_id: &Pubkey,

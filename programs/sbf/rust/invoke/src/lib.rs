@@ -65,7 +65,7 @@ fn do_nested_invokes(num_nested_invokes: u64, accounts: &[AccountInfo]) -> Progr
     Ok(())
 }
 
-solana_program::entrypoint!(process_instruction);
+solana_program::entrypoint_no_alloc!(process_instruction);
 fn process_instruction<'a>(
     program_id: &Pubkey,
     accounts: &[AccountInfo<'a>],

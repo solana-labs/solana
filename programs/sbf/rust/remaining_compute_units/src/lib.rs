@@ -5,7 +5,7 @@ use solana_program::{
     account_info::AccountInfo, compute_units::sol_remaining_compute_units,
     entrypoint::ProgramResult, msg, pubkey::Pubkey,
 };
-solana_program::entrypoint!(process_instruction);
+solana_program::entrypoint_no_alloc!(process_instruction);
 pub fn process_instruction(
     _program_id: &Pubkey,
     _accounts: &[AccountInfo],

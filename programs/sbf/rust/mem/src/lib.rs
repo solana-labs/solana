@@ -10,7 +10,7 @@ use {
     solana_sbf_rust_mem_dep::{run_mem_tests, MemOps},
 };
 
-solana_program::entrypoint!(process_instruction);
+solana_program::entrypoint_no_alloc!(process_instruction);
 pub fn process_instruction(
     _program_id: &Pubkey,
     _accounts: &[AccountInfo],
