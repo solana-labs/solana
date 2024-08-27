@@ -3,14 +3,16 @@
 #![cfg(feature = "full")]
 
 use {
-    crate::{feature_set::FeatureSet, instruction::CompiledInstruction, pubkey::Pubkey},
+    crate::{feature_set::FeatureSet, pubkey::Pubkey},
     lazy_static::lazy_static,
+    num_derive::{FromPrimitive, ToPrimitive},
     solana_decode_error::DecodeError,
+    solana_program::instruction::CompiledInstruction,
     thiserror::Error,
 };
 
 /// Precompile errors
-#[derive(Error, Debug, Clone, PartialEq, Eq)]
+#[derive(Error, Debug, Clone, PartialEq, Eq, FromPrimitive, ToPrimitive)]
 pub enum PrecompileError {
     #[error("public key is not valid")]
     InvalidPublicKey,
@@ -23,6 +25,7 @@ pub enum PrecompileError {
     #[error("instruction is incorrect size")]
     InvalidInstructionDataSize,
 }
+
 impl<T> DecodeError<T> for PrecompileError {
     fn type_of() -> &'static str {
         "PrecompileError"
@@ -94,6 +97,16 @@ where
     PRECOMPILES
         .iter()
         .any(|precompile| precompile.check_id(program_id, |feature_id| is_enabled(feature_id)))
+}
+
+/// Find an enabled precompiled program
+pub fn get_precompile<F>(program_id: &Pubkey, is_enabled: F) -> Option<&Precompile>
+where
+    F: Fn(&Pubkey) -> bool,
+{
+    PRECOMPILES
+        .iter()
+        .find(|precompile| precompile.check_id(program_id, |feature_id| is_enabled(feature_id)))
 }
 
 pub fn get_precompiles<'a>() -> &'a [Precompile] {

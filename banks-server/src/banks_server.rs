@@ -17,7 +17,7 @@ use {
         account::Account,
         clock::Slot,
         commitment_config::CommitmentLevel,
-        feature_set::FeatureSet,
+        feature_set::{self, FeatureSet},
         hash::Hash,
         message::{Message, SanitizedMessage},
         pubkey::Pubkey,
@@ -163,7 +163,13 @@ fn verify_transaction(
     feature_set: &Arc<FeatureSet>,
 ) -> transaction::Result<()> {
     transaction.verify()?;
-    transaction.verify_precompiles(feature_set)?;
+
+    let move_precompile_verification_to_svm =
+        feature_set.is_active(&feature_set::move_precompile_verification_to_svm::id());
+    if !move_precompile_verification_to_svm {
+        transaction.verify_precompiles(feature_set)?;
+    }
+
     Ok(())
 }
 

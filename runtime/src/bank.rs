@@ -5518,9 +5518,13 @@ impl Bank {
             )
         }?;
 
-        if verification_mode == TransactionVerificationMode::HashAndVerifyPrecompiles
-            || verification_mode == TransactionVerificationMode::FullVerification
-        {
+        let move_precompile_verification_to_svm = self
+            .feature_set
+            .is_active(&feature_set::move_precompile_verification_to_svm::id());
+        if !move_precompile_verification_to_svm && {
+            verification_mode == TransactionVerificationMode::HashAndVerifyPrecompiles
+                || verification_mode == TransactionVerificationMode::FullVerification
+        } {
             sanitized_tx.verify_precompiles(&self.feature_set)?;
         }
 

@@ -22,10 +22,11 @@ use {
         bpf_loader_deprecated,
         clock::Slot,
         epoch_schedule::EpochSchedule,
-        feature_set::FeatureSet,
+        feature_set::{self, FeatureSet},
         hash::Hash,
         instruction::{AccountMeta, InstructionError},
         native_loader,
+        precompiles::Precompile,
         pubkey::Pubkey,
         saturating_add_assign,
         stable_layout::stable_instruction::StableInstruction,
@@ -463,6 +464,34 @@ impl<'a> InvokeContext<'a> {
             // MUST pop if and only if `push` succeeded, independent of `result`.
             // Thus, the `.and()` instead of an `.and_then()`.
             .and(self.pop())
+    }
+
+    /// Processes a precompile instruction
+    pub fn process_precompile<'ix_data>(
+        &mut self,
+        precompile: &Precompile,
+        instruction_data: &[u8],
+        instruction_accounts: &[InstructionAccount],
+        program_indices: &[IndexOfAccount],
+        message_instruction_datas_iter: impl Iterator<Item = &'ix_data [u8]>,
+    ) -> Result<(), InstructionError> {
+        self.transaction_context
+            .get_next_instruction_context()?
+            .configure(program_indices, instruction_accounts, instruction_data);
+        self.push()?;
+
+        let feature_set = self.get_feature_set();
+        let move_precompile_verification_to_svm =
+            feature_set.is_active(&feature_set::move_precompile_verification_to_svm::id());
+        if move_precompile_verification_to_svm {
+            let instruction_datas: Vec<_> = message_instruction_datas_iter.collect();
+            precompile
+                .verify(instruction_data, &instruction_datas, feature_set)
+                .map_err(InstructionError::from)
+                .and(self.pop())
+        } else {
+            self.pop()
+        }
     }
 
     /// Calls the instruction's program entrypoint method

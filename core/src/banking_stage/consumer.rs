@@ -392,11 +392,20 @@ impl Consumer {
         let check_results =
             bank.check_transactions(txs, &pre_results, MAX_PROCESSING_AGE, &mut error_counters);
         // If checks passed, verify pre-compiles and continue processing on success.
+        let move_precompile_verification_to_svm = bank
+            .feature_set
+            .is_active(&feature_set::move_precompile_verification_to_svm::id());
         let check_results: Vec<_> = txs
             .iter()
             .zip(check_results)
             .map(|(tx, result)| match result {
-                Ok(_) => tx.verify_precompiles(&bank.feature_set),
+                Ok(_) => {
+                    if !move_precompile_verification_to_svm {
+                        tx.verify_precompiles(&bank.feature_set)
+                    } else {
+                        Ok(())
+                    }
+                }
                 Err(err) => Err(err),
             })
             .collect();
@@ -421,7 +430,10 @@ impl Consumer {
         txs: &[SanitizedTransaction],
         max_slot_ages: &[Slot],
     ) -> ProcessTransactionBatchOutput {
-        // Verify pre-compiles.
+        let move_precompile_verification_to_svm = bank
+            .feature_set
+            .is_active(&feature_set::move_precompile_verification_to_svm::id());
+
         // Need to filter out transactions since they were sanitized earlier.
         // This means that the transaction may cross and epoch boundary (not allowed),
         //  or account lookup tables may have been closed.
@@ -439,7 +451,10 @@ impl Consumer {
                 }
             } else {
                 // Verify pre-compiles.
-                tx.verify_precompiles(&bank.feature_set)?;
+                if !move_precompile_verification_to_svm {
+                    tx.verify_precompiles(&bank.feature_set)?;
+                }
+
                 // Any transaction executed between sanitization time and now may have closed the lookup table(s).
                 // Above re-sanitization already loads addresses, so don't need to re-check in that case.
                 let lookup_tables = tx.message().message_address_table_lookups();

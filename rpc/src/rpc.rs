@@ -2251,8 +2251,12 @@ fn verify_transaction(
         return Err(RpcCustomError::TransactionSignatureVerificationFailure.into());
     }
 
-    if let Err(e) = transaction.verify_precompiles(feature_set) {
-        return Err(RpcCustomError::TransactionPrecompileVerificationFailure(e).into());
+    let move_precompile_verification_to_svm =
+        feature_set.is_active(&feature_set::move_precompile_verification_to_svm::id());
+    if !move_precompile_verification_to_svm {
+        if let Err(e) = transaction.verify_precompiles(feature_set) {
+            return Err(RpcCustomError::TransactionPrecompileVerificationFailure(e).into());
+        }
     }
 
     Ok(())

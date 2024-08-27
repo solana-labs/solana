@@ -1,9 +1,9 @@
 use {
-    solana_measure::measure::Measure,
+    solana_measure::measure_us,
     solana_program_runtime::invoke_context::InvokeContext,
     solana_sdk::{
         account::WritableAccount,
-        precompiles::is_precompile,
+        precompiles::get_precompile,
         saturating_add_assign,
         sysvar::instructions,
         transaction::TransactionError,
@@ -44,10 +44,6 @@ impl MessageProcessor {
             .zip(program_indices.iter())
             .enumerate()
         {
-            let is_precompile = is_precompile(program_id, |id| {
-                invoke_context.get_feature_set().is_active(id)
-            });
-
             // Fixup the special instructions key if present
             // before the account pre-values are taken care of
             if let Some(account_index) = invoke_context
@@ -87,53 +83,48 @@ impl MessageProcessor {
                 });
             }
 
-            let result = if is_precompile {
-                invoke_context
-                    .transaction_context
-                    .get_next_instruction_context()
-                    .map(|instruction_context| {
-                        instruction_context.configure(
-                            program_indices,
-                            &instruction_accounts,
-                            instruction.data,
-                        );
-                    })
-                    .and_then(|_| {
-                        invoke_context.transaction_context.push()?;
-                        invoke_context.transaction_context.pop()
-                    })
-            } else {
-                let time = Measure::start("execute_instruction");
-                let mut compute_units_consumed = 0;
-                let result = invoke_context.process_instruction(
-                    instruction.data,
-                    &instruction_accounts,
-                    program_indices,
-                    &mut compute_units_consumed,
-                    execute_timings,
-                );
-                let time = time.end_as_us();
-                *accumulated_consumed_units =
-                    accumulated_consumed_units.saturating_add(compute_units_consumed);
-                execute_timings.details.accumulate_program(
-                    program_id,
-                    time,
-                    compute_units_consumed,
-                    result.is_err(),
-                );
-                invoke_context.timings = {
-                    execute_timings.details.accumulate(&invoke_context.timings);
-                    ExecuteDetailsTimings::default()
-                };
-                saturating_add_assign!(
-                    execute_timings
-                        .execute_accessories
-                        .process_instructions
-                        .total_us,
-                    time
-                );
-                result
+            let mut compute_units_consumed = 0;
+            let (result, process_instruction_us) = measure_us!({
+                if let Some(precompile) = get_precompile(program_id, |feature_id| {
+                    invoke_context.get_feature_set().is_active(feature_id)
+                }) {
+                    invoke_context.process_precompile(
+                        precompile,
+                        instruction.data,
+                        &instruction_accounts,
+                        program_indices,
+                        message.instructions_iter().map(|ix| ix.data),
+                    )
+                } else {
+                    invoke_context.process_instruction(
+                        instruction.data,
+                        &instruction_accounts,
+                        program_indices,
+                        &mut compute_units_consumed,
+                        execute_timings,
+                    )
+                }
+            });
+
+            *accumulated_consumed_units =
+                accumulated_consumed_units.saturating_add(compute_units_consumed);
+            execute_timings.details.accumulate_program(
+                program_id,
+                process_instruction_us,
+                compute_units_consumed,
+                result.is_err(),
+            );
+            invoke_context.timings = {
+                execute_timings.details.accumulate(&invoke_context.timings);
+                ExecuteDetailsTimings::default()
             };
+            saturating_add_assign!(
+                execute_timings
+                    .execute_accessories
+                    .process_instructions
+                    .total_us,
+                process_instruction_us
+            );
 
             result
                 .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
