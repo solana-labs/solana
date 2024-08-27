@@ -509,7 +509,6 @@ fn check_slots_are_valid(
             "{} dropped vote slots {:?} failed to match hash {} {}",
             vote_state.node_pubkey, vote_slots, vote_hash, slot_hashes[j].1
         );
-        inc_new_counter_info!("dropped-vote-hash", 1);
         return Err(VoteError::SlotHashMismatch);
     }
     Ok(())
