@@ -11,25 +11,25 @@ use {
     solana_sdk::{hash::Hash, pubkey::Pubkey, signature::Signature},
 };
 
-pub struct TransactionMeta {
+pub(crate) struct TransactionMeta {
     /// Signature metadata.
-    pub(crate) signature: SignatureMeta,
+    signature: SignatureMeta,
     /// Message header metadata.
-    pub(crate) message_header: MessageHeaderMeta,
+    message_header: MessageHeaderMeta,
     /// Static account keys metadata.
-    pub(crate) static_account_keys: StaticAccountKeysMeta,
+    static_account_keys: StaticAccountKeysMeta,
     /// Recent blockhash offset.
-    pub(crate) recent_blockhash_offset: u16,
+    recent_blockhash_offset: u16,
     /// Instructions metadata.
-    pub(crate) instructions: InstructionsMeta,
+    instructions: InstructionsMeta,
     /// Address table lookup metadata.
-    pub(crate) address_table_lookup: AddressTableLookupMeta,
+    address_table_lookup: AddressTableLookupMeta,
 }
 
 impl TransactionMeta {
     /// Parse a serialized transaction and verify basic structure.
     /// The `bytes` parameter must have no trailing data.
-    pub fn try_new(bytes: &[u8]) -> Result<Self> {
+    pub(crate) fn try_new(bytes: &[u8]) -> Result<Self> {
         let mut offset = 0;
         let signature = SignatureMeta::try_new(bytes, &mut offset)?;
         let message_header = MessageHeaderMeta::try_new(bytes, &mut offset)?;
@@ -66,43 +66,48 @@ impl TransactionMeta {
     }
 
     /// Return the number of signatures in the transaction.
-    pub fn num_signatures(&self) -> u8 {
+    pub(crate) fn num_signatures(&self) -> u8 {
         self.signature.num_signatures
     }
 
     /// Return the version of the transaction.
-    pub fn version(&self) -> TransactionVersion {
+    pub(crate) fn version(&self) -> TransactionVersion {
         self.message_header.version
     }
 
     /// Return the number of required signatures in the transaction.
-    pub fn num_required_signatures(&self) -> u8 {
+    pub(crate) fn num_required_signatures(&self) -> u8 {
         self.message_header.num_required_signatures
     }
 
     /// Return the number of readonly signed accounts in the transaction.
-    pub fn num_readonly_signed_accounts(&self) -> u8 {
+    pub(crate) fn num_readonly_signed_accounts(&self) -> u8 {
         self.message_header.num_readonly_signed_accounts
     }
 
     /// Return the number of readonly unsigned accounts in the transaction.
-    pub fn num_readonly_unsigned_accounts(&self) -> u8 {
+    pub(crate) fn num_readonly_unsigned_accounts(&self) -> u8 {
         self.message_header.num_readonly_unsigned_accounts
     }
 
     /// Return the number of static account keys in the transaction.
-    pub fn num_static_account_keys(&self) -> u8 {
+    pub(crate) fn num_static_account_keys(&self) -> u8 {
         self.static_account_keys.num_static_accounts
     }
 
     /// Return the number of instructions in the transaction.
-    pub fn num_instructions(&self) -> u16 {
+    pub(crate) fn num_instructions(&self) -> u16 {
         self.instructions.num_instructions
     }
 
     /// Return the number of address table lookups in the transaction.
-    pub fn num_address_table_lookups(&self) -> u8 {
+    pub(crate) fn num_address_table_lookups(&self) -> u8 {
         self.address_table_lookup.num_address_table_lookups
+    }
+
+    /// Return the offset to the message.
+    pub(crate) fn message_offset(&self) -> u16 {
+        self.message_header.offset
     }
 }
 
@@ -112,7 +117,7 @@ impl TransactionMeta {
     /// # Safety
     ///   - This function must be called with the same `bytes` slice that was
     ///     used to create the `TransactionMeta` instance.
-    pub unsafe fn signatures<'a>(&self, bytes: &'a [u8]) -> &'a [Signature] {
+    pub(crate) unsafe fn signatures<'a>(&self, bytes: &'a [u8]) -> &'a [Signature] {
         // Verify at compile time there are no alignment constraints.
         const _: () = assert!(
             core::mem::align_of::<Signature>() == 1,
@@ -144,7 +149,7 @@ impl TransactionMeta {
     /// # Safety
     ///  - This function must be called with the same `bytes` slice that was
     ///    used to create the `TransactionMeta` instance.
-    pub unsafe fn static_account_keys<'a>(&self, bytes: &'a [u8]) -> &'a [Pubkey] {
+    pub(crate) unsafe fn static_account_keys<'a>(&self, bytes: &'a [u8]) -> &'a [Pubkey] {
         // Verify at compile time there are no alignment constraints.
         const _: () = assert!(core::mem::align_of::<Pubkey>() == 1, "Pubkey alignment");
         // The length of the slice is not greater than isize::MAX.
@@ -174,7 +179,7 @@ impl TransactionMeta {
     /// # Safety
     /// - This function must be called with the same `bytes` slice that was
     ///   used to create the `TransactionMeta` instance.
-    pub unsafe fn recent_blockhash<'a>(&self, bytes: &'a [u8]) -> &'a Hash {
+    pub(crate) unsafe fn recent_blockhash<'a>(&self, bytes: &'a [u8]) -> &'a Hash {
         // Verify at compile time there are no alignment constraints.
         const _: () = assert!(core::mem::align_of::<Hash>() == 1, "Hash alignment");
 
@@ -193,7 +198,7 @@ impl TransactionMeta {
     /// # Safety
     /// - This function must be called with the same `bytes` slice that was
     ///   used to create the `TransactionMeta` instance.
-    pub unsafe fn instructions_iter<'a>(&self, bytes: &'a [u8]) -> InstructionsIterator<'a> {
+    pub(crate) unsafe fn instructions_iter<'a>(&self, bytes: &'a [u8]) -> InstructionsIterator<'a> {
         InstructionsIterator {
             bytes,
             offset: usize::from(self.instructions.offset),
@@ -206,7 +211,7 @@ impl TransactionMeta {
     /// # Safety
     /// - This function must be called with the same `bytes` slice that was
     ///   used to create the `TransactionMeta` instance.
-    pub unsafe fn address_table_lookup_iter<'a>(
+    pub(crate) unsafe fn address_table_lookup_iter<'a>(
         &self,
         bytes: &'a [u8],
     ) -> AddressTableLookupIterator<'a> {

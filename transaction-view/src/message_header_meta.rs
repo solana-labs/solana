@@ -34,7 +34,7 @@ pub(crate) struct MessageHeaderMeta {
 
 impl MessageHeaderMeta {
     #[inline(always)]
-    pub fn try_new(bytes: &[u8], offset: &mut usize) -> Result<Self> {
+    pub(crate) fn try_new(bytes: &[u8], offset: &mut usize) -> Result<Self> {
         // Get the message offset.
         // We know the offset does not exceed packet length, and our packet
         // length is less than u16::MAX, so we can safely cast to u16.

@@ -1,5 +1,5 @@
 use {
-    agave_transaction_view::transaction_meta::TransactionMeta,
+    agave_transaction_view::transaction_view::TransactionView,
     criterion::{
         black_box, criterion_group, criterion_main, measurement::Measurement, BenchmarkGroup,
         Criterion, Throughput,
@@ -42,10 +42,10 @@ fn bench_transactions_parsing(
     });
 
     // New Transaction Parsing
-    group.bench_function("TransactionMeta", |c| {
+    group.bench_function("TransactionView", |c| {
         c.iter(|| {
             for bytes in serialized_transactions.iter() {
-                let _ = TransactionMeta::try_new(black_box(bytes)).unwrap();
+                let _ = TransactionView::try_new(black_box(bytes.as_ref())).unwrap();
             }
         });
     });

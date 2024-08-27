@@ -27,5 +27,5 @@ name = "bytes"
 harness = false
 
 [[bench]]
-name = "transaction_meta"
+name = "transaction_view"
 harness = false

@@ -11,7 +11,7 @@ use {
 
 /// Contains metadata about the instructions in a transaction packet.
 #[derive(Default)]
-pub struct InstructionsMeta {
+pub(crate) struct InstructionsMeta {
     /// The number of instructions in the transaction.
     pub(crate) num_instructions: u16,
     /// The offset to the first instruction in the transaction.
@@ -26,7 +26,7 @@ impl InstructionsMeta {
     /// instruction data is well-formed, but will not cache data related to
     /// these instructions.
     #[inline(always)]
-    pub fn try_new(bytes: &[u8], offset: &mut usize) -> Result<Self> {
+    pub(crate) fn try_new(bytes: &[u8], offset: &mut usize) -> Result<Self> {
         // Read the number of instructions at the current offset.
         // Each instruction needs at least 3 bytes, so do a sanity check here to
         // ensure we have enough bytes to read the number of instructions.
