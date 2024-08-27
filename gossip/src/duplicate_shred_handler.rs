@@ -56,8 +56,14 @@ impl DuplicateShredHandlerTrait for DuplicateShredHandler {
     fn handle(&mut self, shred_data: DuplicateShred) {
         self.cache_root_info();
         self.maybe_prune_buffer();
+        let slot = shred_data.slot;
+        let pubkey = shred_data.from;
         if let Err(error) = self.handle_shred_data(shred_data) {
-            error!("handle packet: {error:?}")
+            if error.is_non_critical() {
+                info!("Received invalid duplicate shred proof from {pubkey} for slot {slot}: {error:?}");
+            } else {
+                error!("Unable to process duplicate shred proof from {pubkey} for slot {slot}: {error:?}");
+            }
         }
     }
 }

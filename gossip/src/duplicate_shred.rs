@@ -90,6 +90,33 @@ pub enum Error {
     UnknownSlotLeader(Slot),
 }
 
+impl Error {
+    /// Errors indicating that the initial node submitted an invalid duplicate proof case
+    pub(crate) fn is_non_critical(&self) -> bool {
+        match self {
+            Self::SlotMismatch
+            | Self::InvalidShredVersion(_)
+            | Self::InvalidSignature
+            | Self::ShredTypeMismatch
+            | Self::InvalidDuplicateShreds
+            | Self::InvalidLastIndexConflict
+            | Self::InvalidErasureMetaConflict => true,
+            Self::BlockstoreInsertFailed(_)
+            | Self::DataChunkMismatch
+            | Self::DuplicateSlotSenderFailure
+            | Self::InvalidChunkIndex { .. }
+            | Self::InvalidDuplicateSlotProof
+            | Self::InvalidSizeLimit
+            | Self::InvalidShred(_)
+            | Self::NumChunksMismatch
+            | Self::MissingDataChunk
+            | Self::SerializationError(_)
+            | Self::TryFromIntError(_)
+            | Self::UnknownSlotLeader(_) => false,
+        }
+    }
+}
+
 /// Check that `shred1` and `shred2` indicate a valid duplicate proof
 ///     - Must be for the same slot
 ///     - Must match the expected shred version
