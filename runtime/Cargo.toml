@@ -94,6 +94,7 @@ crate-type = ["lib"]
 name = "solana_runtime"
 
 [dev-dependencies]
+agave-transaction-view = { workspace = true }
 assert_matches = { workspace = true }
 ed25519-dalek = { workspace = true }
 libsecp256k1 = { workspace = true }

@@ -16,6 +16,7 @@ use {
         snapshot_bank_utils, snapshot_utils,
         status_cache::MAX_CACHE_ENTRIES,
     },
+    agave_transaction_view::static_account_keys_meta::MAX_STATIC_ACCOUNTS_PER_PACKET,
     assert_matches::assert_matches,
     crossbeam_channel::{bounded, unbounded},
     itertools::Itertools,
@@ -6192,7 +6193,7 @@ fn test_fuzz_instructions() {
         })
         .collect();
     let (bank, _bank_forks) = bank.wrap_with_bank_forks_for_tests();
-    let max_keys = 100;
+    let max_keys = MAX_STATIC_ACCOUNTS_PER_PACKET;
     let keys: Vec<_> = (0..max_keys)
         .enumerate()
         .map(|_| {
