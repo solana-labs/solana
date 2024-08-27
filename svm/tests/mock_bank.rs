@@ -35,9 +35,10 @@ use {
         env,
         fs::{self, File},
         io::Read,
-        time::{SystemTime, UNIX_EPOCH},
     },
 };
+
+pub const WALLCLOCK_TIME: i64 = 1704067200; // Arbitrarily Jan 1, 2024
 
 pub struct MockForkGraph {}
 
@@ -112,9 +113,15 @@ fn load_program(name: String) -> Vec<u8> {
 }
 
 #[allow(unused)]
+pub fn program_address(program_name: &str) -> Pubkey {
+    Pubkey::create_with_seed(&Pubkey::default(), program_name, &Pubkey::default()).unwrap()
+}
+
+#[allow(unused)]
 pub fn deploy_program(name: String, deployment_slot: Slot, mock_bank: &MockBankCallback) -> Pubkey {
-    let program_account = Pubkey::new_unique();
-    let program_data_account = Pubkey::new_unique();
+    let program_account = program_address(&name);
+    let program_data_account = bpf_loader_upgradeable::get_program_data_address(&program_account);
+
     let state = UpgradeableLoaderState::Program {
         programdata_address: program_data_account,
     };
@@ -124,6 +131,7 @@ pub fn deploy_program(name: String, deployment_slot: Slot, mock_bank: &MockBankC
     account_data.set_data(bincode::serialize(&state).unwrap());
     account_data.set_lamports(25);
     account_data.set_owner(bpf_loader_upgradeable::id());
+    account_data.set_executable(true);
     mock_bank
         .account_shared_data
         .write()
@@ -177,16 +185,12 @@ pub fn create_executable_environment(
     program_cache.fork_graph = Some(Arc::downgrade(&fork_graph));
 
     // We must fill in the sysvar cache entries
-    let time_now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("Time went backwards")
-        .as_secs() as i64;
     let clock = Clock {
         slot: DEPLOYMENT_SLOT,
-        epoch_start_timestamp: time_now.saturating_sub(10) as UnixTimestamp,
+        epoch_start_timestamp: WALLCLOCK_TIME.saturating_sub(10) as UnixTimestamp,
         epoch: DEPLOYMENT_EPOCH,
         leader_schedule_epoch: DEPLOYMENT_EPOCH,
-        unix_timestamp: time_now as UnixTimestamp,
+        unix_timestamp: WALLCLOCK_TIME as UnixTimestamp,
     };
 
     let mut account_data = AccountSharedData::default();
