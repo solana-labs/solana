@@ -739,7 +739,7 @@ impl AccountsDb {
     /// 'accounts_per_storage' should be sorted by slot
     fn calc_accounts_to_combine<'a>(
         &self,
-        accounts_per_storage: &'a mut Vec<(&'a SlotInfo, GetUniqueAccountsResult)>,
+        accounts_per_storage: &'a mut [(&'a SlotInfo, GetUniqueAccountsResult)],
         tuning: &PackedAncientStorageTuning,
         alive_bytes: u64,
         mut many_ref_slots: IncludeManyRefSlots,
@@ -752,18 +752,17 @@ impl AccountsDb {
 
         // `shrink_collect` all accounts in the append vecs we want to combine.
         // This also unrefs all dead accounts in those append vecs.
-        let mut accounts_to_combine = self.thread_pool_clean.install(|| {
-            accounts_per_storage
-                .par_iter()
-                .map(|(info, unique_accounts)| {
-                    self.shrink_collect::<ShrinkCollectAliveSeparatedByRefs<'_>>(
-                        &info.storage,
-                        unique_accounts,
-                        &self.shrink_ancient_stats.shrink_stats,
-                    )
-                })
-                .collect::<Vec<_>>()
-        });
+        // This needs to serially iterate largest to smallest slot so that we unref older dead slots after we have visited the newer alive slots.
+        let mut accounts_to_combine = accounts_per_storage
+            .iter()
+            .map(|(info, unique_accounts)| {
+                self.shrink_collect::<ShrinkCollectAliveSeparatedByRefs<'_>>(
+                    &info.storage,
+                    unique_accounts,
+                    &self.shrink_ancient_stats.shrink_stats,
+                )
+            })
+            .collect::<Vec<_>>();
 
         let mut many_refs_old_alive_count = 0;
 
