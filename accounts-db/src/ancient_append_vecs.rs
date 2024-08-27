@@ -410,7 +410,6 @@ impl AccountsDb {
         let mut accounts_to_combine = self.calc_accounts_to_combine(
             &mut accounts_per_storage,
             &tuning,
-            ancient_slot_infos.total_alive_bytes_shrink.0,
             IncludeManyRefSlots::Skip,
         );
         metrics.unpackable_slots_count += accounts_to_combine.unpackable_slots_count;
@@ -741,9 +740,13 @@ impl AccountsDb {
         &self,
         accounts_per_storage: &'a mut [(&'a SlotInfo, GetUniqueAccountsResult)],
         tuning: &PackedAncientStorageTuning,
-        alive_bytes: u64,
         mut many_ref_slots: IncludeManyRefSlots,
     ) -> AccountsToCombine<'a> {
+        let alive_bytes = accounts_per_storage
+            .iter()
+            .map(|a| a.0.alive_bytes)
+            .sum::<u64>();
+
         // reverse sort by slot #
         accounts_per_storage.sort_unstable_by(|a, b| b.0.slot.cmp(&a.0.slot));
         let mut accounts_keep_slots = HashMap::default();
@@ -1618,11 +1621,9 @@ pub mod tests {
                             )
                             .collect::<Vec<_>>();
 
-                        let alive_bytes = 1000;
                         let accounts_to_combine = db.calc_accounts_to_combine(
                             &mut accounts_per_storage,
                             &default_tuning(),
-                            alive_bytes,
                             IncludeManyRefSlots::Include,
                         );
                         let mut stats = ShrinkStatsSub::default();
@@ -1724,6 +1725,11 @@ pub mod tests {
                     for two_refs in [false, true] {
                         let (db, mut storages, _slots, mut infos) =
                             get_sample_storages(num_slots, None);
+
+                        infos.iter_mut().for_each(|a| {
+                            a.alive_bytes += alive_bytes_per_slot;
+                        });
+
                         if unsorted_slots {
                             storages = storages.into_iter().rev().collect();
                             infos = infos.into_iter().rev().collect();
@@ -1753,11 +1759,9 @@ pub mod tests {
                             .zip(original_results.into_iter())
                             .collect::<Vec<_>>();
 
-                        let alive_bytes = num_slots as u64 * alive_bytes_per_slot;
                         let accounts_to_combine = db.calc_accounts_to_combine(
                             &mut accounts_per_storage,
                             &tuning,
-                            alive_bytes,
                             many_ref_slots,
                         );
                         let mut expected_accounts_to_combine = num_slots;
@@ -1803,6 +1807,10 @@ pub mod tests {
                             for two_refs in [false, true] {
                                 let (db, mut storages, slots, mut infos) =
                                     get_sample_storages(num_slots, None);
+                                infos.iter_mut().for_each(|a| {
+                                    a.alive_bytes += 1;
+                                });
+
                                 let slots_vec;
                                 if unsorted_slots {
                                     slots_vec = slots.rev().collect::<Vec<_>>();
@@ -1857,11 +1865,9 @@ pub mod tests {
                                     .zip(original_results.into_iter())
                                     .collect::<Vec<_>>();
 
-                                let alive_bytes = num_slots;
                                 let accounts_to_combine = db.calc_accounts_to_combine(
                                     &mut accounts_per_storage,
                                     &default_tuning(),
-                                    alive_bytes as u64,
                                     many_ref_slots,
                                 );
                                 assert_eq!(
@@ -2024,11 +2030,9 @@ pub mod tests {
                 .zip(original_results.into_iter())
                 .collect::<Vec<_>>();
 
-            let alive_bytes = 1000; // just something
             let accounts_to_combine = db.calc_accounts_to_combine(
                 &mut accounts_per_storage,
                 &default_tuning(),
-                alive_bytes,
                 IncludeManyRefSlots::Include,
             );
             let slots_vec = slots.collect::<Vec<_>>();
@@ -2214,11 +2218,9 @@ pub mod tests {
                 .zip(original_results.into_iter())
                 .collect::<Vec<_>>();
 
-            let alive_bytes = 0; // just something
             let accounts_to_combine = db.calc_accounts_to_combine(
                 &mut accounts_per_storage,
                 &default_tuning(),
-                alive_bytes,
                 IncludeManyRefSlots::Include,
             );
             let slots_vec = slots.collect::<Vec<_>>();
