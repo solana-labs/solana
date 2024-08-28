@@ -39,22 +39,6 @@ struct SolAccountInfo {
     executable: bool,
 }
 
-/// Rust representation of C's SolSignerSeed
-#[derive(Debug)]
-#[repr(C)]
-struct SolSignerSeedC {
-    addr: u64,
-    len: u64,
-}
-
-/// Rust representation of C's SolSignerSeeds
-#[derive(Debug)]
-#[repr(C)]
-struct SolSignerSeedsC {
-    addr: u64,
-    len: u64,
-}
-
 const READONLY_ACCOUNTS: &[SolAccountInfo] = &[
     SolAccountInfo {
         is_signer: false,
