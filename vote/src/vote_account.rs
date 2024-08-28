@@ -43,7 +43,7 @@ struct VoteAccountInner {
 
 pub type VoteAccountsHashMap = HashMap<Pubkey, (/*stake:*/ u64, VoteAccount)>;
 #[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct VoteAccounts {
     #[serde(deserialize_with = "deserialize_accounts_hash_map")]
     vote_accounts: Arc<VoteAccountsHashMap>,
@@ -57,6 +57,19 @@ pub struct VoteAccounts {
             >,
         >,
     >,
+}
+
+impl Clone for VoteAccounts {
+    fn clone(&self) -> Self {
+        Self {
+            vote_accounts: Arc::clone(&self.vote_accounts),
+            // Reset this so that if the previous bank did compute `staked_nodes`, the new bank
+            // won't copy-on-write and keep updating the map if the staked nodes on this bank are
+            // never accessed. See [`VoteAccounts::add_stake`] [`VoteAccounts::sub_stake`] and
+            // [`VoteAccounts::staked_nodes`].
+            staked_nodes: OnceLock::new(),
+        }
+    }
 }
 
 impl VoteAccount {
