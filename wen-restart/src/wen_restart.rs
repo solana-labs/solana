@@ -686,13 +686,15 @@ pub(crate) fn aggregate_restart_heaviest_fork(
         .unwrap()
         .total_active_stake = total_active_stake;
 
-    let mut progress_last_sent = Instant::now();
     let mut cursor = solana_gossip::crds::Cursor::default();
-    let mut progress_changed = false;
+    // Init progress_changed to true and progress_last_sent to old time so we can send out the first Gossip message.
+    let mut progress_changed = true;
+    let mut progress_last_sent = Instant::now()
+        .checked_sub(Duration::from_secs(HEAVIEST_REFRESH_INTERVAL_IN_SECONDS))
+        .unwrap();
     let majority_stake_required =
         (total_stake as f64 / 100.0 * adjusted_threshold_percent as f64).round() as u64;
     let mut total_active_stake_higher_than_supermajority = false;
-    let mut first_time_entering_loop = true;
     loop {
         if exit.load(Ordering::Relaxed) {
             return Err(WenRestartError::Exiting.into());
@@ -745,10 +747,8 @@ pub(crate) fn aggregate_restart_heaviest_fork(
             // the first time.
             if progress_last_sent.elapsed().as_secs() >= HEAVIEST_REFRESH_INTERVAL_IN_SECONDS
                 || can_exit
-                || first_time_entering_loop
                 || saw_supermajority_first_time
             {
-                first_time_entering_loop = false;
                 cluster_info.push_restart_heaviest_fork(
                     heaviest_fork_slot,
                     heaviest_fork_hash,
@@ -3014,6 +3014,22 @@ mod tests {
             exit.clone(),
             Some(WenRestartError::Exiting),
         );
+        // Find the first HeaviestFork message sent out entering the loop.
+        let my_pubkey = test_state.cluster_info.id();
+        let mut found_myself = false;
+        while !found_myself {
+            sleep(Duration::from_millis(100));
+            test_state.cluster_info.flush_push_queue();
+            for gossip_record in test_state
+                .cluster_info
+                .get_restart_heaviest_fork(&mut cursor)
+            {
+                if gossip_record.from == my_pubkey && gossip_record.observed_stake > 0 {
+                    found_myself = true;
+                    break;
+                }
+            }
+        }
         // Simulating everyone sending out the first RestartHeaviestFork message, Gossip propagation takes
         // time, so the observed_stake is probably smaller than actual active stake. We should send out
         // heaviest fork indicating we have active stake exceeding supermajority.
@@ -3042,7 +3058,6 @@ mod tests {
                 now,
             );
         }
-        let my_pubkey = test_state.cluster_info.id();
         let mut found_myself = false;
         let expected_active_stake = (WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT
             - NON_CONFORMING_VALIDATOR_PERCENT)
@@ -3086,6 +3101,7 @@ mod tests {
             }),
             ..Default::default()
         };
+
         let different_bankhash = Hash::new_unique();
         let validators_to_take: usize = ((WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT
             - NON_CONFORMING_VALIDATOR_PERCENT)
