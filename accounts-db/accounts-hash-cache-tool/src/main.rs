@@ -1,9 +1,9 @@
 use {
-    ahash::{HashMap, RandomState},
+    ahash::{HashMap, HashSet, RandomState},
     bytemuck::Zeroable as _,
     clap::{
-        crate_description, crate_name, value_t_or_exit, App, AppSettings, Arg, ArgMatches,
-        SubCommand,
+        crate_description, crate_name, value_t_or_exit, values_t_or_exit, App, AppSettings, Arg,
+        ArgMatches, SubCommand,
     },
     memmap2::Mmap,
     rayon::prelude::*,
@@ -30,6 +30,7 @@ use {
 };
 
 const CMD_INSPECT: &str = "inspect";
+const CMD_SEARCH: &str = "search";
 const CMD_DIFF: &str = "diff";
 const CMD_DIFF_FILES: &str = "files";
 const CMD_DIFF_DIRS: &str = "directories";
@@ -64,6 +65,25 @@ fn main() {
                         .takes_value(true)
                         .value_name("PATH")
                         .help("Accounts hash cache file to inspect"),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name(CMD_SEARCH)
+                .about("Search for accounts hash cache entries")
+                .arg(
+                    Arg::with_name("path")
+                        .index(1)
+                        .takes_value(true)
+                        .value_name("PATH")
+                        .help("Accounts hash cache directory to search"),
+                )
+                .arg(
+                    Arg::with_name("addresses")
+                    .index(2)
+                    .takes_value(true)
+                    .value_name("PUBKEYS")
+                    .value_delimiter(",")
+                    .help("Search for the entries of one or more pubkeys, delimited by commas"),
                 ),
         )
         .subcommand(
@@ -176,6 +196,7 @@ fn main() {
     let subcommand_str = subcommand.0;
     match subcommand {
         (CMD_INSPECT, Some(subcommand_matches)) => cmd_inspect(&matches, subcommand_matches),
+        (CMD_SEARCH, Some(subcommand_matches)) => cmd_search(&matches, subcommand_matches),
         (CMD_DIFF, Some(subcommand_matches)) => {
             let diff_subcommand = subcommand_matches.subcommand();
             match diff_subcommand {
@@ -206,6 +227,16 @@ fn cmd_inspect(
     let force = subcommand_matches.is_present("force");
     let path = value_t_or_exit!(subcommand_matches, "path", String);
     do_inspect(path, force)
+}
+
+fn cmd_search(
+    _app_matches: &ArgMatches<'_>,
+    subcommand_matches: &ArgMatches<'_>,
+) -> Result<(), String> {
+    let path = value_t_or_exit!(subcommand_matches, "path", String);
+    let addresses = values_t_or_exit!(subcommand_matches, "addresses", Pubkey);
+    let addresses = HashSet::from_iter(addresses);
+    do_search(path, addresses)
 }
 
 fn cmd_diff_files(
@@ -271,6 +302,41 @@ fn do_inspect(file: impl AsRef<Path>, force: bool) -> Result<(), String> {
     })?;
 
     println!("actual entries: {count}, expected: {}", header.count);
+    Ok(())
+}
+
+fn do_search(dir: impl AsRef<Path>, addresses: HashSet<Pubkey>) -> Result<(), String> {
+    let _timer = ElapsedOnDrop::new(format!("searching '{}' took ", dir.as_ref().display()));
+    let files = get_cache_files_in(&dir).map_err(|err| {
+        format!(
+            "failed to get cache files in dir '{}': {err}",
+            dir.as_ref().display(),
+        )
+    })?;
+
+    files.par_iter().for_each(|file| {
+        let Ok((mmap, _header)) = mmap_file(&file.path, false)
+            .inspect_err(|err| eprintln!("failed to mmap file '{}': {err}", file.path.display()))
+        else {
+            return;
+        };
+        let file_name = Path::new(file.path.file_name().expect("path is a file"));
+        let mut count = Saturating(0);
+        scan_mmap(&mmap, |entry| {
+            if addresses.contains(&entry.pubkey) {
+                println!(
+                    "pubkey: {:44}, hash: {:44}, lamports: {}, file: {}, index: {}",
+                    entry.pubkey.to_string(),
+                    entry.hash.0.to_string(),
+                    entry.lamports,
+                    file_name.display(),
+                    count,
+                );
+            }
+            count += 1;
+        });
+    });
+
     Ok(())
 }
 
