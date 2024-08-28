@@ -230,6 +230,8 @@ pub(crate) enum BlockhashStatus {
     Uninitialized,
     /// Non voting validator
     NonVoting,
+    /// Hot spare validator
+    HotSpare,
     /// Successfully generated vote tx with blockhash
     Blockhash(Hash),
 }
@@ -573,6 +575,10 @@ impl Tower {
 
     pub(crate) fn mark_last_vote_tx_blockhash_non_voting(&mut self) {
         self.last_vote_tx_blockhash = BlockhashStatus::NonVoting;
+    }
+
+    pub(crate) fn mark_last_vote_tx_blockhash_hot_spare(&mut self) {
+        self.last_vote_tx_blockhash = BlockhashStatus::HotSpare;
     }
 
     pub fn last_voted_slot_in_bank(bank: &Bank, vote_account_pubkey: &Pubkey) -> Option<Slot> {

@@ -129,7 +129,11 @@ enum ForkReplayMode {
 
 enum GenerateVoteTxResult {
     // non voting validator, not eligible for refresh
+    // until authorized keypair is overriden
     NonVoting,
+    // hot spare validator, not eligble for refresh
+    // until set identity is invoked
+    HotSpare,
     // failed generation, eligible for refresh
     Failed,
     Tx(Transaction),
@@ -138,6 +142,10 @@ enum GenerateVoteTxResult {
 impl GenerateVoteTxResult {
     fn is_non_voting(&self) -> bool {
         matches!(self, Self::NonVoting)
+    }
+
+    fn is_hot_spare(&self) -> bool {
+        matches!(self, Self::HotSpare)
     }
 }
 
@@ -2491,7 +2499,7 @@ impl ReplayStage {
                 vote_state.node_pubkey,
                 node_keypair.pubkey()
             );
-            return GenerateVoteTxResult::Failed;
+            return GenerateVoteTxResult::HotSpare;
         }
 
         let Some(authorized_voter_pubkey) = vote_state.get_authorized_voter(bank.epoch()) else {
@@ -2586,9 +2594,9 @@ impl ReplayStage {
         // If we are a non voting validator or have an incorrect setup preventing us from
         // generating vote txs, no need to refresh
         let last_vote_tx_blockhash = match tower.last_vote_tx_blockhash() {
-            // Since the checks in vote generation are deterministic, if we were non voting
+            // Since the checks in vote generation are deterministic, if we were non voting or hot spare
             // on the original vote, the refresh will also fail. No reason to refresh.
-            BlockhashStatus::NonVoting => return,
+            BlockhashStatus::NonVoting | BlockhashStatus::HotSpare => return,
             // In this case we have not voted since restart, it is unclear if we are non voting.
             // Attempt to refresh.
             BlockhashStatus::Uninitialized => None,
@@ -2651,6 +2659,8 @@ impl ReplayStage {
             last_vote_refresh_time.last_refresh_time = Instant::now();
         } else if vote_tx_result.is_non_voting() {
             tower.mark_last_vote_tx_blockhash_non_voting();
+        } else if vote_tx_result.is_hot_spare() {
+            tower.mark_last_vote_tx_blockhash_hot_spare();
         }
     }
 
