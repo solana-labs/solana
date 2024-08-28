@@ -15,7 +15,8 @@ use {
         collections::{hash_map::Entry, HashMap},
         fmt,
         iter::FromIterator,
-        mem,
+        mem::{self, MaybeUninit},
+        ptr::addr_of_mut,
         sync::{Arc, OnceLock},
     },
     thiserror::Error,
@@ -311,21 +312,51 @@ impl From<VoteAccount> for AccountSharedData {
 impl TryFrom<AccountSharedData> for VoteAccount {
     type Error = Error;
     fn try_from(account: AccountSharedData) -> Result<Self, Self::Error> {
-        let vote_account = VoteAccountInner::try_from(account)?;
-        Ok(Self(Arc::new(vote_account)))
-    }
-}
-
-impl TryFrom<AccountSharedData> for VoteAccountInner {
-    type Error = Error;
-    fn try_from(account: AccountSharedData) -> Result<Self, Self::Error> {
         if !solana_sdk::vote::program::check_id(account.owner()) {
             return Err(Error::InvalidOwner(*account.owner()));
         }
-        Ok(Self {
-            vote_state: VoteState::deserialize(account.data()).map_err(Error::InstructionError)?,
-            account,
-        })
+
+        // Allocate as Arc<MaybeUninit<VoteAccountInner>> so we can initialize in place.
+        let mut inner = Arc::new(MaybeUninit::<VoteAccountInner>::uninit());
+        let inner_ptr = Arc::get_mut(&mut inner)
+            .expect("we're the only ref")
+            .as_mut_ptr();
+
+        // Safety:
+        // - All the addr_of_mut!(...).write(...) calls are valid since we just allocated and so
+        // the field pointers are valid.
+        // - We use write() so that the old values aren't dropped since they're still
+        // uninitialized.
+        unsafe {
+            let vote_state = addr_of_mut!((*inner_ptr).vote_state);
+            // Safety:
+            // - vote_state is non-null and MaybeUninit<VoteState> is guaranteed to have same layout
+            // and alignment as VoteState.
+            // - Here it is safe to create a reference to MaybeUninit<VoteState> since the value is
+            // aligned and MaybeUninit<T> is valid for all possible bit values.
+            let vote_state = &mut *(vote_state as *mut MaybeUninit<VoteState>);
+
+            // Try to deserialize in place
+            if let Err(e) = VoteState::deserialize_into_uninit(account.data(), vote_state) {
+                // Safety:
+                // - Deserialization failed so at this point vote_state is uninitialized and must
+                // not be dropped. We're ok since `vote_state` is a subfield of `inner`  which is
+                // still MaybeUninit - which isn't dropped by definition - and so neither are its
+                // subfields.
+                return Err(e.into());
+            }
+
+            // Write the account field which completes the initialization of VoteAccountInner.
+            addr_of_mut!((*inner_ptr).account).write(account);
+
+            // Safety:
+            // - At this point both `inner.vote_state` and `inner.account`` are initialized, so it's safe to
+            // transmute the MaybeUninit<VoteAccountInner> to VoteAccountInner.
+            Ok(VoteAccount(mem::transmute::<
+                Arc<MaybeUninit<VoteAccountInner>>,
+                Arc<VoteAccountInner>,
+            >(inner)))
+        }
     }
 }
 
@@ -442,6 +473,7 @@ mod tests {
         bincode::Options,
         rand::Rng,
         solana_sdk::{
+            account::WritableAccount,
             pubkey::Pubkey,
             sysvar::clock::Clock,
             vote::state::{VoteInit, VoteStateVersions},
@@ -508,13 +540,31 @@ mod tests {
     }
 
     #[test]
-    fn test_vote_account() {
+    fn test_vote_account_try_from() {
         let mut rng = rand::thread_rng();
         let (account, vote_state) = new_rand_vote_account(&mut rng, None);
         let lamports = account.lamports();
-        let vote_account = VoteAccount::try_from(account).unwrap();
+        let vote_account = VoteAccount::try_from(account.clone()).unwrap();
         assert_eq!(lamports, vote_account.lamports());
         assert_eq!(vote_state, *vote_account.vote_state());
+        assert_eq!(&account, vote_account.account());
+    }
+
+    #[test]
+    #[should_panic(expected = "InvalidOwner")]
+    fn test_vote_account_try_from_invalid_owner() {
+        let mut rng = rand::thread_rng();
+        let (mut account, _) = new_rand_vote_account(&mut rng, None);
+        account.set_owner(Pubkey::new_unique());
+        VoteAccount::try_from(account).unwrap();
+    }
+
+    #[test]
+    #[should_panic(expected = "InvalidAccountData")]
+    fn test_vote_account_try_from_invalid_account() {
+        let mut account = AccountSharedData::default();
+        account.set_owner(solana_sdk::vote::program::id());
+        VoteAccount::try_from(account).unwrap();
     }
 
     #[test]
