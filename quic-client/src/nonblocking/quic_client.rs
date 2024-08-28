@@ -274,7 +274,6 @@ impl QuicClient {
         let mut send_stream = connection.open_uni().await?;
 
         send_stream.write_all(data).await?;
-        send_stream.finish().await?;
         Ok(())
     }
 
