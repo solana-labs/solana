@@ -1187,14 +1187,11 @@ pub fn main() {
             TestPartitionedEpochRewards::None
         };
 
-    accounts_index_config.index_limit_mb =
-        if let Ok(limit) = value_t!(matches, "accounts_index_memory_limit_mb", usize) {
-            IndexLimitMb::Limit(limit)
-        } else if matches.is_present("disable_accounts_disk_index") {
-            IndexLimitMb::InMemOnly
-        } else {
-            IndexLimitMb::Unspecified
-        };
+    accounts_index_config.index_limit_mb = if matches.is_present("disable_accounts_disk_index") {
+        IndexLimitMb::InMemOnly
+    } else {
+        IndexLimitMb::Unlimited
+    };
 
     {
         let mut accounts_index_paths: Vec<PathBuf> = if matches.is_present("accounts_index_path") {

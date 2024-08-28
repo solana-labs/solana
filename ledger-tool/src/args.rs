@@ -59,22 +59,12 @@ pub fn accounts_db_args<'a, 'b>() -> Box<[Arg<'a, 'b>]> {
             .validator(is_pow2)
             .takes_value(true)
             .help("Number of bins to divide the accounts index into"),
-        Arg::with_name("accounts_index_memory_limit_mb")
-            .long("accounts-index-memory-limit-mb")
-            .value_name("MEGABYTES")
-            .validator(is_parsable::<usize>)
-            .takes_value(true)
-            .help(
-                "How much memory the accounts index can consume. If this is exceeded, some \
-                 account index entries will be stored on disk.",
-            ),
         Arg::with_name("disable_accounts_disk_index")
             .long("disable-accounts-disk-index")
             .help(
                 "Disable the disk-based accounts index. It is enabled by default. The entire \
                  accounts index will be kept in memory.",
-            )
-            .conflicts_with("accounts_index_memory_limit_mb"),
+            ),
         Arg::with_name("accounts_db_skip_shrink")
             .long("accounts-db-skip-shrink")
             .help(
@@ -241,14 +231,11 @@ pub fn get_accounts_db_config(
     let ledger_tool_ledger_path = ledger_path.join(LEDGER_TOOL_DIRECTORY);
 
     let accounts_index_bins = value_t!(arg_matches, "accounts_index_bins", usize).ok();
-    let accounts_index_index_limit_mb =
-        if let Ok(limit) = value_t!(arg_matches, "accounts_index_memory_limit_mb", usize) {
-            IndexLimitMb::Limit(limit)
-        } else if arg_matches.is_present("disable_accounts_disk_index") {
-            IndexLimitMb::InMemOnly
-        } else {
-            IndexLimitMb::Unspecified
-        };
+    let accounts_index_index_limit_mb = if arg_matches.is_present("disable_accounts_disk_index") {
+        IndexLimitMb::InMemOnly
+    } else {
+        IndexLimitMb::Unlimited
+    };
     let accounts_index_drives = values_t!(arg_matches, "accounts_index_path", String)
         .ok()
         .map(|drives| drives.into_iter().map(PathBuf::from).collect())

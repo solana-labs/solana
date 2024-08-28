@@ -1401,17 +1401,6 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 ),
         )
         .arg(
-            Arg::with_name("accounts_index_memory_limit_mb")
-                .long("accounts-index-memory-limit-mb")
-                .value_name("MEGABYTES")
-                .validator(is_parsable::<usize>)
-                .takes_value(true)
-                .help(
-                    "How much memory the accounts index can consume. If this is exceeded, some \
-                     account index entries will be stored on disk.",
-                ),
-        )
-        .arg(
             Arg::with_name("accounts_index_bins")
                 .long("accounts-index-bins")
                 .value_name("BINS")
@@ -2009,6 +1998,18 @@ fn deprecated_arguments() -> Vec<DeprecatedArg> {
                 Ok(())
             }
         }));
+    // deprecated in v2.1 by PR #2721
+    add_arg!(Arg::with_name("accounts_index_memory_limit_mb")
+        .long("accounts-index-memory-limit-mb")
+        .value_name("MEGABYTES")
+        .validator(is_parsable::<usize>)
+        .takes_value(true)
+        .help(
+            "How much memory the accounts index can consume. If this is exceeded, some \
+         account index entries will be stored on disk.",
+        ),
+        usage_warning: "index memory limit has been deprecated. The limit arg has no effect now.",
+    );
     add_arg!(Arg::with_name("accountsdb_repl_bind_address")
         .long("accountsdb-repl-bind-address")
         .value_name("HOST")

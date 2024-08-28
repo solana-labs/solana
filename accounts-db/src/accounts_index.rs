@@ -50,7 +50,7 @@ pub const ACCOUNTS_INDEX_CONFIG_FOR_TESTING: AccountsIndexConfig = AccountsIndex
     bins: Some(BINS_FOR_TESTING),
     flush_threads: Some(FLUSH_THREADS_TESTING),
     drives: None,
-    index_limit_mb: IndexLimitMb::Unspecified,
+    index_limit_mb: IndexLimitMb::Unlimited,
     ages_to_stay_in_cache: None,
     scan_results_limit_bytes: None,
     started_from_validator: false,
@@ -59,7 +59,7 @@ pub const ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS: AccountsIndexConfig = AccountsIn
     bins: Some(BINS_FOR_BENCHMARKS),
     flush_threads: Some(FLUSH_THREADS_TESTING),
     drives: None,
-    index_limit_mb: IndexLimitMb::Unspecified,
+    index_limit_mb: IndexLimitMb::Unlimited,
     ages_to_stay_in_cache: None,
     scan_results_limit_bytes: None,
     started_from_validator: false,
@@ -189,20 +189,14 @@ pub struct AccountSecondaryIndexesIncludeExclude {
 }
 
 /// specification of how much memory in-mem portion of account index can use
-#[derive(Debug, Clone)]
+#[derive(Debug, Copy, Clone, Default)]
 pub enum IndexLimitMb {
-    /// nothing explicit specified, so default
-    Unspecified,
-    /// limit was specified, use disk index for rest
-    Limit(usize),
+    /// use disk index while allowing to use as much memory as available for
+    /// in-memory index.
+    #[default]
+    Unlimited,
     /// in-mem-only was specified, no disk index
     InMemOnly,
-}
-
-impl Default for IndexLimitMb {
-    fn default() -> Self {
-        Self::Unspecified
-    }
 }
 
 #[derive(Debug, Default, Clone)]
@@ -2487,7 +2481,7 @@ pub mod tests {
 
         let mut config = ACCOUNTS_INDEX_CONFIG_FOR_TESTING;
         config.index_limit_mb = if use_disk {
-            IndexLimitMb::Limit(10_000)
+            IndexLimitMb::Unlimited
         } else {
             IndexLimitMb::InMemOnly // in-mem only
         };
