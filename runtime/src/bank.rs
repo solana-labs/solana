@@ -3806,9 +3806,10 @@ impl Bank {
                 &durable_nonce,
                 lamports_per_signature,
             );
-            self.rc
-                .accounts
-                .store_cached((self.slot(), accounts_to_store.as_slice()), &transactions);
+            self.rc.accounts.store_cached(
+                (self.slot(), accounts_to_store.as_slice()),
+                transactions.as_deref(),
+            );
         });
 
         self.collect_rent(&processing_results);

@@ -90,6 +90,7 @@ use {
         hash::Hash,
         pubkey::Pubkey,
         rent_collector::RentCollector,
+        saturating_add_assign,
         timing::AtomicInterval,
         transaction::SanitizedTransaction,
     },
@@ -6817,27 +6818,20 @@ impl AccountsDb {
         &self,
         slot: Slot,
         accounts_and_meta_to_store: &impl StorableAccounts<'b>,
-        txn_iter: Box<dyn std::iter::Iterator<Item = &Option<&SanitizedTransaction>> + 'a>,
+        txs: Option<&[&SanitizedTransaction]>,
     ) -> Vec<AccountInfo> {
-        let mut write_version_producer: Box<dyn Iterator<Item = u64>> =
-            if self.accounts_update_notifier.is_some() {
-                let mut current_version = self
-                    .write_version
-                    .fetch_add(accounts_and_meta_to_store.len() as u64, Ordering::AcqRel);
-                Box::new(std::iter::from_fn(move || {
-                    let ret = current_version;
-                    current_version += 1;
-                    Some(ret)
-                }))
-            } else {
-                Box::new(std::iter::empty())
-            };
+        let mut current_write_version = if self.accounts_update_notifier.is_some() {
+            self.write_version
+                .fetch_add(accounts_and_meta_to_store.len() as u64, Ordering::AcqRel)
+        } else {
+            0
+        };
 
-        let (account_infos, cached_accounts) = txn_iter
-            .enumerate()
-            .map(|(i, txn)| {
+        let (account_infos, cached_accounts) = (0..accounts_and_meta_to_store.len())
+            .map(|index| {
+                let txn = txs.map(|txs| *txs.get(index).expect("txs must be present if provided"));
                 let mut account_info = AccountInfo::default();
-                accounts_and_meta_to_store.account_default_if_zero_lamport(i, |account| {
+                accounts_and_meta_to_store.account_default_if_zero_lamport(index, |account| {
                     let account_shared_data = account.to_account_shared_data();
                     let pubkey = account.pubkey();
                     account_info = AccountInfo::new(StorageLocation::Cached, account.lamports());
@@ -6845,10 +6839,11 @@ impl AccountsDb {
                     self.notify_account_at_accounts_update(
                         slot,
                         &account_shared_data,
-                        txn,
+                        &txn,
                         pubkey,
-                        &mut write_version_producer,
+                        current_write_version,
                     );
+                    saturating_add_assign!(current_write_version, 1);
 
                     let cached_account =
                         self.accounts_cache.store(slot, pubkey, account_shared_data);
@@ -6872,7 +6867,7 @@ impl AccountsDb {
         &self,
         accounts: &'c impl StorableAccounts<'b>,
         store_to: &StoreTo,
-        transactions: Option<&[Option<&'a SanitizedTransaction>]>,
+        transactions: Option<&'a [&'a SanitizedTransaction]>,
     ) -> Vec<AccountInfo> {
         let mut calc_stored_meta_time = Measure::start("calc_stored_meta");
         let slot = accounts.target_slot();
@@ -6895,18 +6890,7 @@ impl AccountsDb {
             .fetch_add(calc_stored_meta_time.as_us(), Ordering::Relaxed);
 
         match store_to {
-            StoreTo::Cache => {
-                let txn_iter: Box<dyn std::iter::Iterator<Item = &Option<&SanitizedTransaction>>> =
-                    match transactions {
-                        Some(transactions) => {
-                            assert_eq!(transactions.len(), accounts.len());
-                            Box::new(transactions.iter())
-                        }
-                        None => Box::new(std::iter::repeat(&None).take(accounts.len())),
-                    };
-
-                self.write_accounts_to_cache(slot, accounts, txn_iter)
-            }
+            StoreTo::Cache => self.write_accounts_to_cache(slot, accounts, transactions),
             StoreTo::Storage(storage) => self.write_accounts_to_storage(slot, storage, accounts),
         }
     }
@@ -8292,7 +8276,7 @@ impl AccountsDb {
     pub fn store_cached<'a>(
         &self,
         accounts: impl StorableAccounts<'a>,
-        transactions: Option<&'a [Option<&'a SanitizedTransaction>]>,
+        transactions: Option<&'a [&'a SanitizedTransaction]>,
     ) {
         self.store(
             accounts,
@@ -8306,7 +8290,7 @@ impl AccountsDb {
     pub(crate) fn store_cached_inline_update_index<'a>(
         &self,
         accounts: impl StorableAccounts<'a>,
-        transactions: Option<&'a [Option<&'a SanitizedTransaction>]>,
+        transactions: Option<&'a [&'a SanitizedTransaction]>,
     ) {
         self.store(
             accounts,
@@ -8334,7 +8318,7 @@ impl AccountsDb {
         &self,
         accounts: impl StorableAccounts<'a>,
         store_to: &StoreTo,
-        transactions: Option<&'a [Option<&'a SanitizedTransaction>]>,
+        transactions: Option<&'a [&'a SanitizedTransaction]>,
         reclaim: StoreReclaims,
         update_index_thread_selection: UpdateIndexThreadSelection,
     ) {
@@ -8523,7 +8507,7 @@ impl AccountsDb {
         &self,
         accounts: impl StorableAccounts<'a>,
         store_to: &StoreTo,
-        transactions: Option<&'a [Option<&'a SanitizedTransaction>]>,
+        transactions: Option<&'a [&'a SanitizedTransaction]>,
         reclaim: StoreReclaims,
         update_index_thread_selection: UpdateIndexThreadSelection,
     ) {
@@ -8569,7 +8553,7 @@ impl AccountsDb {
         accounts: impl StorableAccounts<'a>,
         store_to: &StoreTo,
         reset_accounts: bool,
-        transactions: Option<&[Option<&SanitizedTransaction>]>,
+        transactions: Option<&'a [&'a SanitizedTransaction]>,
         reclaim: StoreReclaims,
         update_index_thread_selection: UpdateIndexThreadSelection,
     ) -> StoreAccountsTiming {

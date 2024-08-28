@@ -45,7 +45,7 @@ pub fn collect_accounts_to_store<'a, T: SVMMessage>(
     processing_results: &'a mut [TransactionProcessingResult],
     durable_nonce: &DurableNonce,
     lamports_per_signature: u64,
-) -> (Vec<(&'a Pubkey, &'a AccountSharedData)>, Vec<Option<&'a T>>) {
+) -> (Vec<(&'a Pubkey, &'a AccountSharedData)>, Option<Vec<&'a T>>) {
     let collect_capacity = max_number_of_accounts_to_collect(txs, processing_results);
     let mut accounts = Vec::with_capacity(collect_capacity);
     let mut transactions = Vec::with_capacity(collect_capacity);
@@ -87,12 +87,12 @@ pub fn collect_accounts_to_store<'a, T: SVMMessage>(
             }
         }
     }
-    (accounts, transactions)
+    (accounts, Some(transactions))
 }
 
 fn collect_accounts_for_successful_tx<'a, T: SVMMessage>(
     collected_accounts: &mut Vec<(&'a Pubkey, &'a AccountSharedData)>,
-    collected_account_transactions: &mut Vec<Option<&'a T>>,
+    collected_account_transactions: &mut Vec<&'a T>,
     transaction: &'a T,
     transaction_accounts: &'a [TransactionAccount],
 ) {
@@ -109,13 +109,13 @@ fn collect_accounts_for_successful_tx<'a, T: SVMMessage>(
         })
     {
         collected_accounts.push((address, account));
-        collected_account_transactions.push(Some(transaction));
+        collected_account_transactions.push(transaction);
     }
 }
 
 fn collect_accounts_for_failed_tx<'a, T: SVMMessage>(
     collected_accounts: &mut Vec<(&'a Pubkey, &'a AccountSharedData)>,
-    collected_account_transactions: &mut Vec<Option<&'a T>>,
+    collected_account_transactions: &mut Vec<&'a T>,
     transaction: &'a T,
     rollback_accounts: &'a mut RollbackAccounts,
     durable_nonce: &DurableNonce,
@@ -125,7 +125,7 @@ fn collect_accounts_for_failed_tx<'a, T: SVMMessage>(
     match rollback_accounts {
         RollbackAccounts::FeePayerOnly { fee_payer_account } => {
             collected_accounts.push((fee_payer_address, &*fee_payer_account));
-            collected_account_transactions.push(Some(transaction));
+            collected_account_transactions.push(transaction);
         }
         RollbackAccounts::SameNonceAndFeePayer { nonce } => {
             // Since we know we are dealing with a valid nonce account,
@@ -134,14 +134,14 @@ fn collect_accounts_for_failed_tx<'a, T: SVMMessage>(
                 .try_advance_nonce(*durable_nonce, lamports_per_signature)
                 .unwrap();
             collected_accounts.push((nonce.address(), nonce.account()));
-            collected_account_transactions.push(Some(transaction));
+            collected_account_transactions.push(transaction);
         }
         RollbackAccounts::SeparateNonceAndFeePayer {
             nonce,
             fee_payer_account,
         } => {
             collected_accounts.push((fee_payer_address, &*fee_payer_account));
-            collected_account_transactions.push(Some(transaction));
+            collected_account_transactions.push(transaction);
 
             // Since we know we are dealing with a valid nonce account,
             // unwrap is safe here
@@ -149,7 +149,7 @@ fn collect_accounts_for_failed_tx<'a, T: SVMMessage>(
                 .try_advance_nonce(*durable_nonce, lamports_per_signature)
                 .unwrap();
             collected_accounts.push((nonce.address(), nonce.account()));
-            collected_account_transactions.push(Some(transaction));
+            collected_account_transactions.push(transaction);
         }
     }
 }
@@ -294,9 +294,10 @@ mod tests {
             .iter()
             .any(|(pubkey, _account)| *pubkey == &keypair1.pubkey()));
 
+        let transactions = transactions.unwrap();
         assert_eq!(transactions.len(), 2);
-        assert!(transactions.iter().any(|txn| txn.unwrap().eq(&tx0)));
-        assert!(transactions.iter().any(|txn| txn.unwrap().eq(&tx1)));
+        assert!(transactions.iter().any(|txn| (*txn).eq(&tx0)));
+        assert!(transactions.iter().any(|txn| (*txn).eq(&tx1)));
     }
 
     #[test]

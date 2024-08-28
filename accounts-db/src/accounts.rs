@@ -588,10 +588,10 @@ impl Accounts {
     pub fn store_cached<'a>(
         &self,
         accounts: impl StorableAccounts<'a>,
-        transactions: &'a [Option<&'a SanitizedTransaction>],
+        transactions: Option<&'a [&'a SanitizedTransaction]>,
     ) {
         self.accounts_db
-            .store_cached_inline_update_index(accounts, Some(transactions));
+            .store_cached_inline_update_index(accounts, transactions);
     }
 
     pub fn store_accounts_cached<'a>(&self, accounts: impl StorableAccounts<'a>) {
