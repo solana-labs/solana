@@ -1895,7 +1895,7 @@ impl ClusterInfo {
                         Some(ref bank_forks) => {
                             let root_bank = bank_forks.read().unwrap().root_bank();
                             (
-                                root_bank.staked_nodes(),
+                                root_bank.current_epoch_staked_nodes(),
                                 Some(root_bank.feature_set.clone()),
                             )
                         }
@@ -2704,7 +2704,7 @@ impl ClusterInfo {
             Some(bank_forks) => {
                 let bank = bank_forks.read().unwrap().root_bank();
                 let feature_set = bank.feature_set.clone();
-                (Some(feature_set), bank.staked_nodes())
+                (Some(feature_set), bank.current_epoch_staked_nodes())
             }
         };
         self.process_packets(

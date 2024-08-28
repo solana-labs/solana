@@ -724,7 +724,7 @@ async fn prune_connection_cache(
     debug_assert!(prune_cache_pending.load(Ordering::Relaxed));
     let staked_nodes = {
         let root_bank = bank_forks.read().unwrap().root_bank();
-        root_bank.staked_nodes()
+        root_bank.current_epoch_staked_nodes()
     };
     {
         let mut cache = cache.lock().await;

@@ -99,7 +99,7 @@ mod tests {
         let bank = Bank::new_for_tests(&genesis_config);
 
         let pubkeys_and_stakes: Vec<_> = bank
-            .staked_nodes()
+            .current_epoch_staked_nodes()
             .iter()
             .map(|(pubkey, stake)| (*pubkey, *stake))
             .collect();

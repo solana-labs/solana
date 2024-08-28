@@ -132,7 +132,7 @@ pub(crate) fn weighted_random_order_by_stake<'a>(
     pubkeys: impl Iterator<Item = &'a Pubkey>,
 ) -> impl Iterator<Item = Pubkey> + 'static {
     // Efraimidis and Spirakis algo for weighted random sample without replacement
-    let staked_nodes = bank.staked_nodes();
+    let staked_nodes = bank.current_epoch_staked_nodes();
     let mut pubkey_with_weight: Vec<(f64, Pubkey)> = pubkeys
         .filter_map(|&pubkey| {
             let stake = staked_nodes.get(&pubkey).copied().unwrap_or(0);
@@ -420,6 +420,7 @@ mod tests {
         solana_perf::packet::{Packet, PacketBatch, PacketFlags},
         solana_runtime::{
             bank::Bank,
+            epoch_stakes::EpochStakes,
             genesis_utils::{self, ValidatorVoteKeypairs},
         },
         solana_sdk::{hash::Hash, signature::Signer, system_transaction::transfer},
@@ -845,7 +846,12 @@ mod tests {
     #[test]
     fn test_forwardable_packets() {
         let latest_unprocessed_votes = LatestUnprocessedVotes::new();
-        let bank = Arc::new(Bank::default_for_tests());
+        let mut bank = Bank::default_for_tests();
+        bank.set_epoch_stakes_for_test(
+            bank.epoch().saturating_add(1),
+            EpochStakes::new_for_tests(HashMap::new(), bank.epoch().saturating_add(1)),
+        );
+        let bank = Arc::new(bank);
         let mut forward_packet_batches_by_accounts =
             ForwardPacketBatchesByAccounts::new_with_default_batch_limits();
 
