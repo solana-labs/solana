@@ -137,6 +137,7 @@ pub struct AddressTableLookupIterator<'a> {
 impl<'a> Iterator for AddressTableLookupIterator<'a> {
     type Item = SVMMessageAddressTableLookup<'a>;
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         if self.index < self.num_address_table_lookups {
             self.index = self.index.wrapping_add(1);

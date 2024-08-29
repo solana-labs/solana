@@ -81,6 +81,7 @@ pub struct InstructionsIterator<'a> {
 impl<'a> Iterator for InstructionsIterator<'a> {
     type Item = SVMInstruction<'a>;
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         if self.index < self.num_instructions {
             self.index = self.index.wrapping_add(1);

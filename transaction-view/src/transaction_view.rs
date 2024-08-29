@@ -51,56 +51,67 @@ impl<D: TransactionData> TransactionView<true, D> {
 
 impl<const SANITIZED: bool, D: TransactionData> TransactionView<SANITIZED, D> {
     /// Return the number of signatures in the transaction.
+    #[inline]
     pub fn num_signatures(&self) -> u8 {
         self.meta.num_signatures()
     }
 
     /// Return the version of the transaction.
+    #[inline]
     pub fn version(&self) -> TransactionVersion {
         self.meta.version()
     }
 
     /// Return the number of required signatures in the transaction.
+    #[inline]
     pub fn num_required_signatures(&self) -> u8 {
         self.meta.num_required_signatures()
     }
 
     /// Return the number of readonly signed accounts in the transaction.
+    #[inline]
     pub fn num_readonly_signed_accounts(&self) -> u8 {
         self.meta.num_readonly_signed_accounts()
     }
 
     /// Return the number of readonly unsigned accounts in the transaction.
+    #[inline]
     pub fn num_readonly_unsigned_accounts(&self) -> u8 {
         self.meta.num_readonly_unsigned_accounts()
     }
 
     /// Return the number of static account keys in the transaction.
+    #[inline]
     pub fn num_static_account_keys(&self) -> u8 {
         self.meta.num_static_account_keys()
     }
 
     /// Return the number of instructions in the transaction.
+    #[inline]
     pub fn num_instructions(&self) -> u16 {
         self.meta.num_instructions()
     }
 
     /// Return the number of address table lookups in the transaction.
+    #[inline]
     pub fn num_address_table_lookups(&self) -> u8 {
         self.meta.num_address_table_lookups()
     }
 
     /// Return the number of writable lookup accounts in the transaction.
+    #[inline]
     pub fn total_writable_lookup_accounts(&self) -> u16 {
         self.meta.total_writable_lookup_accounts()
     }
 
     /// Return the number of readonly lookup accounts in the transaction.
+    #[inline]
     pub fn total_readonly_lookup_accounts(&self) -> u16 {
         self.meta.total_readonly_lookup_accounts()
     }
 
     /// Return the slice of signatures in the transaction.
+    #[inline]
     pub fn signatures(&self) -> &[Signature] {
         let data = self.data();
         // SAFETY: `meta` was created from `data`.
@@ -108,6 +119,7 @@ impl<const SANITIZED: bool, D: TransactionData> TransactionView<SANITIZED, D> {
     }
 
     /// Return the slice of static account keys in the transaction.
+    #[inline]
     pub fn static_account_keys(&self) -> &[Pubkey] {
         let data = self.data();
         // SAFETY: `meta` was created from `data`.
@@ -115,6 +127,7 @@ impl<const SANITIZED: bool, D: TransactionData> TransactionView<SANITIZED, D> {
     }
 
     /// Return the recent blockhash in the transaction.
+    #[inline]
     pub fn recent_blockhash(&self) -> &Hash {
         let data = self.data();
         // SAFETY: `meta` was created from `data`.
@@ -122,6 +135,7 @@ impl<const SANITIZED: bool, D: TransactionData> TransactionView<SANITIZED, D> {
     }
 
     /// Return an iterator over the instructions in the transaction.
+    #[inline]
     pub fn instructions_iter(&self) -> InstructionsIterator {
         let data = self.data();
         // SAFETY: `meta` was created from `data`.
@@ -129,6 +143,7 @@ impl<const SANITIZED: bool, D: TransactionData> TransactionView<SANITIZED, D> {
     }
 
     /// Return an iterator over the address table lookups in the transaction.
+    #[inline]
     pub fn address_table_lookup_iter(&self) -> AddressTableLookupIterator {
         let data = self.data();
         // SAFETY: `meta` was created from `data`.
@@ -143,6 +158,7 @@ impl<const SANITIZED: bool, D: TransactionData> TransactionView<SANITIZED, D> {
 
     /// Return the serialized **message** data.
     /// This does not include the signatures.
+    #[inline]
     pub fn message_data(&self) -> &[u8] {
         &self.data()[usize::from(self.meta.message_offset())..]
     }
