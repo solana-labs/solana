@@ -193,12 +193,14 @@ fn main() {
         .get_matches();
 
     let subcommand = matches.subcommand();
-    let subcommand_str = subcommand.0;
+    let mut command_str = subcommand.0.to_string();
     match subcommand {
         (CMD_INSPECT, Some(subcommand_matches)) => cmd_inspect(&matches, subcommand_matches),
         (CMD_SEARCH, Some(subcommand_matches)) => cmd_search(&matches, subcommand_matches),
         (CMD_DIFF, Some(subcommand_matches)) => {
             let diff_subcommand = subcommand_matches.subcommand();
+            command_str += " ";
+            command_str += diff_subcommand.0;
             match diff_subcommand {
                 (CMD_DIFF_FILES, Some(diff_subcommand_matches)) => {
                     cmd_diff_files(&matches, diff_subcommand_matches)
@@ -215,7 +217,7 @@ fn main() {
         _ => unreachable!(),
     }
     .unwrap_or_else(|err| {
-        eprintln!("Error: '{subcommand_str}' failed: {err}");
+        eprintln!("Error: '{command_str}' failed: {err}");
         std::process::exit(1);
     });
 }
