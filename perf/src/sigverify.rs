@@ -11,7 +11,6 @@ use {
         recycler::Recycler,
     },
     rayon::{prelude::*, ThreadPool},
-    solana_metrics::inc_new_counter_debug,
     solana_rayon_threadlimit::get_thread_count,
     solana_sdk::{
         hash::Hash,
@@ -531,7 +530,6 @@ pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, pa
                 }
             });
     });
-    inc_new_counter_debug!("ed25519_verify_cpu", packet_count);
 }
 
 pub fn ed25519_verify_disabled(batches: &mut [PacketBatch]) {
@@ -542,7 +540,6 @@ pub fn ed25519_verify_disabled(batches: &mut [PacketBatch]) {
             .par_iter_mut()
             .for_each(|p| p.meta_mut().set_discard(false))
     });
-    inc_new_counter_debug!("ed25519_verify_disabled", packet_count);
 }
 
 pub fn copy_return_values<I, T>(sig_lens: I, out: &PinnedVec<u8>, rvs: &mut [Vec<u8>])
@@ -672,7 +669,6 @@ pub fn ed25519_verify(
     trace!("done verify");
     copy_return_values(sig_lens, &out, &mut rvs);
     mark_disabled(batches, &rvs);
-    inc_new_counter_debug!("ed25519_verify_gpu", valid_packet_count);
 }
 
 #[cfg(test)]
