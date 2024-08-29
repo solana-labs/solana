@@ -281,7 +281,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
 
     /// lookup 'pubkey' by only looking in memory. Does not look on disk.
     /// callback is called whether pubkey is found or not
-    fn get_only_in_mem<RT>(
+    pub(super) fn get_only_in_mem<RT>(
         &self,
         pubkey: &K,
         update_age: bool,

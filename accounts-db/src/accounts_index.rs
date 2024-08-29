@@ -78,6 +78,22 @@ pub(crate) struct GenerateIndexResult<T: IndexValue> {
     pub duplicates: Option<Vec<(Pubkey, (Slot, T))>>,
 }
 
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+/// which accounts `scan` should load from disk
+pub enum ScanFilter {
+    /// Scan both in-memory and on-disk index
+    #[default]
+    All,
+
+    /// abnormal = ref_count != 1 or slot list.len() != 1
+    /// Scan only in-memory index and skip on-disk index
+    OnlyAbnormal,
+
+    /// Similar to `OnlyAbnormal but also check on-disk index to verify the
+    /// entry on-disk is indeed normal.
+    OnlyAbnormalWithVerify,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// how accounts index 'upsert' should handle reclaims
 pub enum UpsertReclaim {
@@ -1399,6 +1415,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
         mut callback: F,
         avoid_callback_result: Option<AccountsIndexScanResult>,
         provide_entry_in_callback: bool,
+        filter: ScanFilter,
     ) where
         F: FnMut(
             &'a Pubkey,
@@ -1416,10 +1433,8 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
                 lock = Some(&self.account_maps[bin]);
                 last_bin = bin;
             }
-            // SAFETY: The caller must ensure that if `provide_entry_in_callback` is true, and
-            // if it's possible for `callback` to clone the entry Arc, then it must also add
-            // the entry to the in-mem cache if the entry is made dirty.
-            lock.as_ref().unwrap().get_internal(pubkey, |entry| {
+
+            let mut internal_callback = |entry: Option<&AccountMapEntry<T>>| {
                 let mut cache = false;
                 match entry {
                     Some(locked_entry) => {
@@ -1449,7 +1464,36 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndex<T, U> {
                     }
                 }
                 (cache, ())
-            });
+            };
+
+            match filter {
+                ScanFilter::All => {
+                    // SAFETY: The caller must ensure that if `provide_entry_in_callback` is true, and
+                    // if it's possible for `callback` to clone the entry Arc, then it must also add
+                    // the entry to the in-mem cache if the entry is made dirty.
+                    lock.as_ref()
+                        .unwrap()
+                        .get_internal(pubkey, internal_callback);
+                }
+                ScanFilter::OnlyAbnormal | ScanFilter::OnlyAbnormalWithVerify => {
+                    let found = lock
+                        .as_ref()
+                        .unwrap()
+                        .get_only_in_mem(pubkey, false, |entry| {
+                            internal_callback(entry);
+                            entry.is_some()
+                        });
+                    if !found && matches!(filter, ScanFilter::OnlyAbnormalWithVerify) {
+                        lock.as_ref().unwrap().get_internal(pubkey, |entry| {
+                            assert!(entry.is_some(), "{pubkey}, entry: {entry:?}");
+                            let entry = entry.unwrap();
+                            assert_eq!(entry.ref_count(), 1, "{pubkey}");
+                            assert_eq!(entry.slot_list.read().unwrap().len(), 1, "{pubkey}");
+                            (false, ())
+                        });
+                    }
+                }
+            }
         });
     }
 
