@@ -228,11 +228,13 @@ impl Forwarder {
         usize,
         Option<Pubkey>,
     ) {
-        let (res, num_packets, forward_us, leader_pubkey) =
+        let (res, num_packets, _forward_us, leader_pubkey) =
             self.forward_packets(forward_option, forwardable_packets);
+        if let Err(ref err) = res {
+            warn!("failed to forward packets: {err}");
+        }
 
         if num_packets > 0 {
-            inc_new_counter_info!("banking_stage-forwarded_packets", num_packets);
             if let ForwardOption::ForwardTpuVote = forward_option {
                 banking_stage_stats
                     .forwarded_vote_count
@@ -241,12 +243,6 @@ impl Forwarder {
                 banking_stage_stats
                     .forwarded_transaction_count
                     .fetch_add(num_packets, Ordering::Relaxed);
-            }
-
-            inc_new_counter_info!("banking_stage-forward-us", forward_us as usize, 1000, 1000);
-
-            if res.is_err() {
-                inc_new_counter_info!("banking_stage-forward_packets-failed-batches", 1);
             }
         }
 
