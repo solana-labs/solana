@@ -5,6 +5,7 @@ use {
             common_error_adapter, log_instruction_custom_error_ex, CliCommand, CliCommandInfo,
             CliConfig, CliError, ProcessResult,
         },
+        feature::{status_from_account, CliFeatureStatus},
         program::calculate_max_chunk_size,
     },
     clap::{App, AppSettings, Arg, ArgMatches, SubCommand},
@@ -31,10 +32,12 @@ use {
     solana_rpc_client_api::{
         config::{RpcAccountInfoConfig, RpcProgramAccountsConfig, RpcSendTransactionConfig},
         filter::{Memcmp, RpcFilterType},
+        request::MAX_MULTIPLE_ACCOUNTS,
     },
     solana_sdk::{
         account::Account,
         commitment_config::CommitmentConfig,
+        feature_set::{FeatureSet, FEATURE_NAMES},
         hash::Hash,
         instruction::Instruction,
         loader_v4::{
@@ -75,9 +78,15 @@ pub enum ProgramV4CliCommand {
         program_address: Pubkey,
         authority_signer_index: SignerIndex,
     },
+    TransferAuthority {
+        program_address: Pubkey,
+        authority_signer_index: SignerIndex,
+        new_authority_signer_index: SignerIndex,
+    },
     Finalize {
         program_address: Pubkey,
         authority_signer_index: SignerIndex,
+        next_version_signer_index: SignerIndex,
     },
     Show {
         account_pubkey: Option<Pubkey>,
@@ -193,6 +202,38 @@ impl ProgramV4SubCommands for App<'_, '_> {
                         ),
                 )
                 .subcommand(
+                    SubCommand::with_name("transfer-authority")
+                        .about("Transfer the authority of a program to a different address")
+                        .arg(
+                            Arg::with_name("program-id")
+                                .long("program-id")
+                                .value_name("PROGRAM_ID")
+                                .takes_value(true)
+                                .help("Executable program's address"),
+                        )
+                        .arg(
+                            Arg::with_name("authority")
+                                .long("authority")
+                                .value_name("AUTHORITY_SIGNER")
+                                .takes_value(true)
+                                .validator(is_valid_signer)
+                                .help(
+                                    "Current program authority [default: the default configured keypair]",
+                                ),
+                        )
+                        .arg(
+                            Arg::with_name("new-authority")
+                                .long("new-authority")
+                                .value_name("NEW_AUTHORITY_SIGNER")
+                                .takes_value(true)
+                                .required(true)
+                                .validator(is_valid_signer)
+                                .help(
+                                    "New program authority",
+                                ),
+                        ),
+                )
+                .subcommand(
                     SubCommand::with_name("finalize")
                         .about("Finalize a program to make it immutable")
                         .arg(
@@ -210,6 +251,16 @@ impl ProgramV4SubCommands for App<'_, '_> {
                                 .validator(is_valid_signer)
                                 .help(
                                     "Program authority [default: the default configured keypair]",
+                                ),
+                        )
+                        .arg(
+                            Arg::with_name("next-version")
+                                .long("next-version")
+                                .value_name("NEXT_VERSION")
+                                .takes_value(true)
+                                .validator(is_valid_signer)
+                                .help(
+                                    "Reserves the address and links it as the programs next-version, which is a hint that frontends can show to users",
                                 ),
                         ),
                 )
@@ -365,6 +416,35 @@ pub fn parse_program_v4_subcommand(
                 signers: signer_info.signers,
             }
         }
+        ("transfer-authority", Some(matches)) => {
+            let mut bulk_signers = vec![Some(
+                default_signer.signer_from_path(matches, wallet_manager)?,
+            )];
+
+            let (authority, authority_pubkey) = signer_of(matches, "authority", wallet_manager)?;
+            bulk_signers.push(authority);
+
+            let (new_authority, new_authority_pubkey) =
+                signer_of(matches, "new-authority", wallet_manager)?;
+            bulk_signers.push(new_authority);
+
+            let signer_info =
+                default_signer.generate_unique_signers(bulk_signers, matches, wallet_manager)?;
+
+            CliCommandInfo {
+                command: CliCommand::ProgramV4(ProgramV4CliCommand::TransferAuthority {
+                    program_address: pubkey_of(matches, "program-id")
+                        .expect("Program address is missing"),
+                    authority_signer_index: signer_info
+                        .index_of(authority_pubkey)
+                        .expect("Authority signer is missing"),
+                    new_authority_signer_index: signer_info
+                        .index_of(new_authority_pubkey)
+                        .expect("Authority signer is missing"),
+                }),
+                signers: signer_info.signers,
+            }
+        }
         ("finalize", Some(matches)) => {
             let mut bulk_signers = vec![Some(
                 default_signer.signer_from_path(matches, wallet_manager)?,
@@ -373,16 +453,26 @@ pub fn parse_program_v4_subcommand(
             let (authority, authority_pubkey) = signer_of(matches, "authority", wallet_manager)?;
             bulk_signers.push(authority);
 
+            if let Ok((next_version, _next_version_pubkey)) =
+                signer_of(matches, "next-version", wallet_manager)
+            {
+                bulk_signers.push(next_version);
+            }
+
             let signer_info =
                 default_signer.generate_unique_signers(bulk_signers, matches, wallet_manager)?;
+            let authority_signer_index = signer_info
+                .index_of(authority_pubkey)
+                .expect("Authority signer is missing");
 
             CliCommandInfo {
                 command: CliCommand::ProgramV4(ProgramV4CliCommand::Finalize {
                     program_address: pubkey_of(matches, "program-id")
                         .expect("Program address is missing"),
-                    authority_signer_index: signer_info
-                        .index_of(authority_pubkey)
-                        .expect("Authority signer is missing"),
+                    authority_signer_index,
+                    next_version_signer_index: pubkey_of(matches, "next-version")
+                        .and_then(|pubkey| signer_info.index_of(Some(pubkey)))
+                        .unwrap_or(authority_signer_index),
                 }),
                 signers: signer_info.signers,
             }
@@ -414,7 +504,36 @@ pub fn parse_program_v4_subcommand(
     Ok(response)
 }
 
-pub fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+fn fetch_feature_set(rpc_client: &RpcClient) -> Result<FeatureSet, Box<dyn std::error::Error>> {
+    let mut feature_set = FeatureSet::default();
+    for feature_ids in FEATURE_NAMES
+        .keys()
+        .cloned()
+        .collect::<Vec<Pubkey>>()
+        .chunks(MAX_MULTIPLE_ACCOUNTS)
+    {
+        rpc_client
+            .get_multiple_accounts(feature_ids)?
+            .into_iter()
+            .zip(feature_ids)
+            .for_each(|(account, feature_id)| {
+                let activation_slot = account.and_then(status_from_account);
+
+                if let Some(CliFeatureStatus::Active(slot)) = activation_slot {
+                    feature_set.activate(feature_id, slot);
+                }
+            });
+    }
+
+    Ok(feature_set)
+}
+
+pub fn read_and_verify_elf(
+    program_location: &str,
+    rpc_client: &RpcClient,
+) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let feature_set = fetch_feature_set(rpc_client)?;
+
     let mut file = File::open(program_location)
         .map_err(|err| format!("Unable to open program file: {err}"))?;
     let mut program_data = Vec::new();
@@ -423,10 +542,13 @@ pub fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn st
 
     // Verify the program
     let program_runtime_environment =
-        solana_loader_v4_program::create_program_runtime_environment_v2(
+        solana_bpf_loader_program::syscalls::create_program_runtime_environment_v1(
+            &feature_set,
             &ComputeBudget::default(),
+            true,
             false,
-        );
+        )
+        .unwrap();
     let executable =
         Executable::<InvokeContext>::from_elf(&program_data, Arc::new(program_runtime_environment))
             .map_err(|err| format!("ELF error: {err}"))?;
@@ -471,7 +593,7 @@ pub fn process_program_v4_subcommand(
             program_signer_index,
             authority_signer_index,
         } => {
-            let program_data = read_and_verify_elf(program_location)?;
+            let program_data = read_and_verify_elf(program_location, &rpc_client)?;
             let program_len = program_data.len() as u32;
 
             process_deploy_program(
@@ -489,7 +611,7 @@ pub fn process_program_v4_subcommand(
             buffer_signer_index,
             authority_signer_index,
         } => {
-            let program_data = read_and_verify_elf(program_location)?;
+            let program_data = read_and_verify_elf(program_location, &rpc_client)?;
             let program_len = program_data.len() as u32;
             let buffer_signer = buffer_signer_index.map(|index| config.signers[index]);
 
@@ -510,13 +632,25 @@ pub fn process_program_v4_subcommand(
             &ProgramV4CommandConfig::new_from_cli_config(config, authority_signer_index),
             program_address,
         ),
+        ProgramV4CliCommand::TransferAuthority {
+            program_address,
+            authority_signer_index,
+            new_authority_signer_index,
+        } => process_transfer_authority_of_program(
+            rpc_client,
+            &ProgramV4CommandConfig::new_from_cli_config(config, authority_signer_index),
+            program_address,
+            config.signers[*new_authority_signer_index],
+        ),
         ProgramV4CliCommand::Finalize {
             program_address,
             authority_signer_index,
+            next_version_signer_index,
         } => process_finalize_program(
             rpc_client,
             &ProgramV4CommandConfig::new_from_cli_config(config, authority_signer_index),
             program_address,
+            config.signers[*next_version_signer_index],
         ),
         ProgramV4CliCommand::Show {
             account_pubkey,
@@ -703,10 +837,11 @@ fn process_undeploy_program(
     Ok(config.output_format.formatted_string(&program_id))
 }
 
-fn process_finalize_program(
+fn process_transfer_authority_of_program(
     rpc_client: Arc<RpcClient>,
     config: &ProgramV4CommandConfig,
     program_address: &Pubkey,
+    new_authority: &dyn Signer,
 ) -> ProcessResult {
     let blockhash = rpc_client.get_latest_blockhash()?;
 
@@ -714,7 +849,35 @@ fn process_finalize_program(
         &[loader_v4::transfer_authority(
             program_address,
             &config.authority.pubkey(),
-            None,
+            &new_authority.pubkey(),
+        )],
+        Some(&config.payer.pubkey()),
+        &blockhash,
+    )];
+    check_payer(&rpc_client, config, 0, &message, &[], &[])?;
+
+    send_messages(rpc_client, config, &message, &[], &[], None)?;
+
+    let program_id = CliProgramId {
+        program_id: program_address.to_string(),
+        signature: None,
+    };
+    Ok(config.output_format.formatted_string(&program_id))
+}
+
+fn process_finalize_program(
+    rpc_client: Arc<RpcClient>,
+    config: &ProgramV4CommandConfig,
+    program_address: &Pubkey,
+    next_version: &dyn Signer,
+) -> ProcessResult {
+    let blockhash = rpc_client.get_latest_blockhash()?;
+
+    let message = [Message::new_with_blockhash(
+        &[loader_v4::finalize(
+            program_address,
+            &config.authority.pubkey(),
+            &next_version.pubkey(),
         )],
         Some(&config.payer.pubkey()),
         &blockhash,
@@ -752,7 +915,7 @@ fn process_show(
                     Ok(config.output_format.formatted_string(&CliProgramV4 {
                         program_id: account_pubkey.to_string(),
                         owner: account.owner.to_string(),
-                        authority: state.authority_address.to_string(),
+                        authority: state.authority_address_or_next_version.to_string(),
                         last_deploy_slot: state.slot,
                         data_len: account
                             .data
@@ -1131,11 +1294,11 @@ fn build_retract_instruction(
 
     if let Ok(LoaderV4State {
         slot: _,
-        authority_address,
+        authority_address_or_next_version,
         status,
     }) = solana_loader_v4_program::get_state(&account.data)
     {
-        if authority != authority_address {
+        if authority != authority_address_or_next_version {
             return Err(
                 "Program authority does not match with the provided authority address".into(),
             );
@@ -1170,11 +1333,11 @@ fn build_truncate_instructions(
     } else {
         if let Ok(LoaderV4State {
             slot: _,
-            authority_address,
+            authority_address_or_next_version,
             status,
         }) = solana_loader_v4_program::get_state(&account.data)
         {
-            if authority != authority_address {
+            if authority != authority_address_or_next_version {
                 return Err(
                     "Program authority does not match with the provided authority address".into(),
                 );
@@ -1279,7 +1442,7 @@ fn get_programs(
             programs.push(CliProgramV4 {
                 program_id: program.to_string(),
                 owner: account.owner.to_string(),
-                authority: state.authority_address.to_string(),
+                authority: state.authority_address_or_next_version.to_string(),
                 last_deploy_slot: state.slot,
                 status: status.to_string(),
                 data_len: account
@@ -1602,15 +1765,41 @@ mod tests {
     }
 
     #[test]
+    fn test_transfer_authority() {
+        let mut config = CliConfig::default();
+
+        let payer = keypair_from_seed(&[1u8; 32]).unwrap();
+        let program_signer = keypair_from_seed(&[2u8; 32]).unwrap();
+        let authority_signer = program_authority();
+        let new_authority_signer = program_authority();
+
+        config.signers.push(&payer);
+        config.signers.push(&authority_signer);
+        config.signers.push(&new_authority_signer);
+
+        let config = ProgramV4CommandConfig::new_from_cli_config(&config, &1);
+
+        assert!(process_transfer_authority_of_program(
+            Arc::new(rpc_client_with_program_deployed()),
+            &config,
+            &program_signer.pubkey(),
+            &new_authority_signer,
+        )
+        .is_ok());
+    }
+
+    #[test]
     fn test_finalize() {
         let mut config = CliConfig::default();
 
         let payer = keypair_from_seed(&[1u8; 32]).unwrap();
         let program_signer = keypair_from_seed(&[2u8; 32]).unwrap();
         let authority_signer = program_authority();
+        let next_version_signer = keypair_from_seed(&[4u8; 32]).unwrap();
 
         config.signers.push(&payer);
         config.signers.push(&authority_signer);
+        config.signers.push(&next_version_signer);
 
         let config = ProgramV4CommandConfig::new_from_cli_config(&config, &1);
 
@@ -1618,6 +1807,7 @@ mod tests {
             Arc::new(rpc_client_with_program_deployed()),
             &config,
             &program_signer.pubkey(),
+            &next_version_signer,
         )
         .is_ok());
     }
@@ -1803,6 +1993,56 @@ mod tests {
 
     #[test]
     #[allow(clippy::cognitive_complexity)]
+    fn test_cli_parse_transfer_authority() {
+        let test_commands = get_clap_app("test", "desc", "version");
+
+        let default_keypair = Keypair::new();
+        let keypair_file = make_tmp_path("keypair_file");
+        write_keypair_file(&default_keypair, &keypair_file).unwrap();
+        let default_signer = DefaultSigner::new("", &keypair_file);
+
+        let program_keypair = Keypair::new();
+        let program_keypair_file = make_tmp_path("program_keypair_file");
+        write_keypair_file(&program_keypair, &program_keypair_file).unwrap();
+
+        let authority_keypair = Keypair::new();
+        let authority_keypair_file = make_tmp_path("authority_keypair_file");
+        write_keypair_file(&authority_keypair, &authority_keypair_file).unwrap();
+
+        let new_authority_keypair = Keypair::new();
+        let new_authority_keypair_file = make_tmp_path("new_authority_keypair_file");
+        write_keypair_file(&new_authority_keypair, &new_authority_keypair_file).unwrap();
+
+        let test_command = test_commands.clone().get_matches_from(vec![
+            "test",
+            "program-v4",
+            "transfer-authority",
+            "--program-id",
+            &program_keypair_file,
+            "--authority",
+            &authority_keypair_file,
+            "--new-authority",
+            &new_authority_keypair_file,
+        ]);
+        assert_eq!(
+            parse_command(&test_command, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::ProgramV4(ProgramV4CliCommand::TransferAuthority {
+                    program_address: program_keypair.pubkey(),
+                    authority_signer_index: 1,
+                    new_authority_signer_index: 2,
+                }),
+                signers: vec![
+                    Box::new(read_keypair_file(&keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&authority_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&new_authority_keypair_file).unwrap()),
+                ],
+            }
+        );
+    }
+
+    #[test]
+    #[allow(clippy::cognitive_complexity)]
     fn test_cli_parse_finalize() {
         let test_commands = get_clap_app("test", "desc", "version");
 
@@ -1819,6 +2059,10 @@ mod tests {
         let authority_keypair_file = make_tmp_path("authority_keypair_file");
         write_keypair_file(&authority_keypair, &authority_keypair_file).unwrap();
 
+        let next_version_keypair = Keypair::new();
+        let next_version_keypair_file = make_tmp_path("next_version_keypair_file");
+        write_keypair_file(&next_version_keypair, &next_version_keypair_file).unwrap();
+
         let test_command = test_commands.clone().get_matches_from(vec![
             "test",
             "program-v4",
@@ -1827,6 +2071,8 @@ mod tests {
             &program_keypair_file,
             "--authority",
             &authority_keypair_file,
+            "--next-version",
+            &next_version_keypair_file,
         ]);
         assert_eq!(
             parse_command(&test_command, &default_signer, &mut None).unwrap(),
@@ -1834,10 +2080,12 @@ mod tests {
                 command: CliCommand::ProgramV4(ProgramV4CliCommand::Finalize {
                     program_address: program_keypair.pubkey(),
                     authority_signer_index: 1,
+                    next_version_signer_index: 2,
                 }),
                 signers: vec![
                     Box::new(read_keypair_file(&keypair_file).unwrap()),
-                    Box::new(read_keypair_file(&authority_keypair_file).unwrap())
+                    Box::new(read_keypair_file(&authority_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&next_version_keypair_file).unwrap()),
                 ],
             }
         );

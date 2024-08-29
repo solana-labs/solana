@@ -1332,7 +1332,7 @@ fn common_close_account(
     Ok(())
 }
 
-fn execute<'a, 'b: 'a>(
+pub fn execute<'a, 'b: 'a>(
     executable: &'a Executable<InvokeContext<'static>>,
     invoke_context: &'a mut InvokeContext<'b>,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -1513,8 +1513,9 @@ fn execute<'a, 'b: 'a>(
 
 pub mod test_utils {
     use {
-        super::*, solana_program_runtime::loaded_programs::DELAY_VISIBILITY_SLOT_OFFSET,
-        solana_sdk::account::ReadableAccount,
+        super::*,
+        solana_program_runtime::loaded_programs::DELAY_VISIBILITY_SLOT_OFFSET,
+        solana_sdk::{account::ReadableAccount, loader_v4::LoaderV4State},
     };
 
     pub fn load_all_invoked_programs(invoke_context: &mut InvokeContext) {
@@ -1536,6 +1537,11 @@ pub mod test_utils {
 
             let owner = account.owner();
             if check_loader_id(owner) {
+                let programdata_data_offset = if loader_v4::check_id(owner) {
+                    LoaderV4State::program_data_offset()
+                } else {
+                    0
+                };
                 let pubkey = invoke_context
                     .transaction_context
                     .get_key_of_account_at_index(index)
@@ -1544,7 +1550,10 @@ pub mod test_utils {
                 if let Ok(loaded_program) = load_program_from_bytes(
                     None,
                     &mut load_program_metrics,
-                    account.data(),
+                    account
+                        .data()
+                        .get(programdata_data_offset.min(account.data().len())..)
+                        .unwrap(),
                     owner,
                     account.data().len(),
                     0,

@@ -1189,7 +1189,7 @@ impl<FG: ForkGraph> ProgramCache<FG> {
     pub fn get_flattened_entries(
         &self,
         include_program_runtime_v1: bool,
-        include_program_runtime_v2: bool,
+        _include_program_runtime_v2: bool,
     ) -> Vec<(Pubkey, Arc<ProgramCacheEntry>)> {
         match &self.index {
             IndexImplementation::V1 { entries, .. } => entries
@@ -1199,11 +1199,7 @@ impl<FG: ForkGraph> ProgramCache<FG> {
                         .iter()
                         .filter_map(move |program| match program.program {
                             ProgramCacheEntryType::Loaded(_) => {
-                                if (program.account_owner != ProgramCacheEntryOwner::LoaderV4
-                                    && include_program_runtime_v1)
-                                    || (program.account_owner == ProgramCacheEntryOwner::LoaderV4
-                                        && include_program_runtime_v2)
-                                {
+                                if include_program_runtime_v1 {
                                     Some((*id, program.clone()))
                                 } else {
                                     None

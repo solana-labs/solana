@@ -5227,6 +5227,7 @@ name = "solana-loader-v4-program"
 version = "2.1.0"
 dependencies = [
  "log",
+ "solana-bpf-loader-program",
  "solana-compute-budget",
  "solana-log-collector",
  "solana-measure",

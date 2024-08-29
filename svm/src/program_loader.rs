@@ -380,7 +380,7 @@ mod tests {
 
         let loader_data = LoaderV4State {
             slot: 25,
-            authority_address: Pubkey::new_unique(),
+            authority_address_or_next_version: Pubkey::new_unique(),
             status: LoaderV4Status::Deployed,
         };
         let encoded = unsafe {
@@ -731,7 +731,7 @@ mod tests {
 
         let loader_data = LoaderV4State {
             slot: 0,
-            authority_address: Pubkey::new_unique(),
+            authority_address_or_next_version: Pubkey::new_unique(),
             status: LoaderV4Status::Deployed,
         };
         let encoded = unsafe {
@@ -932,7 +932,7 @@ mod tests {
 
         let state = LoaderV4State {
             slot: 58,
-            authority_address: Pubkey::new_unique(),
+            authority_address_or_next_version: Pubkey::new_unique(),
             status: LoaderV4Status::Deployed,
         };
         let encoded = unsafe {

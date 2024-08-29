@@ -33,8 +33,9 @@ pub enum LoaderV4Status {
 pub struct LoaderV4State {
     /// Slot in which the program was last deployed, retracted or initialized.
     pub slot: u64,
-    /// Address of signer which can send program management instructions.
-    pub authority_address: Pubkey,
+    /// Address of signer which can send program management instructions when the status is not finalized.
+    /// Otherwise a forwarding to the next version of the finalized program.
+    pub authority_address_or_next_version: Pubkey,
     /// Deployment status.
     pub status: LoaderV4Status,
     // The raw program data follows this serialized structure in the
@@ -66,6 +67,10 @@ pub fn is_retract_instruction(instruction_data: &[u8]) -> bool {
 
 pub fn is_transfer_authority_instruction(instruction_data: &[u8]) -> bool {
     !instruction_data.is_empty() && 4 == instruction_data[0]
+}
+
+pub fn is_finalize_instruction(instruction_data: &[u8]) -> bool {
+    !instruction_data.is_empty() && 5 == instruction_data[0]
 }
 
 /// Returns the instructions required to initialize a program/buffer account.
@@ -183,18 +188,30 @@ pub fn retract(program_address: &Pubkey, authority: &Pubkey) -> Instruction {
 pub fn transfer_authority(
     program_address: &Pubkey,
     authority: &Pubkey,
-    new_authority: Option<&Pubkey>,
+    new_authority: &Pubkey,
 ) -> Instruction {
-    let mut accounts = vec![
+    let accounts = vec![
         AccountMeta::new(*program_address, false),
         AccountMeta::new_readonly(*authority, true),
+        AccountMeta::new_readonly(*new_authority, true),
     ];
 
-    if let Some(new_auth) = new_authority {
-        accounts.push(AccountMeta::new_readonly(*new_auth, true));
-    }
-
     Instruction::new_with_bincode(id(), &LoaderV4Instruction::TransferAuthority, accounts)
+}
+
+/// Returns the instructions required to finalize program.
+pub fn finalize(
+    program_address: &Pubkey,
+    authority: &Pubkey,
+    next_version_program_address: &Pubkey,
+) -> Instruction {
+    let accounts = vec![
+        AccountMeta::new(*program_address, false),
+        AccountMeta::new_readonly(*authority, true),
+        AccountMeta::new_readonly(*next_version_program_address, false),
+    ];
+
+    Instruction::new_with_bincode(id(), &LoaderV4Instruction::Finalize, accounts)
 }
 
 #[cfg(test)]
@@ -204,7 +221,10 @@ mod tests {
     #[test]
     fn test_layout() {
         assert_eq!(offset_of!(LoaderV4State, slot), 0x00);
-        assert_eq!(offset_of!(LoaderV4State, authority_address), 0x08);
+        assert_eq!(
+            offset_of!(LoaderV4State, authority_address_or_next_version),
+            0x08
+        );
         assert_eq!(offset_of!(LoaderV4State, status), 0x28);
         assert_eq!(LoaderV4State::program_data_offset(), 0x30);
     }
@@ -335,7 +355,7 @@ mod tests {
         let program = Pubkey::new_unique();
         let authority = Pubkey::new_unique();
         let new_authority = Pubkey::new_unique();
-        let instruction = transfer_authority(&program, &authority, Some(&new_authority));
+        let instruction = transfer_authority(&program, &authority, &new_authority);
         assert!(is_transfer_authority_instruction(&instruction.data));
         assert_eq!(instruction.program_id, id());
         assert_eq!(instruction.accounts.len(), 3);
@@ -354,15 +374,19 @@ mod tests {
     fn test_transfer_authority_finalize_instruction() {
         let program = Pubkey::new_unique();
         let authority = Pubkey::new_unique();
-        let instruction = transfer_authority(&program, &authority, None);
-        assert!(is_transfer_authority_instruction(&instruction.data));
+        let next_version = Pubkey::new_unique();
+        let instruction = finalize(&program, &authority, &next_version);
+        assert!(is_finalize_instruction(&instruction.data));
         assert_eq!(instruction.program_id, id());
-        assert_eq!(instruction.accounts.len(), 2);
+        assert_eq!(instruction.accounts.len(), 3);
         assert_eq!(instruction.accounts[0].pubkey, program);
         assert!(instruction.accounts[0].is_writable);
         assert!(!instruction.accounts[0].is_signer);
         assert_eq!(instruction.accounts[1].pubkey, authority);
         assert!(!instruction.accounts[1].is_writable);
         assert!(instruction.accounts[1].is_signer);
+        assert_eq!(instruction.accounts[2].pubkey, next_version);
+        assert!(!instruction.accounts[2].is_writable);
+        assert!(!instruction.accounts[2].is_signer);
     }
 }

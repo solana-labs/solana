@@ -6662,6 +6662,7 @@ version = "2.1.0"
 dependencies = [
  "bincode",
  "log",
+ "solana-bpf-loader-program",
  "solana-compute-budget",
  "solana-log-collector",
  "solana-measure",
