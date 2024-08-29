@@ -1,3 +1,8 @@
 #[derive(Debug, PartialEq, Eq)]
-pub struct TransactionParsingError;
-pub type Result<T> = core::result::Result<T, TransactionParsingError>; // no distinction between errors for now
+#[repr(u8)] // repr(u8) is used to ensure that the enum is represented as a single byte in memory.
+pub enum TransactionViewError {
+    ParseError,
+    SanitizeError,
+}
+
+pub type Result<T> = core::result::Result<T, TransactionViewError>;

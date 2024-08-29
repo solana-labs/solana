@@ -1,7 +1,7 @@
 use {
     crate::{
         bytes::read_byte,
-        result::{Result, TransactionParsingError},
+        result::{Result, TransactionViewError},
     },
     solana_sdk::message::MESSAGE_VERSION_PREFIX,
 };
@@ -49,7 +49,7 @@ impl MessageHeaderMeta {
             let version = message_prefix & !MESSAGE_VERSION_PREFIX;
             match version {
                 0 => (TransactionVersion::V0, read_byte(bytes, offset)?),
-                _ => return Err(TransactionParsingError),
+                _ => return Err(TransactionViewError::ParseError),
             }
         } else {
             // Legacy transaction. The `message_prefix` that was just read is

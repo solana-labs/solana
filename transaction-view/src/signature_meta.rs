@@ -1,7 +1,7 @@
 use {
     crate::{
         bytes::{advance_offset_for_array, read_byte},
-        result::{Result, TransactionParsingError},
+        result::{Result, TransactionViewError},
     },
     solana_sdk::{packet::PACKET_DATA_SIZE, pubkey::Pubkey, signature::Signature},
 };
@@ -35,7 +35,7 @@ impl SignatureMeta {
 
         let num_signatures = read_byte(bytes, offset)?;
         if num_signatures == 0 || num_signatures > MAX_SIGNATURES_PER_PACKET {
-            return Err(TransactionParsingError);
+            return Err(TransactionViewError::ParseError);
         }
 
         let signature_offset = *offset as u16;

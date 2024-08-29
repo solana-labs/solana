@@ -8,6 +8,7 @@ mod address_table_lookup_meta;
 mod instructions_meta;
 mod message_header_meta;
 pub mod result;
+mod sanitize;
 mod signature_meta;
 pub mod static_account_keys_meta;
 pub mod transaction_data;

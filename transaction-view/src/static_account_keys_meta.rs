@@ -1,7 +1,7 @@
 use {
     crate::{
         bytes::{advance_offset_for_array, read_byte},
-        result::{Result, TransactionParsingError},
+        result::{Result, TransactionViewError},
     },
     solana_sdk::{packet::PACKET_DATA_SIZE, pubkey::Pubkey},
 };
@@ -30,7 +30,7 @@ impl StaticAccountKeysMeta {
 
         let num_static_accounts = read_byte(bytes, offset)?;
         if num_static_accounts == 0 || num_static_accounts > MAX_STATIC_ACCOUNTS_PER_PACKET {
-            return Err(TransactionParsingError);
+            return Err(TransactionViewError::ParseError);
         }
 
         // We also know that the offset must be less than 3 here, since the

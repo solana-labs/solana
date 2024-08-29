@@ -1,4 +1,4 @@
-use crate::result::{Result, TransactionParsingError};
+use crate::result::{Result, TransactionViewError};
 
 /// Check that the buffer has at least `len` bytes remaining starting at
 /// `offset`. Returns Err if the buffer is too short.
@@ -12,7 +12,7 @@ use crate::result::{Result, TransactionParsingError};
 #[inline(always)]
 pub fn check_remaining(bytes: &[u8], offset: usize, num_bytes: usize) -> Result<()> {
     if num_bytes > bytes.len().wrapping_sub(offset) {
-        Err(TransactionParsingError)
+        Err(TransactionViewError::ParseError)
     } else {
         Ok(())
     }
@@ -24,7 +24,10 @@ pub fn check_remaining(bytes: &[u8], offset: usize, num_bytes: usize) -> Result<
 pub fn read_byte(bytes: &[u8], offset: &mut usize) -> Result<u8> {
     // Implicitly checks that the offset is within bounds, no need
     // to call `check_remaining` explicitly here.
-    let value = bytes.get(*offset).copied().ok_or(TransactionParsingError);
+    let value = bytes
+        .get(*offset)
+        .copied()
+        .ok_or(TransactionViewError::ParseError);
     *offset = offset.wrapping_add(1);
     value
 }
@@ -49,10 +52,10 @@ pub fn read_compressed_u16(bytes: &[u8], offset: &mut usize) -> Result<u16> {
         // to call check_remaining explicitly here.
         let byte = *bytes
             .get(offset.wrapping_add(i))
-            .ok_or(TransactionParsingError)?;
+            .ok_or(TransactionViewError::ParseError)?;
         // non-minimal encoding or overflow
         if (i > 0 && byte == 0) || (i == 2 && byte > 3) {
-            return Err(TransactionParsingError);
+            return Err(TransactionViewError::ParseError);
         }
         result |= ((byte & 0x7F) as u16) << shift;
         shift = shift.wrapping_add(7);
@@ -86,7 +89,7 @@ pub fn optimized_read_compressed_u16(bytes: &[u8], offset: &mut usize) -> Result
     let mut result = 0u16;
 
     // First byte
-    let byte1 = *bytes.get(*offset).ok_or(TransactionParsingError)?;
+    let byte1 = *bytes.get(*offset).ok_or(TransactionViewError::ParseError)?;
     result |= (byte1 & 0x7F) as u16;
     if byte1 & 0x80 == 0 {
         *offset = offset.wrapping_add(1);
@@ -96,9 +99,9 @@ pub fn optimized_read_compressed_u16(bytes: &[u8], offset: &mut usize) -> Result
     // Second byte
     let byte2 = *bytes
         .get(offset.wrapping_add(1))
-        .ok_or(TransactionParsingError)?;
+        .ok_or(TransactionViewError::ParseError)?;
     if byte2 == 0 || byte2 & 0x80 != 0 {
-        return Err(TransactionParsingError); // non-minimal encoding or overflow
+        return Err(TransactionViewError::ParseError); // non-minimal encoding or overflow
     }
     result |= ((byte2 & 0x7F) as u16) << 7;
     *offset = offset.wrapping_add(2);
