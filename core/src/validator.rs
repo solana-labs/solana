@@ -609,8 +609,8 @@ impl Validator {
                     expected_shred_version,
                 )
                 .context(
-                    "Failed to backup and clear shreds with incorrect \
-                        shred version from blockstore",
+                    "Failed to backup and clear shreds with incorrect shred version from \
+                     blockstore",
                 )?;
             }
         }
@@ -682,9 +682,8 @@ impl Validator {
             .and_then(|geyser_plugin_service| geyser_plugin_service.get_block_metadata_notifier());
 
         info!(
-            "Geyser plugin: accounts_update_notifier: {}, \
-            transaction_notifier: {}, \
-            entry_notifier: {}",
+            "Geyser plugin: accounts_update_notifier: {}, transaction_notifier: {}, \
+             entry_notifier: {}",
             accounts_update_notifier.is_some(),
             transaction_notifier.is_some(),
             entry_notifier.is_some()
@@ -1695,9 +1694,8 @@ fn check_poh_speed(bank: &Bank, maybe_hash_samples: Option<u64>) -> Result<(), V
         (hashes_per_slot as f64 / target_slot_duration.as_secs_f64()) as u64;
 
     info!(
-        "PoH speed check: \
-            computed hashes per second {my_hashes_per_second}, \
-            target hashes per second {target_hashes_per_second}"
+        "PoH speed check: computed hashes per second {my_hashes_per_second}, target hashes per \
+         second {target_hashes_per_second}"
     );
     if my_hashes_per_second < target_hashes_per_second {
         return Err(ValidatorError::PohTooSlow {
@@ -1777,20 +1775,21 @@ fn post_process_restored_tower(
             }
             if should_require_tower && voting_has_been_active {
                 return Err(format!(
-                    "Requested mandatory tower restore failed: {err}. \
-                     And there is an existing vote_account containing actual votes. \
-                     Aborting due to possible conflicting duplicate votes"
+                    "Requested mandatory tower restore failed: {err}. And there is an existing \
+                     vote_account containing actual votes. Aborting due to possible conflicting \
+                     duplicate votes"
                 ));
             }
             if err.is_file_missing() && !voting_has_been_active {
                 // Currently, don't protect against spoofed snapshots with no tower at all
                 info!(
-                    "Ignoring expected failed tower restore because this is the initial \
-                      validator start with the vote account..."
+                    "Ignoring expected failed tower restore because this is the initial validator \
+                     start with the vote account..."
                 );
             } else {
                 error!(
-                    "Rebuilding a new tower from the latest vote account due to failed tower restore: {}",
+                    "Rebuilding a new tower from the latest vote account due to failed tower \
+                     restore: {}",
                     err
                 );
             }
@@ -2396,8 +2395,8 @@ fn wait_for_supermajority(
                 std::cmp::Ordering::Less => return Ok(false),
                 std::cmp::Ordering::Greater => {
                     error!(
-                        "Ledger does not have enough data to wait for supermajority, \
-                             please enable snapshot fetch. Has {} needs {}",
+                        "Ledger does not have enough data to wait for supermajority, please \
+                         enable snapshot fetch. Has {} needs {}",
                         bank.slot(),
                         wait_for_supermajority_slot
                     );

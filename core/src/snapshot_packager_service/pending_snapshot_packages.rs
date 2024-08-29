@@ -59,7 +59,8 @@ impl PendingSnapshotPackages {
                          old: {pending_incremental_snapshot_package:?}, new: {snapshot_package:?}",
                     );
                     info!(
-                        "overwrote pending incremental snapshot package, old slot: {}, new slot: {}",
+                        "overwrote pending incremental snapshot package, old slot: {}, new slot: \
+                         {}",
                         pending_incremental_snapshot_package.slot, snapshot_package.slot,
                     );
                 }

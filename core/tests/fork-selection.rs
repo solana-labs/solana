@@ -561,14 +561,15 @@ fn test_with_partitions(
                 trunk.0
             };
             println!(
-                    "time: {}, tip converged: {}, trunk id: {}, trunk time: {}, trunk converged {}, trunk height {}",
-                    time,
-                    calc_tip_converged(&towers, &converge_map),
-                    trunk.0,
-                    trunk_time,
-                    trunk.1,
-                    calc_fork_depth(&fork_tree, trunk.0)
-                );
+                "time: {}, tip converged: {}, trunk id: {}, trunk time: {}, trunk converged {}, \
+                 trunk height {}",
+                time,
+                calc_tip_converged(&towers, &converge_map),
+                trunk.0,
+                trunk_time,
+                trunk.1,
+                calc_fork_depth(&fork_tree, trunk.0)
+            );
             if break_early && calc_tip_converged(&towers, &converge_map) == len {
                 break;
             }

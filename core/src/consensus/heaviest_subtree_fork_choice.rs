@@ -144,7 +144,11 @@ impl ForkInfo {
     ) {
         if let Some(latest_invalid_ancestor) = self.latest_invalid_ancestor {
             if latest_invalid_ancestor <= newly_valid_ancestor {
-                info!("Fork choice for {:?} clearing latest invalid ancestor {:?} because {:?} was duplicate confirmed", my_key, latest_invalid_ancestor, newly_valid_ancestor);
+                info!(
+                    "Fork choice for {:?} clearing latest invalid ancestor {:?} because {:?} was \
+                     duplicate confirmed",
+                    my_key, latest_invalid_ancestor, newly_valid_ancestor
+                );
                 self.latest_invalid_ancestor = None;
             }
         }
@@ -1188,8 +1192,9 @@ impl HeaviestSubtreeForkChoice {
                             // validator has been running, so we must be able to fetch best_slots for all of
                             // them.
                             panic!(
-                                "a bank at last_voted_slot({last_voted_slot_hash:?}) is a frozen bank so must have been \
-                                        added to heaviest_subtree_fork_choice at time of freezing",
+                                "a bank at last_voted_slot({last_voted_slot_hash:?}) is a frozen \
+                                 bank so must have been added to heaviest_subtree_fork_choice at \
+                                 time of freezing",
                             )
                         } else {
                             // fork_infos doesn't have corresponding data for the stale stray last vote,

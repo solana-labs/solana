@@ -49,9 +49,8 @@ impl SnapshotPackagerService {
                         break;
                     }
 
-                    let Some(snapshot_package) = Self::get_next_snapshot_package(
-                        &pending_snapshot_packages,
-                    )
+                    let Some(snapshot_package) =
+                        Self::get_next_snapshot_package(&pending_snapshot_packages)
                     else {
                         std::thread::sleep(Self::LOOP_LIMITER);
                         continue;
@@ -67,36 +66,42 @@ impl SnapshotPackagerService {
                     // Archiving the snapshot package is not allowed to fail.
                     // AccountsBackgroundService calls `clean_accounts()` with a value for
                     // latest_full_snapshot_slot that requires this archive call to succeed.
-                    let (archive_result, archive_time_us) = measure_us!(snapshot_utils::serialize_and_archive_snapshot_package(
-                        snapshot_package,
-                        &snapshot_config,
-                    ));
+                    let (archive_result, archive_time_us) =
+                        measure_us!(snapshot_utils::serialize_and_archive_snapshot_package(
+                            snapshot_package,
+                            &snapshot_config,
+                        ));
                     if let Err(err) = archive_result {
-                        error!("Stopping SnapshotPackagerService! Fatal error while archiving snapshot package: {err}");
+                        error!(
+                            "Stopping SnapshotPackagerService! Fatal error while archiving \
+                             snapshot package: {err}"
+                        );
                         exit.store(true, Ordering::Relaxed);
                         break;
                     }
 
-
                     if let Some(snapshot_gossip_manager) = snapshot_gossip_manager.as_mut() {
-                        snapshot_gossip_manager.push_snapshot_hash(snapshot_kind, (snapshot_slot, snapshot_hash));
+                        snapshot_gossip_manager
+                            .push_snapshot_hash(snapshot_kind, (snapshot_slot, snapshot_hash));
                     }
 
-                    let (_, purge_archives_time_us) = measure_us!(snapshot_utils::purge_old_snapshot_archives(
-                        &snapshot_config.full_snapshot_archives_dir,
-                        &snapshot_config.incremental_snapshot_archives_dir,
-                        snapshot_config.maximum_full_snapshot_archives_to_retain,
-                        snapshot_config.maximum_incremental_snapshot_archives_to_retain,
-                    ));
+                    let (_, purge_archives_time_us) =
+                        measure_us!(snapshot_utils::purge_old_snapshot_archives(
+                            &snapshot_config.full_snapshot_archives_dir,
+                            &snapshot_config.incremental_snapshot_archives_dir,
+                            snapshot_config.maximum_full_snapshot_archives_to_retain,
+                            snapshot_config.maximum_incremental_snapshot_archives_to_retain,
+                        ));
 
                     // Now that this snapshot package has been archived, it is safe to remove
                     // all bank snapshots older than this slot.  We want to keep the bank
                     // snapshot *at this slot* so that it can be used during restarts, when
                     // booting from local state.
-                    let (_, purge_bank_snapshots_time_us) = measure_us!(snapshot_utils::purge_bank_snapshots_older_than_slot(
-                        &snapshot_config.bank_snapshots_dir,
-                        snapshot_slot,
-                    ));
+                    let (_, purge_bank_snapshots_time_us) =
+                        measure_us!(snapshot_utils::purge_bank_snapshots_older_than_slot(
+                            &snapshot_config.bank_snapshots_dir,
+                            snapshot_slot,
+                        ));
 
                     let handling_time_us = measure_handling.end_as_us();
                     datapoint_info!(
@@ -109,11 +114,7 @@ impl SnapshotPackagerService {
                             purge_bank_snapshots_time_us,
                             i64
                         ),
-                        (
-                            "purge_old_archives_time_us",
-                            purge_archives_time_us,
-                            i64
-                        ),
+                        ("purge_old_archives_time_us", purge_archives_time_us, i64),
                     );
                 }
                 info!("SnapshotPackagerService has stopped");

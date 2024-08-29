@@ -824,8 +824,8 @@ impl RepairService {
         // Select weighted sample of valid peers if no valid peer was passed in.
         if repair_peers.is_empty() {
             debug!(
-                "No pubkey was provided or no valid repair socket was found. \
-                Sampling a set of repair peers instead."
+                "No pubkey was provided or no valid repair socket was found. Sampling a set of \
+                 repair peers instead."
             );
             repair_peers = Self::get_repair_peers(cluster_info.clone(), cluster_slots, slot);
         }

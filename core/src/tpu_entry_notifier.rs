@@ -85,14 +85,16 @@ impl TpuEntryNotifier {
             starting_transaction_index: *current_transaction_index,
         }) {
             warn!(
-                "Failed to send slot {slot:?} entry {index:?} from Tpu to EntryNotifierService, error {err:?}",
+                "Failed to send slot {slot:?} entry {index:?} from Tpu to EntryNotifierService, \
+                 error {err:?}",
             );
         }
         *current_transaction_index += entry.transactions.len();
 
         if let Err(err) = broadcast_entry_sender.send((bank, (entry, tick_height))) {
             warn!(
-                "Failed to send slot {slot:?} entry {index:?} from Tpu to BroadcastStage, error {err:?}",
+                "Failed to send slot {slot:?} entry {index:?} from Tpu to BroadcastStage, error \
+                 {err:?}",
             );
             // If the BroadcastStage channel is closed, the validator has halted. Try to exit
             // gracefully.

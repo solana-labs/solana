@@ -76,7 +76,10 @@ impl AccountsHashVerifier {
                         &snapshot_config,
                     ));
                     if let Err(err) = result {
-                        error!("Stopping AccountsHashVerifier! Fatal error while processing accounts package: {err}");
+                        error!(
+                            "Stopping AccountsHashVerifier! Fatal error while processing accounts \
+                             package: {err}"
+                        );
                         exit.store(true, Ordering::Relaxed);
                         break;
                     }
@@ -144,7 +147,8 @@ impl AccountsHashVerifier {
                     .count();
                 assert!(
                     num_eah_packages <= 1,
-                    "Only a single EAH accounts package is allowed at a time! count: {num_eah_packages}"
+                    "Only a single EAH accounts package is allowed at a time! count: \
+                     {num_eah_packages}"
                 );
 
                 // Get the two highest priority requests, `y` and `z`.
@@ -261,12 +265,12 @@ impl AccountsHashVerifier {
                         accounts_db.get_accounts_hash(base_slot)
                     else {
                         panic!(
-                            "incremental snapshot requires accounts hash and capitalization \
-                             from the full snapshot it is based on \n\
-                             package: {accounts_package:?} \n\
-                             accounts hashes: {:?} \n\
-                             incremental accounts hashes: {:?} \n\
-                             full snapshot archives: {:?} \n\
+                            "incremental snapshot requires accounts hash and capitalization from \
+                             the full snapshot it is based on\n\
+                             package: {accounts_package:?}\n\
+                             accounts hashes: {:?}\n\
+                             incremental accounts hashes: {:?}\n\
+                             full snapshot archives: {:?}\n\
                              bank snapshots: {:?}",
                             accounts_db.get_accounts_hashes(),
                             accounts_db.get_incremental_accounts_hashes(),
@@ -344,10 +348,9 @@ impl AccountsHashVerifier {
                     HashStats::default(),
                 );
             panic!(
-                "accounts hash capitalization mismatch: expected {}, but calculated {} (then recalculated {})",
-                accounts_package.expected_capitalization,
-                lamports,
-                second_accounts_hash.1,
+                "accounts hash capitalization mismatch: expected {}, but calculated {} (then \
+                 recalculated {})",
+                accounts_package.expected_capitalization, lamports, second_accounts_hash.1,
             );
         }
 

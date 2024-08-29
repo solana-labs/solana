@@ -256,7 +256,8 @@ fn select_candidates_failed_switch_duplicate_rollback<'a>(
     // invalid candidate). Thus, it's safe to use as the reset bank.
     let reset_bank = Some(heaviest_bank);
     info!(
-        "Waiting to switch vote to {}, resetting to slot {:?} for now, latest duplicate ancestor: {:?}",
+        "Waiting to switch vote to {}, resetting to slot {:?} for now, latest duplicate ancestor: \
+         {:?}",
         heaviest_bank.slot(),
         reset_bank.as_ref().map(|b| b.slot()),
         latest_duplicate_ancestor,

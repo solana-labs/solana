@@ -355,7 +355,8 @@ impl LatestUnprocessedVotes {
             .and_then(|account| from_account::<SlotHashes, _>(&account));
         if slot_hashes.is_none() {
             error!(
-                "Slot hashes sysvar doesn't exist on bank {}. Including all votes without filtering",
+                "Slot hashes sysvar doesn't exist on bank {}. Including all votes without \
+                 filtering",
                 bank.slot()
             );
         }

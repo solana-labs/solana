@@ -60,7 +60,7 @@ impl CostUpdateService {
                                 let slot = bank.slot();
                                 trace!(
                                     "inflight transaction count is {in_flight_transaction_count} \
-                                    for slot {slot} after {loop_count} iteration(s)"
+                                     for slot {slot} after {loop_count} iteration(s)"
                                 );
                                 cost_tracker.report_stats(slot);
                                 break;
