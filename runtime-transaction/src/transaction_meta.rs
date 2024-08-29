@@ -11,16 +11,18 @@
 //! The StaticMeta and DynamicMeta traits are accessor traits on the
 //! RuntimeTransaction types, not the TransactionMeta itself.
 //!
-use solana_sdk::hash::Hash;
+use {
+    crate::compute_budget_instruction_details::ComputeBudgetInstructionDetails,
+    solana_compute_budget::compute_budget_limits::ComputeBudgetLimits,
+    solana_sdk::{feature_set::FeatureSet, hash::Hash, transaction::Result},
+};
 
 /// metadata can be extracted statically from sanitized transaction,
 /// for example: message hash, simple-vote-tx flag, limits set by instructions
 pub trait StaticMeta {
     fn message_hash(&self) -> &Hash;
     fn is_simple_vote_tx(&self) -> bool;
-    fn compute_unit_limit(&self) -> u32;
-    fn compute_unit_price(&self) -> u64;
-    fn loaded_accounts_bytes(&self) -> u32;
+    fn compute_budget_limits(&self, feature_set: &FeatureSet) -> Result<ComputeBudgetLimits>;
 }
 
 /// Statically loaded meta is a supertrait of Dynamically loaded meta, when
@@ -30,33 +32,10 @@ pub trait StaticMeta {
 /// on-chain ALT, examples are: transaction usage costs, nonce account.
 pub trait DynamicMeta: StaticMeta {}
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(test, derive(Eq, PartialEq))]
+#[derive(Debug, Default)]
 pub struct TransactionMeta {
     pub(crate) message_hash: Hash,
     pub(crate) is_simple_vote_tx: bool,
-    pub(crate) compute_unit_limit: u32,
-    pub(crate) compute_unit_price: u64,
-    pub(crate) loaded_accounts_bytes: u32,
-}
-
-impl TransactionMeta {
-    pub(crate) fn set_message_hash(&mut self, message_hash: Hash) {
-        self.message_hash = message_hash;
-    }
-
-    pub(crate) fn set_is_simple_vote_tx(&mut self, is_simple_vote_tx: bool) {
-        self.is_simple_vote_tx = is_simple_vote_tx;
-    }
-
-    pub(crate) fn set_compute_unit_limit(&mut self, compute_unit_limit: u32) {
-        self.compute_unit_limit = compute_unit_limit;
-    }
-
-    pub(crate) fn set_compute_unit_price(&mut self, compute_unit_price: u64) {
-        self.compute_unit_price = compute_unit_price;
-    }
-
-    pub(crate) fn set_loaded_accounts_bytes(&mut self, loaded_accounts_bytes: u32) {
-        self.loaded_accounts_bytes = loaded_accounts_bytes;
-    }
+    pub(crate) compute_budget_instruction_details: ComputeBudgetInstructionDetails,
 }

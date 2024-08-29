@@ -11,11 +11,12 @@
 //!    with its dynamic metadata loaded.
 use {
     crate::{
-        instructions_processor::process_compute_budget_instructions,
+        compute_budget_instruction_details::*,
         transaction_meta::{DynamicMeta, StaticMeta, TransactionMeta},
     },
     solana_compute_budget::compute_budget_limits::ComputeBudgetLimits,
     solana_sdk::{
+        feature_set::FeatureSet,
         hash::Hash,
         message::AddressLoader,
         pubkey::Pubkey,
@@ -26,7 +27,8 @@ use {
     std::collections::HashSet,
 };
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[cfg_attr(test, derive(Eq, PartialEq))]
+#[derive(Debug)]
 pub struct RuntimeTransaction<T> {
     transaction: T,
     // transaction meta is a collection of fields, it is updated
@@ -53,14 +55,10 @@ impl<T: StaticMetaAccess> StaticMeta for RuntimeTransaction<T> {
     fn is_simple_vote_tx(&self) -> bool {
         self.meta.is_simple_vote_tx
     }
-    fn compute_unit_limit(&self) -> u32 {
-        self.meta.compute_unit_limit
-    }
-    fn compute_unit_price(&self) -> u64 {
-        self.meta.compute_unit_price
-    }
-    fn loaded_accounts_bytes(&self) -> u32 {
-        self.meta.loaded_accounts_bytes
+    fn compute_budget_limits(&self, _feature_set: &FeatureSet) -> Result<ComputeBudgetLimits> {
+        self.meta
+            .compute_budget_instruction_details
+            .sanitize_and_convert_to_compute_budget_limits()
     }
 }
 
@@ -72,34 +70,24 @@ impl RuntimeTransaction<SanitizedVersionedTransaction> {
         message_hash: Option<Hash>,
         is_simple_vote_tx: Option<bool>,
     ) -> Result<Self> {
-        let mut meta = TransactionMeta::default();
-        meta.set_is_simple_vote_tx(
-            is_simple_vote_tx
-                .unwrap_or_else(|| is_simple_vote_transaction(&sanitized_versioned_tx)),
-        );
-
-        meta.set_message_hash(
-            message_hash.unwrap_or_else(|| sanitized_versioned_tx.get_message().message.hash()),
-        );
-
-        let ComputeBudgetLimits {
-            compute_unit_limit,
-            compute_unit_price,
-            loaded_accounts_bytes,
-            ..
-        } = process_compute_budget_instructions(
+        let is_simple_vote_tx = is_simple_vote_tx
+            .unwrap_or_else(|| is_simple_vote_transaction(&sanitized_versioned_tx));
+        let message_hash =
+            message_hash.unwrap_or_else(|| sanitized_versioned_tx.get_message().message.hash());
+        let compute_budget_instruction_details = ComputeBudgetInstructionDetails::try_from(
             sanitized_versioned_tx
                 .get_message()
                 .program_instructions_iter()
                 .map(|(program_id, ix)| (program_id, SVMInstruction::from(ix))),
         )?;
-        meta.set_compute_unit_limit(compute_unit_limit);
-        meta.set_compute_unit_price(compute_unit_price);
-        meta.set_loaded_accounts_bytes(loaded_accounts_bytes.get());
 
         Ok(Self {
             transaction: sanitized_versioned_tx,
-            meta,
+            meta: TransactionMeta {
+                message_hash,
+                is_simple_vote_tx,
+                compute_budget_instruction_details,
+            },
         })
     }
 }
@@ -302,17 +290,14 @@ mod tests {
 
         assert_eq!(&hash, runtime_transaction_static.message_hash());
         assert!(!runtime_transaction_static.is_simple_vote_tx());
-        assert_eq!(
-            compute_unit_limit,
-            runtime_transaction_static.compute_unit_limit()
-        );
-        assert_eq!(
-            compute_unit_price,
-            runtime_transaction_static.compute_unit_price()
-        );
+        let compute_budget_limits = runtime_transaction_static
+            .compute_budget_limits(&FeatureSet::default())
+            .unwrap();
+        assert_eq!(compute_unit_limit, compute_budget_limits.compute_unit_limit);
+        assert_eq!(compute_unit_price, compute_budget_limits.compute_unit_price);
         assert_eq!(
             loaded_accounts_bytes,
-            runtime_transaction_static.loaded_accounts_bytes()
+            compute_budget_limits.loaded_accounts_bytes.get()
         );
     }
 }
