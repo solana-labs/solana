@@ -92,14 +92,19 @@ impl AncientSlotInfos {
         can_randomly_shrink: bool,
         ideal_size: NonZeroU64,
         is_high_slot: bool,
+        db: &AccountsDb,
     ) -> bool {
         let mut was_randomly_shrunk = false;
         let alive_bytes = storage.alive_bytes() as u64;
         if alive_bytes > 0 {
             let capacity = storage.accounts.capacity();
             let should_shrink = if capacity > 0 {
-                let alive_ratio = alive_bytes * 100 / capacity;
-                alive_ratio < 90
+                let candidate_for_shrink = db.is_candidate_for_shrink(&storage);
+                if candidate_for_shrink {
+                    // shrink should run on this
+                    db.shrink_candidate_slots.lock().unwrap().insert(slot);
+                }
+                candidate_for_shrink
                     || if can_randomly_shrink && thread_rng().gen_range(0..10000) == 0 {
                         was_randomly_shrunk = true;
                         true
@@ -329,11 +334,20 @@ impl AccountsDb {
         sorted_slots: Vec<Slot>,
         can_randomly_shrink: bool,
     ) {
+        /*
+        // maybe we want this to be a different tuning parameter passed on cli?
+        let max_ancient_slots = if let Some(offset) = self.ancient_append_vec_offset {
+            offset.unsigned_abs().min(10_000) as usize
+        } else {
+            return;
+        };
+        */
+        let max_ancient_slots = 4400; // this gives us approx 130M ideal size for testing against mnb now
+
         let tuning = PackedAncientStorageTuning {
-            // only allow 10k slots old enough to be ancient
-            max_ancient_slots: 10_000,
-            // re-combine/shrink 55% of the data savings this pass
-            percent_of_alive_shrunk_data: 55,
+            max_ancient_slots,
+            // don't re-pack anything just to shrink. Shrink will handle these old storages.
+            percent_of_alive_shrunk_data: 0,
             ideal_storage_size: NonZeroU64::new(get_ancient_append_vec_capacity()).unwrap(),
             can_randomly_shrink,
             max_resulting_storages: NonZeroU64::new(10).unwrap(),
@@ -391,13 +405,13 @@ impl AccountsDb {
     fn combine_ancient_slots_packed_internal(
         &self,
         sorted_slots: Vec<Slot>,
-        tuning: PackedAncientStorageTuning,
+        mut tuning: PackedAncientStorageTuning,
         metrics: &mut ShrinkStatsSub,
     ) {
         self.shrink_ancient_stats
             .slots_considered
             .fetch_add(sorted_slots.len() as u64, Ordering::Relaxed);
-        let ancient_slot_infos = self.collect_sort_filter_ancient_slots(sorted_slots, &tuning);
+        let ancient_slot_infos = self.collect_sort_filter_ancient_slots(sorted_slots, &mut tuning);
 
         if ancient_slot_infos.all_infos.is_empty() {
             return; // nothing to do
@@ -511,12 +525,13 @@ impl AccountsDb {
     fn collect_sort_filter_ancient_slots(
         &self,
         slots: Vec<Slot>,
-        tuning: &PackedAncientStorageTuning,
+        tuning: &mut PackedAncientStorageTuning,
     ) -> AncientSlotInfos {
         let mut ancient_slot_infos = self.calc_ancient_slot_info(
             slots,
             tuning.can_randomly_shrink,
             tuning.ideal_storage_size,
+            tuning,
         );
 
         ancient_slot_infos.filter_ancient_slots(tuning, &self.shrink_ancient_stats);
@@ -557,6 +572,7 @@ impl AccountsDb {
         slots: Vec<Slot>,
         can_randomly_shrink: bool,
         ideal_size: NonZeroU64,
+        tuning: &mut PackedAncientStorageTuning,
     ) -> AncientSlotInfos {
         let len = slots.len();
         let mut infos = AncientSlotInfos {
@@ -578,19 +594,32 @@ impl AccountsDb {
                     can_randomly_shrink,
                     ideal_size,
                     is_high_slot(*slot),
+                    &self,
                 ) {
                     randoms += 1;
                 }
             }
         }
         let mut total_dead_bytes = 0;
+        let mut total_alive_bytes = 0;
         let should_shrink_count = infos
             .all_infos
             .iter()
             .filter(|info| info.should_shrink)
-            .map(|info| total_dead_bytes += info.capacity.saturating_sub(info.alive_bytes))
+            .map(|info| {
+                total_dead_bytes += info.capacity.saturating_sub(info.alive_bytes);
+                total_alive_bytes += info.alive_bytes;
+            })
             .count()
             .saturating_sub(randoms as usize);
+        // ideal storage size is total alive bytes of ancient storages / half of max ancient slots
+        tuning.ideal_storage_size = NonZeroU64::new(
+            (infos.total_alive_bytes.0 / tuning.max_ancient_slots.max(1) as u64 / 2).max(1_000_000),
+        )
+        .unwrap();
+        self.shrink_ancient_stats
+            .ideal_storage_size
+            .store(tuning.ideal_storage_size.into(), Ordering::Relaxed);
         self.shrink_ancient_stats
             .slots_eligible_to_shrink
             .fetch_add(should_shrink_count as u64, Ordering::Relaxed);

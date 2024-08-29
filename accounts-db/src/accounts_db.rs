@@ -585,6 +585,8 @@ pub struct AccountsAddRootTiming {
     pub store_us: u64,
 }
 
+/// if negative, this many accounts older than # slots in epoch are still treated as modern (ie. non-ancient).
+/// Slots older than # slots in epoch - this # are then treated as ancient and subject to packing.
 const ANCIENT_APPEND_VEC_DEFAULT_OFFSET: Option<i64> = Some(-10_000);
 
 #[derive(Debug, Default, Clone)]
@@ -1478,7 +1480,7 @@ pub struct AccountsDb {
     /// Set of stores which are recently rooted or had accounts removed
     /// such that potentially a 0-lamport account update could be present which
     /// means we can remove the account from the index entirely.
-    dirty_stores: DashMap<Slot, Arc<AccountStorageEntry>>,
+    pub(crate) dirty_stores: DashMap<Slot, Arc<AccountStorageEntry>>,
 
     /// Zero-lamport accounts that are *not* purged during clean because they need to stay alive
     /// for incremental snapshot support.
@@ -1990,6 +1992,7 @@ pub(crate) struct ShrinkAncientStats {
     pub(crate) many_refs_old_alive: AtomicU64,
     pub(crate) slots_eligible_to_shrink: AtomicU64,
     pub(crate) total_dead_bytes: AtomicU64,
+    pub(crate) ideal_storage_size: AtomicU64,
 }
 
 #[derive(Debug, Default)]
@@ -2038,6 +2041,7 @@ pub struct ShrinkStats {
     accounts_loaded: AtomicU64,
     purged_zero_lamports: AtomicU64,
     accounts_not_found_in_index: AtomicU64,
+    shrinking_ancient: AtomicU64,
 }
 
 impl ShrinkStats {
@@ -2149,6 +2153,11 @@ impl ShrinkStats {
                 (
                     "purged_zero_lamports_count",
                     self.purged_zero_lamports.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "shrinking_ancient",
+                    self.shrinking_ancient.swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
@@ -2313,6 +2322,11 @@ impl ShrinkAncientStats {
             (
                 "slots_eligible_to_shrink",
                 self.slots_eligible_to_shrink.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "ideal_storage_size",
+                self.ideal_storage_size.swap(0, Ordering::Relaxed),
                 i64
             ),
             (
@@ -4542,7 +4556,6 @@ impl AccountsDb {
         &self,
         shrink_slots: &ShrinkCandidates,
         shrink_ratio: f64,
-        oldest_non_ancient_slot: Option<Slot>,
     ) -> (IntMap<Slot, Arc<AccountStorageEntry>>, ShrinkCandidates) {
         struct StoreUsageInfo {
             slot: Slot,
@@ -4556,13 +4569,6 @@ impl AccountsDb {
         let mut total_bytes: u64 = 0;
         let mut total_candidate_stores: usize = 0;
         for slot in shrink_slots {
-            if oldest_non_ancient_slot
-                .map(|oldest_non_ancient_slot| slot < &oldest_non_ancient_slot)
-                .unwrap_or_default()
-            {
-                // this slot will be 'shrunk' by ancient code
-                continue;
-            }
             let Some(store) = self.storage.get_slot_storage_entry(*slot) else {
                 continue;
             };
@@ -5033,13 +5039,8 @@ impl AccountsDb {
 
         let (shrink_slots, shrink_slots_next_batch) = {
             if let AccountShrinkThreshold::TotalSpace { shrink_ratio } = self.shrink_ratio {
-                let (shrink_slots, shrink_slots_next_batch) = self
-                    .select_candidates_by_total_usage(
-                        &shrink_candidates_slots,
-                        shrink_ratio,
-                        self.ancient_append_vec_offset
-                            .map(|_| oldest_non_ancient_slot),
-                    );
+                let (shrink_slots, shrink_slots_next_batch) =
+                    self.select_candidates_by_total_usage(&shrink_candidates_slots, shrink_ratio);
                 (shrink_slots, Some(shrink_slots_next_batch))
             } else {
                 (
@@ -5076,6 +5077,15 @@ impl AccountsDb {
             shrink_slots
                 .into_par_iter()
                 .for_each(|(slot, slot_shrink_candidate)| {
+                    if self
+                        .ancient_append_vec_offset
+                        .map(|_| slot < oldest_non_ancient_slot)
+                        .unwrap_or_default()
+                    {
+                        self.shrink_stats
+                            .shrinking_ancient
+                            .fetch_add(1, Ordering::Relaxed);
+                    }
                     let mut measure = Measure::start("shrink_candidate_slots-ms");
                     self.do_shrink_slot_store(slot, &slot_shrink_candidate);
                     measure.stop();
@@ -8024,7 +8034,7 @@ impl AccountsDb {
         true
     }
 
-    fn is_candidate_for_shrink(&self, store: &AccountStorageEntry) -> bool {
+    pub(crate) fn is_candidate_for_shrink(&self, store: &AccountStorageEntry) -> bool {
         // appended ancient append vecs should not be shrunk by the normal shrink codepath.
         // It is not possible to identify ancient append vecs when we pack, so no check for ancient when we are not appending.
         let total_bytes = if self.create_ancient_storage == CreateAncientStorage::Append
