@@ -6,7 +6,7 @@ use {
     crossbeam_channel::Sender,
     pem::Pem,
     quinn::{Endpoint, IdleTimeout, ServerConfig},
-    rustls::{server::ClientCertVerified, Certificate, DistinguishedName},
+    rustls::{server::ClientCertVerified, Certificate, DistinguishedName, KeyLogFile},
     solana_perf::packet::PacketBatch,
     solana_sdk::{
         packet::PACKET_DATA_SIZE,
@@ -78,6 +78,7 @@ pub(crate) fn configure_server(
         .with_client_cert_verifier(SkipClientVerification::new())
         .with_single_cert(vec![cert], priv_key)?;
     server_tls_config.alpn_protocols = vec![ALPN_TPU_PROTOCOL_ID.to_vec()];
+    server_tls_config.key_log = Arc::new(KeyLogFile::new());
 
     let mut server_config = ServerConfig::with_crypto(Arc::new(server_tls_config));
     server_config.concurrent_connections(max_concurrent_connections as u32);

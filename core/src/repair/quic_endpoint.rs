@@ -9,7 +9,7 @@ use {
         EndpointConfig, IdleTimeout, ReadError, ReadToEndError, RecvStream, SendStream,
         ServerConfig, TokioRuntime, TransportConfig, VarInt, WriteError,
     },
-    rustls::{Certificate, PrivateKey},
+    rustls::{Certificate, KeyLogFile, PrivateKey},
     serde_bytes::ByteBuf,
     solana_quic_client::nonblocking::quic_client::SkipServerVerification,
     solana_runtime::bank_forks::BankForks,
@@ -174,6 +174,7 @@ fn new_server_config(cert: Certificate, key: PrivateKey) -> Result<ServerConfig,
         .with_client_cert_verifier(Arc::new(SkipClientVerification {}))
         .with_single_cert(vec![cert], key)?;
     config.alpn_protocols = vec![ALPN_REPAIR_PROTOCOL_ID.to_vec()];
+    config.key_log = Arc::new(KeyLogFile::new());
     let mut config = ServerConfig::with_crypto(Arc::new(config));
     config
         .transport_config(Arc::new(new_transport_config()))
