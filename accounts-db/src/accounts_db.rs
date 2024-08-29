@@ -8270,7 +8270,6 @@ impl AccountsDb {
             pubkeys_removed_from_accounts_index,
         );
         measure.stop();
-        inc_new_counter_info!("clean_stored_dead_slots-ms", measure.as_ms() as usize);
         self.clean_accounts_stats
             .clean_stored_dead_slots_us
             .fetch_add(measure.as_us(), Ordering::Relaxed);
