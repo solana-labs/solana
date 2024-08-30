@@ -575,6 +575,20 @@ impl JsonRpcRequestProcessor {
             .into());
         };
 
+        // If there is a gap in blockstore or long-term historical storage that
+        // includes the epoch boundary, the `get_blocks_with_limit()` call above
+        // will return the slot of the block at the end of that gap, not a
+        // legitimate epoch-boundary block. Therefore, verify that the parent of
+        // `epoch_boundary_block` occurred before the `first_slot_in_epoch`. If
+        // it didn't, return an error; it will be impossible to locate
+        // rewards properly.
+        if first_confirmed_block.parent_slot >= first_slot_in_epoch {
+            return Err(RpcCustomError::SlotNotEpochBoundary {
+                slot: first_confirmed_block_in_epoch,
+            }
+            .into());
+        }
+
         let addresses: Vec<String> = addresses
             .into_iter()
             .map(|pubkey| pubkey.to_string())

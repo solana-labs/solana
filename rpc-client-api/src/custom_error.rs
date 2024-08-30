@@ -24,6 +24,8 @@ pub const JSON_RPC_SERVER_ERROR_TRANSACTION_SIGNATURE_LEN_MISMATCH: i64 = -32013
 pub const JSON_RPC_SERVER_ERROR_BLOCK_STATUS_NOT_AVAILABLE_YET: i64 = -32014;
 pub const JSON_RPC_SERVER_ERROR_UNSUPPORTED_TRANSACTION_VERSION: i64 = -32015;
 pub const JSON_RPC_SERVER_ERROR_MIN_CONTEXT_SLOT_NOT_REACHED: i64 = -32016;
+const _RESERVED_FOR_V2_0_ERROR: i64 = -32017;
+pub const JSON_RPC_SERVER_ERROR_SLOT_NOT_EPOCH_BOUNDARY: i64 = -32018;
 
 #[derive(Error, Debug)]
 pub enum RpcCustomError {
@@ -65,6 +67,8 @@ pub enum RpcCustomError {
     UnsupportedTransactionVersion(u8),
     #[error("MinContextSlotNotReached")]
     MinContextSlotNotReached { context_slot: Slot },
+    #[error("SlotNotEpochBoundary")]
+    SlotNotEpochBoundary { slot: Slot },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -205,6 +209,14 @@ impl From<RpcCustomError> for Error {
                 data: Some(serde_json::json!(MinContextSlotNotReachedErrorData {
                     context_slot,
                 })),
+            },
+            RpcCustomError::SlotNotEpochBoundary { slot } => Self {
+                code: ErrorCode::ServerError(JSON_RPC_SERVER_ERROR_SLOT_NOT_EPOCH_BOUNDARY),
+                message: format!(
+                    "Rewards cannot be found because slot {slot} is not the epoch boundary. This \
+                     may be due to gap in the queried node's local ledger or long-term storage"
+                ),
+                data: None,
             },
         }
     }
