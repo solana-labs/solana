@@ -1578,7 +1578,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
             Arg::with_name("wen_restart")
                 .long("wen-restart")
                 .hidden(hidden_unless_forced())
-                .value_name("DIR")
+                .value_name("FILE")
                 .takes_value(true)
                 .required(false)
                 .conflicts_with("wait_for_supermajority")
