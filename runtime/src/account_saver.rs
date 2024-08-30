@@ -1,14 +1,14 @@
 use {
-    crate::{
+    solana_sdk::{
+        account::AccountSharedData, nonce::state::DurableNonce, pubkey::Pubkey,
+        transaction_context::TransactionAccount,
+    },
+    solana_svm::{
         rollback_accounts::RollbackAccounts,
         transaction_processing_result::{
             ProcessedTransaction, TransactionProcessingResult,
             TransactionProcessingResultExtensions,
         },
-    },
-    solana_sdk::{
-        account::AccountSharedData, nonce::state::DurableNonce, pubkey::Pubkey,
-        transaction_context::TransactionAccount,
     },
     solana_svm_transaction::svm_message::SVMMessage,
 };
@@ -158,11 +158,6 @@ fn collect_accounts_for_failed_tx<'a, T: SVMMessage>(
 mod tests {
     use {
         super::*,
-        crate::{
-            account_loader::{FeesOnlyTransaction, LoadedTransaction},
-            nonce_info::NonceInfo,
-            transaction_execution_result::{ExecutedTransaction, TransactionExecutionDetails},
-        },
         solana_compute_budget::compute_budget_limits::ComputeBudgetLimits,
         solana_sdk::{
             account::{AccountSharedData, ReadableAccount},
@@ -180,6 +175,11 @@ mod tests {
             signature::{keypair_from_seed, signers::Signers, Keypair, Signer},
             system_instruction, system_program,
             transaction::{Result, SanitizedTransaction, Transaction, TransactionError},
+        },
+        solana_svm::{
+            account_loader::{FeesOnlyTransaction, LoadedTransaction},
+            nonce_info::NonceInfo,
+            transaction_execution_result::{ExecutedTransaction, TransactionExecutionDetails},
         },
         std::collections::HashMap,
     };
