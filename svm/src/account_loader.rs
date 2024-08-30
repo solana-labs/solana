@@ -1,7 +1,6 @@
 use {
     crate::{
         account_overrides::AccountOverrides,
-        account_rent_state::RentState,
         nonce_info::NonceInfo,
         rollback_accounts::RollbackAccounts,
         transaction_error_metrics::TransactionErrorMetrics,
@@ -18,7 +17,7 @@ use {
         nonce::State as NonceState,
         pubkey::Pubkey,
         rent::RentDue,
-        rent_collector::{CollectedInfo, RentCollector, RENT_EXEMPT_RENT_EPOCH},
+        rent_collector::{CollectedInfo, RENT_EXEMPT_RENT_EPOCH},
         rent_debits::RentDebits,
         saturating_add_assign,
         sysvar::{
@@ -28,6 +27,7 @@ use {
         transaction::{Result, TransactionError},
         transaction_context::{IndexOfAccount, TransactionAccount},
     },
+    solana_svm_rent_collector::svm_rent_collector::SVMRentCollector,
     solana_svm_transaction::svm_message::SVMMessage,
     solana_system_program::{get_system_account_kind, SystemAccountKind},
     std::num::NonZeroU32,
@@ -100,12 +100,12 @@ pub struct FeesOnlyTransaction {
 /// rent exempt.
 pub fn collect_rent_from_account(
     feature_set: &FeatureSet,
-    rent_collector: &RentCollector,
+    rent_collector: &dyn SVMRentCollector,
     address: &Pubkey,
     account: &mut AccountSharedData,
 ) -> CollectedInfo {
     if !feature_set.is_active(&feature_set::disable_rent_fees_collection::id()) {
-        rent_collector.collect_from_existing_account(address, account)
+        rent_collector.collect_rent(address, account)
     } else {
         // When rent fee collection is disabled, we won't collect rent for any account. If there
         // are any rent paying accounts, their `rent_epoch` won't change either. However, if the
@@ -135,7 +135,7 @@ pub fn validate_fee_payer(
     payer_account: &mut AccountSharedData,
     payer_index: IndexOfAccount,
     error_metrics: &mut TransactionErrorMetrics,
-    rent_collector: &RentCollector,
+    rent_collector: &dyn SVMRentCollector,
     fee: u64,
 ) -> Result<()> {
     if payer_account.lamports() == 0 {
@@ -151,7 +151,9 @@ pub fn validate_fee_payer(
         SystemAccountKind::Nonce => {
             // Should we ever allow a fees charge to zero a nonce account's
             // balance. The state MUST be set to uninitialized in that case
-            rent_collector.rent.minimum_balance(NonceState::size())
+            rent_collector
+                .get_rent()
+                .minimum_balance(NonceState::size())
         }
     };
 
@@ -164,13 +166,13 @@ pub fn validate_fee_payer(
             TransactionError::InsufficientFundsForFee
         })?;
 
-    let payer_pre_rent_state = RentState::from_account(payer_account, &rent_collector.rent);
+    let payer_pre_rent_state = rent_collector.get_account_rent_state(payer_account);
     payer_account
         .checked_sub_lamports(fee)
         .map_err(|_| TransactionError::InsufficientFundsForFee)?;
 
-    let payer_post_rent_state = RentState::from_account(payer_account, &rent_collector.rent);
-    RentState::check_rent_state_with_account(
+    let payer_post_rent_state = rent_collector.get_account_rent_state(payer_account);
+    rent_collector.check_rent_state_with_account(
         &payer_pre_rent_state,
         &payer_post_rent_state,
         payer_address,
@@ -191,7 +193,7 @@ pub(crate) fn load_accounts<CB: TransactionProcessingCallback>(
     error_metrics: &mut TransactionErrorMetrics,
     account_overrides: Option<&AccountOverrides>,
     feature_set: &FeatureSet,
-    rent_collector: &RentCollector,
+    rent_collector: &dyn SVMRentCollector,
     loaded_programs: &ProgramCacheForTxBatch,
 ) -> Vec<TransactionLoadResult> {
     txs.iter()
@@ -218,7 +220,7 @@ fn load_transaction<CB: TransactionProcessingCallback>(
     error_metrics: &mut TransactionErrorMetrics,
     account_overrides: Option<&AccountOverrides>,
     feature_set: &FeatureSet,
-    rent_collector: &RentCollector,
+    rent_collector: &dyn SVMRentCollector,
     loaded_programs: &ProgramCacheForTxBatch,
 ) -> TransactionLoadResult {
     match validation_result {
@@ -274,7 +276,7 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
     error_metrics: &mut TransactionErrorMetrics,
     account_overrides: Option<&AccountOverrides>,
     feature_set: &FeatureSet,
-    rent_collector: &RentCollector,
+    rent_collector: &dyn SVMRentCollector,
     loaded_programs: &ProgramCacheForTxBatch,
 ) -> Result<LoadedTransactionAccounts> {
     let mut tx_rent: TransactionRent = 0;
@@ -409,7 +411,7 @@ fn load_transaction_account<CB: TransactionProcessingCallback>(
     instruction_accounts: &[&u8],
     account_overrides: Option<&AccountOverrides>,
     feature_set: &FeatureSet,
-    rent_collector: &RentCollector,
+    rent_collector: &dyn SVMRentCollector,
     loaded_programs: &ProgramCacheForTxBatch,
 ) -> Result<(LoadedTransactionAccount, bool)> {
     let mut account_found = true;
@@ -1848,18 +1850,19 @@ mod tests {
         let compute_budget = ComputeBudget::new(u64::from(
             compute_budget_limits::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT,
         ));
+        let rent_collector = RentCollector::default();
         let transaction_context = TransactionContext::new(
             loaded_transaction.accounts,
-            Rent::default(),
+            rent_collector.get_rent().clone(),
             compute_budget.max_instruction_stack_depth,
             compute_budget.max_instruction_trace_length,
         );
 
         assert_eq!(
             TransactionAccountStateInfo::new(
-                &Rent::default(),
                 &transaction_context,
-                sanitized_tx.message()
+                sanitized_tx.message(),
+                &rent_collector,
             )
             .len(),
             num_accounts,

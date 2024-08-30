@@ -3478,9 +3478,7 @@ impl Bank {
         timings.saturating_add_in_place(ExecuteTimingType::CheckUs, check_us);
 
         let (blockhash, lamports_per_signature) = self.last_blockhash_and_lamports_per_signature();
-        // TODO: Pass into `TransactionProcessingEnvironment` in place of
-        // `rent_collector` when SVM supports the new `SVMRentCollector` trait.
-        let _rent_collector_with_metrics =
+        let rent_collector_with_metrics =
             RentCollectorWithMetrics::new(self.rent_collector.clone());
         let processing_environment = TransactionProcessingEnvironment {
             blockhash,
@@ -3489,7 +3487,7 @@ impl Bank {
             feature_set: Arc::clone(&self.feature_set),
             fee_structure: Some(&self.fee_structure),
             lamports_per_signature,
-            rent_collector: Some(&self.rent_collector),
+            rent_collector: Some(&rent_collector_with_metrics),
         };
 
         let sanitized_output = self

@@ -12,7 +12,7 @@ use {
         system_program,
         transaction::SanitizedTransaction,
     },
-    solana_svm::account_rent_state::RentState,
+    solana_svm_rent_collector::svm_rent_collector::SVMRentCollector,
     solana_vote::vote_account::VoteAccountsHashMap,
     std::{result::Result, sync::atomic::Ordering::Relaxed},
     thiserror::Error,
@@ -148,16 +148,16 @@ impl Bank {
             return Err(DepositFeeError::InvalidAccountOwner);
         }
 
-        let rent = &self.rent_collector().rent;
-        let recipient_pre_rent_state = RentState::from_account(&account, rent);
+        let recipient_pre_rent_state = self.rent_collector().get_account_rent_state(&account);
         let distribution = account.checked_add_lamports(fees);
         if distribution.is_err() {
             return Err(DepositFeeError::LamportOverflow);
         }
 
-        let recipient_post_rent_state = RentState::from_account(&account, rent);
-        let rent_state_transition_allowed =
-            recipient_post_rent_state.transition_allowed_from(&recipient_pre_rent_state);
+        let recipient_post_rent_state = self.rent_collector().get_account_rent_state(&account);
+        let rent_state_transition_allowed = self
+            .rent_collector()
+            .transition_allowed(&recipient_pre_rent_state, &recipient_post_rent_state);
         if !rent_state_transition_allowed {
             return Err(DepositFeeError::InvalidRentPayingAccount);
         }
@@ -334,6 +334,7 @@ pub mod tests {
             account::AccountSharedData, native_token::sol_to_lamports, pubkey, rent::Rent,
             signature::Signer,
         },
+        solana_svm_rent_collector::rent_state::RentState,
         std::sync::RwLock,
     };
 
@@ -633,8 +634,7 @@ pub mod tests {
         genesis_config.rent = Rent::default(); // Ensure rent is non-zero, as genesis_utils sets Rent::free by default
 
         let bank = Bank::new_for_tests(&genesis_config);
-        let rent = &bank.rent_collector().rent;
-        let rent_exempt_minimum = rent.minimum_balance(0);
+        let rent_exempt_minimum = bank.rent_collector().get_rent().minimum_balance(0);
 
         // Make one validator have an empty identity account
         let mut empty_validator_account = bank
@@ -671,7 +671,7 @@ pub mod tests {
             let account = bank
                 .get_account_with_fixed_root(address)
                 .unwrap_or_default();
-            RentState::from_account(&account, rent)
+            bank.rent_collector().get_account_rent_state(&account)
         };
 
         // Assert starting RentStates

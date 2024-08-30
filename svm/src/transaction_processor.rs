@@ -49,6 +49,7 @@ use {
         transaction::{self, TransactionError},
         transaction_context::{ExecutionRecord, TransactionContext},
     },
+    solana_svm_rent_collector::svm_rent_collector::SVMRentCollector,
     solana_svm_transaction::{svm_message::SVMMessage, svm_transaction::SVMTransaction},
     solana_timings::{ExecuteTimingType, ExecuteTimings},
     solana_type_overrides::sync::{atomic::Ordering, Arc, RwLock, RwLockReadGuard},
@@ -132,7 +133,7 @@ pub struct TransactionProcessingEnvironment<'a> {
     /// Lamports per signature to charge per transaction.
     pub lamports_per_signature: u64,
     /// Rent collector to use for the transaction batch.
-    pub rent_collector: Option<&'a RentCollector>,
+    pub rent_collector: Option<&'a dyn SVMRentCollector>,
 }
 
 #[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
@@ -377,7 +378,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         check_results: Vec<TransactionCheckResult>,
         feature_set: &FeatureSet,
         fee_structure: &FeeStructure,
-        rent_collector: &RentCollector,
+        rent_collector: &dyn SVMRentCollector,
         error_counters: &mut TransactionErrorMetrics,
     ) -> Vec<TransactionValidationResult> {
         sanitized_txs
@@ -412,7 +413,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         checked_details: CheckedTransactionDetails,
         feature_set: &FeatureSet,
         fee_structure: &FeeStructure,
-        rent_collector: &RentCollector,
+        rent_collector: &dyn SVMRentCollector,
         error_counters: &mut TransactionErrorMetrics,
     ) -> transaction::Result<ValidatedTransactionDetails> {
         let compute_budget_limits = process_compute_budget_instructions(
@@ -727,10 +728,10 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
             Some(lamports_sum)
         }
 
-        let rent = environment
+        let default_rent_collector = RentCollector::default();
+        let rent_collector = environment
             .rent_collector
-            .map(|rent_collector| rent_collector.rent.clone())
-            .unwrap_or_default();
+            .unwrap_or(&default_rent_collector);
 
         let lamports_before_tx =
             transaction_accounts_lamports_sum(&transaction_accounts, tx).unwrap_or(0);
@@ -741,7 +742,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
 
         let mut transaction_context = TransactionContext::new(
             transaction_accounts,
-            rent.clone(),
+            rent_collector.get_rent().clone(),
             compute_budget.max_instruction_stack_depth,
             compute_budget.max_instruction_trace_length,
         );
@@ -749,7 +750,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         transaction_context.set_signature(tx.signature());
 
         let pre_account_state_info =
-            TransactionAccountStateInfo::new(&rent, &transaction_context, tx);
+            TransactionAccountStateInfo::new(&transaction_context, tx, rent_collector);
 
         let log_collector = if config.recording_config.enable_log_recording {
             match config.log_messages_bytes_limit {
@@ -803,11 +804,12 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         let mut status = process_result
             .and_then(|info| {
                 let post_account_state_info =
-                    TransactionAccountStateInfo::new(&rent, &transaction_context, tx);
+                    TransactionAccountStateInfo::new(&transaction_context, tx, rent_collector);
                 TransactionAccountStateInfo::verify_changes(
                     &pre_account_state_info,
                     &post_account_state_info,
                     &transaction_context,
+                    rent_collector,
                 )
                 .map(|_| info)
             })
