@@ -5687,7 +5687,6 @@ impl AccountsDb {
             // Notice the subtle `?` at previous line, we bail out pretty early if missing.
 
             if new_slot == slot && new_storage_location.is_store_id_equal(&storage_location) {
-                inc_new_counter_info!("retry_to_get_account_accessor-panic", 1);
                 let message = format!(
                     "Bad index entry detected ({}, {}, {:?}, {:?}, {:?}, {:?})",
                     pubkey,
