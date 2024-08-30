@@ -30,6 +30,7 @@ extraPrimordialStakes="${21:=0}"
 tmpfsAccounts="${22:false}"
 disableQuic="${23}"
 enableUdp="${24}"
+maybeWenRestart="${25}"
 
 set +x
 
@@ -298,6 +299,11 @@ cat >> ~/solana/on-reboot <<EOF
       ./multinode-demo/faucet.sh > faucet.log 2>&1 &
 EOF
     fi
+
+    if [[ -n "$maybeWenRestart" ]]; then
+      args+=(--wen-restart "$maybeWenRestart")
+    fi
+
     # shellcheck disable=SC2206 # Don't want to double quote $extraNodeArgs
     args+=($extraNodeArgs)
 
@@ -427,6 +433,10 @@ EOF
 
     if $enableUdp; then
       args+=(--tpu-enable-udp)
+    fi
+
+    if [[ -n "$maybeWenRestart" ]]; then
+      args+=(--wen-restart "$maybeWenRestart")
     fi
 
 cat >> ~/solana/on-reboot <<EOF
