@@ -4,7 +4,6 @@ pub use solana_program::vote::state::{vote_state_versions::*, *};
 use {
     log::*,
     serde_derive::{Deserialize, Serialize},
-    solana_metrics::datapoint_debug,
     solana_program::vote::{error::VoteError, program::id},
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
@@ -1004,11 +1003,9 @@ pub fn withdraw<S: std::hash::BuildHasher>(
             .unwrap_or(false);
 
         if reject_active_vote_account_close {
-            datapoint_debug!("vote-account-close", ("reject-active", 1, i64));
             return Err(VoteError::ActiveVoteAccountClose.into());
         } else {
             // Deinitialize upon zero-balance
-            datapoint_debug!("vote-account-close", ("allow", 1, i64));
             set_vote_account_state(&mut vote_account, VoteState::default())?;
         }
     } else {
