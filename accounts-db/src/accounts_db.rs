@@ -2039,6 +2039,7 @@ pub struct ShrinkStats {
     index_scan_returned_none: AtomicU64,
     index_scan_returned_some: AtomicU64,
     accounts_loaded: AtomicU64,
+    initial_candidates_count: AtomicU64,
     purged_zero_lamports: AtomicU64,
     accounts_not_found_in_index: AtomicU64,
     shrinking_ancient: AtomicU64,
@@ -2163,6 +2164,11 @@ impl ShrinkStats {
                 (
                     "accounts_not_found_in_index",
                     self.accounts_not_found_in_index.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "initial_candidates_count",
+                    self.initial_candidates_count.swap(0, Ordering::Relaxed),
                     i64
                 ),
             );
@@ -5036,6 +5042,10 @@ impl AccountsDb {
 
         let shrink_candidates_slots =
             std::mem::take(&mut *self.shrink_candidate_slots.lock().unwrap());
+
+        self.shrink_stats
+            .initial_candidates_count
+            .store(shrink_candidates_slots.len() as u64, Ordering::Relaxed);
 
         let (shrink_slots, shrink_slots_next_batch) = {
             if let AccountShrinkThreshold::TotalSpace { shrink_ratio } = self.shrink_ratio {
