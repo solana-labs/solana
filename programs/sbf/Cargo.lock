@@ -5261,6 +5261,7 @@ dependencies = [
  "num_cpus",
  "num_enum 0.7.2",
  "prost",
+ "qualifier_attr",
  "rand 0.8.5",
  "rand_chacha 0.3.1",
  "rayon",
