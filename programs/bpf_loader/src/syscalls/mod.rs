@@ -42,7 +42,8 @@ use {
             enable_big_mod_exp_syscall, enable_get_epoch_stake_syscall,
             enable_partitioned_epoch_reward, enable_poseidon_syscall,
             error_on_syscall_bpf_function_hash_collisions, get_sysvar_syscall_enabled,
-            last_restart_slot_sysvar, reject_callx_r10, remaining_compute_units_syscall_enabled,
+            last_restart_slot_sysvar, partitioned_epoch_rewards_superfeature, reject_callx_r10,
+            remaining_compute_units_syscall_enabled,
         },
         hash::{Hash, Hasher},
         instruction::{AccountMeta, InstructionError, ProcessedSiblingInstruction},
@@ -273,8 +274,9 @@ pub fn create_program_runtime_environment_v1<'a>(
     let blake3_syscall_enabled = feature_set.is_active(&blake3_syscall_enabled::id());
     let curve25519_syscall_enabled = feature_set.is_active(&curve25519_syscall_enabled::id());
     let disable_fees_sysvar = feature_set.is_active(&disable_fees_sysvar::id());
-    let epoch_rewards_syscall_enabled =
-        feature_set.is_active(&enable_partitioned_epoch_reward::id());
+    let epoch_rewards_syscall_enabled = feature_set
+        .is_active(&enable_partitioned_epoch_reward::id())
+        || feature_set.is_active(&partitioned_epoch_rewards_superfeature::id());
     let disable_deploy_of_alloc_free_syscall = reject_deployment_of_broken_elfs
         && feature_set.is_active(&disable_deploy_of_alloc_free_syscall::id());
     let last_restart_slot_syscall_enabled = feature_set.is_active(&last_restart_slot_sysvar::id());

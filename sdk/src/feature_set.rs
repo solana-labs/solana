@@ -369,6 +369,10 @@ pub mod enable_partitioned_epoch_reward {
     solana_sdk::declare_id!("9bn2vTJUsUcnpiZWbu2woSKtTGW3ErZC9ERv88SDqQjK");
 }
 
+pub mod partitioned_epoch_rewards_superfeature {
+    solana_sdk::declare_id!("PERzQrt5gBD1XEe2c9XdFWqwgHY3mr7cYWbm5V772V8");
+}
+
 pub mod spl_token_v3_4_0 {
     solana_sdk::declare_id!("Ftok4njE8b7tDffYkC5bAbCaQv5sL6jispYrprzatUwN");
 }
@@ -1066,6 +1070,7 @@ lazy_static! {
         (enable_transaction_loading_failure_fees::id(), "Enable fees for some additional transaction failures SIMD-0082"),
         (enable_turbine_extended_fanout_experiments::id(), "enable turbine extended fanout experiments #"),
         (deprecate_legacy_vote_ixs::id(), "Deprecate legacy vote instructions"),
+        (partitioned_epoch_rewards_superfeature::id(), "replaces enable_partitioned_epoch_reward to enable partitioned rewards at epoch boundary SIMD-0118"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

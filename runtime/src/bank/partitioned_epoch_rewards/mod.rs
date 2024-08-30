@@ -18,6 +18,7 @@ use {
         reward_info::RewardInfo,
         stake::state::{Delegation, Stake, StakeStateV2},
     },
+    solana_stake_program::points::PointValue,
     solana_vote::vote_account::VoteAccounts,
     std::sync::Arc,
 };
@@ -95,11 +96,24 @@ struct StakeRewardCalculation {
     total_stake_rewards_lamports: u64,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct CalculateValidatorRewardsResult {
     vote_rewards_accounts: VoteRewardsAccounts,
     stake_reward_calculation: StakeRewardCalculation,
-    total_points: u128,
+    point_value: PointValue,
+}
+
+impl Default for CalculateValidatorRewardsResult {
+    fn default() -> Self {
+        Self {
+            vote_rewards_accounts: VoteRewardsAccounts::default(),
+            stake_reward_calculation: StakeRewardCalculation::default(),
+            point_value: PointValue {
+                points: 0,
+                rewards: 0,
+            },
+        }
+    }
 }
 
 /// hold reward calc info to avoid recalculation across functions
@@ -116,12 +130,11 @@ pub(super) struct PartitionedRewardsCalculation {
     pub(super) vote_account_rewards: VoteRewardsAccounts,
     pub(super) stake_rewards_by_partition: StakeRewardCalculationPartitioned,
     pub(super) old_vote_balance_and_staked: u64,
-    pub(super) validator_rewards: u64,
     pub(super) validator_rate: f64,
     pub(super) foundation_rate: f64,
     pub(super) prev_epoch_duration_in_years: f64,
     pub(super) capitalization: u64,
-    total_points: u128,
+    point_value: PointValue,
 }
 
 /// result of calculating the stake rewards at beginning of new epoch
@@ -133,14 +146,16 @@ pub(super) struct StakeRewardCalculationPartitioned {
 }
 
 pub(super) struct CalculateRewardsAndDistributeVoteRewardsResult {
-    /// total rewards for the epoch (including both vote rewards and stake rewards)
+    /// total rewards to be distributed in the epoch (including both vote
+    /// rewards and stake rewards)
     pub(super) total_rewards: u64,
     /// distributed vote rewards
     pub(super) distributed_rewards: u64,
-    /// total rewards points calculated for the current epoch, where points
+    /// total rewards and points calculated for the current epoch, where points
     /// equals the sum of (delegated stake * credits observed) for all
-    /// delegations
-    pub(super) total_points: u128,
+    /// delegations and rewards are the lamports to split across all stake and
+    /// vote accounts
+    pub(super) point_value: PointValue,
     /// stake rewards that still need to be distributed, grouped by partition
     pub(super) stake_rewards_by_partition: Vec<PartitionedStakeRewards>,
 }
@@ -180,6 +195,9 @@ impl Bank {
     pub(super) fn is_partitioned_rewards_feature_enabled(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::enable_partitioned_epoch_reward::id())
+            || self
+                .feature_set
+                .is_active(&feature_set::partitioned_epoch_rewards_superfeature::id())
     }
 
     pub(crate) fn set_epoch_reward_status_active(
@@ -347,17 +365,25 @@ mod tests {
         stake_account_stores_per_block: u64,
         advance_num_slots: u64,
     ) -> RewardBank {
-        let validator_keypairs = (0..expected_num_delegations)
+        create_reward_bank_with_specific_stakes(
+            vec![2_000_000_000; expected_num_delegations],
+            stake_account_stores_per_block,
+            advance_num_slots,
+        )
+    }
+
+    pub(super) fn create_reward_bank_with_specific_stakes(
+        stakes: Vec<u64>,
+        stake_account_stores_per_block: u64,
+        advance_num_slots: u64,
+    ) -> RewardBank {
+        let validator_keypairs = (0..stakes.len())
             .map(|_| ValidatorVoteKeypairs::new_rand())
             .collect::<Vec<_>>();
 
         let GenesisConfigInfo {
             mut genesis_config, ..
-        } = create_genesis_config_with_vote_accounts(
-            1_000_000_000,
-            &validator_keypairs,
-            vec![2_000_000_000; expected_num_delegations],
-        );
+        } = create_genesis_config_with_vote_accounts(1_000_000_000, &validator_keypairs, stakes);
         genesis_config.epoch_schedule = EpochSchedule::new(SLOTS_PER_EPOCH);
 
         let mut accounts_db_config: AccountsDbConfig = ACCOUNTS_DB_CONFIG_FOR_TESTING.clone();
@@ -456,7 +482,7 @@ mod tests {
 
         let mut bank = Bank::new_for_tests(&genesis_config);
         assert!(!bank.is_partitioned_rewards_feature_enabled());
-        bank.activate_feature(&feature_set::enable_partitioned_epoch_reward::id());
+        bank.activate_feature(&feature_set::partitioned_epoch_rewards_superfeature::id());
         assert!(bank.is_partitioned_rewards_feature_enabled());
     }
 
@@ -950,6 +976,9 @@ mod tests {
         genesis_config
             .accounts
             .remove(&feature_set::enable_partitioned_epoch_reward::id());
+        genesis_config
+            .accounts
+            .remove(&feature_set::partitioned_epoch_rewards_superfeature::id());
 
         let bank = Bank::new_for_tests(&genesis_config);
 

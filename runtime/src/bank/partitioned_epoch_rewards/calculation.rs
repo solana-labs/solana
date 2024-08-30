@@ -50,7 +50,7 @@ impl Bank {
         let CalculateRewardsAndDistributeVoteRewardsResult {
             total_rewards,
             distributed_rewards,
-            total_points,
+            point_value,
             stake_rewards_by_partition,
         } = self.calculate_rewards_and_distribute_vote_rewards(
             parent_epoch,
@@ -80,7 +80,7 @@ impl Bank {
             distributed_rewards,
             distribution_starting_block_height,
             num_partitions,
-            total_points,
+            point_value,
         );
 
         datapoint_info!(
@@ -105,12 +105,11 @@ impl Bank {
             vote_account_rewards,
             stake_rewards_by_partition,
             old_vote_balance_and_staked,
-            validator_rewards,
             validator_rate,
             foundation_rate,
             prev_epoch_duration_in_years,
             capitalization,
-            total_points,
+            point_value,
         } = self.calculate_rewards_for_partitioning(
             prev_epoch,
             reward_calc_tracer,
@@ -136,11 +135,11 @@ impl Bank {
         self.assert_validator_rewards_paid(validator_rewards_paid);
 
         // verify that we didn't pay any more than we expected to
-        assert!(validator_rewards >= validator_rewards_paid + total_stake_rewards_lamports);
+        assert!(point_value.rewards >= validator_rewards_paid + total_stake_rewards_lamports);
 
         info!(
             "distributed vote rewards: {} out of {}, remaining {}",
-            validator_rewards_paid, validator_rewards, total_stake_rewards_lamports
+            validator_rewards_paid, point_value.rewards, total_stake_rewards_lamports
         );
 
         let (num_stake_accounts, num_vote_accounts) = {
@@ -179,7 +178,7 @@ impl Bank {
         CalculateRewardsAndDistributeVoteRewardsResult {
             total_rewards: validator_rewards_paid + total_stake_rewards_lamports,
             distributed_rewards: validator_rewards_paid,
-            total_points,
+            point_value,
             stake_rewards_by_partition,
         }
     }
@@ -231,7 +230,7 @@ impl Bank {
         let CalculateValidatorRewardsResult {
             vote_rewards_accounts: vote_account_rewards,
             stake_reward_calculation: mut stake_rewards,
-            total_points,
+            point_value,
         } = self
             .calculate_validator_rewards(
                 prev_epoch,
@@ -260,12 +259,11 @@ impl Bank {
                 total_stake_rewards_lamports: stake_rewards.total_stake_rewards_lamports,
             },
             old_vote_balance_and_staked,
-            validator_rewards,
             validator_rate,
             foundation_rate,
             prev_epoch_duration_in_years,
             capitalization,
-            total_points,
+            point_value,
         }
     }
 
@@ -288,12 +286,11 @@ impl Bank {
             metrics,
         )
         .map(|point_value| {
-            let total_points = point_value.points;
             let (vote_rewards_accounts, stake_reward_calculation) = self
                 .calculate_stake_vote_rewards(
                     &reward_calculate_param,
                     rewarded_epoch,
-                    point_value,
+                    point_value.clone(),
                     thread_pool,
                     reward_calc_tracer,
                     metrics,
@@ -301,7 +298,7 @@ impl Bank {
             CalculateValidatorRewardsResult {
                 vote_rewards_accounts,
                 stake_reward_calculation,
-                total_points,
+                point_value,
             }
         })
     }
@@ -601,7 +598,8 @@ mod tests {
                 null_tracer,
                 partitioned_epoch_rewards::{
                     tests::{
-                        create_default_reward_bank, create_reward_bank, RewardBank, SLOTS_PER_EPOCH,
+                        create_default_reward_bank, create_reward_bank,
+                        create_reward_bank_with_specific_stakes, RewardBank, SLOTS_PER_EPOCH,
                     },
                     EpochRewardStatus, StartBlockHeightAndRewards,
                 },
@@ -988,11 +986,14 @@ mod tests {
 
     #[test]
     fn test_recalculate_partitioned_rewards() {
-        let expected_num_delegations = 4;
+        let expected_num_delegations = 3;
         let num_rewards_per_block = 2;
         // Distribute 4 rewards over 2 blocks
-        let RewardBank { bank, .. } = create_reward_bank(
-            expected_num_delegations,
+        let mut stakes = vec![2_000_000_000; expected_num_delegations];
+        // Add stake large enough to be affected by total-rewards discrepancy
+        stakes.push(40_000_000_000);
+        let RewardBank { bank, .. } = create_reward_bank_with_specific_stakes(
+            stakes,
             num_rewards_per_block,
             SLOTS_PER_EPOCH - 1,
         );
@@ -1012,6 +1013,7 @@ mod tests {
                     stake_rewards_by_partition: expected_stake_rewards,
                     ..
                 },
+            point_value,
             ..
         } = bank.calculate_rewards_for_partitioning(
             rewarded_epoch,
@@ -1034,6 +1036,9 @@ mod tests {
         );
         assert_eq!(expected_stake_rewards.len(), recalculated_rewards.len());
         compare_stake_rewards(&expected_stake_rewards, recalculated_rewards);
+
+        let sysvar = bank.get_epoch_rewards_sysvar();
+        assert_eq!(point_value.rewards, sysvar.total_rewards);
 
         // Advance to first distribution slot
         let mut bank =

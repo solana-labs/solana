@@ -66,8 +66,8 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
     };
 
     // The EpochRewards sysvar only exists after the
-    // enable_partitioned_epoch_reward feature is activated. If it exists, check
-    // the `active` field
+    // partitioned_epoch_rewards_superfeature feature is activated. If it
+    // exists, check the `active` field
     let epoch_rewards_active = invoke_context
         .get_sysvar_cache()
         .get_epoch_rewards()
