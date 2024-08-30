@@ -3718,6 +3718,13 @@ impl AccountsDb {
                 i64
             ),
             (
+                "unref_zero_count",
+                self.accounts_index
+                    .unref_zero_count
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
                 "ancient_account_cleans",
                 ancient_account_cleans.load(Ordering::Relaxed),
                 i64
