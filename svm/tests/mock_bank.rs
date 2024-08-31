@@ -25,7 +25,7 @@ use {
         sysvar::SysvarId,
     },
     solana_svm::{
-        transaction_processing_callback::TransactionProcessingCallback,
+        transaction_processing_callback::{AccountState, TransactionProcessingCallback},
         transaction_processor::TransactionBatchProcessor,
     },
     solana_type_overrides::sync::{Arc, RwLock},
@@ -56,6 +56,9 @@ impl ForkGraph for MockForkGraph {
 pub struct MockBankCallback {
     pub feature_set: Arc<FeatureSet>,
     pub account_shared_data: Arc<RwLock<HashMap<Pubkey, AccountSharedData>>>,
+    #[allow(clippy::type_complexity)]
+    pub inspected_accounts:
+        Arc<RwLock<HashMap<Pubkey, Vec<(Option<AccountSharedData>, /* is_writable */ bool)>>>>,
 }
 
 impl TransactionProcessingCallback for MockBankCallback {
@@ -86,6 +89,19 @@ impl TransactionProcessingCallback for MockBankCallback {
             .write()
             .unwrap()
             .insert(*program_id, account_data);
+    }
+
+    fn inspect_account(&self, address: &Pubkey, account_state: AccountState, is_writable: bool) {
+        let account = match account_state {
+            AccountState::Dead => None,
+            AccountState::Alive(account) => Some(account.clone()),
+        };
+        self.inspected_accounts
+            .write()
+            .unwrap()
+            .entry(*address)
+            .or_default()
+            .push((account, is_writable));
     }
 }
 

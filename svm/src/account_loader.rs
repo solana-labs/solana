@@ -608,12 +608,15 @@ mod tests {
             transaction::{Result, SanitizedTransaction, Transaction, TransactionError},
             transaction_context::{TransactionAccount, TransactionContext},
         },
-        std::{borrow::Cow, collections::HashMap, sync::Arc},
+        std::{borrow::Cow, cell::RefCell, collections::HashMap, sync::Arc},
     };
 
     #[derive(Default)]
     struct TestCallbacks {
         accounts_map: HashMap<Pubkey, AccountSharedData>,
+        #[allow(clippy::type_complexity)]
+        inspected_accounts:
+            RefCell<HashMap<Pubkey, Vec<(Option<AccountSharedData>, /* is_writable */ bool)>>>,
     }
 
     impl TransactionProcessingCallback for TestCallbacks {
@@ -623,6 +626,23 @@ mod tests {
 
         fn get_account_shared_data(&self, pubkey: &Pubkey) -> Option<AccountSharedData> {
             self.accounts_map.get(pubkey).cloned()
+        }
+
+        fn inspect_account(
+            &self,
+            address: &Pubkey,
+            account_state: AccountState,
+            is_writable: bool,
+        ) {
+            let account = match account_state {
+                AccountState::Dead => None,
+                AccountState::Alive(account) => Some(account.clone()),
+            };
+            self.inspected_accounts
+                .borrow_mut()
+                .entry(*address)
+                .or_default()
+                .push((account, is_writable));
         }
     }
 
@@ -640,7 +660,10 @@ mod tests {
         for (pubkey, account) in accounts {
             accounts_map.insert(*pubkey, account.clone());
         }
-        let callbacks = TestCallbacks { accounts_map };
+        let callbacks = TestCallbacks {
+            accounts_map,
+            ..Default::default()
+        };
         load_accounts(
             &callbacks,
             &[sanitized_tx],
@@ -929,7 +952,10 @@ mod tests {
         for (pubkey, account) in accounts {
             accounts_map.insert(*pubkey, account.clone());
         }
-        let callbacks = TestCallbacks { accounts_map };
+        let callbacks = TestCallbacks {
+            accounts_map,
+            ..Default::default()
+        };
         load_accounts(
             &callbacks,
             &[tx],
@@ -2107,5 +2133,98 @@ mod tests {
         );
         assert_eq!(account.rent_epoch(), 0);
         assert_eq!(account.lamports(), 0);
+    }
+
+    // Ensure `TransactionProcessingCallback::inspect_account()` is called when
+    // loading accounts for transaction processing.
+    #[test]
+    fn test_inspect_account_non_fee_payer() {
+        let mut mock_bank = TestCallbacks::default();
+
+        let address0 = Pubkey::new_unique(); // <-- fee payer
+        let address1 = Pubkey::new_unique(); // <-- initially alive
+        let address2 = Pubkey::new_unique(); // <-- initially dead
+        let address3 = Pubkey::new_unique(); // <-- program
+
+        let mut account0 = AccountSharedData::default();
+        account0.set_lamports(1_000_000_000);
+        mock_bank.accounts_map.insert(address0, account0.clone());
+
+        let mut account1 = AccountSharedData::default();
+        account1.set_lamports(2_000_000_000);
+        mock_bank.accounts_map.insert(address1, account1.clone());
+
+        // account2 *not* added to the bank's accounts_map
+
+        let mut account3 = AccountSharedData::default();
+        account3.set_lamports(4_000_000_000);
+        account3.set_executable(true);
+        account3.set_owner(native_loader::id());
+        mock_bank.accounts_map.insert(address3, account3.clone());
+
+        let message = Message {
+            account_keys: vec![address0, address1, address2, address3],
+            header: MessageHeader::default(),
+            instructions: vec![
+                CompiledInstruction {
+                    program_id_index: 3,
+                    accounts: vec![0],
+                    data: vec![],
+                },
+                CompiledInstruction {
+                    program_id_index: 3,
+                    accounts: vec![1, 2],
+                    data: vec![],
+                },
+                CompiledInstruction {
+                    program_id_index: 3,
+                    accounts: vec![1],
+                    data: vec![],
+                },
+            ],
+            recent_blockhash: Hash::new_unique(),
+        };
+        let sanitized_message = new_unchecked_sanitized_message(message);
+        let sanitized_transaction = SanitizedTransaction::new_for_tests(
+            sanitized_message,
+            vec![Signature::new_unique()],
+            false,
+        );
+        let validation_result = Ok(ValidatedTransactionDetails {
+            loaded_fee_payer_account: LoadedTransactionAccount {
+                account: account0.clone(),
+                ..LoadedTransactionAccount::default()
+            },
+            ..ValidatedTransactionDetails::default()
+        });
+        let _load_results = load_accounts(
+            &mock_bank,
+            &[sanitized_transaction],
+            vec![validation_result],
+            &mut TransactionErrorMetrics::default(),
+            None,
+            &FeatureSet::default(),
+            &RentCollector::default(),
+            &ProgramCacheForTxBatch::default(),
+        );
+
+        // ensure the loaded accounts are inspected
+        let mut actual_inspected_accounts: Vec<_> = mock_bank
+            .inspected_accounts
+            .borrow()
+            .iter()
+            .map(|(k, v)| (*k, v.clone()))
+            .collect();
+        actual_inspected_accounts.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+
+        let mut expected_inspected_accounts = vec![
+            // *not* key0, since it is loaded during fee payer validation
+            (address1, vec![(Some(account1), true)]),
+            (address2, vec![(None, true)]),
+            (address3, vec![(Some(account3), false)]),
+        ];
+        expected_inspected_accounts.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+
+        assert_eq!(actual_inspected_accounts, expected_inspected_accounts,);
     }
 }

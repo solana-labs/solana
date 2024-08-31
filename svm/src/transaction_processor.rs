@@ -15,7 +15,7 @@ use {
         transaction_account_state_info::TransactionAccountStateInfo,
         transaction_error_metrics::TransactionErrorMetrics,
         transaction_execution_result::{ExecutedTransaction, TransactionExecutionDetails},
-        transaction_processing_callback::TransactionProcessingCallback,
+        transaction_processing_callback::{AccountState, TransactionProcessingCallback},
         transaction_processing_result::{ProcessedTransaction, TransactionProcessingResult},
     },
     log::debug,
@@ -433,6 +433,12 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
             error_counters.account_not_found += 1;
             return Err(TransactionError::AccountNotFound);
         };
+
+        callbacks.inspect_account(
+            fee_payer_address,
+            AccountState::Alive(&fee_payer_account),
+            true, // <-- is_writable
+        );
 
         let fee_payer_loaded_rent_epoch = fee_payer_account.rent_epoch();
         let fee_payer_rent_debit = collect_rent_from_account(
@@ -1034,6 +1040,9 @@ mod tests {
     #[derive(Default, Clone)]
     pub struct MockBankCallback {
         pub account_shared_data: Arc<RwLock<HashMap<Pubkey, AccountSharedData>>>,
+        #[allow(clippy::type_complexity)]
+        pub inspected_accounts:
+            Arc<RwLock<HashMap<Pubkey, Vec<(Option<AccountSharedData>, /* is_writable */ bool)>>>>,
     }
 
     impl TransactionProcessingCallback for MockBankCallback {
@@ -1064,6 +1073,24 @@ mod tests {
                 .write()
                 .unwrap()
                 .insert(*program_id, account_data);
+        }
+
+        fn inspect_account(
+            &self,
+            address: &Pubkey,
+            account_state: AccountState,
+            is_writable: bool,
+        ) {
+            let account = match account_state {
+                AccountState::Dead => None,
+                AccountState::Alive(account) => Some(account.clone()),
+            };
+            self.inspected_accounts
+                .write()
+                .unwrap()
+                .entry(*address)
+                .or_default()
+                .push((account, is_writable));
         }
     }
 
@@ -1853,6 +1880,7 @@ mod tests {
         mock_accounts.insert(*fee_payer_address, fee_payer_account.clone());
         let mock_bank = MockBankCallback {
             account_shared_data: Arc::new(RwLock::new(mock_accounts)),
+            ..Default::default()
         };
 
         let mut error_counters = TransactionErrorMetrics::default();
@@ -1930,6 +1958,7 @@ mod tests {
         mock_accounts.insert(*fee_payer_address, fee_payer_account.clone());
         let mock_bank = MockBankCallback {
             account_shared_data: Arc::new(RwLock::new(mock_accounts)),
+            ..Default::default()
         };
 
         let mut error_counters = TransactionErrorMetrics::default();
@@ -2014,6 +2043,7 @@ mod tests {
         mock_accounts.insert(*fee_payer_address, fee_payer_account.clone());
         let mock_bank = MockBankCallback {
             account_shared_data: Arc::new(RwLock::new(mock_accounts)),
+            ..Default::default()
         };
 
         let mut error_counters = TransactionErrorMetrics::default();
@@ -2051,6 +2081,7 @@ mod tests {
         mock_accounts.insert(*fee_payer_address, fee_payer_account.clone());
         let mock_bank = MockBankCallback {
             account_shared_data: Arc::new(RwLock::new(mock_accounts)),
+            ..Default::default()
         };
 
         let mut error_counters = TransactionErrorMetrics::default();
@@ -2086,6 +2117,7 @@ mod tests {
         mock_accounts.insert(*fee_payer_address, fee_payer_account.clone());
         let mock_bank = MockBankCallback {
             account_shared_data: Arc::new(RwLock::new(mock_accounts)),
+            ..Default::default()
         };
 
         let mut error_counters = TransactionErrorMetrics::default();
@@ -2177,6 +2209,7 @@ mod tests {
             mock_accounts.insert(*fee_payer_address, fee_payer_account.clone());
             let mock_bank = MockBankCallback {
                 account_shared_data: Arc::new(RwLock::new(mock_accounts)),
+                ..Default::default()
             };
 
             let mut error_counters = TransactionErrorMetrics::default();
@@ -2242,6 +2275,7 @@ mod tests {
             mock_accounts.insert(*fee_payer_address, fee_payer_account.clone());
             let mock_bank = MockBankCallback {
                 account_shared_data: Arc::new(RwLock::new(mock_accounts)),
+                ..Default::default()
             };
 
             let mut error_counters = TransactionErrorMetrics::default();
@@ -2294,6 +2328,7 @@ mod tests {
 
         let mock_bank = MockBankCallback {
             account_shared_data: Arc::new(RwLock::new(mock_accounts)),
+            ..Default::default()
         };
 
         let mut error_counters = TransactionErrorMetrics::default();
@@ -2316,6 +2351,63 @@ mod tests {
             result.is_ok(),
             "test_account_override_used: {:?}",
             result.err()
+        );
+    }
+
+    // Ensure `TransactionProcessingCallback::inspect_account()` is called when
+    // validating the fee payer, since that's when the fee payer account is loaded.
+    #[test]
+    fn test_inspect_account_fee_payer() {
+        let fee_payer_address = Pubkey::new_unique();
+        let fee_payer_account = AccountSharedData::new_rent_epoch(
+            123_000_000_000,
+            0,
+            &Pubkey::default(),
+            RENT_EXEMPT_RENT_EPOCH,
+        );
+        let mock_bank = MockBankCallback::default();
+        mock_bank
+            .account_shared_data
+            .write()
+            .unwrap()
+            .insert(fee_payer_address, fee_payer_account.clone());
+
+        let message = new_unchecked_sanitized_message(Message::new_with_blockhash(
+            &[
+                ComputeBudgetInstruction::set_compute_unit_limit(2000u32),
+                ComputeBudgetInstruction::set_compute_unit_price(1_000_000_000),
+            ],
+            Some(&fee_payer_address),
+            &Hash::new_unique(),
+        ));
+        let batch_processor = TransactionBatchProcessor::<TestForkGraph>::default();
+        batch_processor
+            .validate_transaction_fee_payer(
+                &mock_bank,
+                None,
+                &message,
+                CheckedTransactionDetails {
+                    nonce: None,
+                    lamports_per_signature: 5000,
+                },
+                &FeatureSet::default(),
+                &FeeStructure::default(),
+                &RentCollector::default(),
+                &mut TransactionErrorMetrics::default(),
+            )
+            .unwrap();
+
+        // ensure the fee payer is an inspected account
+        let actual_inspected_accounts: Vec<_> = mock_bank
+            .inspected_accounts
+            .read()
+            .unwrap()
+            .iter()
+            .map(|(k, v)| (*k, v.clone()))
+            .collect();
+        assert_eq!(
+            actual_inspected_accounts.as_slice(),
+            &[(fee_payer_address, vec![(Some(fee_payer_account), true)])],
         );
     }
 }

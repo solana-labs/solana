@@ -655,3 +655,233 @@ fn execute_test_entry(test_entry: SvmTestEntry) {
         }
     }
 }
+
+#[test]
+fn svm_inspect_account() {
+    let mock_bank = MockBankCallback::default();
+    let mut expected_inspected_accounts: HashMap<_, Vec<_>> = HashMap::new();
+
+    let transfer_program =
+        deploy_program("simple-transfer".to_string(), DEPLOYMENT_SLOT, &mock_bank);
+
+    let fee_payer_keypair = Keypair::new();
+    let sender_keypair = Keypair::new();
+
+    let fee_payer = fee_payer_keypair.pubkey();
+    let sender = sender_keypair.pubkey();
+    let recipient = Pubkey::new_unique();
+    let system = system_program::id();
+
+    // Setting up the accounts for the transfer
+
+    // fee payer
+    let mut fee_payer_account = AccountSharedData::default();
+    fee_payer_account.set_lamports(80_020);
+    mock_bank
+        .account_shared_data
+        .write()
+        .unwrap()
+        .insert(fee_payer, fee_payer_account.clone());
+    expected_inspected_accounts
+        .entry(fee_payer)
+        .or_default()
+        .push((Some(fee_payer_account.clone()), true));
+
+    // sender
+    let mut sender_account = AccountSharedData::default();
+    sender_account.set_lamports(11_000_000);
+    mock_bank
+        .account_shared_data
+        .write()
+        .unwrap()
+        .insert(sender, sender_account.clone());
+    expected_inspected_accounts
+        .entry(sender)
+        .or_default()
+        .push((Some(sender_account.clone()), true));
+
+    // recipient -- initially dead
+    expected_inspected_accounts
+        .entry(recipient)
+        .or_default()
+        .push((None, true));
+
+    let instruction = Instruction::new_with_bytes(
+        transfer_program,
+        &u64::to_be_bytes(1_000_000),
+        vec![
+            AccountMeta::new(sender, true),
+            AccountMeta::new(recipient, false),
+            AccountMeta::new_readonly(system, false),
+        ],
+    );
+    let transaction = Transaction::new_signed_with_payer(
+        &[instruction],
+        Some(&fee_payer),
+        &[&fee_payer_keypair, &sender_keypair],
+        Hash::default(),
+    );
+    let sanitized_transaction = SanitizedTransaction::from_transaction_for_tests(transaction);
+    let transaction_check = Ok(CheckedTransactionDetails {
+        nonce: None,
+        lamports_per_signature: 20,
+    });
+
+    // Load and execute the transaction
+
+    let batch_processor = TransactionBatchProcessor::<MockForkGraph>::new(
+        EXECUTION_SLOT,
+        EXECUTION_EPOCH,
+        HashSet::new(),
+    );
+
+    let fork_graph = Arc::new(RwLock::new(MockForkGraph {}));
+
+    create_executable_environment(
+        fork_graph.clone(),
+        &mock_bank,
+        &mut batch_processor.program_cache.write().unwrap(),
+    );
+
+    // The sysvars must be put in the cache
+    batch_processor.fill_missing_sysvar_cache_entries(&mock_bank);
+    register_builtins(&mock_bank, &batch_processor);
+
+    let _result = batch_processor.load_and_execute_sanitized_transactions(
+        &mock_bank,
+        &[sanitized_transaction],
+        vec![transaction_check],
+        &TransactionProcessingEnvironment::default(),
+        &TransactionProcessingConfig::default(),
+    );
+
+    // the system account is modified during transaction processing,
+    // so set the expected inspected account afterwards.
+    let system_account = mock_bank
+        .account_shared_data
+        .read()
+        .unwrap()
+        .get(&system)
+        .cloned();
+    expected_inspected_accounts
+        .entry(system)
+        .or_default()
+        .push((system_account, false));
+
+    // do another transfer; recipient should be alive now
+
+    // fee payer
+    let mut fee_payer_account = AccountSharedData::default();
+    fee_payer_account.set_lamports(80_000);
+    mock_bank
+        .account_shared_data
+        .write()
+        .unwrap()
+        .insert(fee_payer, fee_payer_account.clone());
+    expected_inspected_accounts
+        .entry(fee_payer)
+        .or_default()
+        .push((Some(fee_payer_account.clone()), true));
+
+    // sender
+    let mut sender_account = AccountSharedData::default();
+    sender_account.set_lamports(10_000_000);
+    mock_bank
+        .account_shared_data
+        .write()
+        .unwrap()
+        .insert(sender, sender_account.clone());
+    expected_inspected_accounts
+        .entry(sender)
+        .or_default()
+        .push((Some(sender_account.clone()), true));
+
+    // recipient -- now alive
+    let mut recipient_account = AccountSharedData::default();
+    recipient_account.set_lamports(1_000_000);
+    mock_bank
+        .account_shared_data
+        .write()
+        .unwrap()
+        .insert(recipient, recipient_account.clone());
+    expected_inspected_accounts
+        .entry(recipient)
+        .or_default()
+        .push((Some(recipient_account.clone()), true));
+
+    let instruction = Instruction::new_with_bytes(
+        transfer_program,
+        &u64::to_be_bytes(456),
+        vec![
+            AccountMeta::new(sender, true),
+            AccountMeta::new(recipient, false),
+            AccountMeta::new_readonly(system, false),
+        ],
+    );
+    let transaction = Transaction::new_signed_with_payer(
+        &[instruction],
+        Some(&fee_payer),
+        &[&fee_payer_keypair, &sender_keypair],
+        Hash::default(),
+    );
+    let sanitized_transaction = SanitizedTransaction::from_transaction_for_tests(transaction);
+    let transaction_check = Ok(CheckedTransactionDetails {
+        nonce: None,
+        lamports_per_signature: 20,
+    });
+
+    // Load and execute the second transaction
+    let _result = batch_processor.load_and_execute_sanitized_transactions(
+        &mock_bank,
+        &[sanitized_transaction],
+        vec![transaction_check],
+        &TransactionProcessingEnvironment::default(),
+        &TransactionProcessingConfig::default(),
+    );
+
+    // the system account is modified during transaction processing,
+    // so set the expected inspected account afterwards.
+    let system_account = mock_bank
+        .account_shared_data
+        .read()
+        .unwrap()
+        .get(&system)
+        .cloned();
+    expected_inspected_accounts
+        .entry(system)
+        .or_default()
+        .push((system_account, false));
+
+    // Ensure all the expected inspected accounts were inspected
+    let actual_inspected_accounts = mock_bank.inspected_accounts.read().unwrap().clone();
+    for (expected_pubkey, expected_account) in &expected_inspected_accounts {
+        let actual_account = actual_inspected_accounts.get(expected_pubkey).unwrap();
+        assert_eq!(
+            expected_account, actual_account,
+            "pubkey: {expected_pubkey}",
+        );
+    }
+
+    // The transfer program account is also loaded during transaction processing, however the
+    // account state passed to `inspect_account()` is *not* the same as what is held by
+    // MockBankCallback::account_shared_data.  So we check the transfer program differently.
+    //
+    // First ensure we have the correct number of inspected accounts, correctly counting the
+    // transfer program.
+    let num_expected_inspected_accounts: usize =
+        expected_inspected_accounts.values().map(Vec::len).sum();
+    let num_actual_inspected_accounts: usize =
+        actual_inspected_accounts.values().map(Vec::len).sum();
+    assert_eq!(
+        num_expected_inspected_accounts + 2,
+        num_actual_inspected_accounts,
+    );
+
+    // And second, ensure the inspected transfer program accounts are alive and not writable.
+    let actual_transfer_program_accounts =
+        actual_inspected_accounts.get(&transfer_program).unwrap();
+    for actual_transfer_program_account in actual_transfer_program_accounts {
+        assert!(actual_transfer_program_account.0.is_some());
+        assert!(!actual_transfer_program_account.1);
+    }
+}
