@@ -1710,13 +1710,15 @@ declare_builtin_function!(
         let input_len: u64 = std::cmp::max(input_len, params.modulus_len);
 
         let budget = invoke_context.get_compute_budget();
+        // the compute units are calculated by the quadratic equation `0.5 input_len^2 + 190`
         consume_compute_meter(
             invoke_context,
             budget.syscall_base_cost.saturating_add(
                 input_len
                     .saturating_mul(input_len)
-                    .checked_div(budget.big_modular_exponentiation_cost)
-                    .unwrap_or(u64::MAX),
+                    .checked_div(budget.big_modular_exponentiation_cost_divisor)
+                    .unwrap_or(u64::MAX)
+                    .saturating_add(budget.big_modular_exponentiation_base_cost),
             ),
         )?;
 
@@ -4719,7 +4721,8 @@ mod tests {
             let budget = invoke_context.get_compute_budget();
             invoke_context.mock_set_remaining(
                 budget.syscall_base_cost
-                    + (MAX_LEN * MAX_LEN) / budget.big_modular_exponentiation_cost,
+                    + (MAX_LEN * MAX_LEN) / budget.big_modular_exponentiation_cost_divisor
+                    + budget.big_modular_exponentiation_base_cost,
             );
 
             let result = SyscallBigModExp::rust(
@@ -4760,7 +4763,8 @@ mod tests {
             let budget = invoke_context.get_compute_budget();
             invoke_context.mock_set_remaining(
                 budget.syscall_base_cost
-                    + (INV_LEN * INV_LEN) / budget.big_modular_exponentiation_cost,
+                    + (INV_LEN * INV_LEN) / budget.big_modular_exponentiation_cost_divisor
+                    + budget.big_modular_exponentiation_base_cost,
             );
 
             let result = SyscallBigModExp::rust(
