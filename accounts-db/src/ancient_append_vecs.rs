@@ -342,7 +342,7 @@ impl AccountsDb {
             return;
         };
         */
-        let max_ancient_slots = 4400; // this gives us approx 130M ideal size for testing against mnb now
+        let max_ancient_slots = 100_000; // this gives us approx 5M ideal size for testing against mnb now
 
         let tuning = PackedAncientStorageTuning {
             max_ancient_slots,
