@@ -4024,7 +4024,7 @@ impl AccountsDb {
                 result
             },
             None,
-            true,
+            false,
             self.scan_filter_for_shrinking,
         );
         assert_eq!(index, std::cmp::min(accounts.len(), count));
