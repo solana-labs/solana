@@ -1,0 +1,21 @@
+name: Add Security Team to GHSAs
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 * * * *"
+
+jobs:
+  add-team-to-ghsa:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: master
+      - name: Run script
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GHSA_ADD_SECURITY_INCIDENT_RESPONSE }}
+        run: |
+          .github/scripts/add-team-to-ghsa.sh
