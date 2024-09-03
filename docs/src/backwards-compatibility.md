@@ -7,7 +7,7 @@ breaking API and behavior changes affecting applications and tooling built for S
 In a perfect world, Solana development could continue at a very fast pace without ever
 causing issues for existing developers. However, some compromises will need to be made
 and so this document attempts to clarify and codify the process for new releases. Furthermore,
-there will be a growing number of validator clients maintained seperately by distinct teams.
+there will be a growing number of validator clients maintained separately by distinct teams.
 Coordinating across these teams to ensure the reliability of the network will require ongoing
 communication.
 
