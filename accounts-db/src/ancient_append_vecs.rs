@@ -626,6 +626,9 @@ impl AccountsDb {
         self.shrink_ancient_stats
             .total_dead_bytes
             .fetch_add(total_dead_bytes, Ordering::Relaxed);
+        self.shrink_ancient_stats
+            .total_alive_bytes
+            .fetch_add(total_alive_bytes, Ordering::Relaxed);
         if randoms > 0 {
             self.shrink_ancient_stats
                 .random_shrink
