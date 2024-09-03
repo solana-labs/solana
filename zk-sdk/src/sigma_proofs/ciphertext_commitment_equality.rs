@@ -176,7 +176,7 @@ impl CiphertextCommitmentEqualityProof {
             vec![
                 &self.z_s,           // z_s
                 &(-&c),              // -c
-                &(-&Scalar::one()),  // -identity
+                &(-&Scalar::ONE),    // -identity
                 &(&w * &self.z_x),   // w * z_x
                 &(&w * &self.z_s),   // w * z_s
                 &(&w_negated * &c),  // -w * c

@@ -28,11 +28,11 @@ bincode = { workspace = true }
 curve25519-dalek = { workspace = true, features = ["serde"] }
 itertools = { workspace = true }
 lazy_static = { workspace = true }
-rand = { version = "0.7" }
+rand = { workspace = true }
 serde = { workspace = true }
 serde_derive = { workspace = true }
 serde_json = { workspace = true }
-sha3 = "0.9"
+sha3 = { workspace = true }
 solana-sdk = { workspace = true }
 subtle = { workspace = true }
 zeroize = { workspace = true, features = ["zeroize_derive"] }

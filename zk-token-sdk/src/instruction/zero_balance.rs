@@ -1,7 +1,7 @@
 //! The zero-balance proof instruction.
 //!
 //! A zero-balance proof is defined with respect to a twisted ElGamal ciphertext. The proof
-//! certifies that a given ciphertext encrypts the message 0 in the field (`Scalar::zero()`). To
+//! certifies that a given ciphertext encrypts the message 0 in the field (`Scalar::ZERO`). To
 //! generate the proof, a prover must provide the decryption key for the ciphertext.
 
 #[cfg(not(target_os = "solana"))]
