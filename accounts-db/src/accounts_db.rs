@@ -2708,6 +2708,11 @@ impl AccountsDb {
         self.base_working_path.clone()
     }
 
+    /// Returns true if there is an accounts update notifier.
+    pub fn has_accounts_update_notifier(&self) -> bool {
+        self.accounts_update_notifier.is_some()
+    }
+
     fn next_id(&self) -> AccountsFileId {
         let next_id = self.next_id.fetch_add(1, Ordering::AcqRel);
         assert!(

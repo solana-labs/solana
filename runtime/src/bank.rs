@@ -3804,6 +3804,7 @@ impl Bank {
                 &mut processing_results,
                 &durable_nonce,
                 lamports_per_signature,
+                self.accounts().accounts_db.has_accounts_update_notifier(),
             );
             self.rc.accounts.store_cached(
                 (self.slot(), accounts_to_store.as_slice()),
