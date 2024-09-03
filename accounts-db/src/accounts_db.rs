@@ -3132,10 +3132,10 @@ impl AccountsDb {
                 .take(num_bins)
                 .collect();
 
-        let insert_pubkey = |pubkey: Pubkey| {
-            let index = self.accounts_index.bin_calculator.bin_from_pubkey(&pubkey);
+        let insert_pubkey = |pubkey: &Pubkey| {
+            let index = self.accounts_index.bin_calculator.bin_from_pubkey(pubkey);
             let mut candidates_bin = candidates[index].write().unwrap();
-            candidates_bin.insert(pubkey, CleaningInfo::default());
+            candidates_bin.insert(*pubkey, CleaningInfo::default());
         };
         let dirty_ancient_stores = AtomicUsize::default();
         let mut dirty_store_routine = || {
@@ -3149,9 +3149,7 @@ impl AccountsDb {
                             dirty_ancient_stores.fetch_add(1, Ordering::Relaxed);
                         }
                         oldest_dirty_slot = oldest_dirty_slot.min(*slot);
-                        store.accounts.scan_pubkeys(|key| {
-                            insert_pubkey(*key);
-                        });
+                        store.accounts.scan_pubkeys(insert_pubkey);
                     });
                     oldest_dirty_slot
                 })
@@ -3190,7 +3188,7 @@ impl AccountsDb {
         self.thread_pool_clean.install(|| {
             delta_keys.par_iter().for_each(|keys| {
                 for key in keys {
-                    insert_pubkey(*key);
+                    insert_pubkey(key);
                 }
             });
         });
@@ -3212,7 +3210,7 @@ impl AccountsDb {
                     let is_candidate_for_clean =
                         max_slot_inclusive >= *slot && latest_full_snapshot_slot >= *slot;
                     if is_candidate_for_clean {
-                        insert_pubkey(*pubkey);
+                        insert_pubkey(pubkey);
                     }
                     !is_candidate_for_clean
                 });
