@@ -8,9 +8,8 @@ use {
         pubkey::Pubkey,
         quic::QUIC_PORT_OFFSET,
         rpc_port::{DEFAULT_RPC_PORT, DEFAULT_RPC_PUBSUB_PORT},
-        serde_varint,
     },
-    solana_short_vec as short_vec,
+    solana_serde_varint as serde_varint, solana_short_vec as short_vec,
     solana_streamer::socket::SocketAddrSpace,
     static_assertions::const_assert_eq,
     std::{

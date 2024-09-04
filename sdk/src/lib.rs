@@ -52,8 +52,8 @@ pub use solana_program::{
     epoch_rewards, epoch_schedule, fee_calculator, impl_sysvar_get, incinerator, instruction,
     keccak, lamports, loader_instruction, loader_upgradeable_instruction, loader_v4,
     loader_v4_instruction, message, msg, native_token, nonce, program, program_error,
-    program_option, program_pack, rent, secp256k1_program, serde_varint, serialize_utils,
-    slot_hashes, slot_history, stable_layout, stake, stake_history, syscalls, system_instruction,
+    program_option, program_pack, rent, secp256k1_program, serialize_utils, slot_hashes,
+    slot_history, stable_layout, stake, stake_history, syscalls, system_instruction,
     system_program, sysvar, unchecked_div_by_const, vote,
 };
 #[cfg(feature = "borsh")]
@@ -161,6 +161,8 @@ pub use solana_sdk_macro::pubkey;
 pub use solana_sdk_macro::pubkeys;
 #[deprecated(since = "2.1.0", note = "Use `solana-secp256k1-recover` crate instead")]
 pub use solana_secp256k1_recover as secp256k1_recover;
+#[deprecated(since = "2.1.0", note = "Use `solana-serde-varint` crate instead")]
+pub use solana_serde_varint as serde_varint;
 #[deprecated(since = "2.1.0", note = "Use `solana-short-vec` crate instead")]
 pub use solana_short_vec as short_vec;
 

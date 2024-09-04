@@ -6560,6 +6560,7 @@ dependencies = [
  "solana-runtime",
  "solana-sanitize",
  "solana-sdk",
+ "solana-serde-varint",
  "solana-short-vec",
  "solana-streamer",
  "solana-tpu-client",
@@ -7017,6 +7018,7 @@ dependencies = [
  "solana-sanitize",
  "solana-sdk-macro",
  "solana-secp256k1-recover",
+ "solana-serde-varint",
  "solana-short-vec",
  "static_assertions",
  "test-case",
@@ -7509,6 +7511,7 @@ dependencies = [
  "solana-sdk",
  "solana-sdk-macro",
  "solana-secp256k1-recover",
+ "solana-serde-varint",
  "solana-short-vec",
  "static_assertions",
  "thiserror",
@@ -7561,6 +7564,17 @@ dependencies = [
  "solana-runtime",
  "solana-sdk",
  "solana-tpu-client",
+]
+
+[[package]]
+name = "solana-serde-varint"
+version = "2.1.0"
+dependencies = [
+ "bincode",
+ "rand 0.8.5",
+ "serde",
+ "serde_derive",
+ "solana-short-vec",
 ]
 
 [[package]]
@@ -8119,6 +8133,7 @@ dependencies = [
  "solana-frozen-abi-macro",
  "solana-sanitize",
  "solana-sdk",
+ "solana-serde-varint",
 ]
 
 [[package]]

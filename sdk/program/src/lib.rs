@@ -515,7 +515,6 @@ pub mod program_utils;
 pub mod pubkey;
 pub mod rent;
 pub mod secp256k1_program;
-pub mod serde_varint;
 pub mod serialize_utils;
 pub mod slot_hashes;
 pub mod slot_history;
@@ -535,6 +534,8 @@ pub use solana_program_memory as program_memory;
 pub use solana_sanitize as sanitize;
 #[deprecated(since = "2.1.0", note = "Use `solana-secp256k1-recover` crate instead")]
 pub use solana_secp256k1_recover as secp256k1_recover;
+#[deprecated(since = "2.1.0", note = "Use `solana-serde-varint` crate instead")]
+pub use solana_serde_varint as serde_varint;
 #[deprecated(since = "2.1.0", note = "Use `solana-short-vec` crate instead")]
 pub use solana_short_vec as short_vec;
 #[cfg(target_arch = "wasm32")]

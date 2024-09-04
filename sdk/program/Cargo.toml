@@ -41,6 +41,7 @@ solana-program-memory = { workspace = true }
 solana-sanitize = { workspace = true }
 solana-sdk-macro = { workspace = true }
 solana-secp256k1-recover = { workspace = true }
+solana-serde-varint = { workspace = true }
 solana-short-vec = { workspace = true }
 thiserror = { workspace = true }
 

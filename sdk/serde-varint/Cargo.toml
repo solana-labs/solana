@@ -1,0 +1,22 @@
+[package]
+name = "solana-serde-varint"
+description = "Solana definitions for integers that serialize to variable size"
+documentation = "https://docs.rs/solana-serde-varint"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+serde = { workspace = true }
+
+[dev-dependencies]
+bincode = { workspace = true }
+rand = { workspace = true }
+serde_derive = { workspace = true }
+solana-short-vec = { workspace = true }
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

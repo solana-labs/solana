@@ -18,6 +18,7 @@ solana-frozen-abi = { workspace = true, optional = true }
 solana-frozen-abi-macro = { workspace = true, optional = true }
 solana-sanitize = { workspace = true }
 solana-sdk = { workspace = true }
+solana-serde-varint = { workspace = true }
 
 [features]
 dummy-for-ci-check = []

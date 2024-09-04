@@ -5,7 +5,7 @@ pub use self::legacy::{LegacyVersion1, LegacyVersion2};
 use {
     serde_derive::{Deserialize, Serialize},
     solana_sanitize::Sanitize,
-    solana_sdk::serde_varint,
+    solana_serde_varint as serde_varint,
     std::{convert::TryInto, fmt},
 };
 #[cfg_attr(feature = "frozen-abi", macro_use)]
