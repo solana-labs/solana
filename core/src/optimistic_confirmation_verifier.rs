@@ -61,15 +61,6 @@ impl OptimisticConfirmationVerifier {
             return;
         }
 
-        datapoint_info!(
-            "optimistic_slot_elapsed",
-            (
-                "average_elapsed_ms",
-                self.last_optimistic_slot_ts.elapsed().as_millis() as i64,
-                i64
-            ),
-        );
-
         // We don't have any information about ancestors before the snapshot root,
         // so ignore those slots
         for (new_optimistic_slot, hash) in new_optimistic_slots {
