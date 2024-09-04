@@ -4355,11 +4355,15 @@ impl AccountsDb {
                 // clean needs to take care of this dead slot
                 self.accounts_index.add_uncleaned_roots([slot]);
             }
-            info!(
-                "Unexpected shrink for slot {} alive {} capacity {}, \
-                likely caused by a bug for calculating alive bytes.",
-                slot, shrink_collect.alive_total_bytes, shrink_collect.capacity
-            );
+
+            if !shrink_collect.all_are_zero_lamports {
+                // if all are zero lamports, then we expect that we would like to mark the whole slot dead, but we cannot. That's clean's job.
+                info!(
+                    "Unexpected shrink for slot {} alive {} capacity {}, \
+                        likely caused by a bug for calculating alive bytes.",
+                    slot, shrink_collect.alive_total_bytes, shrink_collect.capacity
+                );
+            }
 
             self.shrink_stats
                 .skipped_shrink
