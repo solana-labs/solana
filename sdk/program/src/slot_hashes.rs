@@ -6,7 +6,7 @@
 //!
 //! [`sysvar::slot_hashes`]: crate::sysvar::slot_hashes
 
-pub use crate::clock::Slot;
+pub use solana_clock::Slot;
 use {
     crate::hash::Hash,
     std::{

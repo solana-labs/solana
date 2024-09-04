@@ -1,7 +1,7 @@
 //! Calculation of transaction fees.
 
 #![allow(clippy::arithmetic_side_effects)]
-use {crate::clock::DEFAULT_MS_PER_SLOT, log::*};
+use {log::*, solana_clock::DEFAULT_MS_PER_SLOT};
 
 #[repr(C)]
 #[cfg_attr(feature = "frozen-abi", derive(AbiExample))]

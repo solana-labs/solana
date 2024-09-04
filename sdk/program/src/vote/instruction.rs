@@ -3,7 +3,6 @@
 use {
     super::state::TowerSync,
     crate::{
-        clock::{Slot, UnixTimestamp},
         hash::Hash,
         instruction::{AccountMeta, Instruction},
         pubkey::Pubkey,
@@ -18,6 +17,7 @@ use {
         },
     },
     serde_derive::{Deserialize, Serialize},
+    solana_clock::{Slot, UnixTimestamp},
 };
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]

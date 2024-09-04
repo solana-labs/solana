@@ -32,6 +32,7 @@ serde_derive = { workspace = true }
 sha2 = { workspace = true }
 sha3 = { workspace = true }
 solana-atomic-u64 = { workspace = true }
+solana-clock = { workspace = true, features = ["serde"] }
 solana-decode-error = { workspace = true }
 solana-frozen-abi = { workspace = true, optional = true, features = ["frozen-abi"] }
 solana-frozen-abi-macro = { workspace = true, optional = true, features = ["frozen-abi"] }

@@ -9,7 +9,6 @@ use {
 };
 use {
     crate::{
-        clock::{Epoch, Slot, UnixTimestamp},
         hash::Hash,
         instruction::InstructionError,
         pubkey::Pubkey,
@@ -20,6 +19,7 @@ use {
     },
     bincode::{serialize_into, ErrorKind},
     serde_derive::{Deserialize, Serialize},
+    solana_clock::{Epoch, Slot, UnixTimestamp},
     std::{
         collections::VecDeque,
         fmt::Debug,
@@ -978,11 +978,7 @@ impl VoteState {
 pub mod serde_compact_vote_state_update {
     use {
         super::*,
-        crate::{
-            clock::{Slot, UnixTimestamp},
-            serde_varint,
-            vote::state::Lockout,
-        },
+        crate::{serde_varint, vote::state::Lockout},
         serde::{Deserialize, Deserializer, Serialize, Serializer},
         solana_short_vec as short_vec,
     };
@@ -1076,11 +1072,7 @@ pub mod serde_compact_vote_state_update {
 pub mod serde_tower_sync {
     use {
         super::*,
-        crate::{
-            clock::{Slot, UnixTimestamp},
-            serde_varint,
-            vote::state::Lockout,
-        },
+        crate::{serde_varint, vote::state::Lockout},
         serde::{Deserialize, Deserializer, Serialize, Serializer},
         solana_short_vec as short_vec,
     };

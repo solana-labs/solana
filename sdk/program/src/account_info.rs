@@ -2,9 +2,10 @@
 
 use {
     crate::{
-        clock::Epoch, debug_account_data::*, entrypoint::MAX_PERMITTED_DATA_INCREASE,
+        debug_account_data::*, entrypoint::MAX_PERMITTED_DATA_INCREASE,
         program_error::ProgramError, pubkey::Pubkey,
     },
+    solana_clock::Epoch,
     solana_program_memory::sol_memset,
     std::{
         cell::{Ref, RefCell, RefMut},

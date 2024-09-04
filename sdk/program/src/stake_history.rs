@@ -6,7 +6,7 @@
 //!
 //! [`sysvar::stake_history`]: crate::sysvar::stake_history
 
-pub use crate::clock::Epoch;
+pub use solana_clock::Epoch;
 use std::ops::Deref;
 
 pub const MAX_ENTRIES: usize = 512; // it should never take as many as 512 epochs to warm up or cool down

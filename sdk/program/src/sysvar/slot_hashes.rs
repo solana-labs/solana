@@ -49,13 +49,13 @@ pub use crate::slot_hashes::SlotHashes;
 use {
     crate::{
         account_info::AccountInfo,
-        clock::Slot,
         hash::Hash,
         program_error::ProgramError,
         slot_hashes::MAX_ENTRIES,
         sysvar::{get_sysvar, Sysvar, SysvarId},
     },
     bytemuck_derive::{Pod, Zeroable},
+    solana_clock::Slot,
 };
 
 const U64_SIZE: usize = std::mem::size_of::<u64>();
@@ -218,7 +218,6 @@ mod tests {
     use {
         super::*,
         crate::{
-            clock::Slot,
             hash::{hash, Hash},
             slot_hashes::MAX_ENTRIES,
             sysvar::tests::mock_get_sysvar_syscall,

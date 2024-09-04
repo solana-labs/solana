@@ -103,6 +103,7 @@ members = [
     "sdk/atomic-u64",
     "sdk/cargo-build-sbf",
     "sdk/cargo-test-sbf",
+    "sdk/clock",
     "sdk/decode-error",
     "sdk/gen-headers",
     "sdk/macro",
@@ -366,6 +367,7 @@ solana-cli = { path = "cli", version = "=2.1.0" }
 solana-cli-config = { path = "cli-config", version = "=2.1.0" }
 solana-cli-output = { path = "cli-output", version = "=2.1.0" }
 solana-client = { path = "client", version = "=2.1.0" }
+solana-clock = { path = "sdk/clock", version = "=2.1.0" }
 solana-compute-budget = { path = "compute-budget", version = "=2.1.0" }
 solana-compute-budget-program = { path = "programs/compute-budget", version = "=2.1.0" }
 solana-config-program = { path = "programs/config", version = "=2.1.0" }

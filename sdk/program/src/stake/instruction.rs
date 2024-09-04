@@ -5,7 +5,6 @@
 
 use {
     crate::{
-        clock::{Epoch, UnixTimestamp},
         instruction::{AccountMeta, Instruction},
         program_error::ProgramError,
         pubkey::Pubkey,
@@ -19,6 +18,7 @@ use {
     log::*,
     num_derive::{FromPrimitive, ToPrimitive},
     serde_derive::{Deserialize, Serialize},
+    solana_clock::{Epoch, UnixTimestamp},
     solana_decode_error::DecodeError,
     thiserror::Error,
 };

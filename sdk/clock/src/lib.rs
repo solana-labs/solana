@@ -20,6 +20,8 @@
 //!
 //! [oracle]: https://docs.solanalabs.com/implemented-proposals/validator-timestamp-oracle
 
+#[cfg(feature = "serde")]
+use serde_derive::{Deserialize, Serialize};
 use solana_sdk_macro::CloneZeroed;
 
 /// The default tick rate that the cluster attempts to achieve (160 per second).
@@ -172,7 +174,8 @@ pub type UnixTimestamp = i64;
 ///
 /// All members of `Clock` start from 0 upon network boot.
 #[repr(C)]
-#[derive(Serialize, Deserialize, Debug, CloneZeroed, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, CloneZeroed, Default, PartialEq, Eq)]
 pub struct Clock {
     /// The current `Slot`.
     pub slot: Slot,

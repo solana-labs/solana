@@ -2,9 +2,9 @@
 use solana_frozen_abi_macro::{AbiEnumVisitor, AbiExample};
 use {
     serde_derive::{Deserialize, Serialize},
+    solana_clock::Slot,
     solana_program::{
         address_lookup_table::error::AddressLookupError,
-        clock::Slot,
         instruction::InstructionError,
         pubkey::Pubkey,
         slot_hashes::{SlotHashes, MAX_ENTRIES},

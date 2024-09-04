@@ -4,7 +4,7 @@
 
 #![allow(clippy::arithmetic_side_effects)]
 
-use {crate::clock::DEFAULT_SLOTS_PER_EPOCH, solana_sdk_macro::CloneZeroed};
+use {solana_clock::DEFAULT_SLOTS_PER_EPOCH, solana_sdk_macro::CloneZeroed};
 
 /// Configuration of network rent.
 #[repr(C)]

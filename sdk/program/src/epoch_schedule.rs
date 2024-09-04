@@ -11,7 +11,7 @@
 //! the chain there is a "warmup" period, where epochs are short, with subsequent
 //! epochs increasing in slots until they last for [`DEFAULT_SLOTS_PER_EPOCH`].
 
-pub use crate::clock::{Epoch, Slot, DEFAULT_SLOTS_PER_EPOCH};
+pub use solana_clock::{Epoch, Slot, DEFAULT_SLOTS_PER_EPOCH};
 use solana_sdk_macro::CloneZeroed;
 
 /// The default number of slots before an epoch starts to calculate the leader schedule.

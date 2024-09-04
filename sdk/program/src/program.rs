@@ -8,9 +8,12 @@
 //! [`invoke_signed`]: invoke_signed
 //! [cpi]: https://solana.com/docs/core/cpi
 
-use crate::{
-    account_info::AccountInfo, entrypoint::ProgramResult, instruction::Instruction, pubkey::Pubkey,
-    stable_layout::stable_instruction::StableInstruction,
+use {
+    crate::{
+        account_info::AccountInfo, entrypoint::ProgramResult, instruction::Instruction,
+        pubkey::Pubkey, stable_layout::stable_instruction::StableInstruction,
+    },
+    solana_clock::Epoch,
 };
 
 /// Invoke a cross-program instruction.
@@ -396,7 +399,7 @@ pub fn get_return_data() -> Option<(Pubkey, Vec<u8>)> {
 pub fn check_type_assumptions() {
     extern crate memoffset;
     use {
-        crate::{clock::Epoch, instruction::AccountMeta},
+        crate::instruction::AccountMeta,
         memoffset::offset_of,
         std::{
             cell::RefCell,

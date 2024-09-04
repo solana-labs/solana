@@ -283,12 +283,12 @@ mod tests {
     use {
         super::*,
         crate::{
-            clock::Epoch,
             entrypoint::SUCCESS,
             program_error::ProgramError,
             program_stubs::{set_syscall_stubs, SyscallStubs},
             pubkey::Pubkey,
         },
+        solana_clock::Epoch,
         std::{cell::RefCell, rc::Rc},
     };
 
