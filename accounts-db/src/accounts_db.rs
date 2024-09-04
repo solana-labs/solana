@@ -476,7 +476,7 @@ impl AncientSlotPubkeys {
 pub(crate) struct ShrinkCollect<'a, T: ShrinkCollectRefs<'a>> {
     pub(crate) slot: Slot,
     pub(crate) capacity: u64,
-    pub(crate) unrefed_pubkeys: Vec<&'a Pubkey>,
+    pub(crate) pubkeys_to_unref: Vec<&'a Pubkey>,
     pub(crate) zero_lamport_single_ref_pubkeys: Vec<&'a Pubkey>,
     pub(crate) alive_accounts: T,
     /// total size in storage of all alive accounts
@@ -3959,7 +3959,7 @@ impl AccountsDb {
 
     /// load the account index entry for the first `count` items in `accounts`
     /// store a reference to all alive accounts in `alive_accounts`
-    /// unref and optionally store a reference to all pubkeys that are in the index, but dead in `unrefed_pubkeys`
+    /// store all pubkeys dead in `slot_to_shrink` in `pubkeys_to_unref`
     /// return sum of account size for all alive accounts
     fn load_accounts_index_for_shrink<'a, T: ShrinkCollectRefs<'a>>(
         &self,
@@ -4157,7 +4157,7 @@ impl AccountsDb {
 
         let len = stored_accounts.len();
         let alive_accounts_collect = Mutex::new(T::with_capacity(len, slot));
-        let unrefed_pubkeys_collect = Mutex::new(Vec::with_capacity(len));
+        let pubkeys_to_unref_collect = Mutex::new(Vec::with_capacity(len));
         let zero_lamport_single_ref_pubkeys_collect = Mutex::new(Vec::with_capacity(len));
         stats
             .accounts_loaded
@@ -4172,7 +4172,7 @@ impl AccountsDb {
                 .for_each(|stored_accounts| {
                     let LoadAccountsIndexForShrink {
                         alive_accounts,
-                        pubkeys_to_unref: mut unrefed_pubkeys,
+                        mut pubkeys_to_unref,
                         all_are_zero_lamports,
                         mut zero_lamport_single_ref_pubkeys,
                     } = self.load_accounts_index_for_shrink(stored_accounts, stats, slot);
@@ -4182,10 +4182,10 @@ impl AccountsDb {
                         .lock()
                         .unwrap()
                         .collect(alive_accounts);
-                    unrefed_pubkeys_collect
+                    pubkeys_to_unref_collect
                         .lock()
                         .unwrap()
-                        .append(&mut unrefed_pubkeys);
+                        .append(&mut pubkeys_to_unref);
                     zero_lamport_single_ref_pubkeys_collect
                         .lock()
                         .unwrap()
@@ -4197,7 +4197,7 @@ impl AccountsDb {
         });
 
         let alive_accounts = alive_accounts_collect.into_inner().unwrap();
-        let unrefed_pubkeys = unrefed_pubkeys_collect.into_inner().unwrap();
+        let pubkeys_to_unref = pubkeys_to_unref_collect.into_inner().unwrap();
         let zero_lamport_single_ref_pubkeys = zero_lamport_single_ref_pubkeys_collect
             .into_inner()
             .unwrap();
@@ -4223,7 +4223,7 @@ impl AccountsDb {
         ShrinkCollect {
             slot,
             capacity: *capacity,
-            unrefed_pubkeys,
+            pubkeys_to_unref,
             zero_lamport_single_ref_pubkeys,
             alive_accounts,
             alive_total_bytes,
@@ -4304,7 +4304,7 @@ impl AccountsDb {
         if !shrink_collect.all_are_zero_lamports {
             self.add_uncleaned_pubkeys_after_shrink(
                 shrink_collect.slot,
-                shrink_collect.unrefed_pubkeys.iter().cloned().cloned(),
+                shrink_collect.pubkeys_to_unref.iter().cloned().cloned(),
             );
         }
 
@@ -4397,7 +4397,7 @@ impl AccountsDb {
             return;
         }
 
-        self.unref_shrunk_dead_accounts(shrink_collect.unrefed_pubkeys.iter().cloned(), slot);
+        self.unref_shrunk_dead_accounts(shrink_collect.pubkeys_to_unref.iter().cloned(), slot);
 
         let total_accounts_after_shrink = shrink_collect.alive_accounts.len();
         debug!(
@@ -5027,7 +5027,7 @@ impl AccountsDb {
     ) {
         /*
         This is only called during 'shrink'-type operations.
-        Original accounts were separated into 'accounts' and 'unrefed_pubkeys'.
+        Original accounts were separated into 'accounts' and 'pubkeys_to_unref'.
         These sets correspond to 'alive' and 'dead'.
         'alive' means this account in this slot is in the accounts index.
         'dead' means this account in this slot is NOT in the accounts index.
@@ -16453,7 +16453,7 @@ pub mod tests {
                                 );
                                 assert_eq!(
                                     shrink_collect
-                                        .unrefed_pubkeys
+                                        .pubkeys_to_unref
                                         .iter()
                                         .sorted()
                                         .cloned()

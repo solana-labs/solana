@@ -474,7 +474,7 @@ impl AccountsDb {
             .iter()
             .for_each(|combine| {
                 self.unref_shrunk_dead_accounts(
-                    combine.unrefed_pubkeys.iter().cloned(),
+                    combine.pubkeys_to_unref.iter().cloned(),
                     combine.slot,
                 );
             });
@@ -831,7 +831,7 @@ impl AccountsDb {
                 // This would fail the invariant that the highest slot # where an account exists defines the most recent account.
                 // It could be a clean error or a transient condition that will resolve if we encounter this situation.
                 // The count of these accounts per call will be reported by metrics in `unpackable_slots_count`
-                if shrink_collect.unrefed_pubkeys.is_empty()
+                if shrink_collect.pubkeys_to_unref.is_empty()
                     && shrink_collect.alive_accounts.one_ref.accounts.is_empty()
                     && shrink_collect
                         .alive_accounts
@@ -1866,7 +1866,7 @@ pub mod tests {
                                     assert!(!accounts_to_combine
                                         .accounts_to_combine
                                         .iter()
-                                        .any(|a| a.unrefed_pubkeys.is_empty()));
+                                        .any(|a| a.pubkeys_to_unref.is_empty()));
                                 }
                                 // all accounts should be in one_ref and all slots are available as target slots
                                 assert_eq!(
@@ -3821,14 +3821,14 @@ pub mod tests {
         let db = AccountsDb::new_single_for_tests();
         let empty_account = AccountSharedData::default();
         for count in 0..3 {
-            let unrefed_pubkeys = (0..count)
+            let pubkeys_to_unref = (0..count)
                 .map(|_| solana_sdk::pubkey::new_rand())
                 .collect::<Vec<_>>();
             // how many of `many_ref_accounts` should be found in the index with ref_count=1
             let mut expected_ref_counts_before_unref = HashMap::<Pubkey, u64>::default();
             let mut expected_ref_counts_after_unref = HashMap::<Pubkey, u64>::default();
 
-            unrefed_pubkeys.iter().for_each(|k| {
+            pubkeys_to_unref.iter().for_each(|k| {
                 for slot in 0..2 {
                     // each upsert here (to a different slot) adds a refcount of 1 since entry is NOT cached
                     db.accounts_index.upsert(
@@ -3848,7 +3848,7 @@ pub mod tests {
 
             let shrink_collect = ShrinkCollect::<ShrinkCollectAliveSeparatedByRefs> {
                 // the only interesting field
-                unrefed_pubkeys: unrefed_pubkeys.iter().collect(),
+                pubkeys_to_unref: pubkeys_to_unref.iter().collect(),
 
                 // irrelevant fields
                 zero_lamport_single_ref_pubkeys: Vec::default(),
@@ -3866,7 +3866,7 @@ pub mod tests {
 
             // Assert ref_counts before unref.
             db.accounts_index.scan(
-                shrink_collect.unrefed_pubkeys.iter().cloned(),
+                shrink_collect.pubkeys_to_unref.iter().cloned(),
                 |k, slot_refs, _entry| {
                     assert_eq!(
                         expected_ref_counts_before_unref.remove(k).unwrap(),
@@ -3881,11 +3881,11 @@ pub mod tests {
             assert!(expected_ref_counts_before_unref.is_empty());
 
             // unref ref_counts
-            db.unref_shrunk_dead_accounts(shrink_collect.unrefed_pubkeys.iter().cloned(), 0);
+            db.unref_shrunk_dead_accounts(shrink_collect.pubkeys_to_unref.iter().cloned(), 0);
 
             // Assert ref_counts after unref
             db.accounts_index.scan(
-                shrink_collect.unrefed_pubkeys.iter().cloned(),
+                shrink_collect.pubkeys_to_unref.iter().cloned(),
                 |k, slot_refs, _entry| {
                     assert_eq!(
                         expected_ref_counts_after_unref.remove(k).unwrap(),
