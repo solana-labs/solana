@@ -585,6 +585,8 @@ pub struct AccountsAddRootTiming {
     pub store_us: u64,
 }
 
+/// if negative, this many accounts older than # slots in epoch are still treated as modern (ie. non-ancient).
+/// Slots older than # slots in epoch - this # are then treated as ancient and subject to packing.
 const ANCIENT_APPEND_VEC_DEFAULT_OFFSET: Option<i64> = Some(-10_000);
 
 #[derive(Debug, Default, Clone)]
@@ -2039,6 +2041,7 @@ pub struct ShrinkStats {
     accounts_loaded: AtomicU64,
     purged_zero_lamports: AtomicU64,
     accounts_not_found_in_index: AtomicU64,
+    num_ancient_slots_shrunk: AtomicU64,
 }
 
 impl ShrinkStats {
@@ -2150,6 +2153,11 @@ impl ShrinkStats {
                 (
                     "purged_zero_lamports_count",
                     self.purged_zero_lamports.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "num_ancient_slots_shrunk",
+                    self.num_ancient_slots_shrunk.swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
@@ -4558,7 +4566,6 @@ impl AccountsDb {
         &self,
         shrink_slots: &ShrinkCandidates,
         shrink_ratio: f64,
-        oldest_non_ancient_slot: Option<Slot>,
     ) -> (IntMap<Slot, Arc<AccountStorageEntry>>, ShrinkCandidates) {
         struct StoreUsageInfo {
             slot: Slot,
@@ -4572,13 +4579,6 @@ impl AccountsDb {
         let mut total_bytes: u64 = 0;
         let mut total_candidate_stores: usize = 0;
         for slot in shrink_slots {
-            if oldest_non_ancient_slot
-                .map(|oldest_non_ancient_slot| slot < &oldest_non_ancient_slot)
-                .unwrap_or_default()
-            {
-                // this slot will be 'shrunk' by ancient code
-                continue;
-            }
             let Some(store) = self.storage.get_slot_storage_entry(*slot) else {
                 continue;
             };
@@ -5049,13 +5049,8 @@ impl AccountsDb {
 
         let (shrink_slots, shrink_slots_next_batch) = {
             if let AccountShrinkThreshold::TotalSpace { shrink_ratio } = self.shrink_ratio {
-                let (shrink_slots, shrink_slots_next_batch) = self
-                    .select_candidates_by_total_usage(
-                        &shrink_candidates_slots,
-                        shrink_ratio,
-                        self.ancient_append_vec_offset
-                            .map(|_| oldest_non_ancient_slot),
-                    );
+                let (shrink_slots, shrink_slots_next_batch) =
+                    self.select_candidates_by_total_usage(&shrink_candidates_slots, shrink_ratio);
                 (shrink_slots, Some(shrink_slots_next_batch))
             } else {
                 (
@@ -5092,6 +5087,11 @@ impl AccountsDb {
             shrink_slots
                 .into_par_iter()
                 .for_each(|(slot, slot_shrink_candidate)| {
+                    if self.ancient_append_vec_offset.is_some() && slot < oldest_non_ancient_slot {
+                        self.shrink_stats
+                            .num_ancient_slots_shrunk
+                            .fetch_add(1, Ordering::Relaxed);
+                    }
                     let mut measure = Measure::start("shrink_candidate_slots-ms");
                     self.do_shrink_slot_store(slot, &slot_shrink_candidate);
                     measure.stop();
@@ -12614,7 +12614,7 @@ pub mod tests {
         let db = AccountsDb::new_single_for_tests();
 
         let (selected_candidates, next_candidates) =
-            db.select_candidates_by_total_usage(&candidates, DEFAULT_ACCOUNTS_SHRINK_RATIO, None);
+            db.select_candidates_by_total_usage(&candidates, DEFAULT_ACCOUNTS_SHRINK_RATIO);
 
         assert_eq!(0, selected_candidates.len());
         assert_eq!(0, next_candidates.len());
@@ -12676,7 +12676,7 @@ pub mod tests {
         // to the candidates list for next round.
         let target_alive_ratio = 0.6;
         let (selected_candidates, next_candidates) =
-            db.select_candidates_by_total_usage(&candidates, target_alive_ratio, None);
+            db.select_candidates_by_total_usage(&candidates, target_alive_ratio);
         assert_eq!(1, selected_candidates.len());
         assert!(selected_candidates.contains(&store1_slot));
         assert_eq!(1, next_candidates.len());
@@ -12736,7 +12736,7 @@ pub mod tests {
         // Set the target ratio to default (0.8), both store1 and store2 must be selected and store3 is ignored.
         let target_alive_ratio = DEFAULT_ACCOUNTS_SHRINK_RATIO;
         let (selected_candidates, next_candidates) =
-            db.select_candidates_by_total_usage(&candidates, target_alive_ratio, None);
+            db.select_candidates_by_total_usage(&candidates, target_alive_ratio);
         assert_eq!(2, selected_candidates.len());
         assert!(selected_candidates.contains(&store1_slot));
         assert!(selected_candidates.contains(&store2_slot));
@@ -12781,34 +12781,14 @@ pub mod tests {
             .store(store_file_size as usize / 2, Ordering::Release);
         candidates.insert(store2_slot);
 
-        for newest_ancient_slot in [None, Some(store1_slot), Some(store2_slot)] {
-            // Set the target ratio to default (0.8), both stores from the two different slots must be selected.
-            let target_alive_ratio = DEFAULT_ACCOUNTS_SHRINK_RATIO;
-            let (selected_candidates, next_candidates) = db.select_candidates_by_total_usage(
-                &candidates,
-                target_alive_ratio,
-                newest_ancient_slot.map(|newest_ancient_slot| newest_ancient_slot + 1),
-            );
-            assert_eq!(
-                if newest_ancient_slot == Some(store1_slot) {
-                    1
-                } else if newest_ancient_slot == Some(store2_slot) {
-                    0
-                } else {
-                    2
-                },
-                selected_candidates.len()
-            );
-            assert_eq!(
-                newest_ancient_slot.is_none(),
-                selected_candidates.contains(&store1_slot)
-            );
-
-            if newest_ancient_slot != Some(store2_slot) {
-                assert!(selected_candidates.contains(&store2_slot));
-            }
-            assert_eq!(0, next_candidates.len());
-        }
+        // Set the target ratio to default (0.8), both stores from the two different slots must be selected.
+        let target_alive_ratio = DEFAULT_ACCOUNTS_SHRINK_RATIO;
+        let (selected_candidates, next_candidates) =
+            db.select_candidates_by_total_usage(&candidates, target_alive_ratio);
+        assert_eq!(2, selected_candidates.len());
+        assert!(selected_candidates.contains(&store1_slot));
+        assert!(selected_candidates.contains(&store2_slot));
+        assert_eq!(0, next_candidates.len());
     }
 
     const UPSERT_POPULATE_RECLAIMS: UpsertReclaim = UpsertReclaim::PopulateReclaims;
