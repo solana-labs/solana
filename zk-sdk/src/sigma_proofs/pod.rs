@@ -16,8 +16,13 @@ use crate::sigma_proofs::{
     zero_ciphertext::ZeroCiphertextProof,
 };
 use {
-    crate::sigma_proofs::{errors::*, *},
+    crate::{
+        pod::{impl_from_bytes, impl_from_str},
+        sigma_proofs::{errors::*, *},
+    },
+    base64::{prelude::BASE64_STANDARD, Engine},
     bytemuck::{Pod, Zeroable},
+    std::fmt,
 };
 
 /// The `CiphertextCommitmentEqualityProof` type as a `Pod`.
@@ -43,6 +48,25 @@ impl TryFrom<PodCiphertextCommitmentEqualityProof> for CiphertextCommitmentEqual
     }
 }
 
+const CIPHERTEXT_COMMITMENT_EQUALITY_PROOF_MAX_BASE64_LEN: usize = 256;
+
+impl fmt::Display for PodCiphertextCommitmentEqualityProof {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", BASE64_STANDARD.encode(self.0))
+    }
+}
+
+impl_from_str!(
+    TYPE = PodCiphertextCommitmentEqualityProof,
+    BYTES_LEN = CIPHERTEXT_COMMITMENT_EQUALITY_PROOF_LEN,
+    BASE64_LEN = CIPHERTEXT_COMMITMENT_EQUALITY_PROOF_MAX_BASE64_LEN
+);
+
+impl_from_bytes!(
+    TYPE = PodCiphertextCommitmentEqualityProof,
+    BYTES_LEN = CIPHERTEXT_COMMITMENT_EQUALITY_PROOF_LEN
+);
+
 /// The `CiphertextCiphertextEqualityProof` type as a `Pod`.
 #[derive(Clone, Copy)]
 #[repr(transparent)]
@@ -65,6 +89,25 @@ impl TryFrom<PodCiphertextCiphertextEqualityProof> for CiphertextCiphertextEqual
         Self::from_bytes(&pod_proof.0)
     }
 }
+
+const CIPHERTEXT_CIPHERTEXT_EQUALITY_PROOF_MAX_BASE64_LEN: usize = 300;
+
+impl fmt::Display for PodCiphertextCiphertextEqualityProof {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", BASE64_STANDARD.encode(self.0))
+    }
+}
+
+impl_from_str!(
+    TYPE = PodCiphertextCiphertextEqualityProof,
+    BYTES_LEN = CIPHERTEXT_CIPHERTEXT_EQUALITY_PROOF_LEN,
+    BASE64_LEN = CIPHERTEXT_CIPHERTEXT_EQUALITY_PROOF_MAX_BASE64_LEN
+);
+
+impl_from_bytes!(
+    TYPE = PodCiphertextCiphertextEqualityProof,
+    BYTES_LEN = CIPHERTEXT_CIPHERTEXT_EQUALITY_PROOF_LEN
+);
 
 /// The `GroupedCiphertext2HandlesValidityProof` type as a `Pod`.
 #[derive(Clone, Copy)]
@@ -89,6 +132,25 @@ impl TryFrom<PodGroupedCiphertext2HandlesValidityProof> for GroupedCiphertext2Ha
     }
 }
 
+const GROUPED_CIPHERTEXT_2_HANDLES_VALIDITY_PROOF_MAX_BASE64_LEN: usize = 216;
+
+impl fmt::Display for PodGroupedCiphertext2HandlesValidityProof {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", BASE64_STANDARD.encode(self.0))
+    }
+}
+
+impl_from_str!(
+    TYPE = PodGroupedCiphertext2HandlesValidityProof,
+    BYTES_LEN = GROUPED_CIPHERTEXT_2_HANDLES_VALIDITY_PROOF_LEN,
+    BASE64_LEN = GROUPED_CIPHERTEXT_2_HANDLES_VALIDITY_PROOF_MAX_BASE64_LEN
+);
+
+impl_from_bytes!(
+    TYPE = PodGroupedCiphertext2HandlesValidityProof,
+    BYTES_LEN = GROUPED_CIPHERTEXT_2_HANDLES_VALIDITY_PROOF_LEN
+);
+
 /// The `GroupedCiphertext3HandlesValidityProof` type as a `Pod`.
 #[derive(Clone, Copy)]
 #[repr(transparent)]
@@ -111,6 +173,25 @@ impl TryFrom<PodGroupedCiphertext3HandlesValidityProof> for GroupedCiphertext3Ha
         Self::from_bytes(&pod_proof.0)
     }
 }
+
+const GROUPED_CIPHERTEXT_3_HANDLES_VALIDITY_PROOF_MAX_BASE64_LEN: usize = 256;
+
+impl fmt::Display for PodGroupedCiphertext3HandlesValidityProof {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", BASE64_STANDARD.encode(self.0))
+    }
+}
+
+impl_from_str!(
+    TYPE = PodGroupedCiphertext3HandlesValidityProof,
+    BYTES_LEN = GROUPED_CIPHERTEXT_3_HANDLES_VALIDITY_PROOF_LEN,
+    BASE64_LEN = GROUPED_CIPHERTEXT_3_HANDLES_VALIDITY_PROOF_MAX_BASE64_LEN
+);
+
+impl_from_bytes!(
+    TYPE = PodGroupedCiphertext3HandlesValidityProof,
+    BYTES_LEN = GROUPED_CIPHERTEXT_3_HANDLES_VALIDITY_PROOF_LEN
+);
 
 /// The `BatchedGroupedCiphertext2HandlesValidityProof` type as a `Pod`.
 #[derive(Clone, Copy)]
@@ -141,6 +222,25 @@ impl TryFrom<PodBatchedGroupedCiphertext2HandlesValidityProof>
     }
 }
 
+const BATCHED_GROUPED_CIPHERTEXT_2_HANDLES_VALIDITY_PROOF_MAX_BASE64_LEN: usize = 216;
+
+impl fmt::Display for PodBatchedGroupedCiphertext2HandlesValidityProof {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", BASE64_STANDARD.encode(self.0))
+    }
+}
+
+impl_from_str!(
+    TYPE = PodBatchedGroupedCiphertext2HandlesValidityProof,
+    BYTES_LEN = BATCHED_GROUPED_CIPHERTEXT_2_HANDLES_VALIDITY_PROOF_LEN,
+    BASE64_LEN = BATCHED_GROUPED_CIPHERTEXT_2_HANDLES_VALIDITY_PROOF_MAX_BASE64_LEN
+);
+
+impl_from_bytes!(
+    TYPE = PodBatchedGroupedCiphertext2HandlesValidityProof,
+    BYTES_LEN = BATCHED_GROUPED_CIPHERTEXT_2_HANDLES_VALIDITY_PROOF_LEN
+);
+
 /// The `BatchedGroupedCiphertext3HandlesValidityProof` type as a `Pod`.
 #[derive(Clone, Copy)]
 #[repr(transparent)]
@@ -170,6 +270,25 @@ impl TryFrom<PodBatchedGroupedCiphertext3HandlesValidityProof>
     }
 }
 
+const BATCHED_GROUPED_CIPHERTEXT_3_HANDLES_VALIDITY_PROOF_MAX_BASE64_LEN: usize = 256;
+
+impl fmt::Display for PodBatchedGroupedCiphertext3HandlesValidityProof {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", BASE64_STANDARD.encode(self.0))
+    }
+}
+
+impl_from_str!(
+    TYPE = PodBatchedGroupedCiphertext3HandlesValidityProof,
+    BYTES_LEN = BATCHED_GROUPED_CIPHERTEXT_3_HANDLES_VALIDITY_PROOF_LEN,
+    BASE64_LEN = BATCHED_GROUPED_CIPHERTEXT_3_HANDLES_VALIDITY_PROOF_MAX_BASE64_LEN
+);
+
+impl_from_bytes!(
+    TYPE = PodBatchedGroupedCiphertext3HandlesValidityProof,
+    BYTES_LEN = BATCHED_GROUPED_CIPHERTEXT_3_HANDLES_VALIDITY_PROOF_LEN
+);
+
 /// The `ZeroCiphertextProof` type as a `Pod`.
 #[derive(Clone, Copy)]
 #[repr(transparent)]
@@ -190,6 +309,25 @@ impl TryFrom<PodZeroCiphertextProof> for ZeroCiphertextProof {
         Self::from_bytes(&pod_proof.0)
     }
 }
+
+const ZERO_CIPHERTEXT_PROOF_MAX_BASE64_LEN: usize = 128;
+
+impl fmt::Display for PodZeroCiphertextProof {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", BASE64_STANDARD.encode(self.0))
+    }
+}
+
+impl_from_str!(
+    TYPE = PodZeroCiphertextProof,
+    BYTES_LEN = ZERO_CIPHERTEXT_PROOF_LEN,
+    BASE64_LEN = ZERO_CIPHERTEXT_PROOF_MAX_BASE64_LEN
+);
+
+impl_from_bytes!(
+    TYPE = PodZeroCiphertextProof,
+    BYTES_LEN = ZERO_CIPHERTEXT_PROOF_LEN
+);
 
 /// The `PercentageWithCapProof` type as a `Pod`.
 #[derive(Clone, Copy, bytemuck_derive::Pod, bytemuck_derive::Zeroable)]
@@ -212,6 +350,25 @@ impl TryFrom<PodPercentageWithCapProof> for PercentageWithCapProof {
     }
 }
 
+const PERCENTAGE_WITH_CAP_PROOF_MAX_BASE64_LEN: usize = 344;
+
+impl fmt::Display for PodPercentageWithCapProof {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", BASE64_STANDARD.encode(self.0))
+    }
+}
+
+impl_from_str!(
+    TYPE = PodPercentageWithCapProof,
+    BYTES_LEN = PERCENTAGE_WITH_CAP_PROOF_LEN,
+    BASE64_LEN = PERCENTAGE_WITH_CAP_PROOF_MAX_BASE64_LEN
+);
+
+impl_from_bytes!(
+    TYPE = PodPercentageWithCapProof,
+    BYTES_LEN = PERCENTAGE_WITH_CAP_PROOF_LEN
+);
+
 /// The `PubkeyValidityProof` type as a `Pod`.
 #[derive(Clone, Copy, bytemuck_derive::Pod, bytemuck_derive::Zeroable)]
 #[repr(transparent)]
@@ -232,6 +389,25 @@ impl TryFrom<PodPubkeyValidityProof> for PubkeyValidityProof {
         Self::from_bytes(&pod_proof.0)
     }
 }
+
+const PUBKEY_VALIDITY_PROOF_MAX_BASE64_LEN: usize = 88;
+
+impl fmt::Display for PodPubkeyValidityProof {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", BASE64_STANDARD.encode(self.0))
+    }
+}
+
+impl_from_str!(
+    TYPE = PodPubkeyValidityProof,
+    BYTES_LEN = PUBKEY_VALIDITY_PROOF_LEN,
+    BASE64_LEN = PUBKEY_VALIDITY_PROOF_MAX_BASE64_LEN
+);
+
+impl_from_bytes!(
+    TYPE = PodPubkeyValidityProof,
+    BYTES_LEN = PUBKEY_VALIDITY_PROOF_LEN
+);
 
 // The sigma proof pod types are wrappers for byte arrays, which are both `Pod` and `Zeroable`. However,
 // the marker traits `bytemuck::Pod` and `bytemuck::Zeroable` can only be derived for power-of-two

@@ -3,9 +3,9 @@
 #[cfg(not(target_os = "solana"))]
 use crate::{encryption::auth_encryption::AeCiphertext, errors::AuthenticatedEncryptionError};
 use {
-    crate::encryption::{
+    crate::{
+        encryption::AE_CIPHERTEXT_LEN,
         pod::{impl_from_bytes, impl_from_str},
-        AE_CIPHERTEXT_LEN,
     },
     base64::{prelude::BASE64_STANDARD, Engine},
     bytemuck::{Pod, Zeroable},

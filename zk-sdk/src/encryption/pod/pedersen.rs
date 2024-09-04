@@ -1,18 +1,18 @@
 //! Plain Old Data type for the Pedersen commitment scheme.
 
-use {
-    crate::encryption::{
-        pod::{impl_from_bytes, impl_from_str},
-        PEDERSEN_COMMITMENT_LEN,
-    },
-    base64::{prelude::BASE64_STANDARD, Engine},
-    bytemuck_derive::{Pod, Zeroable},
-    std::fmt,
-};
 #[cfg(not(target_os = "solana"))]
 use {
     crate::{encryption::pedersen::PedersenCommitment, errors::ElGamalError},
     curve25519_dalek::ristretto::CompressedRistretto,
+};
+use {
+    crate::{
+        encryption::PEDERSEN_COMMITMENT_LEN,
+        pod::{impl_from_bytes, impl_from_str},
+    },
+    base64::{prelude::BASE64_STANDARD, Engine},
+    bytemuck_derive::{Pod, Zeroable},
+    std::fmt,
 };
 
 /// Maximum length of a base64 encoded ElGamal public key
@@ -33,6 +33,12 @@ impl fmt::Debug for PodPedersenCommitment {
 impl From<PedersenCommitment> for PodPedersenCommitment {
     fn from(decoded_commitment: PedersenCommitment) -> Self {
         Self(decoded_commitment.to_bytes())
+    }
+}
+
+impl fmt::Display for PodPedersenCommitment {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", BASE64_STANDARD.encode(self.0))
     }
 }
 

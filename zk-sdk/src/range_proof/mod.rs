@@ -55,21 +55,21 @@ pub const INNER_PRODUCT_PROOF_U64_LEN: usize = 448;
 
 /// Byte length of a range proof for an unsigned 64-bit number
 pub const RANGE_PROOF_U64_LEN: usize =
-    INNER_PRODUCT_PROOF_U64_LEN + RANGE_PROOF_MODULO_INNER_PRODUCT_PROOF_LEN;
+    INNER_PRODUCT_PROOF_U64_LEN + RANGE_PROOF_MODULO_INNER_PRODUCT_PROOF_LEN; // 672 bytes
 
 /// Byte length of an inner-product proof for a vector of length 128
 pub const INNER_PRODUCT_PROOF_U128_LEN: usize = 512;
 
 /// Byte length of a range proof for an unsigned 128-bit number
 pub const RANGE_PROOF_U128_LEN: usize =
-    INNER_PRODUCT_PROOF_U128_LEN + RANGE_PROOF_MODULO_INNER_PRODUCT_PROOF_LEN;
+    INNER_PRODUCT_PROOF_U128_LEN + RANGE_PROOF_MODULO_INNER_PRODUCT_PROOF_LEN; // 736 bytes
 
 /// Byte length of an inner-product proof for a vector of length 256
 pub const INNER_PRODUCT_PROOF_U256_LEN: usize = 576;
 
 /// Byte length of a range proof for an unsigned 256-bit number
 pub const RANGE_PROOF_U256_LEN: usize =
-    INNER_PRODUCT_PROOF_U256_LEN + RANGE_PROOF_MODULO_INNER_PRODUCT_PROOF_LEN;
+    INNER_PRODUCT_PROOF_U256_LEN + RANGE_PROOF_MODULO_INNER_PRODUCT_PROOF_LEN; // 800 bytes
 
 #[allow(non_snake_case)]
 #[cfg(not(target_os = "solana"))]
@@ -466,7 +466,13 @@ fn delta(bit_lengths: &[usize], y: &Scalar, z: &Scalar) -> Scalar {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use {
+        super::*,
+        crate::{
+            encryption::pod::pedersen::PodPedersenCommitment, range_proof::pod::PodRangeProofU128,
+        },
+        std::str::FromStr,
+    };
 
     #[test]
     fn test_single_rangeproof() {
@@ -478,9 +484,9 @@ mod tests {
         let proof =
             RangeProof::new(vec![55], vec![32], vec![&open], &mut transcript_create).unwrap();
 
-        assert!(proof
+        proof
             .verify(vec![&comm], vec![32], &mut transcript_verify)
-            .is_ok());
+            .unwrap();
     }
 
     #[test]
@@ -500,14 +506,41 @@ mod tests {
         )
         .unwrap();
 
-        assert!(proof
+        proof
             .verify(
                 vec![&comm_1, &comm_2, &comm_3],
                 vec![64, 32, 32],
                 &mut transcript_verify,
             )
-            .is_ok());
+            .unwrap();
     }
 
-    // TODO: write test for serialization/deserialization
+    #[test]
+    fn test_range_proof_string() {
+        let commitment_1_str = "dDaa/MTEDlyI0Nxx+iu1tOteZsTWmPXAfn9QI0W9mSc=";
+        let pod_commitment_1 = PodPedersenCommitment::from_str(commitment_1_str).unwrap();
+        let commitment_1: PedersenCommitment = pod_commitment_1.try_into().unwrap();
+
+        let commitment_2_str = "tnRILjKpogi2sXxLgZzMqlqPMLnCJmrSjZ5SPQYhtgg=";
+        let pod_commitment_2 = PodPedersenCommitment::from_str(commitment_2_str).unwrap();
+        let commitment_2: PedersenCommitment = pod_commitment_2.try_into().unwrap();
+
+        let commitment_3_str = "ZAC5ZLXotsMOVExtrr56D/EZNeyo9iWepNbeH22EuRo=";
+        let pod_commitment_3 = PodPedersenCommitment::from_str(commitment_3_str).unwrap();
+        let commitment_3: PedersenCommitment = pod_commitment_3.try_into().unwrap();
+
+        let proof_str = "AvvBQL63pXMXsmuvuNbs/CqXdzeyrMpEIO2O/cI6/SyqU4N+7HUU3LmXai9st+DxqTnuKsm0SgnADfpLpQCEbDDupMb09NY8oHT8Bx8WQhv9eyoBlrPRd7DVhOUsio02gBshe3p2Wj7+yDCpFaZ7/PMypFBX6+E+EqCiPI6yUk4ztslWY0Ksac41eJgcPzXyIx2kvmSTsVBKLb7U01PWBC+AUyUmK3/IdvmJ4DnlS3xFrdg/mxSsYJFd3OZA3cwDb0jePQf/P43/2VVqPRixMVO7+VGoMKPoRTEEVbClsAlW6stGTFPcrimu3c+geASgvwElkIKNGtYcjoj3SS+/VeqIG9Ei1j+TJtPhOE9SG4KNw9xBGwecpliDbQhKjO950EVcnOts+a525/frZV1jHJmOOrZtKRV4pvk37dtQkx4sv+pxRmfVrjwOcKQeg+BzcuF0vaQbqa4SUbzbO9z3RwIMlYIBaz0bqZgJmtPOFuFmNyCJaeB29vlcEAfYbn5gdlgtWP50tKmhoskndulziKZjz4qHSA9rbG2ZtoMHoCsAobHKu2H9OxcaK4Scj1QGwst+zXBEY8uePNbxvU5DMJLVFORtLUXkVdPCmCSsm1Bz4TRbnls8LOVW6wqTgShQMhjNM3RtwdHXENPn5uDnhyvfduAcL+DtI8AIJyRneROefk7i7gjal8dLdMM/QnXT7ctpMQU6uNlpsNzq65xlOQKXO71vQ3c2mE/DmxVJi6BTS5WCzavvhiqdhQyRL61ESCALQpaP0/d0DLwLikVH3ypuDLEnVXe9Pmkxdd0xCzO6QcfyK50CPnV/dVgHeLg8EVag2O83+/7Ys5oLxrDad9TJTDcrT2xsRqECFnSA+z9uZtDPujhQL0ogS5RH4agnQN4mVGTwOLV8OKpn+AvWq6+j1/9EXFkLPBTU5wT0FQuT2VZ8xp5GeqdI13Zey1uPrxc6CZZ407y9OINED4IdBQ==";
+        let pod_proof = PodRangeProofU128::from_str(proof_str).unwrap();
+        let proof: RangeProof = pod_proof.try_into().unwrap();
+
+        let mut transcript_verify = Transcript::new(b"Test");
+
+        proof
+            .verify(
+                vec![&commitment_1, &commitment_2, &commitment_3],
+                vec![64, 32, 32],
+                &mut transcript_verify,
+            )
+            .unwrap()
+    }
 }

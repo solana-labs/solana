@@ -267,7 +267,14 @@ impl CiphertextCiphertextEqualityProof {
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    use {
+        super::*,
+        crate::{
+            encryption::pod::elgamal::{PodElGamalCiphertext, PodElGamalPubkey},
+            sigma_proofs::pod::PodCiphertextCiphertextEqualityProof,
+        },
+        std::str::FromStr,
+    };
 
     #[test]
     fn test_ciphertext_ciphertext_equality_proof_correctness() {
@@ -295,15 +302,15 @@ mod test {
             &mut prover_transcript,
         );
 
-        assert!(proof
+        proof
             .verify(
                 first_keypair.pubkey(),
                 second_keypair.pubkey(),
                 &first_ciphertext,
                 &second_ciphertext,
-                &mut verifier_transcript
+                &mut verifier_transcript,
             )
-            .is_ok());
+            .unwrap();
 
         // fail case: encrypted and committed messages are different
         let first_message: u64 = 55;
@@ -337,5 +344,40 @@ mod test {
                 &mut verifier_transcript
             )
             .is_err());
+    }
+
+    #[test]
+    fn test_ciphertext_ciphertext_equality_proof_string() {
+        let first_pubkey_str = "VOPKaqo4nsX4XnbgGjCKHkLkR6JG1jX9D5G/e0EuYmM=";
+        let pod_first_pubkey = PodElGamalPubkey::from_str(first_pubkey_str).unwrap();
+        let first_pubkey: ElGamalPubkey = pod_first_pubkey.try_into().unwrap();
+
+        let second_pubkey_str = "JnVhtKo9B7g9c8Obo/5/EqvA59i3TvtuOcQWf17T7SU=";
+        let pod_second_pubkey = PodElGamalPubkey::from_str(second_pubkey_str).unwrap();
+        let second_pubkey: ElGamalPubkey = pod_second_pubkey.try_into().unwrap();
+
+        let first_ciphertext_str = "oKv6zxN051MXdk2cISD+CUsH2+FINoH1iB4WZyuy6nNkE7Q+eLiY9JB8itJhgKHJEA/1sAzDvpnRlLL06OXvIg==";
+        let pod_first_ciphertext = PodElGamalCiphertext::from_str(first_ciphertext_str).unwrap();
+        let first_ciphertext: ElGamalCiphertext = pod_first_ciphertext.try_into().unwrap();
+
+        let second_ciphertext_str = "ooSA2cQDqutgyCBoMiQktM1Cu4NDNEbphF010gjG4iF0iMK1N+u/Qxqk0wwO/+w+5S6RiicwPs4mEKRJpFiHEw==";
+        let pod_second_ciphertext = PodElGamalCiphertext::from_str(second_ciphertext_str).unwrap();
+        let second_ciphertext: ElGamalCiphertext = pod_second_ciphertext.try_into().unwrap();
+
+        let proof_str = "MlfRDO4sBPbpciEXci3QfVSLVABAJ0s8wMZ/Uz3AyETmGJ1BUE961fHIiNQXPD0j1uu1Josj//E8loPD1w+4E3bfDBJ3Mp2YqeOv41Bdec02YXlAotTGjq/UfncGdUhyampkuXUmSvnmkf5BIp4nr3X18cR9KHTAzBrKv6erjAxIckyRnACaZGEx+ZboEb3FBEXqTklytT1nrebbwkjvDUWbcpZrE+xxBWYek3qeq1x1debzxVhtS2yx44cvR5UIGLzGYa2ec/xh7wvyNEbnX80rZju2dztr4bN5f2vrTgk=";
+        let pod_proof = PodCiphertextCiphertextEqualityProof::from_str(proof_str).unwrap();
+        let proof: CiphertextCiphertextEqualityProof = pod_proof.try_into().unwrap();
+
+        let mut verifier_transcript = Transcript::new(b"Test");
+
+        proof
+            .verify(
+                &first_pubkey,
+                &second_pubkey,
+                &first_ciphertext,
+                &second_ciphertext,
+                &mut verifier_transcript,
+            )
+            .unwrap();
     }
 }

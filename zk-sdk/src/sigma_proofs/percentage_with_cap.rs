@@ -556,7 +556,14 @@ fn conditional_select_ristretto(
 
 #[cfg(test)]
 mod test {
-    use {super::*, crate::encryption::pedersen::Pedersen};
+    use {
+        super::*,
+        crate::{
+            encryption::{pedersen::Pedersen, pod::pedersen::PodPedersenCommitment},
+            sigma_proofs::pod::PodPercentageWithCapProof,
+        },
+        std::str::FromStr,
+    };
 
     #[test]
     fn test_proof_above_max_proof() {
@@ -594,7 +601,7 @@ mod test {
             &mut prover_transcript,
         );
 
-        assert!(proof
+        proof
             .verify(
                 &percentage_commitment,
                 &delta_commitment,
@@ -602,7 +609,7 @@ mod test {
                 max_value,
                 &mut verifier_transcript,
             )
-            .is_ok());
+            .unwrap();
     }
 
     #[test]
@@ -646,7 +653,7 @@ mod test {
             &mut prover_transcript,
         );
 
-        assert!(proof
+        proof
             .verify(
                 &percentage_commitment,
                 &delta_commitment,
@@ -654,7 +661,7 @@ mod test {
                 max_value,
                 &mut verifier_transcript,
             )
-            .is_ok());
+            .unwrap();
     }
 
     #[test]
@@ -693,7 +700,7 @@ mod test {
             &mut prover_transcript,
         );
 
-        assert!(proof
+        proof
             .verify(
                 &percentage_commitment,
                 &delta_commitment,
@@ -701,6 +708,42 @@ mod test {
                 max_value,
                 &mut verifier_transcript,
             )
-            .is_ok());
+            .unwrap();
+    }
+
+    #[test]
+    fn test_percentage_with_cap_proof_string() {
+        let max_value: u64 = 3;
+
+        let percentage_commitment_str = "JGuzRjhmp3d8PWshbrN3Q7kg027OdPn7IU26ISTiz3c=";
+        let pod_percentage_commitment =
+            PodPedersenCommitment::from_str(percentage_commitment_str).unwrap();
+        let percentage_commitment: PedersenCommitment =
+            pod_percentage_commitment.try_into().unwrap();
+
+        let delta_commitment_str = "3mwfK4u0J0UqCVznbxyCjlGEgMrI+XHdW7g00YVjSVA=";
+        let pod_delta_commitment = PodPedersenCommitment::from_str(delta_commitment_str).unwrap();
+        let delta_commitment: PedersenCommitment = pod_delta_commitment.try_into().unwrap();
+
+        let claimed_commitment_str = "/t9n3yJa7p9wJV5P2cclnUiirKU5oNUv/gQMe27WMT4=";
+        let pod_claimed_commitment =
+            PodPedersenCommitment::from_str(claimed_commitment_str).unwrap();
+        let claimed_commitment: PedersenCommitment = pod_claimed_commitment.try_into().unwrap();
+
+        let proof_str = "SpmzL7hrLLp7P/Cz+2kBh22QKq3mWb0v28Er6lO9aRfBer77VY03i9VSEd4uHYMXdaf/MBPUsDVjUxNjoauwBmw6OrAcq6tq9o1Z+NS8lkukVh6sqSrSh9dy9ipq6JcIePAVmGwDNk07ACgPE/ynrenwSPJ7ZHDGZszGkw95h25gTKPyoaMbvZoXGLtkuHmvXJ7KBBJmK2eTzELb6UF2HOUg9cGFgomL8Xa3l14LBDMwLAokJK4n2d6eTkk1O0ECddmTDwoG6lmt0fHXYm37Z+k4yrQkhUgKwph2nLWG3Q7zvRM2qVFxFUGfLWJq5Sm7l7segOm+hQpRaH+q7OHNBg==";
+        let pod_proof = PodPercentageWithCapProof::from_str(proof_str).unwrap();
+        let proof: PercentageWithCapProof = pod_proof.try_into().unwrap();
+
+        let mut verifier_transcript = Transcript::new(b"test");
+
+        proof
+            .verify(
+                &percentage_commitment,
+                &delta_commitment,
+                &claimed_commitment,
+                max_value,
+                &mut verifier_transcript,
+            )
+            .unwrap();
     }
 }

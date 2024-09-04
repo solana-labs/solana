@@ -5,13 +5,11 @@ use crate::encryption::grouped_elgamal::GroupedElGamalCiphertext;
 use {
     crate::{
         encryption::{
-            pod::{
-                elgamal::PodElGamalCiphertext, impl_from_bytes, impl_from_str,
-                pedersen::PodPedersenCommitment,
-            },
+            pod::{elgamal::PodElGamalCiphertext, pedersen::PodPedersenCommitment},
             DECRYPT_HANDLE_LEN, ELGAMAL_CIPHERTEXT_LEN, PEDERSEN_COMMITMENT_LEN,
         },
         errors::ElGamalError,
+        pod::{impl_from_bytes, impl_from_str},
     },
     base64::{prelude::BASE64_STANDARD, Engine},
     bytemuck::Zeroable,
@@ -89,6 +87,12 @@ impl Default for PodGroupedElGamalCiphertext2Handles {
     }
 }
 
+impl fmt::Display for PodGroupedElGamalCiphertext2Handles {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", BASE64_STANDARD.encode(self.0))
+    }
+}
+
 impl_from_str!(
     TYPE = PodGroupedElGamalCiphertext2Handles,
     BYTES_LEN = GROUPED_ELGAMAL_CIPHERTEXT_2_HANDLES,
@@ -134,6 +138,12 @@ impl fmt::Debug for PodGroupedElGamalCiphertext3Handles {
 impl Default for PodGroupedElGamalCiphertext3Handles {
     fn default() -> Self {
         Self::zeroed()
+    }
+}
+
+impl fmt::Display for PodGroupedElGamalCiphertext3Handles {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", BASE64_STANDARD.encode(self.0))
     }
 }
 

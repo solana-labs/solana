@@ -123,11 +123,22 @@ impl BatchedGroupedCiphertext2HandlesValidityProof {
 mod test {
     use {
         super::*,
-        crate::encryption::{elgamal::ElGamalKeypair, pedersen::Pedersen},
+        crate::{
+            encryption::{
+                elgamal::ElGamalKeypair,
+                pedersen::Pedersen,
+                pod::{
+                    elgamal::{PodDecryptHandle, PodElGamalPubkey},
+                    pedersen::PodPedersenCommitment,
+                },
+            },
+            sigma_proofs::pod::PodBatchedGroupedCiphertext2HandlesValidityProof,
+        },
+        std::str::FromStr,
     };
 
     #[test]
-    fn test_batched_grouped_ciphertext_validity_proof() {
+    fn test_batched_grouped_ciphertext_2_handles_validity_proof() {
         let first_keypair = ElGamalKeypair::new_rand();
         let first_pubkey = first_keypair.pubkey();
 
@@ -159,7 +170,7 @@ mod test {
             &mut prover_transcript,
         );
 
-        assert!(proof
+        proof
             .verify(
                 first_pubkey,
                 second_pubkey,
@@ -171,6 +182,62 @@ mod test {
                 &second_handle_hi,
                 &mut verifier_transcript,
             )
-            .is_ok());
+            .unwrap();
+    }
+
+    #[test]
+    fn test_batched_grouped_ciphertext_2_handles_validity_proof_string() {
+        let first_pubkey_str = "3FQGicS6AgVkRnX5Sau8ybxJDvlehmbdvBUdo+o+oE4=";
+        let pod_first_pubkey = PodElGamalPubkey::from_str(first_pubkey_str).unwrap();
+        let first_pubkey: ElGamalPubkey = pod_first_pubkey.try_into().unwrap();
+
+        let second_pubkey_str = "IieU/fJCRksbDNvIJZvg/N/safpnIWAGT/xpUAG7YUg=";
+        let pod_second_pubkey = PodElGamalPubkey::from_str(second_pubkey_str).unwrap();
+        let second_pubkey: ElGamalPubkey = pod_second_pubkey.try_into().unwrap();
+
+        let commitment_lo_str = "Lq0z7bx3ccyxIB0rRHoWzcba8W1azvAhMfnJogxcz2I=";
+        let pod_commitment_lo = PodPedersenCommitment::from_str(commitment_lo_str).unwrap();
+        let commitment_lo: PedersenCommitment = pod_commitment_lo.try_into().unwrap();
+
+        let commitment_hi_str = "dLPLdQrcl5ZWb0EaJcmebAlJA6RrzKpMSYPDVMJdOm0=";
+        let pod_commitment_hi = PodPedersenCommitment::from_str(commitment_hi_str).unwrap();
+        let commitment_hi: PedersenCommitment = pod_commitment_hi.try_into().unwrap();
+
+        let first_handle_lo_str = "GizvHRUmu6CMjhH7qWg5Rqu43V69Nyjq4QsN/yXBHT8=";
+        let pod_first_handle_lo_str = PodDecryptHandle::from_str(first_handle_lo_str).unwrap();
+        let first_handle_lo: DecryptHandle = pod_first_handle_lo_str.try_into().unwrap();
+
+        let first_handle_hi_str = "qMuR929bbkKiVJfRvYxnb90rbh2btjNDjaXpeLCvQWk=";
+        let pod_first_handle_hi_str = PodDecryptHandle::from_str(first_handle_hi_str).unwrap();
+        let first_handle_hi: DecryptHandle = pod_first_handle_hi_str.try_into().unwrap();
+
+        let second_handle_lo_str = "MmDbMo2l/jAcXUIm09AQZsBXa93lI2BapAiGZ6f9zRs=";
+        let pod_second_handle_lo_str = PodDecryptHandle::from_str(second_handle_lo_str).unwrap();
+        let second_handle_lo: DecryptHandle = pod_second_handle_lo_str.try_into().unwrap();
+
+        let second_handle_hi_str = "gKhb0o3d22XcUcQl5hENF4l1SJwg1vpgiw2RDYqXOxY=";
+        let pod_second_handle_hi_str = PodDecryptHandle::from_str(second_handle_hi_str).unwrap();
+        let second_handle_hi: DecryptHandle = pod_second_handle_hi_str.try_into().unwrap();
+
+        let proof_str = "2n2mADpkNrop+eHJj1sAryXWcTtC/7QKcxMp7FdHeh8wjGKLAa9kC89QLGrphv7pZdb2J25kKXqhWUzRBsJWU0izi5vxau9XX6cyd72F3Q9hMXBfjk3htOHI0VnGAalZ/3dZ6C7erjGQDoeTVGOd1vewQ+NObAbfZwcry3+VhQNpkhL17E1dUgZZ+mb5K0tXAjWCmVh1OfN9h3sGltTUCg==";
+        let pod_proof =
+            PodBatchedGroupedCiphertext2HandlesValidityProof::from_str(proof_str).unwrap();
+        let proof: BatchedGroupedCiphertext2HandlesValidityProof = pod_proof.try_into().unwrap();
+
+        let mut verifier_transcript = Transcript::new(b"Test");
+
+        proof
+            .verify(
+                &first_pubkey,
+                &second_pubkey,
+                &commitment_lo,
+                &commitment_hi,
+                &first_handle_lo,
+                &first_handle_hi,
+                &second_handle_lo,
+                &second_handle_hi,
+                &mut verifier_transcript,
+            )
+            .unwrap();
     }
 }
