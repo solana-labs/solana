@@ -524,8 +524,9 @@ pub type BinnedHashData = Vec<Vec<CalculateHashIntermediate>>;
 struct LoadAccountsIndexForShrink<'a, T: ShrinkCollectRefs<'a>> {
     /// all alive accounts
     alive_accounts: T,
-    /// pubkeys that were unref'd in the accounts index because they were dead
-    unrefed_pubkeys: Vec<&'a Pubkey>,
+    /// pubkeys that are going to be unref'd in the accounts index after we are
+    /// done with shrinking, because they are dead
+    pubkeys_to_unref: Vec<&'a Pubkey>,
     /// pubkeys that are the last remaining zero lamport instance of an account
     zero_lamport_single_ref_pubkeys: Vec<&'a Pubkey>,
     /// true if all alive accounts are zero lamport accounts
@@ -3968,7 +3969,7 @@ impl AccountsDb {
     ) -> LoadAccountsIndexForShrink<'a, T> {
         let count = accounts.len();
         let mut alive_accounts = T::with_capacity(count, slot_to_shrink);
-        let mut unrefed_pubkeys = Vec::with_capacity(count);
+        let mut pubkeys_to_unref = Vec::with_capacity(count);
         let mut zero_lamport_single_ref_pubkeys = Vec::with_capacity(count);
 
         let mut alive = 0;
@@ -3981,7 +3982,6 @@ impl AccountsDb {
         self.accounts_index.scan(
             accounts.iter().map(|account| account.pubkey()),
             |pubkey, slots_refs, _entry| {
-                let mut result = AccountsIndexScanResult::OnlyKeepInMemoryIfDirty;
                 let stored_account = &accounts[index];
                 let mut do_populate_accounts_for_shrink = |ref_count, slot_list| {
                     if stored_account.is_zero_lamport()
@@ -4017,8 +4017,7 @@ impl AccountsDb {
                         // It would have had a ref to the storage from the initial store, but it will
                         // not exist in the re-written slot. Unref it to keep the index consistent with
                         // rewriting the storage entries.
-                        unrefed_pubkeys.push(pubkey);
-                        result = AccountsIndexScanResult::Unref;
+                        pubkeys_to_unref.push(pubkey);
                         dead += 1;
                     } else {
                         do_populate_accounts_for_shrink(ref_count, slot_list);
@@ -4035,7 +4034,7 @@ impl AccountsDb {
                     do_populate_accounts_for_shrink(ref_count, &slot_list);
                 }
                 index += 1;
-                result
+                AccountsIndexScanResult::OnlyKeepInMemoryIfDirty
             },
             None,
             false,
@@ -4053,7 +4052,7 @@ impl AccountsDb {
 
         LoadAccountsIndexForShrink {
             alive_accounts,
-            unrefed_pubkeys,
+            pubkeys_to_unref,
             zero_lamport_single_ref_pubkeys,
             all_are_zero_lamports,
         }
@@ -4173,7 +4172,7 @@ impl AccountsDb {
                 .for_each(|stored_accounts| {
                     let LoadAccountsIndexForShrink {
                         alive_accounts,
-                        mut unrefed_pubkeys,
+                        pubkeys_to_unref: mut unrefed_pubkeys,
                         all_are_zero_lamports,
                         mut zero_lamport_single_ref_pubkeys,
                     } = self.load_accounts_index_for_shrink(stored_accounts, stats, slot);
@@ -4323,6 +4322,33 @@ impl AccountsDb {
             .fetch_add(time.as_us(), Ordering::Relaxed);
     }
 
+    pub(crate) fn unref_shrunk_dead_accounts<'a>(
+        &self,
+        pubkeys: impl Iterator<Item = &'a Pubkey>,
+        slot: Slot,
+    ) {
+        self.accounts_index.scan(
+            pubkeys,
+            |pubkey, slot_refs, _entry| {
+                if slot_refs.is_none() {
+                    // We also expect that the accounts index must contain an
+                    // entry for `pubkey`. Log a warning for now. In future,
+                    // we will panic when this happens.
+                    warn!("pubkey {pubkey} in slot {slot} was NOT found in accounts index during shrink");
+                    datapoint_warn!(
+                        "accounts_db-shink_pubkey_missing_from_index",
+                        ("store_slot", slot, i64),
+                        ("pubkey", pubkey.to_string(), String),
+                    )
+                }
+                AccountsIndexScanResult::Unref
+            },
+            None,
+            false,
+            ScanFilter::All,
+        );
+    }
+
     fn do_shrink_slot_store(&self, slot: Slot, store: &Arc<AccountStorageEntry>) {
         if self.accounts_cache.contains(slot) {
             // It is not correct to shrink a slot while it is in the write cache until flush is complete and the slot is removed from the write cache.
@@ -4368,33 +4394,10 @@ impl AccountsDb {
             self.shrink_stats
                 .skipped_shrink
                 .fetch_add(1, Ordering::Relaxed);
-
-            self.accounts_index.scan(
-                shrink_collect.unrefed_pubkeys.into_iter(),
-                |pubkey, _slot_refs, entry| {
-                    // pubkeys in `unrefed_pubkeys` were unref'd in `shrink_collect` above under the assumption that we would shrink everything.
-                    // Since shrink is not occurring, we need to addref the pubkeys to get the system back to the prior state since the account still exists at this slot.
-                    if let Some(entry) = entry {
-                        entry.addref();
-                    } else {
-                        // We also expect that the accounts index must contain an
-                        // entry for `pubkey`. Log a warning for now. In future,
-                        // we will panic when this happens.
-                        warn!("pubkey {pubkey} in slot {slot} was NOT found in accounts index during shrink");
-                        datapoint_warn!(
-                            "accounts_db-shink_pubkey_missing_from_index",
-                            ("store_slot", slot, i64),
-                            ("pubkey", pubkey.to_string(), String),
-                        )
-                    }
-                    AccountsIndexScanResult::OnlyKeepInMemoryIfDirty
-                },
-                None,
-                true,
-                ScanFilter::All,
-            );
             return;
         }
+
+        self.unref_shrunk_dead_accounts(shrink_collect.unrefed_pubkeys.iter().cloned(), slot);
 
         let total_accounts_after_shrink = shrink_collect.alive_accounts.len();
         debug!(

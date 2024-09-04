@@ -13,12 +13,11 @@ use {
             ShrinkCollectAliveSeparatedByRefs, ShrinkStatsSub,
         },
         accounts_file::AccountsFile,
-        accounts_index::{AccountsIndexScanResult, ScanFilter},
         active_stats::ActiveStatItem,
         storable_accounts::{StorableAccounts, StorableAccountsBySlot},
     },
     rand::{thread_rng, Rng},
-    rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
+    rayon::prelude::{IntoParallelRefIterator, ParallelIterator},
     solana_measure::measure_us,
     solana_sdk::clock::Slot,
     std::{
@@ -440,7 +439,6 @@ impl AccountsDb {
                 accounts_to_combine.target_slots_sorted.last(),
                 many_refs_newest.last().map(|accounts| accounts.slot)
             );
-            self.addref_accounts_failed_to_shrink_ancient(accounts_to_combine.accounts_to_combine);
             return;
         }
 
@@ -468,11 +466,18 @@ impl AccountsDb {
 
         if pack.len() > accounts_to_combine.target_slots_sorted.len() {
             // Not enough slots to contain the accounts we are trying to pack.
-            // `shrink_collect` previously unref'd some accounts. We need to addref them
-            // to restore the correct state since we failed to combine anything.
-            self.addref_accounts_failed_to_shrink_ancient(accounts_to_combine.accounts_to_combine);
             return;
         }
+
+        accounts_to_combine
+            .accounts_to_combine
+            .iter()
+            .for_each(|combine| {
+                self.unref_shrunk_dead_accounts(
+                    combine.unrefed_pubkeys.iter().cloned(),
+                    combine.slot,
+                );
+            });
 
         let write_ancient_accounts = self.write_packed_storages(&accounts_to_combine, pack);
 
@@ -481,29 +486,6 @@ impl AccountsDb {
             write_ancient_accounts,
             metrics,
         );
-    }
-
-    /// for each account in `unrefed_pubkeys`, in each `accounts_to_combine`, addref
-    fn addref_accounts_failed_to_shrink_ancient<'a>(
-        &self,
-        accounts_to_combine: Vec<ShrinkCollect<'a, ShrinkCollectAliveSeparatedByRefs<'a>>>,
-    ) {
-        self.thread_pool_clean.install(|| {
-            accounts_to_combine.into_par_iter().for_each(|combine| {
-                self.accounts_index.scan(
-                    combine.unrefed_pubkeys.into_iter(),
-                    |_pubkey, _slots_refs, entry| {
-                        if let Some(entry) = entry {
-                            entry.addref();
-                        }
-                        AccountsIndexScanResult::OnlyKeepInMemoryIfDirty
-                    },
-                    None,
-                    true,
-                    ScanFilter::All,
-                );
-            });
-        });
     }
 
     /// calculate all storage info for the storages in slots
@@ -762,8 +744,12 @@ impl AccountsDb {
         let mut target_slots_sorted = Vec::with_capacity(len);
 
         // `shrink_collect` all accounts in the append vecs we want to combine.
-        // This also unrefs all dead accounts in those append vecs.
-        // This needs to serially iterate largest to smallest slot so that we unref older dead slots after we have visited the newer alive slots.
+        // We are no longer doing eager unref in shrink_collect. Therefore, we will no longer need to iter them serially?
+        // There is a subtle difference for zero lamport accounts, which can lead to having more multi-refs than before?
+        // Consider account X in both slot x, and x+1 and x+2.
+        // With eager unref, we will only collect `one_ref`` X at slot x+2 after shrink.
+        // Without eager unref, we will collect X at `multi-ref` after shrink.
+        // Packing multi-ref is less efficient than `one_ref``. But it might be ok - in next round of clean, hopefully, it can turn this from multi-ref into one-ref.
         let mut accounts_to_combine = accounts_per_storage
             .iter()
             .map(|(info, unique_accounts)| {
@@ -865,9 +851,6 @@ impl AccountsDb {
             }
         }
         let unpackable_slots_count = remove.len();
-        remove.into_iter().rev().for_each(|i| {
-            self.addref_accounts_failed_to_shrink_ancient(vec![accounts_to_combine.remove(i)]);
-        });
         target_slots_sorted.sort_unstable();
         self.shrink_ancient_stats
             .slots_cannot_move_count
@@ -1210,7 +1193,7 @@ pub mod tests {
             },
             accounts_file::StorageAccess,
             accounts_hash::AccountHash,
-            accounts_index::UpsertReclaim,
+            accounts_index::{AccountsIndexScanResult, ScanFilter, UpsertReclaim},
             append_vec::{
                 aligned_stored_size, AppendVec, AppendVecStoredAccountMeta,
                 MAXIMUM_APPEND_VEC_FILE_SIZE,
@@ -1772,13 +1755,7 @@ pub mod tests {
                             &tuning,
                             many_ref_slots,
                         );
-                        let mut expected_accounts_to_combine = num_slots;
-                        if two_refs && many_ref_slots == IncludeManyRefSlots::Skip && num_slots > 2
-                        {
-                            // We require more than 1 target slot. Since all slots have multi refs, we find no slots we can use as target slots.
-                            // Thus, nothing can be packed.
-                            expected_accounts_to_combine = 0;
-                        }
+                        let expected_accounts_to_combine = num_slots;
                         (0..accounts_to_combine
                             .target_slots_sorted
                             .len()
@@ -1881,7 +1858,7 @@ pub mod tests {
                                 assert_eq!(
                                     accounts_to_combine.accounts_to_combine.len(),
                                     // if we are only trying to pack a single slot of multi-refs, it will succeed
-                                    if !two_refs || many_ref_slots == IncludeManyRefSlots::Include || num_slots == 1 {num_slots} else {0},
+                                    if !two_refs || many_ref_slots == IncludeManyRefSlots::Include || num_slots == 1 || num_slots == 2 {num_slots} else {0},
                                     "method: {method:?}, num_slots: {num_slots}, two_refs: {two_refs}, many_refs: {many_ref_slots:?}"
                                 );
 
@@ -3840,7 +3817,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_addref_accounts_failed_to_shrink_ancient() {
+    fn test_shrink_ancient_expected_unref() {
         let db = AccountsDb::new_single_for_tests();
         let empty_account = AccountSharedData::default();
         for count in 0..3 {
@@ -3848,7 +3825,8 @@ pub mod tests {
                 .map(|_| solana_sdk::pubkey::new_rand())
                 .collect::<Vec<_>>();
             // how many of `many_ref_accounts` should be found in the index with ref_count=1
-            let mut expected_ref_counts = HashMap::<Pubkey, u64>::default();
+            let mut expected_ref_counts_before_unref = HashMap::<Pubkey, u64>::default();
+            let mut expected_ref_counts_after_unref = HashMap::<Pubkey, u64>::default();
 
             unrefed_pubkeys.iter().for_each(|k| {
                 for slot in 0..2 {
@@ -3864,8 +3842,8 @@ pub mod tests {
                         UpsertReclaim::IgnoreReclaims,
                     );
                 }
-                // set to 2 initially, made part of `unrefed_pubkeys`, expect it to be addref'd to 3
-                expected_ref_counts.insert(*k, 3);
+                expected_ref_counts_before_unref.insert(*k, 2);
+                expected_ref_counts_after_unref.insert(*k, 1);
             });
 
             let shrink_collect = ShrinkCollect::<ShrinkCollectAliveSeparatedByRefs> {
@@ -3885,17 +3863,34 @@ pub mod tests {
                 total_starting_accounts: 0,
                 all_are_zero_lamports: false,
             };
-            let accounts_to_combine = AccountsToCombine {
-                accounts_keep_slots: HashMap::default(),
-                accounts_to_combine: vec![shrink_collect],
-                target_slots_sorted: Vec::default(),
-                unpackable_slots_count: 0,
-            };
-            db.addref_accounts_failed_to_shrink_ancient(accounts_to_combine.accounts_to_combine);
+
+            // Assert ref_counts before unref.
             db.accounts_index.scan(
-                unrefed_pubkeys.iter(),
+                shrink_collect.unrefed_pubkeys.iter().cloned(),
                 |k, slot_refs, _entry| {
-                    assert_eq!(expected_ref_counts.remove(k).unwrap(), slot_refs.unwrap().1);
+                    assert_eq!(
+                        expected_ref_counts_before_unref.remove(k).unwrap(),
+                        slot_refs.unwrap().1
+                    );
+                    AccountsIndexScanResult::OnlyKeepInMemoryIfDirty
+                },
+                None,
+                false,
+                ScanFilter::All,
+            );
+            assert!(expected_ref_counts_before_unref.is_empty());
+
+            // unref ref_counts
+            db.unref_shrunk_dead_accounts(shrink_collect.unrefed_pubkeys.iter().cloned(), 0);
+
+            // Assert ref_counts after unref
+            db.accounts_index.scan(
+                shrink_collect.unrefed_pubkeys.iter().cloned(),
+                |k, slot_refs, _entry| {
+                    assert_eq!(
+                        expected_ref_counts_after_unref.remove(k).unwrap(),
+                        slot_refs.unwrap().1
+                    );
                     AccountsIndexScanResult::OnlyKeepInMemoryIfDirty
                 },
                 None,
@@ -3903,7 +3898,7 @@ pub mod tests {
                 ScanFilter::All,
             );
             // should have removed all of them
-            assert!(expected_ref_counts.is_empty());
+            assert!(expected_ref_counts_after_unref.is_empty());
         }
     }
 
