@@ -8850,6 +8850,10 @@ impl AccountsDb {
         let mut amount_to_top_off_rent = 0;
         let mut stored_size_alive = 0;
 
+        use std::str::FromStr;
+        let pks = ["3akqNJtCaHpdLqCkfBLUGCuUVwiYoSn5fDKftS7ExhRf", "36EypUXbF1iESNypfcUa2vrJYTLTR4fAn3ctU5tt9d8i"];
+        let pks = pks.iter().map(|k| Pubkey::from_str(k).unwrap()).collect::<Vec<_>>();
+
         let (dirty_pubkeys, insert_time_us, mut generate_index_results) = {
             let mut items_local = Vec::default();
             storage.accounts.scan_index(|info| {
@@ -8860,6 +8864,9 @@ impl AccountsDb {
                 items_local.push(info.index_info);
             });
             let items = items_local.into_iter().map(|info| {
+                if pks.contains(&info.pubkey) {
+                    log::error!("{}, {slot}", info.pubkey);
+                }
                 if let Some(amount_to_top_off_rent_this_account) = Self::stats_for_rent_payers(
                     &info.pubkey,
                     info.lamports,

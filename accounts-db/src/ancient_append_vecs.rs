@@ -94,8 +94,18 @@ impl AncientSlotInfos {
         is_high_slot: bool,
         db: &AccountsDb,
     ) -> bool {
+        let slots = [
+            287302120,
+287344734,
+287344738,
+287332411,
+        ];
+
         let mut was_randomly_shrunk = false;
         let alive_bytes = storage.alive_bytes() as u64;
+        if slots.contains(&slot) {
+            log::error!("ancient.add? slot: {slot}, alive: {alive_bytes}, cap: {}, count: {}", storage.capacity(), storage.approx_stored_count());
+        }
         if alive_bytes > 0 {
             let capacity = storage.accounts.capacity();
             let should_shrink = if capacity > 0 {
@@ -224,11 +234,15 @@ impl AncientSlotInfos {
         let mut bytes_from_must_shrink = 0;
         let mut bytes_from_smallest_storages = 0;
         let mut bytes_from_newest_storages = 0;
+        // make sure we are always including some smallest. We are alrady making sure we include some newest.
+        const MIN_SMALLEST_INCLUDED_COUNT: u64 = 100;
+        let mut smallest_included = 0;
         for (i, info) in self.all_infos.iter().enumerate() {
             cumulative_bytes += info.alive_bytes;
             let ancient_storages_required =
                 div_ceil(cumulative_bytes.0, tuning.ideal_storage_size) as usize;
             let storages_remaining = total_storages - i - 1;
+
 
             // if the remaining uncombined storages and the # of resulting
             // combined ancient storages are less than the threshold, then
@@ -240,7 +254,7 @@ impl AncientSlotInfos {
             // We do not stop including entries until we have dealt with all the high slot #s. This allows the algorithm to continue
             // to make progress each time it is called. There are exceptions that can cause the pack to fail, such as accounts with multiple
             // refs.
-            if !info.is_high_slot
+            if !info.is_high_slot && smallest_included > MIN_SMALLEST_INCLUDED_COUNT
                 && (storages_remaining + ancient_storages_required < low_threshold
                     || ancient_storages_required as u64 > u64::from(tuning.max_resulting_storages))
             {
@@ -253,6 +267,7 @@ impl AncientSlotInfos {
                 bytes_from_newest_storages += info.alive_bytes;
             } else {
                 bytes_from_smallest_storages += info.alive_bytes;
+                smallest_included += 1;
             }
         }
         stats
@@ -279,7 +294,11 @@ impl AncientSlotInfos {
         stats: &ShrinkAncientStats,
     ) {
         let total_storages = self.all_infos.len();
-        log::error!("total: {total_storages}, max: {}, quit: {}", tuning.max_ancient_slots, total_storages <= tuning.max_ancient_slots);
+        log::error!(
+            "total: {total_storages}, max: {}, quit: {}",
+            tuning.max_ancient_slots,
+            total_storages <= tuning.max_ancient_slots
+        );
         if total_storages <= tuning.max_ancient_slots {
             // currently fewer storages than max, so nothing to shrink
             self.shrink_indexes.clear();
@@ -409,6 +428,9 @@ impl AccountsDb {
         mut tuning: PackedAncientStorageTuning,
         metrics: &mut ShrinkStatsSub,
     ) {
+        log::error!("first/last: {:?}", (
+            sorted_slots.first(), sorted_slots.last()
+        ));
         self.shrink_ancient_stats
             .slots_considered
             .fetch_add(sorted_slots.len() as u64, Ordering::Relaxed);
@@ -848,6 +870,21 @@ impl AccountsDb {
                     self.shrink_ancient_stats
                         .many_ref_slots_skipped
                         .fetch_add(1, Ordering::Relaxed);
+                    log::info!("many ref skipped. slot: {}, target slots: {}, required packed slots: {required_packed_slots}, # many ref accounts: {}, first: {}, last: {}, cap: {}, alive: {}, dead: {}, first: {:?}",
+                    info.slot,
+                    target_slots_sorted.len(),
+                    shrink_collect
+                    .alive_accounts
+                    .many_refs_this_is_newest_alive.accounts.len(),
+                    accounts_per_storage.first().map(|a| a.0.slot).unwrap_or_default(),
+                    accounts_per_storage.last().map(|a| a.0.slot).unwrap_or_default(),
+                    shrink_collect.capacity,
+                    shrink_collect.alive_total_bytes,
+                    shrink_collect.capacity as usize - shrink_collect.alive_total_bytes,
+                    shrink_collect
+                    .alive_accounts
+                    .many_refs_this_is_newest_alive.accounts.first().map(|i| i.pubkey())
+                    );
                     remove.push(i);
                     continue;
                 }
