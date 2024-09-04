@@ -3,6 +3,7 @@ use {
     crate::{
         max_slots::MaxSlots, optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
         parsed_token_accounts::*, rpc_cache::LargestAccountsCache, rpc_health::*,
+        rpc_service::service_runtime,
     },
     base64::{prelude::BASE64_STANDARD, Engine},
     bincode::{config::Options, serialize},
@@ -111,6 +112,7 @@ use {
         },
         time::Duration,
     },
+    tokio::runtime::Runtime,
 };
 
 pub mod account_resolver;
@@ -137,7 +139,7 @@ fn is_finalized(
         && (blockstore.is_root(slot) || bank.status_cache_ancestors().contains(&slot))
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct JsonRpcConfig {
     pub enable_rpc_transaction_history: bool,
     pub enable_extended_tx_metadata_storage: bool,
@@ -147,6 +149,7 @@ pub struct JsonRpcConfig {
     pub max_multiple_accounts: Option<usize>,
     pub account_indexes: AccountSecondaryIndexes,
     pub rpc_threads: usize,
+    pub rpc_blocking_threads: usize,
     pub rpc_niceness_adj: i8,
     pub full_api: bool,
     pub obsolete_v1_7_api: bool,
@@ -154,6 +157,28 @@ pub struct JsonRpcConfig {
     pub max_request_body_size: Option<usize>,
     /// Disable the health check, used for tests and TestValidator
     pub disable_health_check: bool,
+}
+
+impl Default for JsonRpcConfig {
+    fn default() -> Self {
+        Self {
+            enable_rpc_transaction_history: Default::default(),
+            enable_extended_tx_metadata_storage: Default::default(),
+            faucet_addr: Option::default(),
+            health_check_slot_distance: Default::default(),
+            rpc_bigtable_config: Option::default(),
+            max_multiple_accounts: Option::default(),
+            account_indexes: AccountSecondaryIndexes::default(),
+            rpc_threads: 1,
+            rpc_blocking_threads: 1,
+            rpc_niceness_adj: Default::default(),
+            full_api: Default::default(),
+            obsolete_v1_7_api: Default::default(),
+            rpc_scan_and_fix_roots: Default::default(),
+            max_request_body_size: Option::default(),
+            disable_health_check: Default::default(),
+        }
+    }
 }
 
 impl JsonRpcConfig {
@@ -210,6 +235,7 @@ pub struct JsonRpcRequestProcessor {
     max_complete_transaction_status_slot: Arc<AtomicU64>,
     max_complete_rewards_slot: Arc<AtomicU64>,
     prioritization_fee_cache: Arc<PrioritizationFeeCache>,
+    runtime: Arc<Runtime>,
 }
 impl Metadata for JsonRpcRequestProcessor {}
 
@@ -326,6 +352,7 @@ impl JsonRpcRequestProcessor {
         max_complete_transaction_status_slot: Arc<AtomicU64>,
         max_complete_rewards_slot: Arc<AtomicU64>,
         prioritization_fee_cache: Arc<PrioritizationFeeCache>,
+        runtime: Arc<Runtime>,
     ) -> (Self, Receiver<TransactionInfo>) {
         let (sender, receiver) = unbounded();
         (
@@ -348,6 +375,7 @@ impl JsonRpcRequestProcessor {
                 max_complete_transaction_status_slot,
                 max_complete_rewards_slot,
                 prioritization_fee_cache,
+                runtime,
             },
             receiver,
         )
@@ -393,8 +421,17 @@ impl JsonRpcRequestProcessor {
         let slot = bank.slot();
         let optimistically_confirmed_bank =
             Arc::new(RwLock::new(OptimisticallyConfirmedBank { bank }));
+        let config = JsonRpcConfig::default();
+
+        let JsonRpcConfig {
+            rpc_threads,
+            rpc_blocking_threads,
+            rpc_niceness_adj,
+            ..
+        } = config;
+
         Self {
-            config: JsonRpcConfig::default(),
+            config,
             snapshot_config: None,
             bank_forks,
             block_commitment_cache: Arc::new(RwLock::new(BlockCommitmentCache::new(
@@ -422,6 +459,7 @@ impl JsonRpcRequestProcessor {
             max_complete_transaction_status_slot: Arc::new(AtomicU64::default()),
             max_complete_rewards_slot: Arc::new(AtomicU64::default()),
             prioritization_fee_cache: Arc::new(PrioritizationFeeCache::default()),
+            runtime: service_runtime(rpc_threads, rpc_blocking_threads, rpc_niceness_adj),
         }
     }
 
@@ -6881,8 +6919,15 @@ pub mod tests {
             .my_contact_info()
             .tpu(connection_cache.protocol())
             .unwrap();
+        let config = JsonRpcConfig::default();
+        let JsonRpcConfig {
+            rpc_threads,
+            rpc_blocking_threads,
+            rpc_niceness_adj,
+            ..
+        } = config;
         let (meta, receiver) = JsonRpcRequestProcessor::new(
-            JsonRpcConfig::default(),
+            config,
             None,
             bank_forks.clone(),
             block_commitment_cache,
@@ -7155,8 +7200,15 @@ pub mod tests {
             .unwrap();
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
+        let config = JsonRpcConfig::default();
+        let JsonRpcConfig {
+            rpc_threads,
+            rpc_blocking_threads,
+            rpc_niceness_adj,
+            ..
+        } = config;
         let (request_processor, receiver) = JsonRpcRequestProcessor::new(
-            JsonRpcConfig::default(),
+            config,
             None,
             bank_forks.clone(),
             block_commitment_cache,
@@ -7173,6 +7225,7 @@ pub mod tests {
             Arc::new(AtomicU64::default()),
             Arc::new(AtomicU64::default()),
             Arc::new(PrioritizationFeeCache::default()),
+            service_runtime(rpc_threads, rpc_blocking_threads, rpc_niceness_adj),
         );
         SendTransactionService::new::<NullTpuInfo>(
             tpu_address,
@@ -8788,7 +8841,7 @@ pub mod tests {
         ));
 
         let (meta, _receiver) = JsonRpcRequestProcessor::new(
-            JsonRpcConfig::default(),
+            config,
             None,
             bank_forks.clone(),
             block_commitment_cache,
@@ -8805,6 +8858,7 @@ pub mod tests {
             max_complete_transaction_status_slot,
             max_complete_rewards_slot,
             Arc::new(PrioritizationFeeCache::default()),
+            service_runtime(rpc_threads, rpc_blocking_threads, rpc_niceness_adj),
         );
 
         let mut io = MetaIoHandler::default();
