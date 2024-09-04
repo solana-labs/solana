@@ -13,16 +13,16 @@ use {
 pub const MAX_STATIC_ACCOUNTS_PER_PACKET: u8 =
     (PACKET_DATA_SIZE / core::mem::size_of::<Pubkey>()) as u8;
 
-/// Contains meta-data about the static account keys in a transaction packet.
+/// Contains metadata about the static account keys in a transaction packet.
 #[derive(Default)]
-pub(crate) struct StaticAccountKeysMeta {
+pub(crate) struct StaticAccountKeysFrame {
     /// The number of static accounts in the transaction.
     pub(crate) num_static_accounts: u8,
     /// The offset to the first static account in the transaction.
     pub(crate) offset: u16,
 }
 
-impl StaticAccountKeysMeta {
+impl StaticAccountKeysFrame {
     #[inline(always)]
     pub(crate) fn try_new(bytes: &[u8], offset: &mut usize) -> Result<Self> {
         // Max size must not have the MSB set so that it is size 1.
@@ -55,16 +55,16 @@ mod tests {
     fn test_zero_accounts() {
         let bytes = bincode::serialize(&ShortVec(Vec::<Pubkey>::new())).unwrap();
         let mut offset = 0;
-        assert!(StaticAccountKeysMeta::try_new(&bytes, &mut offset).is_err());
+        assert!(StaticAccountKeysFrame::try_new(&bytes, &mut offset).is_err());
     }
 
     #[test]
     fn test_one_account() {
         let bytes = bincode::serialize(&ShortVec(vec![Pubkey::default()])).unwrap();
         let mut offset = 0;
-        let meta = StaticAccountKeysMeta::try_new(&bytes, &mut offset).unwrap();
-        assert_eq!(meta.num_static_accounts, 1);
-        assert_eq!(meta.offset, 1);
+        let frame = StaticAccountKeysFrame::try_new(&bytes, &mut offset).unwrap();
+        assert_eq!(frame.num_static_accounts, 1);
+        assert_eq!(frame.offset, 1);
         assert_eq!(offset, 1 + core::mem::size_of::<Pubkey>());
     }
 
@@ -73,9 +73,9 @@ mod tests {
         let signatures = vec![Pubkey::default(); usize::from(MAX_STATIC_ACCOUNTS_PER_PACKET)];
         let bytes = bincode::serialize(&ShortVec(signatures)).unwrap();
         let mut offset = 0;
-        let meta = StaticAccountKeysMeta::try_new(&bytes, &mut offset).unwrap();
-        assert_eq!(meta.num_static_accounts, 38);
-        assert_eq!(meta.offset, 1);
+        let frame = StaticAccountKeysFrame::try_new(&bytes, &mut offset).unwrap();
+        assert_eq!(frame.num_static_accounts, 38);
+        assert_eq!(frame.offset, 1);
         assert_eq!(offset, 1 + 38 * core::mem::size_of::<Pubkey>());
     }
 
@@ -84,7 +84,7 @@ mod tests {
         let signatures = vec![Pubkey::default(); usize::from(MAX_STATIC_ACCOUNTS_PER_PACKET) + 1];
         let bytes = bincode::serialize(&ShortVec(signatures)).unwrap();
         let mut offset = 0;
-        assert!(StaticAccountKeysMeta::try_new(&bytes, &mut offset).is_err());
+        assert!(StaticAccountKeysFrame::try_new(&bytes, &mut offset).is_err());
     }
 
     #[test]
@@ -92,6 +92,6 @@ mod tests {
         let signatures = vec![Pubkey::default(); u16::MAX as usize];
         let bytes = bincode::serialize(&ShortVec(signatures)).unwrap();
         let mut offset = 0;
-        assert!(StaticAccountKeysMeta::try_new(&bytes, &mut offset).is_err());
+        assert!(StaticAccountKeysFrame::try_new(&bytes, &mut offset).is_err());
     }
 }

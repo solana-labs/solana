@@ -11,14 +11,14 @@ use {
 
 /// Contains metadata about the instructions in a transaction packet.
 #[derive(Default)]
-pub(crate) struct InstructionsMeta {
+pub(crate) struct InstructionsFrame {
     /// The number of instructions in the transaction.
     pub(crate) num_instructions: u16,
     /// The offset to the first instruction in the transaction.
     pub(crate) offset: u16,
 }
 
-impl InstructionsMeta {
+impl InstructionsFrame {
     /// Get the number of instructions and offset to the first instruction.
     /// The offset will be updated to point to the first byte after the last
     /// instruction.
@@ -149,10 +149,10 @@ mod tests {
     fn test_zero_instructions() {
         let bytes = bincode::serialize(&ShortVec(Vec::<CompiledInstruction>::new())).unwrap();
         let mut offset = 0;
-        let instructions_meta = InstructionsMeta::try_new(&bytes, &mut offset).unwrap();
+        let instructions_frame = InstructionsFrame::try_new(&bytes, &mut offset).unwrap();
 
-        assert_eq!(instructions_meta.num_instructions, 0);
-        assert_eq!(instructions_meta.offset, 1);
+        assert_eq!(instructions_frame.num_instructions, 0);
+        assert_eq!(instructions_frame.offset, 1);
         assert_eq!(offset, bytes.len());
     }
 
@@ -167,7 +167,7 @@ mod tests {
         // modify the number of instructions to be too high
         bytes[0] = 0x02;
         let mut offset = 0;
-        assert!(InstructionsMeta::try_new(&bytes, &mut offset).is_err());
+        assert!(InstructionsFrame::try_new(&bytes, &mut offset).is_err());
     }
 
     #[test]
@@ -179,9 +179,9 @@ mod tests {
         }]))
         .unwrap();
         let mut offset = 0;
-        let instructions_meta = InstructionsMeta::try_new(&bytes, &mut offset).unwrap();
-        assert_eq!(instructions_meta.num_instructions, 1);
-        assert_eq!(instructions_meta.offset, 1);
+        let instructions_frame = InstructionsFrame::try_new(&bytes, &mut offset).unwrap();
+        assert_eq!(instructions_frame.num_instructions, 1);
+        assert_eq!(instructions_frame.offset, 1);
         assert_eq!(offset, bytes.len());
     }
 
@@ -201,9 +201,9 @@ mod tests {
         ]))
         .unwrap();
         let mut offset = 0;
-        let instructions_meta = InstructionsMeta::try_new(&bytes, &mut offset).unwrap();
-        assert_eq!(instructions_meta.num_instructions, 2);
-        assert_eq!(instructions_meta.offset, 1);
+        let instructions_frame = InstructionsFrame::try_new(&bytes, &mut offset).unwrap();
+        assert_eq!(instructions_frame.num_instructions, 2);
+        assert_eq!(instructions_frame.offset, 1);
         assert_eq!(offset, bytes.len());
     }
 
@@ -220,7 +220,7 @@ mod tests {
         bytes[2] = 127;
 
         let mut offset = 0;
-        assert!(InstructionsMeta::try_new(&bytes, &mut offset).is_err());
+        assert!(InstructionsFrame::try_new(&bytes, &mut offset).is_err());
     }
 
     #[test]
@@ -236,6 +236,6 @@ mod tests {
         bytes[6] = 127;
 
         let mut offset = 0;
-        assert!(InstructionsMeta::try_new(&bytes, &mut offset).is_err());
+        assert!(InstructionsFrame::try_new(&bytes, &mut offset).is_err());
     }
 }

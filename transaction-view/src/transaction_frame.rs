@@ -1,39 +1,39 @@
 use {
     crate::{
-        address_table_lookup_meta::{AddressTableLookupIterator, AddressTableLookupMeta},
+        address_table_lookup_frame::{AddressTableLookupFrame, AddressTableLookupIterator},
         bytes::advance_offset_for_type,
-        instructions_meta::{InstructionsIterator, InstructionsMeta},
-        message_header_meta::{MessageHeaderMeta, TransactionVersion},
+        instructions_frame::{InstructionsFrame, InstructionsIterator},
+        message_header_frame::{MessageHeaderFrame, TransactionVersion},
         result::{Result, TransactionViewError},
-        signature_meta::SignatureMeta,
-        static_account_keys_meta::StaticAccountKeysMeta,
+        signature_frame::SignatureFrame,
+        static_account_keys_frame::StaticAccountKeysFrame,
     },
     solana_sdk::{hash::Hash, pubkey::Pubkey, signature::Signature},
 };
 
-pub(crate) struct TransactionMeta {
-    /// Signature metadata.
-    signature: SignatureMeta,
-    /// Message header metadata.
-    message_header: MessageHeaderMeta,
-    /// Static account keys metadata.
-    static_account_keys: StaticAccountKeysMeta,
+pub(crate) struct TransactionFrame {
+    /// Signature framing data.
+    signature: SignatureFrame,
+    /// Message header framing data.
+    message_header: MessageHeaderFrame,
+    /// Static account keys framing data.
+    static_account_keys: StaticAccountKeysFrame,
     /// Recent blockhash offset.
     recent_blockhash_offset: u16,
-    /// Instructions metadata.
-    instructions: InstructionsMeta,
-    /// Address table lookup metadata.
-    address_table_lookup: AddressTableLookupMeta,
+    /// Instructions framing data.
+    instructions: InstructionsFrame,
+    /// Address table lookup framing data.
+    address_table_lookup: AddressTableLookupFrame,
 }
 
-impl TransactionMeta {
+impl TransactionFrame {
     /// Parse a serialized transaction and verify basic structure.
     /// The `bytes` parameter must have no trailing data.
     pub(crate) fn try_new(bytes: &[u8]) -> Result<Self> {
         let mut offset = 0;
-        let signature = SignatureMeta::try_new(bytes, &mut offset)?;
-        let message_header = MessageHeaderMeta::try_new(bytes, &mut offset)?;
-        let static_account_keys = StaticAccountKeysMeta::try_new(bytes, &mut offset)?;
+        let signature = SignatureFrame::try_new(bytes, &mut offset)?;
+        let message_header = MessageHeaderFrame::try_new(bytes, &mut offset)?;
+        let static_account_keys = StaticAccountKeysFrame::try_new(bytes, &mut offset)?;
 
         // The recent blockhash is the first account key after the static
         // account keys. The recent blockhash is always present in a valid
@@ -41,15 +41,15 @@ impl TransactionMeta {
         let recent_blockhash_offset = offset as u16;
         advance_offset_for_type::<Hash>(bytes, &mut offset)?;
 
-        let instructions = InstructionsMeta::try_new(bytes, &mut offset)?;
+        let instructions = InstructionsFrame::try_new(bytes, &mut offset)?;
         let address_table_lookup = match message_header.version {
-            TransactionVersion::Legacy => AddressTableLookupMeta {
+            TransactionVersion::Legacy => AddressTableLookupFrame {
                 num_address_table_lookups: 0,
                 offset: 0,
                 total_writable_lookup_accounts: 0,
                 total_readonly_lookup_accounts: 0,
             },
-            TransactionVersion::V0 => AddressTableLookupMeta::try_new(bytes, &mut offset)?,
+            TransactionVersion::V0 => AddressTableLookupFrame::try_new(bytes, &mut offset)?,
         };
 
         // Verify that the entire transaction was parsed.
@@ -135,11 +135,11 @@ impl TransactionMeta {
 }
 
 // Separate implementation for `unsafe` accessor methods.
-impl TransactionMeta {
+impl TransactionFrame {
     /// Return the slice of signatures in the transaction.
     /// # Safety
     ///   - This function must be called with the same `bytes` slice that was
-    ///     used to create the `TransactionMeta` instance.
+    ///     used to create the `TransactionFrame` instance.
     #[inline]
     pub(crate) unsafe fn signatures<'a>(&self, bytes: &'a [u8]) -> &'a [Signature] {
         // Verify at compile time there are no alignment constraints.
@@ -152,10 +152,10 @@ impl TransactionMeta {
             assert!(u8::MAX as usize * core::mem::size_of::<Signature>() <= isize::MAX as usize);
 
         // SAFETY:
-        // - If this `TransactionMeta` was created from `bytes`:
+        // - If this `TransactionFrame` was created from `bytes`:
         //     - the pointer is valid for the range and is properly aligned.
         // - `num_signatures` has been verified against the bounds if
-        //   `TransactionMeta` was created successfully.
+        //   `TransactionFrame` was created successfully.
         // - `Signature` are just byte arrays; there is no possibility the
         //   `Signature` are not initialized properly.
         // - The lifetime of the returned slice is the same as the input
@@ -172,7 +172,7 @@ impl TransactionMeta {
     ///
     /// # Safety
     ///  - This function must be called with the same `bytes` slice that was
-    ///    used to create the `TransactionMeta` instance.
+    ///    used to create the `TransactionFrame` instance.
     #[inline]
     pub(crate) unsafe fn static_account_keys<'a>(&self, bytes: &'a [u8]) -> &'a [Pubkey] {
         // Verify at compile time there are no alignment constraints.
@@ -182,10 +182,10 @@ impl TransactionMeta {
             assert!(u8::MAX as usize * core::mem::size_of::<Pubkey>() <= isize::MAX as usize);
 
         // SAFETY:
-        // - If this `TransactionMeta` was created from `bytes`:
+        // - If this `TransactionFrame` was created from `bytes`:
         //     - the pointer is valid for the range and is properly aligned.
         // - `num_static_accounts` has been verified against the bounds if
-        //   `TransactionMeta` was created successfully.
+        //   `TransactionFrame` was created successfully.
         // - `Pubkey` are just byte arrays; there is no possibility the
         //   `Pubkey` are not initialized properly.
         // - The lifetime of the returned slice is the same as the input
@@ -203,7 +203,7 @@ impl TransactionMeta {
     /// Return the recent blockhash in the transaction.
     /// # Safety
     /// - This function must be called with the same `bytes` slice that was
-    ///   used to create the `TransactionMeta` instance.
+    ///   used to create the `TransactionFrame` instance.
     #[inline]
     pub(crate) unsafe fn recent_blockhash<'a>(&self, bytes: &'a [u8]) -> &'a Hash {
         // Verify at compile time there are no alignment constraints.
@@ -223,7 +223,7 @@ impl TransactionMeta {
     /// Return an iterator over the instructions in the transaction.
     /// # Safety
     /// - This function must be called with the same `bytes` slice that was
-    ///   used to create the `TransactionMeta` instance.
+    ///   used to create the `TransactionFrame` instance.
     #[inline]
     pub(crate) unsafe fn instructions_iter<'a>(&self, bytes: &'a [u8]) -> InstructionsIterator<'a> {
         InstructionsIterator {
@@ -237,7 +237,7 @@ impl TransactionMeta {
     /// Return an iterator over the address table lookups in the transaction.
     /// # Safety
     /// - This function must be called with the same `bytes` slice that was
-    ///   used to create the `TransactionMeta` instance.
+    ///   used to create the `TransactionFrame` instance.
     #[inline]
     pub(crate) unsafe fn address_table_lookup_iter<'a>(
         &self,
@@ -266,36 +266,36 @@ mod tests {
         },
     };
 
-    fn verify_transaction_view_meta(tx: &VersionedTransaction) {
+    fn verify_transaction_view_frame(tx: &VersionedTransaction) {
         let bytes = bincode::serialize(tx).unwrap();
-        let meta = TransactionMeta::try_new(&bytes).unwrap();
+        let frame = TransactionFrame::try_new(&bytes).unwrap();
 
-        assert_eq!(meta.signature.num_signatures, tx.signatures.len() as u8);
-        assert_eq!(meta.signature.offset as usize, 1);
+        assert_eq!(frame.signature.num_signatures, tx.signatures.len() as u8);
+        assert_eq!(frame.signature.offset as usize, 1);
 
         assert_eq!(
-            meta.message_header.num_required_signatures,
+            frame.message_header.num_required_signatures,
             tx.message.header().num_required_signatures
         );
         assert_eq!(
-            meta.message_header.num_readonly_signed_accounts,
+            frame.message_header.num_readonly_signed_accounts,
             tx.message.header().num_readonly_signed_accounts
         );
         assert_eq!(
-            meta.message_header.num_readonly_unsigned_accounts,
+            frame.message_header.num_readonly_unsigned_accounts,
             tx.message.header().num_readonly_unsigned_accounts
         );
 
         assert_eq!(
-            meta.static_account_keys.num_static_accounts,
+            frame.static_account_keys.num_static_accounts,
             tx.message.static_account_keys().len() as u8
         );
         assert_eq!(
-            meta.instructions.num_instructions,
+            frame.instructions.num_instructions,
             tx.message.instructions().len() as u16
         );
         assert_eq!(
-            meta.address_table_lookup.num_address_table_lookups,
+            frame.address_table_lookup.num_address_table_lookups,
             tx.message
                 .address_table_lookups()
                 .map(|x| x.len() as u8)
@@ -420,22 +420,22 @@ mod tests {
 
     #[test]
     fn test_minimal_sized_transaction() {
-        verify_transaction_view_meta(&minimally_sized_transaction());
+        verify_transaction_view_frame(&minimally_sized_transaction());
     }
 
     #[test]
     fn test_simple_transfer() {
-        verify_transaction_view_meta(&simple_transfer());
+        verify_transaction_view_frame(&simple_transfer());
     }
 
     #[test]
     fn test_simple_transfer_v0() {
-        verify_transaction_view_meta(&simple_transfer_v0());
+        verify_transaction_view_frame(&simple_transfer_v0());
     }
 
     #[test]
     fn test_v0_with_lookup() {
-        verify_transaction_view_meta(&v0_with_single_lookup());
+        verify_transaction_view_frame(&v0_with_single_lookup());
     }
 
     #[test]
@@ -443,14 +443,14 @@ mod tests {
         let tx = simple_transfer();
         let mut bytes = bincode::serialize(&tx).unwrap();
         bytes.push(0);
-        assert!(TransactionMeta::try_new(&bytes).is_err());
+        assert!(TransactionFrame::try_new(&bytes).is_err());
     }
 
     #[test]
     fn test_insufficient_bytes() {
         let tx = simple_transfer();
         let bytes = bincode::serialize(&tx).unwrap();
-        assert!(TransactionMeta::try_new(&bytes[..bytes.len().wrapping_sub(1)]).is_err());
+        assert!(TransactionFrame::try_new(&bytes[..bytes.len().wrapping_sub(1)]).is_err());
     }
 
     #[test]
@@ -461,7 +461,7 @@ mod tests {
         bytes[0] = 0xff;
         bytes[1] = 0xff;
         bytes[2] = 0xff;
-        assert!(TransactionMeta::try_new(&bytes).is_err());
+        assert!(TransactionFrame::try_new(&bytes).is_err());
     }
 
     #[test]
@@ -473,7 +473,7 @@ mod tests {
         bytes[offset] = 0xff;
         bytes[offset + 1] = 0xff;
         bytes[offset + 2] = 0xff;
-        assert!(TransactionMeta::try_new(&bytes).is_err());
+        assert!(TransactionFrame::try_new(&bytes).is_err());
     }
 
     #[test]
@@ -490,7 +490,7 @@ mod tests {
         bytes[offset] = 0xff;
         bytes[offset + 1] = 0xff;
         bytes[offset + 2] = 0xff;
-        assert!(TransactionMeta::try_new(&bytes).is_err());
+        assert!(TransactionFrame::try_new(&bytes).is_err());
     }
 
     #[test]
@@ -513,33 +513,33 @@ mod tests {
             + 1 // byte for data length
             + ix_bytes;
         bytes[offset] = 0x01;
-        assert!(TransactionMeta::try_new(&bytes).is_err());
+        assert!(TransactionFrame::try_new(&bytes).is_err());
     }
 
     #[test]
     fn test_basic_accessors() {
         let tx = simple_transfer();
         let bytes = bincode::serialize(&tx).unwrap();
-        let meta = TransactionMeta::try_new(&bytes).unwrap();
+        let frame = TransactionFrame::try_new(&bytes).unwrap();
 
-        assert_eq!(meta.num_signatures(), 1);
-        assert!(matches!(meta.version(), TransactionVersion::Legacy));
-        assert_eq!(meta.num_required_signatures(), 1);
-        assert_eq!(meta.num_readonly_signed_accounts(), 0);
-        assert_eq!(meta.num_readonly_unsigned_accounts(), 1);
-        assert_eq!(meta.num_static_account_keys(), 3);
-        assert_eq!(meta.num_instructions(), 1);
-        assert_eq!(meta.num_address_table_lookups(), 0);
+        assert_eq!(frame.num_signatures(), 1);
+        assert!(matches!(frame.version(), TransactionVersion::Legacy));
+        assert_eq!(frame.num_required_signatures(), 1);
+        assert_eq!(frame.num_readonly_signed_accounts(), 0);
+        assert_eq!(frame.num_readonly_unsigned_accounts(), 1);
+        assert_eq!(frame.num_static_account_keys(), 3);
+        assert_eq!(frame.num_instructions(), 1);
+        assert_eq!(frame.num_address_table_lookups(), 0);
 
-        // SAFETY: `bytes` is the same slice used to create `meta`.
+        // SAFETY: `bytes` is the same slice used to create `frame`.
         unsafe {
-            let signatures = meta.signatures(&bytes);
+            let signatures = frame.signatures(&bytes);
             assert_eq!(signatures, &tx.signatures);
 
-            let static_account_keys = meta.static_account_keys(&bytes);
+            let static_account_keys = frame.static_account_keys(&bytes);
             assert_eq!(static_account_keys, tx.message.static_account_keys());
 
-            let recent_blockhash = meta.recent_blockhash(&bytes);
+            let recent_blockhash = frame.recent_blockhash(&bytes);
             assert_eq!(recent_blockhash, tx.message.recent_blockhash());
         }
     }
@@ -548,11 +548,11 @@ mod tests {
     fn test_instructions_iter_empty() {
         let tx = minimally_sized_transaction();
         let bytes = bincode::serialize(&tx).unwrap();
-        let meta = TransactionMeta::try_new(&bytes).unwrap();
+        let frame = TransactionFrame::try_new(&bytes).unwrap();
 
-        // SAFETY: `bytes` is the same slice used to create `meta`.
+        // SAFETY: `bytes` is the same slice used to create `frame`.
         unsafe {
-            let mut iter = meta.instructions_iter(&bytes);
+            let mut iter = frame.instructions_iter(&bytes);
             assert!(iter.next().is_none());
         }
     }
@@ -561,11 +561,11 @@ mod tests {
     fn test_instructions_iter_single() {
         let tx = simple_transfer();
         let bytes = bincode::serialize(&tx).unwrap();
-        let meta = TransactionMeta::try_new(&bytes).unwrap();
+        let frame = TransactionFrame::try_new(&bytes).unwrap();
 
-        // SAFETY: `bytes` is the same slice used to create `meta`.
+        // SAFETY: `bytes` is the same slice used to create `frame`.
         unsafe {
-            let mut iter = meta.instructions_iter(&bytes);
+            let mut iter = frame.instructions_iter(&bytes);
             let ix = iter.next().unwrap();
             assert_eq!(ix.program_id_index, 2);
             assert_eq!(ix.accounts, &[0, 1]);
@@ -581,11 +581,11 @@ mod tests {
     fn test_instructions_iter_multiple() {
         let tx = multiple_transfers();
         let bytes = bincode::serialize(&tx).unwrap();
-        let meta = TransactionMeta::try_new(&bytes).unwrap();
+        let frame = TransactionFrame::try_new(&bytes).unwrap();
 
-        // SAFETY: `bytes` is the same slice used to create `meta`.
+        // SAFETY: `bytes` is the same slice used to create `frame`.
         unsafe {
-            let mut iter = meta.instructions_iter(&bytes);
+            let mut iter = frame.instructions_iter(&bytes);
             let ix = iter.next().unwrap();
             assert_eq!(ix.program_id_index, 3);
             assert_eq!(ix.accounts, &[0, 1]);
@@ -608,11 +608,11 @@ mod tests {
     fn test_address_table_lookup_iter_empty() {
         let tx = simple_transfer();
         let bytes = bincode::serialize(&tx).unwrap();
-        let meta = TransactionMeta::try_new(&bytes).unwrap();
+        let frame = TransactionFrame::try_new(&bytes).unwrap();
 
-        // SAFETY: `bytes` is the same slice used to create `meta`.
+        // SAFETY: `bytes` is the same slice used to create `frame`.
         unsafe {
-            let mut iter = meta.address_table_lookup_iter(&bytes);
+            let mut iter = frame.address_table_lookup_iter(&bytes);
             assert!(iter.next().is_none());
         }
     }
@@ -621,12 +621,12 @@ mod tests {
     fn test_address_table_lookup_iter_single() {
         let tx = v0_with_single_lookup();
         let bytes = bincode::serialize(&tx).unwrap();
-        let meta = TransactionMeta::try_new(&bytes).unwrap();
+        let frame = TransactionFrame::try_new(&bytes).unwrap();
 
         let atls_actual = tx.message.address_table_lookups().unwrap();
-        // SAFETY: `bytes` is the same slice used to create `meta`.
+        // SAFETY: `bytes` is the same slice used to create `frame`.
         unsafe {
-            let mut iter = meta.address_table_lookup_iter(&bytes);
+            let mut iter = frame.address_table_lookup_iter(&bytes);
             let lookup = iter.next().unwrap();
             assert_eq!(lookup.account_key, &atls_actual[0].account_key);
             assert_eq!(lookup.writable_indexes, atls_actual[0].writable_indexes);
@@ -639,12 +639,12 @@ mod tests {
     fn test_address_table_lookup_iter_multiple() {
         let tx = v0_with_multiple_lookups();
         let bytes = bincode::serialize(&tx).unwrap();
-        let meta = TransactionMeta::try_new(&bytes).unwrap();
+        let frame = TransactionFrame::try_new(&bytes).unwrap();
 
         let atls_actual = tx.message.address_table_lookups().unwrap();
-        // SAFETY: `bytes` is the same slice used to create `meta`.
+        // SAFETY: `bytes` is the same slice used to create `frame`.
         unsafe {
-            let mut iter = meta.address_table_lookup_iter(&bytes);
+            let mut iter = frame.address_table_lookup_iter(&bytes);
 
             let lookup = iter.next().unwrap();
             assert_eq!(lookup.account_key, &atls_actual[0].account_key);

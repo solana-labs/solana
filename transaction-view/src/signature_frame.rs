@@ -16,15 +16,15 @@ use {
 const MAX_SIGNATURES_PER_PACKET: u8 =
     (PACKET_DATA_SIZE / (core::mem::size_of::<Signature>() + core::mem::size_of::<Pubkey>())) as u8;
 
-/// Meta data for accessing transaction-level signatures in a transaction view.
-pub(crate) struct SignatureMeta {
+/// Metadata for accessing transaction-level signatures in a transaction view.
+pub(crate) struct SignatureFrame {
     /// The number of signatures in the transaction.
     pub(crate) num_signatures: u8,
     /// Offset to the first signature in the transaction packet.
     pub(crate) offset: u16,
 }
 
-impl SignatureMeta {
+impl SignatureFrame {
     /// Get the number of signatures and the offset to the first signature in
     /// the transaction packet, starting at the given `offset`.
     #[inline(always)]
@@ -56,16 +56,16 @@ mod tests {
     fn test_zero_signatures() {
         let bytes = bincode::serialize(&ShortVec(Vec::<Signature>::new())).unwrap();
         let mut offset = 0;
-        assert!(SignatureMeta::try_new(&bytes, &mut offset).is_err());
+        assert!(SignatureFrame::try_new(&bytes, &mut offset).is_err());
     }
 
     #[test]
     fn test_one_signature() {
         let bytes = bincode::serialize(&ShortVec(vec![Signature::default()])).unwrap();
         let mut offset = 0;
-        let meta = SignatureMeta::try_new(&bytes, &mut offset).unwrap();
-        assert_eq!(meta.num_signatures, 1);
-        assert_eq!(meta.offset, 1);
+        let frame = SignatureFrame::try_new(&bytes, &mut offset).unwrap();
+        assert_eq!(frame.num_signatures, 1);
+        assert_eq!(frame.offset, 1);
         assert_eq!(offset, 1 + core::mem::size_of::<Signature>());
     }
 
@@ -74,9 +74,9 @@ mod tests {
         let signatures = vec![Signature::default(); usize::from(MAX_SIGNATURES_PER_PACKET)];
         let bytes = bincode::serialize(&ShortVec(signatures)).unwrap();
         let mut offset = 0;
-        let meta = SignatureMeta::try_new(&bytes, &mut offset).unwrap();
-        assert_eq!(meta.num_signatures, 12);
-        assert_eq!(meta.offset, 1);
+        let frame = SignatureFrame::try_new(&bytes, &mut offset).unwrap();
+        assert_eq!(frame.num_signatures, 12);
+        assert_eq!(frame.offset, 1);
         assert_eq!(offset, 1 + 12 * core::mem::size_of::<Signature>());
     }
 
@@ -85,9 +85,9 @@ mod tests {
         let mut bytes = bincode::serialize(&ShortVec(vec![Signature::default()])).unwrap();
         bytes.insert(0, 0); // Insert a byte at the beginning of the packet.
         let mut offset = 1; // Start at the second byte.
-        let meta = SignatureMeta::try_new(&bytes, &mut offset).unwrap();
-        assert_eq!(meta.num_signatures, 1);
-        assert_eq!(meta.offset, 2);
+        let frame = SignatureFrame::try_new(&bytes, &mut offset).unwrap();
+        assert_eq!(frame.num_signatures, 1);
+        assert_eq!(frame.offset, 2);
         assert_eq!(offset, 2 + core::mem::size_of::<Signature>());
     }
 
@@ -96,7 +96,7 @@ mod tests {
         let signatures = vec![Signature::default(); usize::from(MAX_SIGNATURES_PER_PACKET) + 1];
         let bytes = bincode::serialize(&ShortVec(signatures)).unwrap();
         let mut offset = 0;
-        assert!(SignatureMeta::try_new(&bytes, &mut offset).is_err());
+        assert!(SignatureFrame::try_new(&bytes, &mut offset).is_err());
     }
 
     #[test]
@@ -104,6 +104,6 @@ mod tests {
         let signatures = vec![Signature::default(); u16::MAX as usize];
         let bytes = bincode::serialize(&ShortVec(signatures)).unwrap();
         let mut offset = 0;
-        assert!(SignatureMeta::try_new(&bytes, &mut offset).is_err());
+        assert!(SignatureFrame::try_new(&bytes, &mut offset).is_err());
     }
 }

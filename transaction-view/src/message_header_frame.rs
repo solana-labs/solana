@@ -15,8 +15,8 @@ pub enum TransactionVersion {
     V0 = 0,
 }
 
-/// Meta data for accessing message header fields in a transaction view.
-pub(crate) struct MessageHeaderMeta {
+/// Metadata for accessing message header fields in a transaction view.
+pub(crate) struct MessageHeaderFrame {
     /// The offset to the first byte of the message in the transaction packet.
     pub(crate) offset: u16,
     /// The version of the transaction.
@@ -32,7 +32,7 @@ pub(crate) struct MessageHeaderMeta {
     pub(crate) num_readonly_unsigned_accounts: u8,
 }
 
-impl MessageHeaderMeta {
+impl MessageHeaderFrame {
     #[inline(always)]
     pub(crate) fn try_new(bytes: &[u8], offset: &mut usize) -> Result<Self> {
         // Get the message offset.
@@ -78,21 +78,21 @@ mod tests {
     fn test_invalid_version() {
         let bytes = [0b1000_0001];
         let mut offset = 0;
-        assert!(MessageHeaderMeta::try_new(&bytes, &mut offset).is_err());
+        assert!(MessageHeaderFrame::try_new(&bytes, &mut offset).is_err());
     }
 
     #[test]
     fn test_legacy_transaction_missing_header_byte() {
         let bytes = [5, 0];
         let mut offset = 0;
-        assert!(MessageHeaderMeta::try_new(&bytes, &mut offset).is_err());
+        assert!(MessageHeaderFrame::try_new(&bytes, &mut offset).is_err());
     }
 
     #[test]
     fn test_legacy_transaction_valid() {
         let bytes = [5, 1, 2];
         let mut offset = 0;
-        let header = MessageHeaderMeta::try_new(&bytes, &mut offset).unwrap();
+        let header = MessageHeaderFrame::try_new(&bytes, &mut offset).unwrap();
         assert!(matches!(header.version, TransactionVersion::Legacy));
         assert_eq!(header.num_required_signatures, 5);
         assert_eq!(header.num_readonly_signed_accounts, 1);
@@ -103,14 +103,14 @@ mod tests {
     fn test_v0_transaction_missing_header_byte() {
         let bytes = [MESSAGE_VERSION_PREFIX, 5, 1];
         let mut offset = 0;
-        assert!(MessageHeaderMeta::try_new(&bytes, &mut offset).is_err());
+        assert!(MessageHeaderFrame::try_new(&bytes, &mut offset).is_err());
     }
 
     #[test]
     fn test_v0_transaction_valid() {
         let bytes = [MESSAGE_VERSION_PREFIX, 5, 1, 2];
         let mut offset = 0;
-        let header = MessageHeaderMeta::try_new(&bytes, &mut offset).unwrap();
+        let header = MessageHeaderFrame::try_new(&bytes, &mut offset).unwrap();
         assert!(matches!(header.version, TransactionVersion::V0));
         assert_eq!(header.num_required_signatures, 5);
         assert_eq!(header.num_readonly_signed_accounts, 1);

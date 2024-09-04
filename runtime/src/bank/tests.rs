@@ -16,7 +16,7 @@ use {
         snapshot_bank_utils, snapshot_utils,
         status_cache::MAX_CACHE_ENTRIES,
     },
-    agave_transaction_view::static_account_keys_meta::MAX_STATIC_ACCOUNTS_PER_PACKET,
+    agave_transaction_view::static_account_keys_frame::MAX_STATIC_ACCOUNTS_PER_PACKET,
     assert_matches::assert_matches,
     crossbeam_channel::{bounded, unbounded},
     itertools::Itertools,

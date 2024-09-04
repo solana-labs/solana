@@ -46,7 +46,7 @@ const MAX_ATLS_PER_PACKET: u8 =
     ((PACKET_DATA_SIZE - MIN_SIZED_PACKET_WITH_ATLS) / MIN_SIZED_ATL) as u8;
 
 /// Contains metadata about the address table lookups in a transaction packet.
-pub(crate) struct AddressTableLookupMeta {
+pub(crate) struct AddressTableLookupFrame {
     /// The number of address table lookups in the transaction.
     pub(crate) num_address_table_lookups: u8,
     /// The offset to the first address table lookup in the transaction.
@@ -57,7 +57,7 @@ pub(crate) struct AddressTableLookupMeta {
     pub(crate) total_readonly_lookup_accounts: u16,
 }
 
-impl AddressTableLookupMeta {
+impl AddressTableLookupFrame {
     /// Get the number of address table lookups (ATL) and offset to the first.
     /// The offset will be updated to point to the first byte after the last
     /// ATL.
@@ -211,12 +211,12 @@ mod tests {
     fn test_zero_atls() {
         let bytes = bincode::serialize(&ShortVec::<MessageAddressTableLookup>(vec![])).unwrap();
         let mut offset = 0;
-        let meta = AddressTableLookupMeta::try_new(&bytes, &mut offset).unwrap();
-        assert_eq!(meta.num_address_table_lookups, 0);
-        assert_eq!(meta.offset, 1);
+        let frame = AddressTableLookupFrame::try_new(&bytes, &mut offset).unwrap();
+        assert_eq!(frame.num_address_table_lookups, 0);
+        assert_eq!(frame.offset, 1);
         assert_eq!(offset, bytes.len());
-        assert_eq!(meta.total_writable_lookup_accounts, 0);
-        assert_eq!(meta.total_readonly_lookup_accounts, 0);
+        assert_eq!(frame.total_writable_lookup_accounts, 0);
+        assert_eq!(frame.total_readonly_lookup_accounts, 0);
     }
 
     #[test]
@@ -225,7 +225,7 @@ mod tests {
         let mut offset = 0;
         // modify the number of atls to be too high
         bytes[0] = 5;
-        assert!(AddressTableLookupMeta::try_new(&bytes, &mut offset).is_err());
+        assert!(AddressTableLookupFrame::try_new(&bytes, &mut offset).is_err());
     }
 
     #[test]
@@ -239,12 +239,12 @@ mod tests {
         ]))
         .unwrap();
         let mut offset = 0;
-        let meta = AddressTableLookupMeta::try_new(&bytes, &mut offset).unwrap();
-        assert_eq!(meta.num_address_table_lookups, 1);
-        assert_eq!(meta.offset, 1);
+        let frame = AddressTableLookupFrame::try_new(&bytes, &mut offset).unwrap();
+        assert_eq!(frame.num_address_table_lookups, 1);
+        assert_eq!(frame.offset, 1);
         assert_eq!(offset, bytes.len());
-        assert_eq!(meta.total_writable_lookup_accounts, 3);
-        assert_eq!(meta.total_readonly_lookup_accounts, 3);
+        assert_eq!(frame.total_writable_lookup_accounts, 3);
+        assert_eq!(frame.total_readonly_lookup_accounts, 3);
     }
 
     #[test]
@@ -263,12 +263,12 @@ mod tests {
         ]))
         .unwrap();
         let mut offset = 0;
-        let meta = AddressTableLookupMeta::try_new(&bytes, &mut offset).unwrap();
-        assert_eq!(meta.num_address_table_lookups, 2);
-        assert_eq!(meta.offset, 1);
+        let frame = AddressTableLookupFrame::try_new(&bytes, &mut offset).unwrap();
+        assert_eq!(frame.num_address_table_lookups, 2);
+        assert_eq!(frame.offset, 1);
         assert_eq!(offset, bytes.len());
-        assert_eq!(meta.total_writable_lookup_accounts, 6);
-        assert_eq!(meta.total_readonly_lookup_accounts, 5);
+        assert_eq!(frame.total_writable_lookup_accounts, 6);
+        assert_eq!(frame.total_readonly_lookup_accounts, 5);
     }
 
     #[test]
@@ -284,7 +284,7 @@ mod tests {
         bytes[33] = 127;
 
         let mut offset = 0;
-        assert!(AddressTableLookupMeta::try_new(&bytes, &mut offset).is_err());
+        assert!(AddressTableLookupFrame::try_new(&bytes, &mut offset).is_err());
     }
 
     #[test]
@@ -300,6 +300,6 @@ mod tests {
         bytes[37] = 127;
 
         let mut offset = 0;
-        assert!(AddressTableLookupMeta::try_new(&bytes, &mut offset).is_err());
+        assert!(AddressTableLookupFrame::try_new(&bytes, &mut offset).is_err());
     }
 }
