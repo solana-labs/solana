@@ -80,6 +80,8 @@ struct AncientSlotInfos {
     total_alive_bytes_shrink: Saturating<u64>,
     /// total alive bytes across all slots
     total_alive_bytes: Saturating<u64>,
+    /// best_slots_to_shrink
+    best_slots_to_shrink: Vec<(Slot, u64)>,
 }
 
 impl AncientSlotInfos {
@@ -94,17 +96,16 @@ impl AncientSlotInfos {
         is_high_slot: bool,
         db: &AccountsDb,
     ) -> bool {
-        let slots = [
-            287302120,
-287344734,
-287344738,
-287332411,
-        ];
+        let slots = [287302120, 287344734, 287344738, 287332411];
 
         let mut was_randomly_shrunk = false;
         let alive_bytes = storage.alive_bytes() as u64;
         if slots.contains(&slot) {
-            log::error!("ancient.add? slot: {slot}, alive: {alive_bytes}, cap: {}, count: {}", storage.capacity(), storage.approx_stored_count());
+            log::error!(
+                "ancient.add? slot: {slot}, alive: {alive_bytes}, cap: {}, count: {}",
+                storage.capacity(),
+                storage.approx_stored_count()
+            );
         }
         if alive_bytes > 0 {
             let capacity = storage.accounts.capacity();
@@ -193,8 +194,11 @@ impl AncientSlotInfos {
                     * tuning.percent_of_alive_shrunk_data
                     / 100,
             );
+        self.best_slots_to_shrink = Vec::with_capacity(self.shrink_indexes.len());
+        log::error!("slots to shrink: {}", self.shrink_indexes.len());
         for info_index in &self.shrink_indexes {
             let info = &mut self.all_infos[*info_index];
+            self.best_slots_to_shrink.push((info.slot, info.capacity));
             if bytes_to_shrink_due_to_ratio.0 >= threshold_bytes {
                 // we exceeded the amount to shrink due to alive ratio, so don't shrink this one just due to 'should_shrink'
                 // It MAY be shrunk based on total capacity still.
@@ -243,7 +247,6 @@ impl AncientSlotInfos {
                 div_ceil(cumulative_bytes.0, tuning.ideal_storage_size) as usize;
             let storages_remaining = total_storages - i - 1;
 
-
             // if the remaining uncombined storages and the # of resulting
             // combined ancient storages are less than the threshold, then
             // we've gone too far, so get rid of this entry and all after it.
@@ -254,7 +257,8 @@ impl AncientSlotInfos {
             // We do not stop including entries until we have dealt with all the high slot #s. This allows the algorithm to continue
             // to make progress each time it is called. There are exceptions that can cause the pack to fail, such as accounts with multiple
             // refs.
-            if !info.is_high_slot && smallest_included > MIN_SMALLEST_INCLUDED_COUNT
+            if !info.is_high_slot
+                && smallest_included > MIN_SMALLEST_INCLUDED_COUNT
                 && (storages_remaining + ancient_storages_required < low_threshold
                     || ancient_storages_required as u64 > u64::from(tuning.max_resulting_storages))
             {
@@ -428,13 +432,16 @@ impl AccountsDb {
         mut tuning: PackedAncientStorageTuning,
         metrics: &mut ShrinkStatsSub,
     ) {
-        log::error!("first/last: {:?}", (
-            sorted_slots.first(), sorted_slots.last()
-        ));
+        log::error!(
+            "first/last: {:?}",
+            (sorted_slots.first(), sorted_slots.last())
+        );
         self.shrink_ancient_stats
             .slots_considered
             .fetch_add(sorted_slots.len() as u64, Ordering::Relaxed);
-        let ancient_slot_infos = self.collect_sort_filter_ancient_slots(sorted_slots, &mut tuning);
+        let mut ancient_slot_infos = self.collect_sort_filter_ancient_slots(sorted_slots, &mut tuning);
+
+        std::mem::swap(&mut *self.best_ancient_slots_to_shrink.write().unwrap(), &mut ancient_slot_infos.best_slots_to_shrink);
 
         if ancient_slot_infos.all_infos.is_empty() {
             return; // nothing to do

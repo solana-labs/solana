@@ -1522,6 +1522,11 @@ pub struct AccountsDb {
 
     /// The latest full snapshot slot dictates how to handle zero lamport accounts
     latest_full_snapshot_slot: SeqLock<Option<Slot>>,
+
+    /// These are the ancient storages that could be valuable to shrink.
+    /// sorted by largest dead bytes to smallest
+    /// Members are Slot and capacity. If capacity is smaller, then that means the storage was already shrunk.
+    pub(crate) best_ancient_slots_to_shrink: RwLock<Vec<(Slot, u64)>>,
 }
 
 #[derive(Debug, Default)]
@@ -2504,6 +2509,7 @@ impl AccountsDb {
         const ACCOUNTS_STACK_SIZE: usize = 8 * 1024 * 1024;
 
         AccountsDb {
+            best_ancient_slots_to_shrink: RwLock::default(),
             create_ancient_storage: CreateAncientStorage::default(),
             verify_accounts_hash_in_bg: VerifyAccountsHashInBackground::default(),
             active_stats: ActiveStats::default(),
@@ -5053,7 +5059,7 @@ impl AccountsDb {
             .initial_candidates_count
             .store(shrink_candidates_slots.len() as u64, Ordering::Relaxed);
 
-        let (shrink_slots, shrink_slots_next_batch) = {
+        let (mut shrink_slots, shrink_slots_next_batch) = {
             if let AccountShrinkThreshold::TotalSpace { shrink_ratio } = self.shrink_ratio {
                 let (shrink_slots, shrink_slots_next_batch) =
                     self.select_candidates_by_total_usage(&shrink_candidates_slots, shrink_ratio);
@@ -5073,6 +5079,41 @@ impl AccountsDb {
                 )
             }
         };
+
+        let mut limit = 10;
+        let mut added = 0;
+        if shrink_slots.len() >= limit {
+            limit = shrink_slots.len() + 1;
+        }
+        let mut num_found = 0;
+        if shrink_slots.len() < limit {
+            let mut ancients = self.best_ancient_slots_to_shrink.write().unwrap();
+            num_found = ancients.len();
+
+            for (slot, capacity) in ancients.iter_mut() {
+                if *capacity == 0 || shrink_slots.contains(slot) {
+                    // already dealt with
+                    continue;
+                }
+                // we will be done processing this suggestion no matter what
+                if let Some(store) = self.storage.get_slot_storage_entry(*slot) {
+                    if *capacity != store.capacity()
+                        || !Self::is_candidate_for_shrink(&self, &store)
+                    {
+                        *capacity = 0;
+                        // ignore this one
+                        continue;
+                    }
+                    *capacity = 0;
+                    added += 1;
+                    shrink_slots.insert(*slot, store);
+                    if shrink_slots.len() >= limit {
+                        break;
+                    }
+                }
+            }
+        }
+        log::error!("added: {added}, {}, avail: {num_found}", shrink_slots.len());
 
         if shrink_slots.is_empty()
             && shrink_slots_next_batch
@@ -8851,8 +8892,14 @@ impl AccountsDb {
         let mut stored_size_alive = 0;
 
         use std::str::FromStr;
-        let pks = ["3akqNJtCaHpdLqCkfBLUGCuUVwiYoSn5fDKftS7ExhRf", "36EypUXbF1iESNypfcUa2vrJYTLTR4fAn3ctU5tt9d8i"];
-        let pks = pks.iter().map(|k| Pubkey::from_str(k).unwrap()).collect::<Vec<_>>();
+        let pks = [
+            "3akqNJtCaHpdLqCkfBLUGCuUVwiYoSn5fDKftS7ExhRf",
+            "36EypUXbF1iESNypfcUa2vrJYTLTR4fAn3ctU5tt9d8i",
+        ];
+        let pks = pks
+            .iter()
+            .map(|k| Pubkey::from_str(k).unwrap())
+            .collect::<Vec<_>>();
 
         let (dirty_pubkeys, insert_time_us, mut generate_index_results) = {
             let mut items_local = Vec::default();
