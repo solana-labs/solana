@@ -15,6 +15,10 @@ ghsa_json=$(gh api \
 
 # Get a list of GHSAs that don't have the $team_to_add_slug in collaborating_teams
 ghsa_without_team=$( jq -r '[ .[] | select(all(.collaborating_teams.[]; .slug != "'"$team_to_add_slug"'")) | .ghsa_id ] | sort | .[] ' <<< "$ghsa_json" )
+if [[ -z $ghsa_without_team ]]; then
+    echo "All GHSAs already have $team_to_add_slug. Exiting..."
+    exit 0
+fi
 
 # Iterate through the teams
 while IFS= read -r ghsa_id; do
