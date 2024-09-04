@@ -1990,6 +1990,7 @@ pub(crate) struct ShrinkAncientStats {
     pub(crate) many_refs_old_alive: AtomicU64,
     pub(crate) slots_eligible_to_shrink: AtomicU64,
     pub(crate) total_dead_bytes: AtomicU64,
+    pub(crate) total_alive_bytes: AtomicU64,
 }
 
 #[derive(Debug, Default)]
@@ -2318,6 +2319,11 @@ impl ShrinkAncientStats {
             (
                 "total_dead_bytes",
                 self.total_dead_bytes.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "total_alive_bytes",
+                self.total_alive_bytes.swap(0, Ordering::Relaxed),
                 i64
             ),
             (

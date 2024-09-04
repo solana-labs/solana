@@ -584,11 +584,15 @@ impl AccountsDb {
             }
         }
         let mut total_dead_bytes = 0;
+        let mut total_alive_bytes = 0;
         let should_shrink_count = infos
             .all_infos
             .iter()
             .filter(|info| info.should_shrink)
-            .map(|info| total_dead_bytes += info.capacity.saturating_sub(info.alive_bytes))
+            .map(|info| {
+                total_dead_bytes += info.capacity.saturating_sub(info.alive_bytes);
+                total_alive_bytes += info.alive_bytes;
+            })
             .count()
             .saturating_sub(randoms as usize);
         self.shrink_ancient_stats
@@ -597,6 +601,9 @@ impl AccountsDb {
         self.shrink_ancient_stats
             .total_dead_bytes
             .fetch_add(total_dead_bytes, Ordering::Relaxed);
+        self.shrink_ancient_stats
+            .total_alive_bytes
+            .fetch_add(total_alive_bytes, Ordering::Relaxed);
         if randoms > 0 {
             self.shrink_ancient_stats
                 .random_shrink
