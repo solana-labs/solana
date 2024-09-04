@@ -614,7 +614,7 @@ impl AccountsDb {
             .saturating_sub(randoms as usize);
         // ideal storage size is total alive bytes of ancient storages / half of max ancient slots
         tuning.ideal_storage_size = NonZeroU64::new(
-            (infos.total_alive_bytes.0 / tuning.max_ancient_slots.max(1) as u64 * 2).max(1_000_000),
+            (infos.total_alive_bytes.0 / tuning.max_ancient_slots.max(1) as u64 * 2).max(5_000_000),
         )
         .unwrap();
         self.shrink_ancient_stats
