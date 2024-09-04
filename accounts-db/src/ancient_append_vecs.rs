@@ -279,6 +279,7 @@ impl AncientSlotInfos {
         stats: &ShrinkAncientStats,
     ) {
         let total_storages = self.all_infos.len();
+        log::error!("total: {total_storages}, max: {}, quit: {}", tuning.max_ancient_slots, total_storages <= tuning.max_ancient_slots);
         if total_storages <= tuning.max_ancient_slots {
             // currently fewer storages than max, so nothing to shrink
             self.shrink_indexes.clear();
