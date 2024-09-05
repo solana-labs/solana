@@ -167,6 +167,7 @@ pub fn process_instruction_truncate(
     } else {
         let rent = invoke_context.get_sysvar_cache().get_rent()?;
         rent.minimum_balance(LoaderV4State::program_data_offset().saturating_add(new_size as usize))
+            .max(1)
     };
     match program.get_lamports().cmp(&required_lamports) {
         std::cmp::Ordering::Less => {
@@ -279,7 +280,7 @@ pub fn process_instruction_deploy(
     };
     let executor = ProgramCacheEntry::new(
         &loader_v4::id(),
-        environments.program_runtime_v2.clone(),
+        environments.program_runtime_v1.clone(),
         deployment_slot,
         effective_slot,
         programdata,
