@@ -858,7 +858,7 @@ mod tests {
             &Keypair::new(),
             &Pubkey::new_unique(),
             1,
-            1,
+            1000,
             bank.last_blockhash(),
         );
         let tx2 = create_and_fund_prioritized_transfer(
@@ -867,7 +867,7 @@ mod tests {
             &Keypair::new(),
             &Pubkey::new_unique(),
             1,
-            2,
+            2000,
             bank.last_blockhash(),
         );
         let tx1_hash = tx1.message().hash();
@@ -914,7 +914,7 @@ mod tests {
             &Keypair::new(),
             &pk,
             1,
-            1,
+            1000,
             bank.last_blockhash(),
         );
         let tx2 = create_and_fund_prioritized_transfer(
@@ -923,7 +923,7 @@ mod tests {
             &Keypair::new(),
             &pk,
             1,
-            2,
+            2000,
             bank.last_blockhash(),
         );
         let tx1_hash = tx1.message().hash();
@@ -1105,7 +1105,7 @@ mod tests {
             &Keypair::new(),
             &Pubkey::new_unique(),
             1,
-            1,
+            1000,
             bank.last_blockhash(),
         );
         let tx2 = create_and_fund_prioritized_transfer(
@@ -1114,7 +1114,7 @@ mod tests {
             &Keypair::new(),
             &Pubkey::new_unique(),
             1,
-            2,
+            2000,
             bank.last_blockhash(),
         );
         let tx1_hash = tx1.message().hash();

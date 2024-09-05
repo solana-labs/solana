@@ -21,7 +21,7 @@ impl Display for TransactionBatchId {
 }
 
 /// A unique identifier for a transaction.
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct TransactionId(u64);
 
 impl TransactionId {
