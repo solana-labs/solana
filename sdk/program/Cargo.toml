@@ -16,7 +16,7 @@ bincode = { workspace = true }
 blake3 = { workspace = true, features = ["digest", "traits-preview"] }
 borsh = { workspace = true, optional = true }
 borsh0-10 = { package = "borsh", version = "0.10.3", optional = true }
-bs58 = { workspace = true }
+bs58 = { workspace = true, features = ["alloc"] }
 bv = { workspace = true, features = ["serde"] }
 bytemuck = { workspace = true }
 bytemuck_derive = { workspace = true }
@@ -36,12 +36,18 @@ solana-clock = { workspace = true, features = ["serde"] }
 solana-decode-error = { workspace = true }
 solana-frozen-abi = { workspace = true, optional = true, features = ["frozen-abi"] }
 solana-frozen-abi-macro = { workspace = true, optional = true, features = ["frozen-abi"] }
+solana-hash = { workspace = true, features = [
+    "bytemuck",
+    "serde",
+    "std",
+] }
 solana-msg = { workspace = true }
 solana-program-memory = { workspace = true }
 solana-sanitize = { workspace = true }
 solana-sdk-macro = { workspace = true }
 solana-secp256k1-recover = { workspace = true }
 solana-serde-varint = { workspace = true }
+solana-sha256-hasher = { workspace = true, features = ["sha2"] }
 solana-short-vec = { workspace = true }
 thiserror = { workspace = true }
 
@@ -98,13 +104,14 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 default = ["borsh"]
-borsh = ["dep:borsh", "dep:borsh0-10"]
+borsh = ["dep:borsh", "dep:borsh0-10", "solana-hash/borsh"]
 dev-context-only-utils = ["dep:qualifier_attr"]
 frozen-abi = [
     "dep:rustc_version",
     "dep:solana-frozen-abi",
     "dep:solana-frozen-abi-macro",
-    "solana-short-vec/frozen-abi",
+    "solana-hash/frozen-abi",
+    "solana-short-vec/frozen-abi"
 ]
 
 [lints]

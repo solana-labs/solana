@@ -1,0 +1,32 @@
+[package]
+name = "solana-sha256-hasher"
+description = "Solana SHA256 hashing"
+documentation = "https://docs.rs/solana-sha256-hasher"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+solana-hash = { workspace = true }
+
+[target.'cfg(not(target_os = "solana"))'.dependencies]
+sha2 = { workspace = true }
+
+[target.'cfg(target_os = "solana")'.dependencies]
+# sha2 should be removed in the next breaking release,
+# as there's no reason to use the crate instead of the syscall
+# onchain
+sha2 = { workspace = true, optional = true }
+solana-define-syscall = { workspace = true }
+
+[features]
+sha2 = ["dep:sha2"]
+
+[lints]
+workspace = true

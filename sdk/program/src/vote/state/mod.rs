@@ -54,7 +54,7 @@ pub const VOTE_CREDITS_MAXIMUM_PER_SLOT: u8 = 16;
 
 #[cfg_attr(
     feature = "frozen-abi",
-    frozen_abi(digest = "Ch2vVEwos2EjAVqSHCyJjnN2MNX1yrpapZTGhMSCjWUH"),
+    frozen_abi(digest = "GvUzgtcxhKVVxPAjSntXGPqjLZK5ovgZzCiUP1tDpB9q"),
     derive(AbiExample)
 )]
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone)]
@@ -168,7 +168,7 @@ impl From<Lockout> for LandedVote {
 
 #[cfg_attr(
     feature = "frozen-abi",
-    frozen_abi(digest = "GwJfVFsATSj7nvKwtUkHYzqPRaPY6SLxPGXApuCya3x5"),
+    frozen_abi(digest = "DRKTb72wifCUcCTSJs6PqWrQQK5Pfis4SCLEvXqWnDaL"),
     derive(AbiExample)
 )]
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone)]
@@ -221,7 +221,7 @@ impl VoteStateUpdate {
 
 #[cfg_attr(
     feature = "frozen-abi",
-    frozen_abi(digest = "5VUusSTenF9vZ9eHiCprVe9ABJUHCubeDNCCDxykybZY"),
+    frozen_abi(digest = "5PFw9pyF1UG1DXVsw7gpjHegNyRycAAxWf2GA9wUXPs5"),
     derive(AbiExample)
 )]
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone)]

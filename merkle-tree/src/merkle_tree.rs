@@ -1,4 +1,4 @@
-use solana_program::hash::{hashv, Hash};
+use {solana_hash::Hash, solana_sha256_hasher::hashv};
 
 // We need to discern between leaf and intermediate nodes to prevent trivial second
 // pre-image attacks.

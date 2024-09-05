@@ -106,12 +106,14 @@ members = [
     "sdk/clock",
     "sdk/decode-error",
     "sdk/gen-headers",
+    "sdk/hash",
     "sdk/macro",
     "sdk/msg",
     "sdk/package-metadata-macro",
     "sdk/program",
     "sdk/program-memory",
     "sdk/serde-varint",
+    "sdk/sha256-hasher",
     "send-transaction-service",
     "short-vec",
     "stake-accounts",
@@ -198,7 +200,7 @@ bincode = "1.3.3"
 bitflags = { version = "2.6.0" }
 blake3 = "1.5.1"
 borsh = { version = "1.5.1", features = ["derive", "unstable__schema"] }
-bs58 = "0.5.1"
+bs58 = { version = "0.5.1", default-features = false }
 bv = "0.11.1"
 byte-unit = "4.0.19"
 bytecount = "0.6.8"
@@ -390,6 +392,7 @@ solana-genesis-utils = { path = "genesis-utils", version = "=2.1.0" }
 agave-geyser-plugin-interface = { path = "geyser-plugin-interface", version = "=2.1.0" }
 solana-geyser-plugin-manager = { path = "geyser-plugin-manager", version = "=2.1.0" }
 solana-gossip = { path = "gossip", version = "=2.1.0" }
+solana-hash = { path = "sdk/hash", version = "=2.1.0" }
 solana-inline-spl = { path = "inline-spl", version = "=2.1.0" }
 solana-lattice-hash = { path = "lattice-hash", version = "=2.1.0" }
 solana-ledger = { path = "ledger", version = "=2.1.0" }
@@ -418,6 +421,7 @@ solana-rayon-threadlimit = { path = "rayon-threadlimit", version = "=2.1.0" }
 solana-remote-wallet = { path = "remote-wallet", version = "=2.1.0", default-features = false }
 solana-sanitize = { path = "sanitize", version = "=2.1.0" }
 solana-serde-varint = { path = "sdk/serde-varint", version = "=2.1.0" }
+solana-sha256-hasher = { path = "sdk/sha256-hasher", version = "=2.1.0" }
 solana-timings = { path = "timings", version = "=2.1.0" }
 solana-unified-scheduler-logic = { path = "unified-scheduler-logic", version = "=2.1.0" }
 solana-unified-scheduler-pool = { path = "unified-scheduler-pool", version = "=2.1.0" }

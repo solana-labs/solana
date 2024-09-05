@@ -239,7 +239,7 @@ pub(crate) enum BlockhashStatus {
 #[cfg_attr(
     feature = "frozen-abi",
     derive(AbiExample),
-    frozen_abi(digest = "H6T5A66kgJYANFXVrUprxV76WD5ce7Gf62q9SiBC2uYk")
+    frozen_abi(digest = "5BUswzvu7Qe44HbR4eBwPX4Jn9GSfhjmg8eijnBjoKUd")
 )]
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
 pub struct Tower {

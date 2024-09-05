@@ -10,7 +10,7 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
-bs58 = { workspace = true }
+bs58 = { workspace = true, features = ["alloc"] }
 bv = { workspace = true, features = ["serde"] }
 log = { workspace = true, features = ["std"] }
 serde = { workspace = true, features = ["rc"] }

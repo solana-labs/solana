@@ -30,7 +30,7 @@ use {
 #[cfg_attr(
     feature = "frozen-abi",
     derive(AbiExample, AbiEnumVisitor),
-    frozen_abi(digest = "3R2hRL3FM6jovbYubq2UWeiVDEVzrhH6M1ihoCPZWLsk")
+    frozen_abi(digest = "3dbyMxwfCN43orGKa5YiyY1EqN2K97pTicNhKYTZSUQH")
 )]
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub enum VoteTransaction {
