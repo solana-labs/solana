@@ -239,7 +239,7 @@ impl AncientSlotInfos {
         let mut bytes_from_smallest_storages = 0;
         let mut bytes_from_newest_storages = 0;
         // make sure we are always including some smallest. We are alrady making sure we include some newest.
-        const MIN_SMALLEST_INCLUDED_COUNT: u64 = 100;
+        const MIN_SMALLEST_INCLUDED_COUNT: u64 = 0;
         let mut smallest_included = 0;
         for (i, info) in self.all_infos.iter().enumerate() {
             cumulative_bytes += info.alive_bytes;
