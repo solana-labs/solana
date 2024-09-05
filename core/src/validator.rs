@@ -742,27 +742,25 @@ impl Validator {
         }
 
         let hard_forks = bank_forks.read().unwrap().root_bank().hard_forks();
-        if !hard_forks.is_empty() {
-            info!("Hard forks: {:?}", hard_forks);
-        }
-
-        node.info.set_wallclock(timestamp());
-        node.info.set_shred_version(compute_shred_version(
-            &genesis_config.hash(),
-            Some(&hard_forks),
-        ));
-        Self::print_node_info(&node);
+        let shred_version = compute_shred_version(&genesis_config.hash(), Some(&hard_forks));
+        info!(
+            "shred version: {shred_version}, hard forks: {:?}",
+            hard_forks
+        );
 
         if let Some(expected_shred_version) = config.expected_shred_version {
-            if expected_shred_version != node.info.shred_version() {
-                return Err(ValidatorError::Other(format!(
-                    "shred version mismatch: expected {} found: {}",
-                    expected_shred_version,
-                    node.info.shred_version(),
-                ))
+            if expected_shred_version != shred_version {
+                return Err(ValidatorError::ShredVersionMismatch {
+                    actual: shred_version,
+                    expected: expected_shred_version,
+                }
                 .into());
             }
         }
+
+        node.info.set_shred_version(shred_version);
+        node.info.set_wallclock(timestamp());
+        Self::print_node_info(&node);
 
         let mut cluster_info = ClusterInfo::new(
             node.info.clone(),
@@ -1449,7 +1447,7 @@ impl Validator {
             ("cluster_type", genesis_config.cluster_type as u32, i64),
             ("elapsed_ms", start_time.elapsed().as_millis() as i64, i64),
             ("waited_for_supermajority", waited_for_supermajority, bool),
-            ("expected_shred_version", config.expected_shred_version, Option<i64>),
+            ("shred_version", shred_version as i64, i64),
         );
 
         *start_progress.write().unwrap() = ValidatorStartProgress::Running;
@@ -2359,6 +2357,9 @@ pub enum ValidatorError {
         "PoH hashes/second rate is slower than the cluster target: mine {mine}, cluster {target}"
     )]
     PohTooSlow { mine: u64, target: u64 },
+
+    #[error("shred version mistmatch: actual {actual}, expected {expected}")]
+    ShredVersionMismatch { actual: u16, expected: u16 },
 
     #[error(transparent)]
     TraceError(#[from] TraceError),
