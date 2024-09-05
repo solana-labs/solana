@@ -105,6 +105,7 @@ members = [
     "sdk/cargo-test-sbf",
     "sdk/clock",
     "sdk/decode-error",
+    "sdk/derivation-path",
     "sdk/gen-headers",
     "sdk/hash",
     "sdk/macro",
@@ -380,6 +381,7 @@ solana-cost-model = { path = "cost-model", version = "=2.1.0" }
 solana-curve25519 = { path = "curves/curve25519", version = "=2.1.0" }
 solana-decode-error = { path = "sdk/decode-error", version = "=2.1.0" }
 solana-define-syscall = { path = "define-syscall", version = "=2.1.0" }
+solana-derivation-path = { path = "sdk/derivation-path", version = "=2.1.0" }
 solana-download-utils = { path = "download-utils", version = "=2.1.0" }
 solana-entry = { path = "entry", version = "=2.1.0" }
 solana-faucet = { path = "faucet", version = "=2.1.0" }

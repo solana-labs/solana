@@ -63,7 +63,6 @@ pub mod account_utils;
 pub mod client;
 pub mod commitment_config;
 pub mod compute_budget;
-pub mod derivation_path;
 pub mod deserialize_utils;
 pub mod ed25519_instruction;
 pub mod entrypoint;
@@ -113,6 +112,8 @@ pub mod wasm;
 pub use solana_bn254 as alt_bn128;
 #[deprecated(since = "2.1.0", note = "Use `solana-decode-error` crate instead")]
 pub use solana_decode_error as decode_error;
+#[deprecated(since = "2.1.0", note = "Use `solana-derivation-path` crate instead")]
+pub use solana_derivation_path as derivation_path;
 #[deprecated(since = "2.1.0", note = "Use `solana-program-memory` crate instead")]
 pub use solana_program_memory as program_memory;
 #[deprecated(since = "2.1.0", note = "Use `solana-sanitize` crate instead")]

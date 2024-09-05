@@ -7,8 +7,8 @@ use {
             RemoteWalletType,
         },
     },
+    solana_derivation_path::DerivationPath,
     solana_sdk::{
-        derivation_path::DerivationPath,
         pubkey::Pubkey,
         signature::{Signature, Signer, SignerError},
     },

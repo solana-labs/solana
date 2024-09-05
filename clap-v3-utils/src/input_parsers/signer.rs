@@ -5,12 +5,12 @@ use {
         ASK_KEYWORD, SKIP_SEED_PHRASE_VALIDATION_ARG,
     },
     clap::{builder::ValueParser, ArgMatches},
+    solana_derivation_path::{DerivationPath, DerivationPathError},
     solana_remote_wallet::{
         locator::{Locator as RemoteWalletLocator, LocatorError as RemoteWalletLocatorError},
         remote_wallet::RemoteWalletManager,
     },
     solana_sdk::{
-        derivation_path::{DerivationPath, DerivationPathError},
         pubkey::Pubkey,
         signature::{read_keypair_file, Keypair, Signature, Signer},
     },

@@ -34,8 +34,8 @@ use {
     rand::rngs::OsRng,
     serde::{Deserialize, Serialize},
     sha3::{Digest, Sha3_512},
+    solana_derivation_path::DerivationPath,
     solana_sdk::{
-        derivation_path::DerivationPath,
         signature::Signature,
         signer::{
             keypair::generate_seed_from_seed_phrase_and_passphrase, EncodableKey, EncodableKeypair,

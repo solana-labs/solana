@@ -16,6 +16,7 @@ dirs-next = { workspace = true }
 num_cpus = { workspace = true }
 solana-clap-v3-utils = { workspace = true }
 solana-cli-config = { workspace = true }
+solana-derivation-path = { workspace = true }
 solana-remote-wallet = { workspace = true, features = ["default"] }
 solana-sdk = { workspace = true }
 solana-version = { workspace = true }

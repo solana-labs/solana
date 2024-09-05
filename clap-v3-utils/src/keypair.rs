@@ -18,12 +18,12 @@ use {
     bip39::{Language, Mnemonic, Seed},
     clap::ArgMatches,
     rpassword::prompt_password,
+    solana_derivation_path::DerivationPath,
     solana_remote_wallet::{
         remote_keypair::generate_remote_keypair,
         remote_wallet::{maybe_wallet_manager, RemoteWalletError, RemoteWalletManager},
     },
     solana_sdk::{
-        derivation_path::DerivationPath,
         hash::Hash,
         message::Message,
         pubkey::Pubkey,

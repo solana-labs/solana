@@ -5917,6 +5917,7 @@ dependencies = [
  "chrono",
  "clap 2.33.3",
  "rpassword",
+ "solana-derivation-path",
  "solana-remote-wallet",
  "solana-sdk",
  "tempfile",
@@ -5934,6 +5935,7 @@ dependencies = [
  "chrono",
  "clap 3.2.23",
  "rpassword",
+ "solana-derivation-path",
  "solana-remote-wallet",
  "solana-sdk",
  "solana-zk-token-sdk",
@@ -6317,6 +6319,17 @@ name = "solana-define-syscall"
 version = "2.1.0"
 
 [[package]]
+name = "solana-derivation-path"
+version = "2.1.0"
+dependencies = [
+ "assert_matches",
+ "derivation-path",
+ "qstring",
+ "thiserror",
+ "uriparse",
+]
+
+[[package]]
 name = "solana-dos"
 version = "2.1.0"
 dependencies = [
@@ -6610,6 +6623,7 @@ dependencies = [
  "num_cpus",
  "solana-clap-v3-utils",
  "solana-cli-config",
+ "solana-derivation-path",
  "solana-remote-wallet",
  "solana-sdk",
  "solana-version",
@@ -7197,6 +7211,7 @@ dependencies = [
  "parking_lot 0.12.3",
  "qstring",
  "semver 1.0.23",
+ "solana-derivation-path",
  "solana-sdk",
  "thiserror",
  "uriparse",
@@ -7492,7 +7507,6 @@ dependencies = [
  "byteorder",
  "chrono",
  "curve25519-dalek 4.1.3",
- "derivation-path",
  "digest 0.10.7",
  "ed25519-dalek",
  "ed25519-dalek-bip32",
@@ -7510,7 +7524,6 @@ dependencies = [
  "num-traits",
  "num_enum",
  "pbkdf2 0.11.0",
- "qstring",
  "qualifier_attr",
  "rand 0.7.3",
  "rand 0.8.5",
@@ -7525,6 +7538,7 @@ dependencies = [
  "siphasher",
  "solana-bn254",
  "solana-decode-error",
+ "solana-derivation-path",
  "solana-frozen-abi",
  "solana-frozen-abi-macro",
  "solana-logger",
@@ -7539,7 +7553,6 @@ dependencies = [
  "static_assertions",
  "thiserror",
  "tiny-bip39",
- "uriparse",
  "wasm-bindgen",
 ]
 
@@ -8287,6 +8300,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "sha3",
+ "solana-derivation-path",
  "solana-program",
  "solana-sdk",
  "subtle",
@@ -8344,6 +8358,7 @@ dependencies = [
  "serde_json",
  "sha3",
  "solana-curve25519",
+ "solana-derivation-path",
  "solana-program",
  "solana-sdk",
  "subtle",

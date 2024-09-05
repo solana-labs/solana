@@ -8,8 +8,8 @@ use {
     },
     log::*,
     parking_lot::RwLock,
+    solana_derivation_path::{DerivationPath, DerivationPathError},
     solana_sdk::{
-        derivation_path::{DerivationPath, DerivationPathError},
         pubkey::Pubkey,
         signature::{Signature, SignerError},
     },

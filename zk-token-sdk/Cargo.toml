@@ -35,6 +35,7 @@ serde = { workspace = true }
 serde_derive = { workspace = true }
 serde_json = { workspace = true }
 sha3 = { workspace = true }
+solana-derivation-path = { workspace = true }
 solana-sdk = { workspace = true }
 subtle = { workspace = true }
 zeroize = { workspace = true, features = ["zeroize_derive"] }
