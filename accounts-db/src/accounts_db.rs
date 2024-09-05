@@ -4247,6 +4247,7 @@ impl AccountsDb {
         zero_lamport_single_ref_pubkeys: &[&Pubkey],
         slot: Slot,
         stats: &ShrinkStats,
+        do_assert: bool,
     ) {
         stats.purged_zero_lamports.fetch_add(
             zero_lamport_single_ref_pubkeys.len() as u64,
@@ -4255,10 +4256,15 @@ impl AccountsDb {
 
         // we have to unref before we `purge_keys_exact`. Otherwise, we could race with the foreground with tx processing
         // reviving this index entry and then we'd unref the revived version, which is a refcount bug.
+
         self.accounts_index.scan(
             zero_lamport_single_ref_pubkeys.iter().cloned(),
             |_pubkey, _slots_refs, _entry| AccountsIndexScanResult::Unref,
-            Some(AccountsIndexScanResult::Unref),
+            if do_assert {
+                Some(AccountsIndexScanResult::UnrefAssert0)
+            } else {
+                Some(AccountsIndexScanResult::UnrefLog0)
+            },
             false,
             ScanFilter::All,
         );
@@ -4286,6 +4292,7 @@ impl AccountsDb {
             &shrink_collect.zero_lamport_single_ref_pubkeys,
             shrink_collect.slot,
             stats,
+            false,
         );
 
         // Purge old, overwritten storage entries
@@ -11151,6 +11158,35 @@ pub mod tests {
     }
 
     #[test]
+    #[should_panic(expected = "ref count expected to be zero")]
+    fn test_remove_zero_lamport_multi_ref_accounts_panic() {
+        let accounts = AccountsDb::new_single_for_tests();
+        let pubkey_zero = Pubkey::from([1; 32]);
+        let one_lamport_account =
+            AccountSharedData::new(1, 0, AccountSharedData::default().owner());
+
+        let zero_lamport_account =
+            AccountSharedData::new(0, 0, AccountSharedData::default().owner());
+        let slot = 1;
+
+        accounts.store_for_tests(slot, &[(&pubkey_zero, &one_lamport_account)]);
+        accounts.calculate_accounts_delta_hash(slot);
+        accounts.add_root_and_flush_write_cache(slot);
+
+        accounts.store_for_tests(slot + 1, &[(&pubkey_zero, &zero_lamport_account)]);
+        accounts.calculate_accounts_delta_hash(slot + 1);
+        accounts.add_root_and_flush_write_cache(slot + 1);
+
+        // This should panic because there are 2 refs for pubkey_zero.
+        accounts.remove_zero_lamport_single_ref_accounts_after_shrink(
+            &[&pubkey_zero],
+            slot,
+            &ShrinkStats::default(),
+            true,
+        );
+    }
+
+    #[test]
     fn test_remove_zero_lamport_single_ref_accounts_after_shrink() {
         for pass in 0..3 {
             let accounts = AccountsDb::new_single_for_tests();
@@ -11195,39 +11231,67 @@ pub mod tests {
                 (false, ())
             });
 
-            let zero_lamport_single_ref_pubkeys = [&pubkey_zero];
+            let zero_lamport_single_ref_pubkeys =
+                if pass < 2 { vec![&pubkey_zero] } else { vec![] };
             accounts.remove_zero_lamport_single_ref_accounts_after_shrink(
                 &zero_lamport_single_ref_pubkeys,
                 slot,
                 &ShrinkStats::default(),
+                true,
             );
 
             accounts.accounts_index.get_and_then(&pubkey_zero, |entry| {
-                if pass == 0 {
-                    // should not exist in index at all
-                    assert!(entry.is_none(), "{pass}");
-                } else {
-                    // alive only in slot + 1
-                    assert_eq!(entry.unwrap().slot_list.read().unwrap().len(), 1);
-                    assert_eq!(
-                        entry
+                match pass {
+                    0 => {
+                        // should not exist in index at all
+                        assert!(entry.is_none(), "{pass}");
+                    }
+                    1 => {
+                        // alive only in slot + 1
+                        assert_eq!(entry.unwrap().slot_list.read().unwrap().len(), 1);
+                        assert_eq!(
+                            entry
+                                .unwrap()
+                                .slot_list
+                                .read()
+                                .unwrap()
+                                .first()
+                                .map(|(s, _)| s)
+                                .cloned()
+                                .unwrap(),
+                            slot + 1
+                        );
+                        let expected_ref_count = 0;
+                        assert_eq!(
+                            entry.map(|e| e.ref_count()),
+                            Some(expected_ref_count),
+                            "{pass}"
+                        );
+                    }
+                    2 => {
+                        // alive in both slot, slot + 1
+                        assert_eq!(entry.unwrap().slot_list.read().unwrap().len(), 2);
+
+                        let slots = entry
                             .unwrap()
                             .slot_list
                             .read()
                             .unwrap()
-                            .first()
+                            .iter()
                             .map(|(s, _)| s)
                             .cloned()
-                            .unwrap(),
-                        slot + 1
-                    );
-                    // refcount = 1 if we flushed the write cache for slot + 1
-                    let expected_ref_count = if pass < 2 { 0 } else { 1 };
-                    assert_eq!(
-                        entry.map(|e| e.ref_count()),
-                        Some(expected_ref_count),
-                        "{pass}"
-                    );
+                            .collect::<Vec<_>>();
+                        assert_eq!(slots, vec![slot, slot + 1]);
+                        let expected_ref_count = 2;
+                        assert_eq!(
+                            entry.map(|e| e.ref_count()),
+                            Some(expected_ref_count),
+                            "{pass}"
+                        );
+                    }
+                    _ => {
+                        unreachable!("Shouldn't reach here.")
+                    }
                 }
                 (false, ())
             });
