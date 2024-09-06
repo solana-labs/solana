@@ -31,6 +31,15 @@ pub struct HeaviestForkFinalResult {
     pub total_active_stake_seen_supermajority: u64,
 }
 
+#[derive(Debug, PartialEq)]
+pub enum HeaviestForkAggregateResult {
+    AlreadyExists,
+    DifferentVersionExists(RestartHeaviestFork, RestartHeaviestFork),
+    Inserted(HeaviestForkRecord),
+    Malformed,
+    ZeroStakeIgnored,
+}
+
 impl HeaviestForkAggregate {
     pub(crate) fn new(
         wait_for_supermajority_threshold_percent: u64,
@@ -63,7 +72,7 @@ impl HeaviestForkAggregate {
         &mut self,
         key_string: &str,
         record: &HeaviestForkRecord,
-    ) -> Result<Option<HeaviestForkRecord>> {
+    ) -> Result<HeaviestForkAggregateResult> {
         let from = Pubkey::from_str(key_string)?;
         let bankhash = Hash::from_str(&record.bankhash)?;
         let restart_heaviest_fork = RestartHeaviestFork {
@@ -77,29 +86,37 @@ impl HeaviestForkAggregate {
         Ok(self.aggregate(restart_heaviest_fork))
     }
 
-    fn should_replace(
+    fn is_valid_change(
         current_heaviest_fork: &RestartHeaviestFork,
         new_heaviest_fork: &RestartHeaviestFork,
-    ) -> bool {
-        if current_heaviest_fork == new_heaviest_fork {
-            return false;
-        }
-        if current_heaviest_fork.wallclock > new_heaviest_fork.wallclock {
-            return false;
-        }
-        if current_heaviest_fork.last_slot == new_heaviest_fork.last_slot
-            && current_heaviest_fork.last_slot_hash == new_heaviest_fork.last_slot_hash
-            && current_heaviest_fork.observed_stake == new_heaviest_fork.observed_stake
+    ) -> HeaviestForkAggregateResult {
+        if current_heaviest_fork.last_slot != new_heaviest_fork.last_slot
+            || current_heaviest_fork.last_slot_hash != new_heaviest_fork.last_slot_hash
         {
-            return false;
+            return HeaviestForkAggregateResult::DifferentVersionExists(
+                current_heaviest_fork.clone(),
+                new_heaviest_fork.clone(),
+            );
         }
-        true
+        if current_heaviest_fork == new_heaviest_fork
+            || current_heaviest_fork.wallclock > new_heaviest_fork.wallclock
+            || current_heaviest_fork.observed_stake == new_heaviest_fork.observed_stake
+        {
+            return HeaviestForkAggregateResult::AlreadyExists;
+        }
+        HeaviestForkAggregateResult::Inserted(HeaviestForkRecord {
+            slot: new_heaviest_fork.last_slot,
+            bankhash: new_heaviest_fork.last_slot_hash.to_string(),
+            total_active_stake: new_heaviest_fork.observed_stake,
+            shred_version: new_heaviest_fork.shred_version as u32,
+            wallclock: new_heaviest_fork.wallclock,
+        })
     }
 
     pub(crate) fn aggregate(
         &mut self,
         received_heaviest_fork: RestartHeaviestFork,
-    ) -> Option<HeaviestForkRecord> {
+    ) -> HeaviestForkAggregateResult {
         let total_stake = self.epoch_stakes.total_stake();
         let from = &received_heaviest_fork.from;
         let sender_stake = self.epoch_stakes.node_id_to_stake(from).unwrap_or(0);
@@ -108,55 +125,46 @@ impl HeaviestForkAggregate {
                 "Gossip should not accept zero-stake RestartLastVotedFork from {:?}",
                 from
             );
-            return None;
+            return HeaviestForkAggregateResult::ZeroStakeIgnored;
         }
         if from == &self.my_pubkey {
-            return None;
+            return HeaviestForkAggregateResult::AlreadyExists;
         }
         if received_heaviest_fork.shred_version != self.my_shred_version {
             warn!(
                 "Gossip should not accept RestartLastVotedFork with different shred version {} from {:?}",
                 received_heaviest_fork.shred_version, from
             );
-            return None;
+            return HeaviestForkAggregateResult::Malformed;
         }
-        let record = HeaviestForkRecord {
-            slot: received_heaviest_fork.last_slot,
-            bankhash: received_heaviest_fork.last_slot_hash.to_string(),
-            total_active_stake: received_heaviest_fork.observed_stake,
-            shred_version: received_heaviest_fork.shred_version as u32,
-            wallclock: received_heaviest_fork.wallclock,
-        };
-        if let Some(old_heaviest_fork) = self
-            .heaviest_forks
-            .insert(*from, received_heaviest_fork.clone())
-        {
-            if Self::should_replace(&old_heaviest_fork, &received_heaviest_fork) {
-                let entry = self
-                    .block_stake_map
-                    .get_mut(&(
-                        old_heaviest_fork.last_slot,
-                        old_heaviest_fork.last_slot_hash,
-                    ))
-                    .unwrap();
-                info!(
-                    "{:?} Replacing old heaviest fork from {:?} with {:?}",
-                    from, old_heaviest_fork, received_heaviest_fork
-                );
-                *entry = entry.saturating_sub(sender_stake);
+        let result = if let Some(old_heaviest_fork) = self.heaviest_forks.get(from) {
+            let result = Self::is_valid_change(old_heaviest_fork, &received_heaviest_fork);
+            if let HeaviestForkAggregateResult::Inserted(_) = result {
+                // continue following processing
             } else {
-                return None;
+                return result;
             }
-        }
-        let entry = self
-            .block_stake_map
-            .entry((
-                received_heaviest_fork.last_slot,
-                received_heaviest_fork.last_slot_hash,
-            ))
-            .or_insert(0);
-        *entry = entry.saturating_add(sender_stake);
-        self.active_peers.insert(*from);
+            result
+        } else {
+            let entry = self
+                .block_stake_map
+                .entry((
+                    received_heaviest_fork.last_slot,
+                    received_heaviest_fork.last_slot_hash,
+                ))
+                .or_insert(0);
+            *entry = entry.saturating_add(sender_stake);
+            self.active_peers.insert(*from);
+            HeaviestForkAggregateResult::Inserted(HeaviestForkRecord {
+                slot: received_heaviest_fork.last_slot,
+                bankhash: received_heaviest_fork.last_slot_hash.to_string(),
+                total_active_stake: received_heaviest_fork.observed_stake,
+                shred_version: received_heaviest_fork.shred_version as u32,
+                wallclock: received_heaviest_fork.wallclock,
+            })
+        };
+        self.heaviest_forks
+            .insert(*from, received_heaviest_fork.clone());
         if received_heaviest_fork.observed_stake as f64 / total_stake as f64
             >= self.supermajority_threshold
         {
@@ -169,7 +177,7 @@ impl HeaviestForkAggregate {
         {
             self.active_peers_seen_supermajority.insert(self.my_pubkey);
         }
-        Some(record)
+        result
     }
 
     pub(crate) fn total_active_stake(&self) -> u64 {
@@ -195,7 +203,7 @@ impl HeaviestForkAggregate {
 mod tests {
     use {
         crate::{
-            heaviest_fork_aggregate::HeaviestForkAggregate,
+            heaviest_fork_aggregate::{HeaviestForkAggregate, HeaviestForkAggregateResult},
             solana::wen_restart_proto::HeaviestForkRecord,
         },
         solana_gossip::restart_crds_values::RestartHeaviestFork,
@@ -253,30 +261,30 @@ mod tests {
     fn test_aggregate_from_gossip() {
         let mut test_state = test_aggregate_init();
         let initial_num_active_validators = 3;
+        let timestamp1 = timestamp();
         for validator_voting_keypair in test_state
             .validator_voting_keypairs
             .iter()
             .take(initial_num_active_validators)
         {
             let pubkey = validator_voting_keypair.node_keypair.pubkey();
-            let now = timestamp();
             assert_eq!(
                 test_state
                     .heaviest_fork_aggregate
                     .aggregate(RestartHeaviestFork {
                         from: pubkey,
-                        wallclock: now,
+                        wallclock: timestamp1,
                         last_slot: test_state.heaviest_slot,
                         last_slot_hash: test_state.heaviest_hash,
                         observed_stake: 100,
                         shred_version: SHRED_VERSION,
                     },),
-                Some(HeaviestForkRecord {
+                HeaviestForkAggregateResult::Inserted(HeaviestForkRecord {
                     slot: test_state.heaviest_slot,
                     bankhash: test_state.heaviest_hash.to_string(),
                     total_active_stake: 100,
                     shred_version: SHRED_VERSION as u32,
-                    wallclock: now,
+                    wallclock: timestamp1,
                 }),
             );
         }
@@ -302,7 +310,7 @@ mod tests {
             test_state
                 .heaviest_fork_aggregate
                 .aggregate(new_active_validator_last_voted_slots),
-            Some(HeaviestForkRecord {
+            HeaviestForkAggregateResult::Inserted(HeaviestForkRecord {
                 slot: test_state.heaviest_slot,
                 bankhash: test_state.heaviest_hash.to_string(),
                 total_active_stake: 100,
@@ -318,7 +326,7 @@ mod tests {
         let replace_message_validator = test_state.validator_voting_keypairs[2]
             .node_keypair
             .pubkey();
-        // Allow specific validator to replace message.
+        // If hash changes, it will be ignored.
         let now = timestamp();
         let new_hash = Hash::new_unique();
         let replace_message_validator_last_fork = RestartHeaviestFork {
@@ -332,14 +340,18 @@ mod tests {
         assert_eq!(
             test_state
                 .heaviest_fork_aggregate
-                .aggregate(replace_message_validator_last_fork),
-            Some(HeaviestForkRecord {
-                slot: test_state.heaviest_slot + 1,
-                bankhash: new_hash.to_string(),
-                total_active_stake: 100,
-                shred_version: SHRED_VERSION as u32,
-                wallclock: now,
-            }),
+                .aggregate(replace_message_validator_last_fork.clone()),
+            HeaviestForkAggregateResult::DifferentVersionExists(
+                RestartHeaviestFork {
+                    from: replace_message_validator,
+                    wallclock: timestamp1,
+                    last_slot: test_state.heaviest_slot,
+                    last_slot_hash: test_state.heaviest_hash,
+                    observed_stake: 100,
+                    shred_version: SHRED_VERSION,
+                },
+                replace_message_validator_last_fork,
+            ),
         );
         assert_eq!(
             test_state.heaviest_fork_aggregate.total_active_stake(),
@@ -359,7 +371,7 @@ mod tests {
                     observed_stake: 100,
                     shred_version: SHRED_VERSION,
                 },),
-            None,
+            HeaviestForkAggregateResult::ZeroStakeIgnored,
         );
         assert_eq!(
             test_state.heaviest_fork_aggregate.total_active_stake(),
@@ -381,7 +393,7 @@ mod tests {
                         observed_stake: 1400,
                         shred_version: SHRED_VERSION,
                     },),
-                Some(HeaviestForkRecord {
+                HeaviestForkAggregateResult::Inserted(HeaviestForkRecord {
                     slot: test_state.heaviest_slot,
                     bankhash: test_state.heaviest_hash.to_string(),
                     total_active_stake: 1400,
@@ -417,7 +429,7 @@ mod tests {
                         observed_stake: 1500,
                         shred_version: SHRED_VERSION,
                     },),
-                Some(HeaviestForkRecord {
+                HeaviestForkAggregateResult::Inserted(HeaviestForkRecord {
                     slot: test_state.heaviest_slot,
                     bankhash: test_state.heaviest_hash.to_string(),
                     total_active_stake: 1500,
@@ -454,7 +466,7 @@ mod tests {
                     observed_stake: 100,
                     shred_version: SHRED_VERSION,
                 },),
-            None,
+            HeaviestForkAggregateResult::AlreadyExists,
         );
     }
 
@@ -462,6 +474,9 @@ mod tests {
     fn test_aggregate_from_record() {
         let mut test_state = test_aggregate_init();
         let time1 = timestamp();
+        let from = test_state.validator_voting_keypairs[0]
+            .node_keypair
+            .pubkey();
         let record = HeaviestForkRecord {
             wallclock: time1,
             slot: test_state.heaviest_slot,
@@ -473,15 +488,9 @@ mod tests {
         assert_eq!(
             test_state
                 .heaviest_fork_aggregate
-                .aggregate_from_record(
-                    &test_state.validator_voting_keypairs[0]
-                        .node_keypair
-                        .pubkey()
-                        .to_string(),
-                    &record,
-                )
+                .aggregate_from_record(&from.to_string(), &record,)
                 .unwrap(),
-            Some(record.clone()),
+            HeaviestForkAggregateResult::Inserted(record.clone()),
         );
         assert_eq!(test_state.heaviest_fork_aggregate.total_active_stake(), 200);
         // Now if you get the same result from Gossip again, it should be ignored.
@@ -489,34 +498,31 @@ mod tests {
             test_state
                 .heaviest_fork_aggregate
                 .aggregate(RestartHeaviestFork {
-                    from: test_state.validator_voting_keypairs[0]
-                        .node_keypair
-                        .pubkey(),
+                    from,
                     wallclock: time1,
                     last_slot: test_state.heaviest_slot,
                     last_slot_hash: test_state.heaviest_hash,
                     observed_stake: 100,
                     shred_version: SHRED_VERSION,
                 },),
-            None,
+            HeaviestForkAggregateResult::AlreadyExists,
         );
 
-        // But if it's a new record from the same validator, it will be replaced.
+        // If only observed_stake changes, it will be replaced.
         let time2 = timestamp();
+        let old_heaviest_fork = RestartHeaviestFork {
+            from,
+            wallclock: time2,
+            last_slot: test_state.heaviest_slot,
+            last_slot_hash: test_state.heaviest_hash,
+            observed_stake: 200,
+            shred_version: SHRED_VERSION,
+        };
         assert_eq!(
             test_state
                 .heaviest_fork_aggregate
-                .aggregate(RestartHeaviestFork {
-                    from: test_state.validator_voting_keypairs[0]
-                        .node_keypair
-                        .pubkey(),
-                    wallclock: time2,
-                    last_slot: test_state.heaviest_slot,
-                    last_slot_hash: test_state.heaviest_hash,
-                    observed_stake: 200,
-                    shred_version: SHRED_VERSION,
-                },),
-            Some(HeaviestForkRecord {
+                .aggregate(old_heaviest_fork.clone()),
+            HeaviestForkAggregateResult::Inserted(HeaviestForkRecord {
                 wallclock: time2,
                 slot: test_state.heaviest_slot,
                 bankhash: test_state.heaviest_hash.to_string(),
@@ -524,6 +530,48 @@ mod tests {
                 total_active_stake: 200,
             }),
         );
+
+        // If slot changes, it will be ignored.
+        let new_heaviest_fork = RestartHeaviestFork {
+            from: test_state.validator_voting_keypairs[0]
+                .node_keypair
+                .pubkey(),
+            wallclock: timestamp(),
+            last_slot: test_state.heaviest_slot + 1,
+            last_slot_hash: test_state.heaviest_hash,
+            observed_stake: 100,
+            shred_version: SHRED_VERSION,
+        };
+        assert_eq!(
+            test_state
+                .heaviest_fork_aggregate
+                .aggregate(new_heaviest_fork.clone()),
+            HeaviestForkAggregateResult::DifferentVersionExists(
+                old_heaviest_fork.clone(),
+                new_heaviest_fork
+            )
+        );
+        // If hash changes, it will also be ignored.
+        let new_heaviest_fork = RestartHeaviestFork {
+            from: test_state.validator_voting_keypairs[0]
+                .node_keypair
+                .pubkey(),
+            wallclock: timestamp(),
+            last_slot: test_state.heaviest_slot,
+            last_slot_hash: Hash::new_unique(),
+            observed_stake: 100,
+            shred_version: SHRED_VERSION,
+        };
+        assert_eq!(
+            test_state
+                .heaviest_fork_aggregate
+                .aggregate(new_heaviest_fork.clone()),
+            HeaviestForkAggregateResult::DifferentVersionExists(
+                old_heaviest_fork,
+                new_heaviest_fork
+            )
+        );
+
         // percentage doesn't change since it's a replace.
         assert_eq!(test_state.heaviest_fork_aggregate.total_active_stake(), 200);
 
@@ -542,7 +590,7 @@ mod tests {
                     }
                 )
                 .unwrap(),
-            None,
+            HeaviestForkAggregateResult::ZeroStakeIgnored,
         );
         // percentage doesn't change since the previous aggregate is ignored.
         assert_eq!(test_state.heaviest_fork_aggregate.total_active_stake(), 200);
@@ -565,7 +613,7 @@ mod tests {
                     }
                 )
                 .unwrap(),
-            None,
+            HeaviestForkAggregateResult::AlreadyExists,
         );
     }
 
@@ -591,7 +639,7 @@ mod tests {
                     &heaviest_fork_record,
                 )
                 .unwrap(),
-            Some(heaviest_fork_record.clone()),
+            HeaviestForkAggregateResult::Inserted(heaviest_fork_record.clone()),
         );
         // Then test that it fails if the record is invalid.
 
