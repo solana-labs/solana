@@ -42,7 +42,7 @@ pub struct Tower1_7_14 {
 #[cfg_attr(
     feature = "frozen-abi",
     derive(AbiExample),
-    frozen_abi(digest = "CxwFFxKfn6ez6wifDKr5WYr3eu2PsWUKdMYp3LX8Xj52")
+    frozen_abi(digest = "2ngfAgnN19JwF6FnFYPYp2aHQiZnnjzaYP1vSRMRiSaq")
 )]
 #[derive(Default, Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct SavedTower1_7_14 {

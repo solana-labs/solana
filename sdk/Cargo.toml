@@ -23,11 +23,11 @@ default = [
 full = [
     "byteorder",
     "chrono",
-    "generic-array",
     "memmap2",
     "rand",
     "rand0-7",
     "serde_json",
+    "solana-signature",
     "ed25519-dalek",
     "ed25519-dalek-bip32",
     "libsecp256k1",
@@ -42,6 +42,7 @@ frozen-abi = [
     "dep:solana-frozen-abi-macro",
     "solana-program/frozen-abi",
     "solana-short-vec/frozen-abi",
+    "solana-signature/frozen-abi"
 ]
 
 [dependencies]
@@ -94,6 +95,7 @@ solana-sdk-macro = { workspace = true }
 solana-secp256k1-recover = { workspace = true }
 solana-serde-varint = { workspace = true }
 solana-short-vec = { workspace = true }
+solana-signature = { workspace = true, features = ["rand", "serde", "verify"], optional = true }
 thiserror = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]

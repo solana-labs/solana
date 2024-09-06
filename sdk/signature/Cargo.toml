@@ -1,0 +1,48 @@
+[package]
+name = "solana-signature"
+description = "Solana 64-byte signature type"
+documentation = "https://docs.rs/solana-signature"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+bs58 = { workspace = true }
+ed25519-dalek = { workspace = true, optional = true }
+generic-array = { workspace = true, features = ["more_lengths"] }
+rand = { workspace = true, optional = true }
+serde = { workspace = true, optional = true }
+serde_derive = { workspace = true, optional = true }
+solana-frozen-abi = { workspace = true, optional = true }
+solana-frozen-abi-macro = { workspace = true, optional = true }
+solana-sanitize = { workspace = true }
+
+[dev-dependencies]
+curve25519-dalek = { workspace = true }
+ed25519-dalek = { workspace = true }
+solana-program = { workspace = true }
+
+[build-dependencies]
+rustc_version = { workspace = true, optional = true }
+
+[features]
+default = ["std"]
+frozen-abi = [
+    "dep:rustc_version",
+    "dep:solana-frozen-abi",
+    "dep:solana-frozen-abi-macro",
+    "std"
+]
+rand = ["dep:rand"]
+serde = ["dep:serde", "dep:serde_derive", "generic-array/serde"]
+std = []
+verify = ["dep:ed25519-dalek"]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[lints]
+workspace = true

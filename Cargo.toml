@@ -115,6 +115,7 @@ members = [
     "sdk/program-memory",
     "sdk/serde-varint",
     "sdk/sha256-hasher",
+    "sdk/signature",
     "send-transaction-service",
     "short-vec",
     "stake-accounts",
@@ -424,6 +425,7 @@ solana-remote-wallet = { path = "remote-wallet", version = "=2.1.0", default-fea
 solana-sanitize = { path = "sanitize", version = "=2.1.0" }
 solana-serde-varint = { path = "sdk/serde-varint", version = "=2.1.0" }
 solana-sha256-hasher = { path = "sdk/sha256-hasher", version = "=2.1.0" }
+solana-signature = { path = "sdk/signature", version = "=2.1.0" }
 solana-timings = { path = "timings", version = "=2.1.0" }
 solana-unified-scheduler-logic = { path = "unified-scheduler-logic", version = "=2.1.0" }
 solana-unified-scheduler-pool = { path = "unified-scheduler-pool", version = "=2.1.0" }
