@@ -211,6 +211,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "agave-store-histogram"
+version = "2.1.0"
+dependencies = [
+ "clap 2.33.3",
+ "solana-version",
+]
+
+[[package]]
 name = "agave-store-tool"
 version = "2.1.0"
 dependencies = [

@@ -10,6 +10,7 @@ members = [
     "accounts-cluster-bench",
     "accounts-db",
     "accounts-db/accounts-hash-cache-tool",
+    "accounts-db/store-histogram",
     "accounts-db/store-tool",
     "banking-bench",
     "banks-client",

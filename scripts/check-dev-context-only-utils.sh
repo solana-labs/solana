@@ -34,6 +34,7 @@ declare tainted_packages=(
   agave-ledger-tool
   solana-bench-tps
   agave-store-tool
+  agave-store-histogram
   agave-accounts-hash-cache-tool
 )
 
