@@ -61,7 +61,7 @@ all transactions to build up the necessary metadata.
 ## Accessing BigTable
 
 BigTable has a gRPC endpoint that can be accessed using the
-[tonic](https://crates.io/crates/crate)] and the raw protobuf API, as currently
+[tonic](https://crates.io/crates/crate) and the raw protobuf API, as currently
 no higher-level Rust crate for BigTable exists. Practically this makes parsing
 the results of BigTable queries more complicated but is not a significant issue.
 
