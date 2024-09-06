@@ -2224,63 +2224,63 @@ fn backup_and_clear_blockstore(
         start_slot,
         expected_shred_version,
     )?;
-
-    if let Some(incorrect_shred_version) = incorrect_shred_version {
-        // .unwrap() safe because getting to this point implies blockstore has slots/shreds
-        let end_slot = blockstore.highest_slot()?.unwrap();
-
-        // Backing up the shreds that will be deleted from primary blockstore is
-        // not critical, so swallow errors from backup blockstore operations.
-        let backup_folder = format!(
-            "{}_backup_{}_{}_{}",
-            config
-                .ledger_column_options
-                .shred_storage_type
-                .blockstore_directory(),
-            incorrect_shred_version,
-            start_slot,
-            end_slot
-        );
-        match Blockstore::open_with_options(
-            &ledger_path.join(backup_folder),
-            blockstore_options_from_config(config),
-        ) {
-            Ok(backup_blockstore) => {
-                info!("Backing up slots from {start_slot} to {end_slot}");
-                let mut timer = Measure::start("blockstore backup");
-
-                const PRINT_INTERVAL: Duration = Duration::from_secs(5);
-                let mut print_timer = Instant::now();
-                let mut num_slots_copied = 0;
-                let slot_meta_iterator = blockstore.slot_meta_iterator(start_slot)?;
-                for (slot, _meta) in slot_meta_iterator {
-                    let shreds = blockstore.get_data_shreds_for_slot(slot, 0)?;
-                    let _ = backup_blockstore.insert_shreds(shreds, None, true);
-                    num_slots_copied += 1;
-
-                    if print_timer.elapsed() > PRINT_INTERVAL {
-                        info!("Backed up {num_slots_copied} slots thus far");
-                        print_timer = Instant::now();
-                    }
-                }
-
-                timer.stop();
-                info!("Backing up slots done. {timer}");
-            }
-            Err(err) => {
-                warn!("Unable to backup shreds with incorrect shred version: {err}");
-            }
-        }
-
-        info!("Purging slots {start_slot} to {end_slot} from blockstore");
-        let mut timer = Measure::start("blockstore purge");
-        blockstore.purge_from_next_slots(start_slot, end_slot);
-        blockstore.purge_slots(start_slot, end_slot, PurgeType::Exact);
-        timer.stop();
-        info!("Purging slots done. {timer}");
-    } else {
+    let Some(incorrect_shred_version) = incorrect_shred_version else {
         info!("Only shreds with the correct version were found in the blockstore");
+        return Ok(());
+    };
+
+    // .unwrap() safe because getting to this point implies blockstore has slots/shreds
+    let end_slot = blockstore.highest_slot()?.unwrap();
+
+    // Backing up the shreds that will be deleted from primary blockstore is
+    // not critical, so swallow errors from backup blockstore operations.
+    let backup_folder = format!(
+        "{}_backup_{}_{}_{}",
+        config
+            .ledger_column_options
+            .shred_storage_type
+            .blockstore_directory(),
+        incorrect_shred_version,
+        start_slot,
+        end_slot
+    );
+    match Blockstore::open_with_options(
+        &ledger_path.join(backup_folder),
+        blockstore_options_from_config(config),
+    ) {
+        Ok(backup_blockstore) => {
+            info!("Backing up slots from {start_slot} to {end_slot}");
+            let mut timer = Measure::start("blockstore backup");
+
+            const PRINT_INTERVAL: Duration = Duration::from_secs(5);
+            let mut print_timer = Instant::now();
+            let mut num_slots_copied = 0;
+            let slot_meta_iterator = blockstore.slot_meta_iterator(start_slot)?;
+            for (slot, _meta) in slot_meta_iterator {
+                let shreds = blockstore.get_data_shreds_for_slot(slot, 0)?;
+                let _ = backup_blockstore.insert_shreds(shreds, None, true);
+                num_slots_copied += 1;
+
+                if print_timer.elapsed() > PRINT_INTERVAL {
+                    info!("Backed up {num_slots_copied} slots thus far");
+                    print_timer = Instant::now();
+                }
+            }
+
+            timer.stop();
+            info!("Backing up slots done. {timer}");
+        }
+        Err(err) => {
+            warn!("Unable to backup shreds with incorrect shred version: {err}");
+        }
     }
+
+    info!("Purging slots {start_slot} to {end_slot} from blockstore");
+    let mut timer = Measure::start("blockstore purge");
+    blockstore.purge_from_next_slots(start_slot, end_slot);
+    blockstore.purge_slots(start_slot, end_slot, PurgeType::Exact);
+    timer.stop();
+    info!("Purging slots done. {timer}");
 
     Ok(())
 }
