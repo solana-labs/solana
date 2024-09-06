@@ -508,7 +508,6 @@ pub mod native_token;
 pub mod nonce;
 pub mod program;
 pub mod program_error;
-pub mod program_option;
 pub mod program_pack;
 pub mod program_stubs;
 pub mod program_utils;
@@ -540,7 +539,7 @@ pub use solana_serde_varint as serde_varint;
 pub use solana_short_vec as short_vec;
 #[cfg(target_arch = "wasm32")]
 pub use wasm_bindgen::prelude::wasm_bindgen;
-pub use {solana_clock as clock, solana_msg::msg};
+pub use {solana_clock as clock, solana_msg::msg, solana_program_option as program_option};
 
 /// The [config native program][np].
 ///

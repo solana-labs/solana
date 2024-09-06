@@ -5455,6 +5455,7 @@ dependencies = [
  "solana-hash",
  "solana-msg",
  "solana-program-memory",
+ "solana-program-option",
  "solana-sanitize",
  "solana-sdk-macro",
  "solana-secp256k1-recover",
@@ -5472,6 +5473,10 @@ dependencies = [
  "num-traits",
  "solana-define-syscall",
 ]
+
+[[package]]
+name = "solana-program-option"
+version = "2.1.0"
 
 [[package]]
 name = "solana-program-runtime"

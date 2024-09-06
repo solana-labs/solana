@@ -43,6 +43,7 @@ solana-hash = { workspace = true, features = [
 ] }
 solana-msg = { workspace = true }
 solana-program-memory = { workspace = true }
+solana-program-option = { workspace = true }
 solana-sanitize = { workspace = true }
 solana-sdk-macro = { workspace = true }
 solana-secp256k1-recover = { workspace = true }

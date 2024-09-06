@@ -29,7 +29,7 @@ declare print_free_tree=(
   ':sdk/**.rs'
   ':^sdk/cargo-build-sbf/**.rs'
   ':^sdk/msg/src/lib.rs'
-  ':^sdk/program/src/program_option.rs'
+  ':^sdk/program-option/src/lib.rs'
   ':^sdk/program/src/program_stubs.rs'
   ':programs/**.rs'
   ':^**bin**.rs'

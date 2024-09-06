@@ -114,6 +114,7 @@ members = [
     "sdk/package-metadata-macro",
     "sdk/program",
     "sdk/program-memory",
+    "sdk/program-option",
     "sdk/serde-varint",
     "sdk/sha256-hasher",
     "sdk/signature",
@@ -417,6 +418,7 @@ solana-poh = { path = "poh", version = "=2.1.0" }
 solana-poseidon = { path = "poseidon", version = "=2.1.0" }
 solana-program = { path = "sdk/program", version = "=2.1.0", default-features = false }
 solana-program-memory = { path = "sdk/program-memory", version = "=2.1.0" }
+solana-program-option = { path = "sdk/program-option", version = "=2.1.0" }
 solana-program-runtime = { path = "program-runtime", version = "=2.1.0" }
 solana-program-test = { path = "program-test", version = "=2.1.0" }
 solana-pubsub-client = { path = "pubsub-client", version = "=2.1.0" }

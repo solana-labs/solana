@@ -172,7 +172,7 @@ impl<T> COption<T> {
     /// ```
     ///
     /// ```should_panic
-    /// # use solana_program::program_option::COption;
+    /// # use solana_program_option::COption;
     /// let x: COption<&str> = COption::None;
     /// x.expect("the world is ending"); // panics with `the world is ending`
     /// ```
@@ -205,7 +205,7 @@ impl<T> COption<T> {
     /// ```
     ///
     /// ```should_panic
-    /// # use solana_program::program_option::COption;
+    /// # use solana_program_option::COption;
     /// let x: COption<&str> = COption::None;
     /// assert_eq!(x.unwrap(), "air"); // fails
     /// ```
