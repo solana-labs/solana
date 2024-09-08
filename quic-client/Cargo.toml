@@ -10,7 +10,7 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
-async-mutex = { workspace = true }
+async-lock = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
