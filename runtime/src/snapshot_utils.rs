@@ -1083,8 +1083,9 @@ fn archive_snapshot(
                 encoder.finish().map_err(E::FinishEncoder)?;
             }
             ArchiveFormat::TarZstd => {
+                // Compression level of 1 is optimized for speed.
                 let mut encoder =
-                    zstd::stream::Encoder::new(archive_file, 0).map_err(E::CreateEncoder)?;
+                    zstd::stream::Encoder::new(archive_file, 1).map_err(E::CreateEncoder)?;
                 do_archive_files(&mut encoder)?;
                 encoder.finish().map_err(E::FinishEncoder)?;
             }
