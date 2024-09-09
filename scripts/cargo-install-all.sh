@@ -103,6 +103,7 @@ else
     solana
     solana-bench-tps
     solana-faucet
+    solana-genesis
     solana-gossip
     agave-install
     solana-keygen
@@ -126,10 +127,6 @@ else
       agave-watchtower
     )
   fi
-
-  #XXX: Ensure `solana-genesis` is built LAST!
-  # See https://github.com/solana-labs/solana/issues/5826
-  BINS+=(solana-genesis)
 fi
 
 binArgs=()
