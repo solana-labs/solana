@@ -3799,12 +3799,22 @@ impl Bank {
 
         let ((), store_accounts_us) = measure_us!({
             let durable_nonce = DurableNonce::from_blockhash(&last_blockhash);
+
+            // If geyser is present, we must collect `SanitizedTransaction`
+            // references in order to comply with that interface - until it
+            // is changed.
+            let maybe_transaction_refs = self
+                .accounts()
+                .accounts_db
+                .has_accounts_update_notifier()
+                .then(|| sanitized_txs.iter().collect::<Vec<_>>());
+
             let (accounts_to_store, transactions) = collect_accounts_to_store(
                 sanitized_txs,
+                &maybe_transaction_refs,
                 &mut processing_results,
                 &durable_nonce,
                 lamports_per_signature,
-                self.accounts().accounts_db.has_accounts_update_notifier(),
             );
             self.rc.accounts.store_cached(
                 (self.slot(), accounts_to_store.as_slice()),
