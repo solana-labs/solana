@@ -52,7 +52,7 @@ pub enum BankForksUtilsError {
     )]
     NoBankSnapshotDirectory { flag: String, value: String },
 
-    #[error("failed to load bank: {source}, snapshot: {path}")]
+    #[error("failed to load bank from snapshot '{path}': {source}")]
     BankFromSnapshotsDirectory {
         source: snapshot_utils::SnapshotError,
         path: PathBuf,
