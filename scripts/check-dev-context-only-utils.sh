@@ -28,18 +28,10 @@ source ci/rust-version.sh nightly
 # as normal (not dev) dependencies, only if you're sure that there's good
 # reason to bend dev-context-only-utils's original intention and that listed
 # package isn't part of released binaries.
-declare tainted_packages=(
-  solana-accounts-bench
-  solana-banking-bench
-  agave-ledger-tool
-  solana-bench-tps
-  agave-store-tool
-  agave-store-histogram
-  agave-accounts-hash-cache-tool
-)
+source scripts/dcou-tainted-packages.sh
 
 # convert to comma separeted (ref: https://stackoverflow.com/a/53839433)
-printf -v allowed '"%s",' "${tainted_packages[@]}"
+printf -v allowed '"%s",' "${dcou_tainted_packages[@]}"
 allowed="${allowed%,}"
 
 mode=${1:-full}
