@@ -1183,7 +1183,7 @@ impl AccountStorageEntry {
     }
 
     pub fn alive_bytes(&self) -> usize {
-        self.alive_bytes.load(Ordering::SeqCst)
+        self.alive_bytes.load(Ordering::Acquire)
     }
 
     pub fn written_bytes(&self) -> u64 {
@@ -1219,7 +1219,7 @@ impl AccountStorageEntry {
         *count_and_status = (count_and_status.0 + num_accounts, count_and_status.1);
         self.approx_store_count
             .fetch_add(num_accounts, Ordering::Relaxed);
-        self.alive_bytes.fetch_add(num_bytes, Ordering::SeqCst);
+        self.alive_bytes.fetch_add(num_bytes, Ordering::Release);
     }
 
     fn try_available(&self) -> bool {
@@ -1269,7 +1269,7 @@ impl AccountStorageEntry {
             self.id(),
         );
 
-        self.alive_bytes.fetch_sub(num_bytes, Ordering::SeqCst);
+        self.alive_bytes.fetch_sub(num_bytes, Ordering::Release);
         count = count.saturating_sub(num_accounts);
         *count_and_status = (count, status);
         count
@@ -9371,7 +9371,9 @@ impl AccountsDb {
                     assert_eq!(count_and_status.0, 0);
                     count_and_status.0 = entry.count;
                 }
-                store.alive_bytes.store(entry.stored_size, Ordering::SeqCst);
+                store
+                    .alive_bytes
+                    .store(entry.stored_size, Ordering::Release);
                 assert!(
                     store.approx_stored_count() >= entry.count,
                     "{}, {}",
@@ -11335,7 +11337,7 @@ pub mod tests {
                 .get_slot_storage_entry(slot)
                 .unwrap()
                 .alive_bytes
-                .fetch_sub(aligned_stored_size(0), Ordering::Relaxed);
+                .fetch_sub(aligned_stored_size(0), Ordering::Release);
 
             if let Some(latest_full_snapshot_slot) = latest_full_snapshot_slot {
                 accounts.set_latest_full_snapshot_slot(latest_full_snapshot_slot);
@@ -13854,7 +13856,7 @@ pub mod tests {
         let storage0 = accounts_db.get_and_assert_single_storage(slot);
 
         storage0.accounts.scan_accounts(|account| {
-            let before_size = storage0.alive_bytes.load(Ordering::Acquire);
+            let before_size = storage0.alive_bytes();
             let account_info = accounts_db
                 .accounts_index
                 .get_cloned(account.pubkey())
@@ -13867,7 +13869,7 @@ pub mod tests {
             assert_eq!(account_info.0, slot);
             let reclaims = [account_info];
             accounts_db.remove_dead_accounts(reclaims.iter(), None, true);
-            let after_size = storage0.alive_bytes.load(Ordering::Acquire);
+            let after_size = storage0.alive_bytes();
             if storage0.count() == 0
                 && AccountsFileProvider::HotStorage == accounts_db.accounts_file_provider
             {
@@ -15137,14 +15139,14 @@ pub mod tests {
 
         for (_, store) in accounts.storage.iter() {
             assert_eq!(store.count_and_status.read().0, 0);
-            assert_eq!(store.alive_bytes.load(Ordering::Acquire), 0);
+            assert_eq!(store.alive_bytes(), 0);
         }
         accounts.set_storage_count_and_alive_bytes(dashmap, &mut GenerateIndexTimings::default());
         assert_eq!(accounts.storage.len(), 1);
         for (_, store) in accounts.storage.iter() {
             assert_eq!(store.id(), 0);
             assert_eq!(store.count_and_status.read().0, count);
-            assert_eq!(store.alive_bytes.load(Ordering::Acquire), 2);
+            assert_eq!(store.alive_bytes(), 2);
         }
     });
 
