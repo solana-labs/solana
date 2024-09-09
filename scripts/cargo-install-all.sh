@@ -153,6 +153,19 @@ done
 
 mkdir -p "$installDir/bin"
 
+cargo_build() {
+  # shellcheck disable=SC2086 # Don't want to double quote $maybeRustVersion
+  "$cargo" $maybeRustVersion build $buildProfileArg "$@"
+}
+
+# This is called to detect both of unintended activation AND deactivation of
+# dcou, in order to make this rather fragile grep more resilient to bitrot...
+check_dcou() {
+  RUSTC_BOOTSTRAP=1 \
+    cargo_build -Z unstable-options --build-plan "$@" | \
+    grep -q -F '"feature=\"dev-context-only-utils\""'
+}
+
 # Some binaries (like the notable agave-ledger-tool) need to acitivate
 # the dev-context-only-utils feature flag to build.
 # Build those binaries separately to avoid the unwanted feature unification.
@@ -166,25 +179,22 @@ mkdir -p "$installDir/bin"
   # output after turning rustc into the nightly mode with RUSTC_BOOTSTRAP=1.
   # In this way, additional requirement of nightly rustc toolchian is avoided.
   # Note that `cargo tree` can't be used, because it doesn't support `--bin`.
-  # shellcheck disable=SC2086 # Don't want to double quote $maybeRustVersion
-  if (RUSTC_BOOTSTRAP=1 \
-      "$cargo" $maybeRustVersion build \
-      -Z unstable-options --build-plan \
-      $buildProfileArg "${binArgs[@]}" --workspace "${excludeArgs[@]}" | \
-      grep -q -F '"feature=\"dev-context-only-utils\""'); then
-     echo 'dcou feature activation is incorrctly activated!' && \
+  if check_dcou "${binArgs[@]}" --workspace "${excludeArgs[@]}"; then
+     echo 'dcou feature activation is incorrectly activated!'
      exit 1
   fi
 
   # Build our production binaries without dcou.
-  # shellcheck disable=SC2086 # Don't want to double quote $maybeRustVersion
-  "$cargo" $maybeRustVersion build \
-     $buildProfileArg "${binArgs[@]}" --workspace "${excludeArgs[@]}"
+  cargo_build "${binArgs[@]}" --workspace "${excludeArgs[@]}"
 
   # Finally, build the remaining dev tools with dcou.
-  # shellcheck disable=SC2086 # Don't want to double quote $maybeRustVersion
-  "$cargo" $maybeRustVersion build \
-     $buildProfileArg "${dcouBinArgs[@]}"
+  if [[ ${#dcouBinArgs[@]} -gt 0 ]]; then
+    if ! check_dcou "${dcouBinArgs[@]}"; then
+       echo 'dcou feature activation is incorrectly remain to be deactivated!'
+       exit 1
+    fi
+    cargo_build "${dcouBinArgs[@]}"
+  fi
 
   # Exclude `spl-token` binary for net.sh builds
   if [[ -z "$validatorOnly" ]]; then
