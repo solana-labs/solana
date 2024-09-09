@@ -68,7 +68,6 @@ use {
     solana_sdk::{
         clock::{BankId, Slot, MAX_PROCESSING_AGE, NUM_CONSECUTIVE_LEADER_SLOTS},
         feature_set,
-        genesis_config::ClusterType,
         hash::Hash,
         pubkey::Pubkey,
         saturating_add_assign,
@@ -4080,17 +4079,6 @@ impl ReplayStage {
             rewards_recorder_sender
                 .send(RewardsMessage::Complete(bank.slot()))
                 .unwrap_or_else(|err| warn!("rewards_recorder_sender failed: {:?}", err));
-        }
-    }
-
-    pub fn get_unlock_switch_vote_slot(cluster_type: ClusterType) -> Slot {
-        match cluster_type {
-            ClusterType::Development => 0,
-            ClusterType::Devnet => 0,
-            // Epoch 63
-            ClusterType::Testnet => 21_692_256,
-            // 400_000 slots into epoch 61
-            ClusterType::MainnetBeta => 26_752_000,
         }
     }
 
