@@ -122,10 +122,8 @@ fn calc(info: &[(usize, usize)], bin_widths: Vec<usize>) {
     eprintln!("count {}", bin_all.count);
     eprintln!("min size {}", bin_all.min_size);
     eprintln!("max size {}", bin_all.max_size);
-    eprintln!("avg size {}", bin_all.sum_size / bin_all.count);
     eprintln!("avg size {}", bin_all.avg);
     eprintln!("bin width {}", bins[0].slot_max - bins[0].slot_min);
-    eprintln!("...");
 
     for i in 0..bins.len() {
         if i > 0 && bins[i - 1].slot_max != bins[i].slot_min {
@@ -133,27 +131,28 @@ fn calc(info: &[(usize, usize)], bin_widths: Vec<usize>) {
         }
         let bin = &bins[i];
         if bin.slot_min == 432_000 {
-            eprintln!("-------------------------------------------------------------------------------------------------------------------------------------------------------------------");
+            eprintln!("------------------------------------------------------------------------------------------------------------------------------------------------------------------------");
         }
-        let offset = format!("{:10}", bin.slot_min);
+        let offset = format!("{:8}", bin.slot_min);
 
         if i == 0 {
             let s = [
-                format!("{:10}", "slot age"),
-                pad(2),
+                format!("{:8}", "slot age"),
+                pad(1),
                 format!("{:10}", "count"),
-                pad(2),
+                pad(1),
                 format!("{:10}", "min size"),
-                pad(2),
+                pad(1),
                 format!("{:10}", "max size"),
-                pad(2),
+                pad(1),
                 format!("{:10}", "sum size"),
-                pad(2),
+                pad(1),
                 format!("{:10}", "avg size"),
-                pad(2),
+                pad(1),
                 format!(",{:>15}", "slot min"),
                 format!(",{:>15}", "count"),
                 format!(",{:>15}", "sum size"),
+                format!(",{:>7}", "% size"),
                 format!(",{:>15}", "min size"),
                 format!(",{:>15}", "max size"),
                 format!(",{:>15}", "avg size"),
@@ -167,20 +166,21 @@ fn calc(info: &[(usize, usize)], bin_widths: Vec<usize>) {
 
         let s = [
             offset,
-            pad(2),
+            pad(1),
             get_stars(bin.count, bin_max.count, 10),
-            pad(2),
+            pad(1),
             get_stars(bin.min_size, bin_max.min_size, 10),
-            pad(2),
+            pad(1),
             get_stars(bin.max_size, bin_max.max_size, 10),
-            pad(2),
+            pad(1),
             get_stars(bin.sum_size, bin_max.sum_size, 10),
-            pad(2),
+            pad(1),
             get_stars(bin.avg, bin_max.avg, 10),
-            pad(2),
+            pad(1),
             format!(",{:15}", max_inclusive - bin.slot_min),
             format!(",{:15}", bin.count),
             format!(",{:15}", bin.sum_size),
+            format!(",{:6}%", bin.sum_size * 100 / bin_all.sum_size),
             format!(",{:15}", bin.min_size),
             format!(",{:15}", bin.max_size),
             format!(",{:15}", bin.avg),
