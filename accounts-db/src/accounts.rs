@@ -514,9 +514,9 @@ impl Accounts {
     /// This function will prevent multiple threads from modifying the same account state at the
     /// same time
     #[must_use]
-    pub fn lock_accounts<'a>(
+    pub fn lock_accounts<'a, Tx: SVMMessage + 'a>(
         &self,
-        txs: impl Iterator<Item = &'a SanitizedTransaction>,
+        txs: impl Iterator<Item = &'a Tx>,
         tx_account_lock_limit: usize,
     ) -> Vec<Result<()>> {
         // Validate the account locks, then get iterator if successful validation.
@@ -566,9 +566,9 @@ impl Accounts {
     }
 
     /// Once accounts are unlocked, new transactions that modify that state can enter the pipeline
-    pub fn unlock_accounts<'a>(
+    pub fn unlock_accounts<'a, Tx: SVMMessage + 'a>(
         &self,
-        txs_and_results: impl Iterator<Item = (&'a SanitizedTransaction, &'a Result<()>)> + Clone,
+        txs_and_results: impl Iterator<Item = (&'a Tx, &'a Result<()>)> + Clone,
     ) {
         if !txs_and_results.clone().any(|(_, res)| res.is_ok()) {
             return;
@@ -578,7 +578,7 @@ impl Accounts {
         debug!("bank unlock accounts");
         for (tx, res) in txs_and_results {
             if res.is_ok() {
-                let tx_account_locks = TransactionAccountLocksIterator::new(tx.message());
+                let tx_account_locks = TransactionAccountLocksIterator::new(tx);
                 account_locks.unlock_accounts(tx_account_locks.accounts_with_is_writable());
             }
         }
