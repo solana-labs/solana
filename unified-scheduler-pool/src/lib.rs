@@ -37,6 +37,7 @@ use {
     },
     solana_timings::ExecuteTimings,
     solana_unified_scheduler_logic::{SchedulingStateMachine, Task, UsageQueue},
+    static_assertions::const_assert_eq,
     std::{
         fmt::Debug,
         marker::PhantomData,
@@ -475,7 +476,8 @@ enum SubchanneledPayload<P1, P2> {
     CloseSubchannel,
 }
 
-type NewTaskPayload = SubchanneledPayload<Task, (SchedulingContext, ResultWithTimings)>;
+type NewTaskPayload = SubchanneledPayload<Task, Box<(SchedulingContext, ResultWithTimings)>>;
+const_assert_eq!(mem::size_of::<NewTaskPayload>(), 16);
 
 // A tiny generic message type to synchronize multiple threads everytime some contextual data needs
 // to be switched (ie. SchedulingContext), just using a single communication channel.
@@ -1092,10 +1094,9 @@ impl<S: SpawnableScheduler<TH>, TH: TaskHandler> ThreadManager<S, TH> {
 
                     // Prepare for the new session.
                     match new_task_receiver.recv() {
-                        Ok(NewTaskPayload::OpenSubchannel((
-                            new_context,
-                            new_result_with_timings,
-                        ))) => {
+                        Ok(NewTaskPayload::OpenSubchannel(context_and_result_with_timings)) => {
+                            let (new_context, new_result_with_timings) =
+                                *context_and_result_with_timings;
                             // We just received subsequent (= not initial) session and about to
                             // enter into the preceding `while(!is_finished) {...}` loop again.
                             // Before that, propagate new SchedulingContext to handler threads
@@ -1332,10 +1333,10 @@ impl<S: SpawnableScheduler<TH>, TH: TaskHandler> ThreadManager<S, TH> {
         assert!(!self.are_threads_joined());
         assert_matches!(self.session_result_with_timings, None);
         self.new_task_sender
-            .send(NewTaskPayload::OpenSubchannel((
+            .send(NewTaskPayload::OpenSubchannel(Box::new((
                 context,
                 result_with_timings,
-            )))
+            ))))
             .expect("no new session after aborted");
     }
 }

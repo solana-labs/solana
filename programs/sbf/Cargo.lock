@@ -6772,6 +6772,7 @@ dependencies = [
  "solana-sdk",
  "solana-timings",
  "solana-unified-scheduler-logic",
+ "static_assertions",
  "vec_extract_if_polyfill",
 ]
 
