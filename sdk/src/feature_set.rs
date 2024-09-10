@@ -789,6 +789,10 @@ pub mod deprecate_unused_legacy_vote_plumbing {
     solana_sdk::declare_id!("6Uf8S75PVh91MYgPQSHnjRAPQq6an5BDv9vomrCwDqLe");
 }
 
+pub mod enable_turbine_extended_fanout_experiments {
+    solana_sdk::declare_id!("BZn14Liea52wtBwrXUxTv6vojuTTmfc7XGEDTXrvMD7b");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -981,6 +985,7 @@ lazy_static! {
         (enable_chained_merkle_shreds::id(), "Enable chained Merkle shreds #34916"),
         (deprecate_unused_legacy_vote_plumbing::id(), "Deprecate unused legacy vote tx plumbing"),
         (chained_merkle_conflict_duplicate_proofs::id(), "generate duplicate proofs for chained merkle root conflicts"),
+        (enable_turbine_extended_fanout_experiments::id(), "enable turbine extended fanout experiments #2373"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
