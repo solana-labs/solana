@@ -2,6 +2,7 @@ use {
     super::*,
     crate::serialization::account_data_region_memory_state,
     scopeguard::defer,
+    solana_feature_set::{self as feature_set, enable_bpf_loader_set_authority_checked_ix},
     solana_measure::measure::Measure,
     solana_program_runtime::invoke_context::SerializedAccountMetadata,
     solana_rbpf::{
@@ -9,7 +10,6 @@ use {
         memory_region::{MemoryRegion, MemoryState},
     },
     solana_sdk::{
-        feature_set::enable_bpf_loader_set_authority_checked_ix,
         saturating_add_assign,
         stable_layout::stable_instruction::StableInstruction,
         syscalls::{
@@ -1593,6 +1593,7 @@ mod tests {
         super::*,
         crate::mock_create_vm,
         assert_matches::assert_matches,
+        solana_feature_set::bpf_account_data_direct_mapping,
         solana_program_runtime::{
             invoke_context::SerializedAccountMetadata, with_mock_invoke_context,
         },
@@ -1602,7 +1603,6 @@ mod tests {
         solana_sdk::{
             account::{Account, AccountSharedData, ReadableAccount},
             clock::Epoch,
-            feature_set::bpf_account_data_direct_mapping,
             instruction::Instruction,
             system_program,
             transaction_context::TransactionAccount,

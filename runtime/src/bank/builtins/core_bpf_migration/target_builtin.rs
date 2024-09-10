@@ -75,10 +75,11 @@ mod tests {
         super::*,
         crate::bank::{tests::create_simple_test_bank, ApplyFeatureActivationsCaller},
         assert_matches::assert_matches,
+        solana_feature_set as feature_set,
         solana_sdk::{
             account::Account,
             bpf_loader_upgradeable::{UpgradeableLoaderState, ID as BPF_LOADER_UPGRADEABLE_ID},
-            feature, feature_set,
+            feature,
         },
         test_case::test_case,
     };

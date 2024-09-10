@@ -18,6 +18,7 @@ scopeguard = { workspace = true }
 solana-bn254 = { workspace = true }
 solana-compute-budget = { workspace = true }
 solana-curve25519 = { workspace = true }
+solana-feature-set = { workspace = true }
 solana-log-collector = { workspace = true }
 solana-measure = { workspace = true }
 solana-poseidon = { workspace = true }

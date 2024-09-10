@@ -15,6 +15,7 @@ use {
         consensus::tower_storage::TowerStorage,
         validator::{Validator, ValidatorConfig, ValidatorStartProgress},
     },
+    solana_feature_set::FEATURE_NAMES,
     solana_geyser_plugin_manager::{
         geyser_plugin_manager::GeyserPluginManager, GeyserPluginManagerRequest,
     },
@@ -43,8 +44,6 @@ use {
         commitment_config::CommitmentConfig,
         epoch_schedule::EpochSchedule,
         exit::Exit,
-        feature,
-        feature_set::FEATURE_NAMES,
         fee_calculator::FeeRateGovernor,
         instruction::{AccountMeta, Instruction},
         message::Message,
@@ -444,7 +443,7 @@ impl TestValidatorGenesis {
                 .for_each(|(maybe_account, feature_id)| {
                     if maybe_account
                         .as_ref()
-                        .and_then(feature::from_account)
+                        .and_then(solana_sdk::feature::from_account)
                         .and_then(|feature| feature.activated_at)
                         .is_none()
                     {

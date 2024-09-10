@@ -22,6 +22,7 @@ solana-type-overrides = { workspace = true }
 [dev-dependencies]
 assert_matches = { workspace = true }
 solana-compute-budget = { workspace = true }
+solana-feature-set = { workspace = true }
 solana-logger = { workspace = true }
 
 [lib]

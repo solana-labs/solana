@@ -4,12 +4,12 @@ pub use solana_program::vote::state::{vote_state_versions::*, *};
 use {
     log::*,
     serde_derive::{Deserialize, Serialize},
+    solana_feature_set::{self as feature_set, FeatureSet},
     solana_program::vote::{error::VoteError, program::id},
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         clock::{Epoch, Slot, UnixTimestamp},
         epoch_schedule::EpochSchedule,
-        feature_set::{self, FeatureSet},
         hash::Hash,
         instruction::InstructionError,
         pubkey::Pubkey,

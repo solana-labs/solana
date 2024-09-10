@@ -45,6 +45,7 @@ use {
     rand::{seq::SliceRandom, thread_rng, CryptoRng, Rng},
     rayon::{prelude::*, ThreadPool, ThreadPoolBuilder},
     serde::ser::Serialize,
+    solana_feature_set::FeatureSet,
     solana_ledger::shred::Shred,
     solana_measure::measure::Measure,
     solana_net_utils::{
@@ -62,7 +63,6 @@ use {
     solana_sanitize::{Sanitize, SanitizeError},
     solana_sdk::{
         clock::{Slot, DEFAULT_MS_PER_SLOT, DEFAULT_SLOTS_PER_EPOCH},
-        feature_set::FeatureSet,
         hash::Hash,
         pubkey::Pubkey,
         quic::QUIC_PORT_OFFSET,

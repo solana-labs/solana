@@ -1441,6 +1441,7 @@ mod tests {
     use {
         super::*,
         crate::repair::repair_response,
+        solana_feature_set::FeatureSet,
         solana_gossip::{contact_info::ContactInfo, socketaddr, socketaddr_any},
         solana_ledger::{
             blockstore::make_many_slot_entries,
@@ -1451,10 +1452,7 @@ mod tests {
         },
         solana_perf::packet::{deserialize_from_with_limit, Packet},
         solana_runtime::bank::Bank,
-        solana_sdk::{
-            feature_set::FeatureSet, hash::Hash, pubkey::Pubkey, signature::Keypair,
-            timing::timestamp,
-        },
+        solana_sdk::{hash::Hash, pubkey::Pubkey, signature::Keypair, timing::timestamp},
         solana_streamer::socket::SocketAddrSpace,
         std::{io::Cursor, net::Ipv4Addr},
     };

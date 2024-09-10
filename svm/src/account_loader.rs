@@ -8,10 +8,10 @@ use {
     },
     itertools::Itertools,
     solana_compute_budget::compute_budget_limits::ComputeBudgetLimits,
+    solana_feature_set::{self as feature_set, FeatureSet},
     solana_program_runtime::loaded_programs::{ProgramCacheEntry, ProgramCacheForTxBatch},
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
-        feature_set::{self, FeatureSet},
         fee::FeeDetails,
         native_loader,
         nonce::State as NonceState,
@@ -583,12 +583,12 @@ mod tests {
         },
         nonce::state::Versions as NonceVersions,
         solana_compute_budget::{compute_budget::ComputeBudget, compute_budget_limits},
+        solana_feature_set::FeatureSet,
         solana_program_runtime::loaded_programs::{ProgramCacheEntry, ProgramCacheForTxBatch},
         solana_sdk::{
             account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
             bpf_loader_upgradeable,
             epoch_schedule::EpochSchedule,
-            feature_set::FeatureSet,
             hash::Hash,
             instruction::CompiledInstruction,
             message::{

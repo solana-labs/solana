@@ -46,7 +46,6 @@ use {
         clock::{self, Clock, Slot},
         commitment_config::CommitmentConfig,
         epoch_schedule::Epoch,
-        feature_set,
         hash::Hash,
         message::Message,
         native_token::lamports_to_sol,
@@ -1898,8 +1897,10 @@ pub fn process_show_stakes(
     let stake_history = from_account(&stake_history_account).ok_or_else(|| {
         CliError::RpcRequestError("Failed to deserialize stake history".to_string())
     })?;
-    let new_rate_activation_epoch =
-        get_feature_activation_epoch(rpc_client, &feature_set::reduce_stake_warmup_cooldown::id())?;
+    let new_rate_activation_epoch = get_feature_activation_epoch(
+        rpc_client,
+        &solana_feature_set::reduce_stake_warmup_cooldown::id(),
+    )?;
     stake_account_progress_bar.finish_and_clear();
 
     let mut stake_accounts: Vec<CliKeyedStakeState> = vec![];

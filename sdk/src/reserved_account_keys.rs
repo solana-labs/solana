@@ -7,13 +7,11 @@
 use {
     crate::{
         address_lookup_table, bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
-        compute_budget, config, ed25519_program, feature,
-        feature_set::{self, FeatureSet},
-        loader_v4, native_loader,
-        pubkey::Pubkey,
+        compute_budget, config, ed25519_program, feature, loader_v4, native_loader, pubkey::Pubkey,
         secp256k1_program, stake, system_program, sysvar, vote,
     },
     lazy_static::lazy_static,
+    solana_feature_set::{self as feature_set, FeatureSet},
     std::collections::{HashMap, HashSet},
 };
 

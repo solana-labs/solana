@@ -72,7 +72,6 @@ pub mod epoch_rewards_hasher;
 pub mod example_mocks;
 pub mod exit;
 pub mod feature;
-pub mod feature_set;
 pub mod fee;
 pub mod genesis_config;
 pub mod hard_forks;
@@ -114,6 +113,8 @@ pub use solana_bn254 as alt_bn128;
 pub use solana_decode_error as decode_error;
 #[deprecated(since = "2.1.0", note = "Use `solana-derivation-path` crate instead")]
 pub use solana_derivation_path as derivation_path;
+#[deprecated(since = "2.1.0", note = "Use `solana-feature-set` crate instead")]
+pub use solana_feature_set as feature_set;
 #[deprecated(since = "2.1.0", note = "Use `solana-program-memory` crate instead")]
 pub use solana_program_memory as program_memory;
 #[deprecated(since = "2.1.0", note = "Use `solana-sanitize` crate instead")]

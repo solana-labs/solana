@@ -126,9 +126,9 @@ use {
         signers::Signers,
     },
     serde::Serialize,
+    solana_feature_set as feature_set,
     solana_program::{system_instruction::SystemInstruction, system_program},
     solana_sanitize::{Sanitize, SanitizeError},
-    solana_sdk::feature_set,
     solana_short_vec as short_vec,
     std::result,
 };

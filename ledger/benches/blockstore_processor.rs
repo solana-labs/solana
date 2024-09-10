@@ -6,6 +6,7 @@ use {
         iter::IndexedParallelIterator,
         prelude::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
     },
+    solana_feature_set::apply_cost_tracker_during_replay,
     solana_ledger::{
         blockstore_processor::{execute_batch, TransactionBatchWithIndexes},
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
@@ -16,7 +17,6 @@ use {
     },
     solana_sdk::{
         account::{Account, ReadableAccount},
-        feature_set::apply_cost_tracker_during_replay,
         signature::Keypair,
         signer::Signer,
         stake_history::Epoch,

@@ -40,6 +40,7 @@ frozen-abi = [
     "dep:rustc_version",
     "dep:solana-frozen-abi",
     "dep:solana-frozen-abi-macro",
+    "solana-feature-set/frozen-abi",
     "solana-program/frozen-abi",
     "solana-short-vec/frozen-abi",
     "solana-signature/frozen-abi"
@@ -86,6 +87,7 @@ siphasher = { workspace = true }
 solana-bn254 = { workspace = true }
 solana-decode-error = { workspace = true }
 solana-derivation-path = { workspace = true }
+solana-feature-set = { workspace = true }
 solana-frozen-abi = { workspace = true, optional = true }
 solana-frozen-abi-macro = { workspace = true, optional = true }
 solana-program = { workspace = true }

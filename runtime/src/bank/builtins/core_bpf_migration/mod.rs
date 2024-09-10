@@ -322,7 +322,7 @@ impl Bank {
     /// `apply_feature_activations` function, similar to below.
     ///
     /// ```ignore
-    /// if new_feature_activations.contains(&feature_set::test_upgrade_program::id()) {
+    /// if new_feature_activations.contains(&solana_feature_set::test_upgrade_program::id()) {
     ///     self.upgrade_core_bpf_program(
     ///        &core_bpf_program_address,
     ///        &source_buffer_address,

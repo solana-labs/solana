@@ -11,6 +11,7 @@ use {
         BankingStageStats,
     },
     itertools::Itertools,
+    solana_feature_set as feature_set,
     solana_ledger::token_balances::collect_token_balances,
     solana_measure::{measure::Measure, measure_us},
     solana_poh::poh_recorder::{
@@ -24,7 +25,6 @@ use {
     solana_runtime_transaction::instructions_processor::process_compute_budget_instructions,
     solana_sdk::{
         clock::{Slot, FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET, MAX_PROCESSING_AGE},
-        feature_set,
         fee::FeeBudgetLimits,
         message::SanitizedMessage,
         saturating_add_assign,

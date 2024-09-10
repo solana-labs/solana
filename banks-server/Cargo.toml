@@ -15,6 +15,7 @@ crossbeam-channel = { workspace = true }
 futures = { workspace = true }
 solana-banks-interface = { workspace = true }
 solana-client = { workspace = true }
+solana-feature-set = { workspace = true }
 solana-runtime = { workspace = true }
 solana-sdk = { workspace = true }
 solana-send-transaction-service = { workspace = true }

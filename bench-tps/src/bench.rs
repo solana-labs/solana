@@ -1224,10 +1224,10 @@ pub fn fund_keypairs<T: 'static + TpsClient + Send + Sync + ?Sized>(
 mod tests {
     use {
         super::*,
+        solana_feature_set::FeatureSet,
         solana_runtime::{bank::Bank, bank_client::BankClient, bank_forks::BankForks},
         solana_sdk::{
             commitment_config::CommitmentConfig,
-            feature_set::FeatureSet,
             fee_calculator::FeeRateGovernor,
             genesis_config::{create_genesis_config, GenesisConfig},
             native_token::sol_to_lamports,

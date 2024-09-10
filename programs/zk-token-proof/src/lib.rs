@@ -2,10 +2,10 @@
 
 use {
     bytemuck::Pod,
+    solana_feature_set as feature_set,
     solana_log_collector::ic_msg,
     solana_program_runtime::{declare_process_instruction, invoke_context::InvokeContext},
     solana_sdk::{
-        feature_set,
         instruction::{InstructionError, TRANSACTION_LEVEL_STACK_HEIGHT},
         system_program,
     },

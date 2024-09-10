@@ -24,6 +24,9 @@ use {
         create_program_runtime_environment_v1, create_program_runtime_environment_v2,
     },
     solana_compute_budget::compute_budget::ComputeBudget,
+    solana_feature_set::{
+        enable_transaction_loading_failure_fees, remove_rounding_in_fee_calculation, FeatureSet,
+    },
     solana_log_collector::LogCollector,
     solana_measure::{measure::Measure, measure_us},
     solana_program_runtime::{
@@ -38,7 +41,6 @@ use {
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, PROGRAM_OWNERS},
         clock::{Epoch, Slot},
-        feature_set::{self, remove_rounding_in_fee_calculation, FeatureSet},
         fee::{FeeBudgetLimits, FeeStructure},
         hash::Hash,
         inner_instruction::{InnerInstruction, InnerInstructionsList},
@@ -298,7 +300,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
 
         let enable_transaction_loading_failure_fees = environment
             .feature_set
-            .is_active(&feature_set::enable_transaction_loading_failure_fees::id());
+            .is_active(&enable_transaction_loading_failure_fees::id());
         let (processing_results, execution_us): (Vec<TransactionProcessingResult>, u64) =
             measure_us!(loaded_transactions
                 .into_iter()
@@ -999,13 +1001,13 @@ mod tests {
             rollback_accounts::RollbackAccounts,
         },
         solana_compute_budget::compute_budget_limits::ComputeBudgetLimits,
+        solana_feature_set::FeatureSet,
         solana_program_runtime::loaded_programs::{BlockRelation, ProgramCacheEntryType},
         solana_sdk::{
             account::{create_account_shared_data_for_test, WritableAccount},
             bpf_loader,
             compute_budget::ComputeBudgetInstruction,
             epoch_schedule::EpochSchedule,
-            feature_set::FeatureSet,
             fee::FeeDetails,
             fee_calculator::FeeCalculator,
             hash::Hash,

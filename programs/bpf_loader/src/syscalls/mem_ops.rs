@@ -70,7 +70,7 @@ declare_builtin_function!(
 
         if invoke_context
             .get_feature_set()
-            .is_active(&feature_set::bpf_account_data_direct_mapping::id())
+            .is_active(&solana_feature_set::bpf_account_data_direct_mapping::id())
         {
             let cmp_result = translate_type_mut::<i32>(
                 memory_mapping,
@@ -126,7 +126,7 @@ declare_builtin_function!(
 
         if invoke_context
             .get_feature_set()
-            .is_active(&feature_set::bpf_account_data_direct_mapping::id())
+            .is_active(&solana_feature_set::bpf_account_data_direct_mapping::id())
         {
             memset_non_contiguous(dst_addr, c as u8, n, memory_mapping)
         } else {
@@ -151,7 +151,7 @@ fn memmove(
 ) -> Result<u64, Error> {
     if invoke_context
         .get_feature_set()
-        .is_active(&feature_set::bpf_account_data_direct_mapping::id())
+        .is_active(&solana_feature_set::bpf_account_data_direct_mapping::id())
     {
         memmove_non_contiguous(dst_addr, src_addr, n, memory_mapping)
     } else {

@@ -1,6 +1,7 @@
 #![cfg(feature = "sbf_rust")]
 
 use {
+    solana_feature_set::disable_fees_sysvar,
     solana_runtime::{
         bank::Bank,
         bank_client::BankClient,
@@ -8,7 +9,6 @@ use {
         loader_utils::load_upgradeable_program_and_advance_slot,
     },
     solana_sdk::{
-        feature_set::disable_fees_sysvar,
         instruction::{AccountMeta, Instruction},
         message::Message,
         pubkey::Pubkey,

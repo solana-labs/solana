@@ -3,11 +3,11 @@
 #![cfg(feature = "full")]
 
 use {
-    crate::{feature_set::FeatureSet, pubkey::Pubkey},
     lazy_static::lazy_static,
     num_derive::{FromPrimitive, ToPrimitive},
     solana_decode_error::DecodeError,
-    solana_program::instruction::CompiledInstruction,
+    solana_feature_set::FeatureSet,
+    solana_program::{instruction::CompiledInstruction, pubkey::Pubkey},
     thiserror::Error,
 };
 

@@ -8,9 +8,8 @@
 )]
 
 use {
-    solana_rbpf::memory_region::MemoryState,
-    solana_sdk::{feature_set::bpf_account_data_direct_mapping, signer::keypair::Keypair},
-    std::slice,
+    solana_feature_set::bpf_account_data_direct_mapping, solana_rbpf::memory_region::MemoryState,
+    solana_sdk::signer::keypair::Keypair, std::slice,
 };
 
 extern crate test;
@@ -22,6 +21,7 @@ use {
         syscalls::create_program_runtime_environment_v1,
     },
     solana_compute_budget::compute_budget::ComputeBudget,
+    solana_feature_set::FeatureSet,
     solana_measure::measure::Measure,
     solana_program_runtime::invoke_context::InvokeContext,
     solana_rbpf::{
@@ -39,7 +39,6 @@ use {
         bpf_loader,
         client::SyncClient,
         entrypoint::SUCCESS,
-        feature_set::FeatureSet,
         instruction::{AccountMeta, Instruction},
         message::Message,
         native_loader,

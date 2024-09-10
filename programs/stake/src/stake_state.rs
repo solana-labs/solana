@@ -9,13 +9,13 @@
 )]
 pub use solana_sdk::stake::state::*;
 use {
+    solana_feature_set::FeatureSet,
     solana_log_collector::ic_msg,
     solana_program_runtime::invoke_context::InvokeContext,
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         account_utils::StateMut,
         clock::{Clock, Epoch},
-        feature_set::FeatureSet,
         instruction::{checked_add, InstructionError},
         pubkey::Pubkey,
         rent::Rent,

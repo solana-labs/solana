@@ -20,6 +20,7 @@ solana-accounts-db = { workspace = true }
 solana-cli-output = { workspace = true }
 solana-compute-budget = { workspace = true }
 solana-core = { workspace = true }
+solana-feature-set = { workspace = true }
 solana-geyser-plugin-manager = { workspace = true }
 solana-gossip = { workspace = true }
 solana-ledger = { workspace = true }

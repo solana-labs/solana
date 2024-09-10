@@ -5,8 +5,9 @@ use super::Bank;
 mod tests {
     use {
         super::*,
+        solana_feature_set as feature_set,
         solana_sdk::{
-            feature_set, genesis_config::create_genesis_config, pubkey::Pubkey,
+            genesis_config::create_genesis_config, pubkey::Pubkey,
             sysvar::epoch_rewards::EpochRewards,
         },
         solana_stake_program::points::PointValue,

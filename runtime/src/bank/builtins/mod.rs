@@ -4,7 +4,8 @@ pub mod prototypes;
 pub use prototypes::{BuiltinPrototype, StatelessBuiltinPrototype};
 use {
     core_bpf_migration::CoreBpfMigrationConfig,
-    solana_sdk::{bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable, feature_set},
+    solana_feature_set as feature_set,
+    solana_sdk::{bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable},
 };
 
 macro_rules! testable_prototype {
@@ -56,7 +57,7 @@ pub static BUILTINS: &[BuiltinPrototype] = &[
         core_bpf_migration_config: Some(CoreBpfMigrationConfig {
             source_buffer_address: buffer_accounts::config_program::id(),
             upgrade_authority_address: None,
-            feature_id: solana_sdk::feature_set::migrate_config_program_to_core_bpf::id(),
+            feature_id: solana_feature_set::migrate_config_program_to_core_bpf::id(),
             migration_target: core_bpf_migration::CoreBpfMigrationTargetType::Builtin,
             datapoint_name: "migrate_builtin_to_core_bpf_config_program",
         }),
@@ -97,8 +98,7 @@ pub static BUILTINS: &[BuiltinPrototype] = &[
         core_bpf_migration_config: Some(CoreBpfMigrationConfig {
             source_buffer_address: buffer_accounts::address_lookup_table_program::id(),
             upgrade_authority_address: None,
-            feature_id:
-                solana_sdk::feature_set::migrate_address_lookup_table_program_to_core_bpf::id(),
+            feature_id: solana_feature_set::migrate_address_lookup_table_program_to_core_bpf::id(),
             migration_target: core_bpf_migration::CoreBpfMigrationTargetType::Builtin,
             datapoint_name: "migrate_builtin_to_core_bpf_address_lookup_table_program",
         }),
@@ -134,7 +134,7 @@ pub static STATELESS_BUILTINS: &[StatelessBuiltinPrototype] = &[StatelessBuiltin
     core_bpf_migration_config: Some(CoreBpfMigrationConfig {
         source_buffer_address: buffer_accounts::feature_gate_program::id(),
         upgrade_authority_address: None,
-        feature_id: solana_sdk::feature_set::migrate_feature_gate_program_to_core_bpf::id(),
+        feature_id: solana_feature_set::migrate_feature_gate_program_to_core_bpf::id(),
         migration_target: core_bpf_migration::CoreBpfMigrationTargetType::Stateless,
         datapoint_name: "migrate_stateless_to_core_bpf_feature_gate_program",
     }),

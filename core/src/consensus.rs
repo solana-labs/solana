@@ -1,4 +1,4 @@
-use {crate::replay_stage::DUPLICATE_THRESHOLD, solana_sdk::feature_set};
+use crate::replay_stage::DUPLICATE_THRESHOLD;
 
 pub mod fork_choice;
 pub mod heaviest_subtree_fork_choice;
@@ -594,7 +594,7 @@ impl Tower {
             bank.slot(),
             bank.hash(),
             bank.feature_set
-                .is_active(&feature_set::enable_tower_sync_ix::id()),
+                .is_active(&solana_feature_set::enable_tower_sync_ix::id()),
         )
     }
 

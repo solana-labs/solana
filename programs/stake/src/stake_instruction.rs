@@ -9,7 +9,6 @@ use {
         declare_process_instruction, sysvar_cache::get_sysvar_with_account_check,
     },
     solana_sdk::{
-        feature_set,
         instruction::InstructionError,
         program_utils::limited_deserialize,
         pubkey::Pubkey,
@@ -340,7 +339,7 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
         StakeInstruction::MoveStake(lamports) => {
             if invoke_context
                 .get_feature_set()
-                .is_active(&feature_set::move_stake_and_move_lamports_ixs::id())
+                .is_active(&solana_feature_set::move_stake_and_move_lamports_ixs::id())
             {
                 instruction_context.check_number_of_instruction_accounts(3)?;
                 move_stake(
@@ -359,7 +358,7 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
         StakeInstruction::MoveLamports(lamports) => {
             if invoke_context
                 .get_feature_set()
-                .is_active(&feature_set::move_stake_and_move_lamports_ixs::id())
+                .is_active(&solana_feature_set::move_stake_and_move_lamports_ixs::id())
             {
                 instruction_context.check_number_of_instruction_accounts(3)?;
                 move_lamports(
@@ -391,6 +390,7 @@ mod tests {
         },
         assert_matches::assert_matches,
         bincode::serialize,
+        solana_feature_set::FeatureSet,
         solana_program_runtime::invoke_context::mock_process_instruction,
         solana_sdk::{
             account::{
@@ -400,7 +400,6 @@ mod tests {
             account_utils::StateMut,
             clock::{Clock, Epoch, UnixTimestamp},
             epoch_schedule::EpochSchedule,
-            feature_set::FeatureSet,
             instruction::{AccountMeta, Instruction},
             pubkey::Pubkey,
             rent::Rent,
@@ -437,7 +436,7 @@ mod tests {
         let mut feature_set = feature_set_all_enabled();
         Arc::get_mut(&mut feature_set)
             .unwrap()
-            .deactivate(&feature_set::stake_raise_minimum_delegation_to_1_sol::id());
+            .deactivate(&solana_feature_set::stake_raise_minimum_delegation_to_1_sol::id());
         feature_set
     }
 

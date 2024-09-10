@@ -22,6 +22,7 @@ use {
     solana_client::connection_cache::{ConnectionCache, Protocol},
     solana_entry::entry::Entry,
     solana_faucet::faucet::request_airdrop_transaction,
+    solana_feature_set as feature_set,
     solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
     solana_inline_spl::{
         token::{SPL_TOKEN_ACCOUNT_MINT_OFFSET, SPL_TOKEN_ACCOUNT_OWNER_OFFSET},
@@ -67,7 +68,6 @@ use {
         epoch_rewards_hasher::EpochRewardsHasher,
         epoch_schedule::EpochSchedule,
         exit::Exit,
-        feature_set,
         hash::Hash,
         message::SanitizedMessage,
         pubkey::{Pubkey, PUBKEY_BYTES},

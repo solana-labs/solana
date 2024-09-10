@@ -4,6 +4,7 @@ use {
         SyscallMemset, SyscallSetReturnData,
     },
     solana_compute_budget::compute_budget::ComputeBudget,
+    solana_feature_set::FeatureSet,
     solana_program_runtime::{
         invoke_context::InvokeContext,
         loaded_programs::{
@@ -18,7 +19,6 @@ use {
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{Clock, UnixTimestamp},
-        feature_set::FeatureSet,
         native_loader,
         pubkey::Pubkey,
         slot_hashes::Slot,

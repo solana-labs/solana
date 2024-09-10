@@ -3,9 +3,9 @@
 extern crate test;
 use {
     rand0_7::{thread_rng, Rng},
+    solana_feature_set::FeatureSet,
     solana_sdk::{
         ed25519_instruction::new_ed25519_instruction,
-        feature_set::FeatureSet,
         hash::Hash,
         signature::{Keypair, Signer},
         transaction::Transaction,

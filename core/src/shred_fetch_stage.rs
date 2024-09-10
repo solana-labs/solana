@@ -5,6 +5,7 @@ use {
     bytes::Bytes,
     crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, Sender},
     itertools::Itertools,
+    solana_feature_set::{self as feature_set, FeatureSet},
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::shred::{should_discard_shred, ShredFetchStats},
     solana_perf::packet::{PacketBatch, PacketBatchRecycler, PacketFlags, PACKETS_PER_BATCH},
@@ -12,7 +13,6 @@ use {
     solana_sdk::{
         clock::{Slot, DEFAULT_MS_PER_SLOT},
         epoch_schedule::EpochSchedule,
-        feature_set::{self, FeatureSet},
         genesis_config::ClusterType,
         packet::{Meta, PACKET_DATA_SIZE},
         pubkey::Pubkey,

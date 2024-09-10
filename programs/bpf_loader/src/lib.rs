@@ -6,6 +6,9 @@ pub mod syscalls;
 
 use {
     solana_compute_budget::compute_budget::MAX_INSTRUCTION_STACK_DEPTH,
+    solana_feature_set::{
+        bpf_account_data_direct_mapping, enable_bpf_loader_set_authority_checked_ix,
+    },
     solana_log_collector::{ic_logger_msg, ic_msg, LogCollector},
     solana_measure::measure::Measure,
     solana_program_runtime::{
@@ -34,9 +37,6 @@ use {
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::Slot,
         entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
-        feature_set::{
-            bpf_account_data_direct_mapping, enable_bpf_loader_set_authority_checked_ix,
-        },
         instruction::{AccountMeta, InstructionError},
         loader_upgradeable_instruction::UpgradeableLoaderInstruction,
         loader_v4, native_loader,

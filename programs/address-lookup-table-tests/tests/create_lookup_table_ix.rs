@@ -9,7 +9,6 @@ use {
             state::{AddressLookupTable, LOOKUP_TABLE_META_SIZE},
         },
         clock::Slot,
-        feature_set,
         instruction::InstructionError,
         pubkey::Pubkey,
         rent::Rent,
@@ -28,7 +27,7 @@ pub async fn setup_test_context_without_authority_feature() -> ProgramTestContex
         Some(solana_address_lookup_table_program::processor::Entrypoint::vm),
     );
     program_test.deactivate_feature(
-        feature_set::relax_authority_signer_check_for_lookup_table_creation::id(),
+        solana_feature_set::relax_authority_signer_check_for_lookup_table_creation::id(),
     );
     program_test.start_with_context().await
 }

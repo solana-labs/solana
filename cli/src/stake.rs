@@ -43,7 +43,6 @@ use {
         clock::{Clock, UnixTimestamp, SECONDS_PER_DAY},
         commitment_config::CommitmentConfig,
         epoch_schedule::EpochSchedule,
-        feature_set,
         message::Message,
         native_token::Sol,
         pubkey::Pubkey,
@@ -2567,7 +2566,7 @@ pub fn process_show_stake_account(
             })?;
             let new_rate_activation_epoch = get_feature_activation_epoch(
                 rpc_client,
-                &feature_set::reduce_stake_warmup_cooldown::id(),
+                &solana_feature_set::reduce_stake_warmup_cooldown::id(),
             )?;
 
             let mut state = build_stake_state(

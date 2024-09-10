@@ -5,6 +5,7 @@ use {
     },
     crossbeam_channel::{Receiver, RecvTimeoutError, SendError, Sender},
     rayon::{prelude::*, ThreadPool, ThreadPoolBuilder},
+    solana_feature_set as feature_set,
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{
         leader_schedule_cache::LeaderScheduleCache,
@@ -19,7 +20,6 @@ use {
     },
     solana_sdk::{
         clock::Slot,
-        feature_set,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
     },

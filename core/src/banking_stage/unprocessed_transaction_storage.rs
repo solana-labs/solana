@@ -18,11 +18,12 @@ use {
     itertools::Itertools,
     min_max_heap::MinMaxHeap,
     solana_accounts_db::account_locks::validate_account_locks,
+    solana_feature_set::FeatureSet,
     solana_measure::measure_us,
     solana_runtime::bank::Bank,
     solana_sdk::{
-        clock::FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET, feature_set::FeatureSet, hash::Hash,
-        saturating_add_assign, transaction::SanitizedTransaction,
+        clock::FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET, hash::Hash, saturating_add_assign,
+        transaction::SanitizedTransaction,
     },
     solana_svm::transaction_error_metrics::TransactionErrorMetrics,
     std::{

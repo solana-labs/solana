@@ -22,6 +22,7 @@ percentage = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
 solana-compute-budget = { workspace = true }
+solana-feature-set = { workspace = true }
 solana-frozen-abi = { workspace = true, optional = true }
 solana-frozen-abi-macro = { workspace = true, optional = true }
 solana-log-collector = { workspace = true }

@@ -1,4 +1,5 @@
 use {
+    solana_feature_set as feature_set,
     solana_log_collector::ic_msg,
     solana_program_runtime::{declare_process_instruction, invoke_context::InvokeContext},
     solana_sdk::{
@@ -11,7 +12,6 @@ use {
             },
         },
         clock::Slot,
-        feature_set,
         instruction::InstructionError,
         program_utils::limited_deserialize,
         pubkey::{Pubkey, PUBKEY_BYTES},

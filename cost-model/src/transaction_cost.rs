@@ -199,8 +199,8 @@ mod tests {
     use {
         super::*,
         crate::cost_model::CostModel,
+        solana_feature_set::FeatureSet,
         solana_sdk::{
-            feature_set::FeatureSet,
             hash::Hash,
             message::SimpleAddressLoader,
             reserved_account_keys::ReservedAccountKeys,

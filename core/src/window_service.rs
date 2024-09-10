@@ -19,6 +19,7 @@ use {
     },
     crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, Sender},
     rayon::{prelude::*, ThreadPool},
+    solana_feature_set as feature_set,
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{
         blockstore::{Blockstore, BlockstoreInsertionMetrics, PossibleDuplicateShred},
@@ -30,10 +31,7 @@ use {
     solana_perf::packet::{Packet, PacketBatch},
     solana_rayon_threadlimit::get_thread_count,
     solana_runtime::bank_forks::BankForks,
-    solana_sdk::{
-        clock::{Slot, DEFAULT_MS_PER_SLOT},
-        feature_set,
-    },
+    solana_sdk::clock::{Slot, DEFAULT_MS_PER_SLOT},
     solana_turbine::cluster_nodes,
     std::{
         cmp::Reverse,

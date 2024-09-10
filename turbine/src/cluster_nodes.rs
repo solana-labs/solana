@@ -4,6 +4,7 @@ use {
     lazy_lru::LruCache,
     rand::{seq::SliceRandom, Rng, SeedableRng},
     rand_chacha::ChaChaRng,
+    solana_feature_set as feature_set,
     solana_gossip::{
         cluster_info::ClusterInfo,
         contact_info::{ContactInfo, Protocol},
@@ -16,7 +17,6 @@ use {
     solana_runtime::bank::Bank,
     solana_sdk::{
         clock::{Epoch, Slot},
-        feature_set,
         genesis_config::ClusterType,
         native_token::LAMPORTS_PER_SOL,
         pubkey::Pubkey,

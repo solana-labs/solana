@@ -12,15 +12,13 @@ use {
     },
     solana_client::connection_cache::ConnectionCache,
     solana_connection_cache::client_connection::ClientConnection as TpuConnection,
+    solana_feature_set::FeatureSet,
     solana_gossip::cluster_info::ClusterInfo,
     solana_measure::measure_us,
     solana_perf::{data_budget::DataBudget, packet::Packet},
     solana_poh::poh_recorder::PohRecorder,
     solana_runtime::bank_forks::BankForks,
-    solana_sdk::{
-        feature_set::FeatureSet, pubkey::Pubkey, transaction::SanitizedTransaction,
-        transport::TransportError,
-    },
+    solana_sdk::{pubkey::Pubkey, transaction::SanitizedTransaction, transport::TransportError},
     solana_streamer::sendmmsg::batch_send,
     std::{
         iter::repeat,

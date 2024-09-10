@@ -44,7 +44,6 @@ use {
     },
     solana_sdk::{
         clock::{Slot, MAX_PROCESSING_AGE},
-        feature_set,
         genesis_config::GenesisConfig,
         hash::Hash,
         pubkey::Pubkey,
@@ -173,7 +172,7 @@ pub fn execute_batch(
 
     let (check_block_cost_limits_result, check_block_cost_limits_us) = measure_us!(if bank
         .feature_set
-        .is_active(&feature_set::apply_cost_tracker_during_replay::id())
+        .is_active(&solana_feature_set::apply_cost_tracker_during_replay::id())
     {
         check_block_cost_limits(bank, &commit_results, batch.sanitized_transactions())
     } else {

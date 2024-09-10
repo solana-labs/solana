@@ -12,11 +12,11 @@ use {
     solana_compute_budget::compute_budget_limits::{
         DEFAULT_HEAP_COST, DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT, MAX_COMPUTE_UNIT_LIMIT,
     },
+    solana_feature_set::{self as feature_set, FeatureSet},
     solana_runtime_transaction::instructions_processor::process_compute_budget_instructions,
     solana_sdk::{
         borsh1::try_from_slice_unchecked,
         compute_budget::{self, ComputeBudgetInstruction},
-        feature_set::{self, FeatureSet},
         fee::FeeStructure,
         instruction::CompiledInstruction,
         program_utils::limited_deserialize,

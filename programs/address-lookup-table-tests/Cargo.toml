@@ -15,6 +15,7 @@ edition = { workspace = true }
 assert_matches = { workspace = true }
 bincode = { workspace = true }
 solana-address-lookup-table-program = { workspace = true }
+solana-feature-set = { workspace = true }
 solana-program-test = { workspace = true }
 solana-sdk = { workspace = true }
 

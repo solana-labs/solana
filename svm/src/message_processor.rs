@@ -138,6 +138,7 @@ mod tests {
     use {
         super::*,
         solana_compute_budget::compute_budget::ComputeBudget,
+        solana_feature_set::FeatureSet,
         solana_program_runtime::{
             declare_process_instruction,
             invoke_context::EnvironmentConfig,
@@ -146,7 +147,6 @@ mod tests {
         },
         solana_sdk::{
             account::{AccountSharedData, ReadableAccount},
-            feature_set::FeatureSet,
             hash::Hash,
             instruction::{AccountMeta, Instruction, InstructionError},
             message::{AccountKeys, Message, SanitizedMessage},

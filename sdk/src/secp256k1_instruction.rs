@@ -788,15 +788,12 @@
 #![cfg(feature = "full")]
 
 use {
-    crate::{
-        feature_set::{
-            libsecp256k1_fail_on_bad_count, libsecp256k1_fail_on_bad_count2, FeatureSet,
-        },
-        instruction::Instruction,
-        precompiles::PrecompileError,
-    },
+    crate::{instruction::Instruction, precompiles::PrecompileError},
     digest::Digest,
     serde_derive::{Deserialize, Serialize},
+    solana_feature_set::{
+        libsecp256k1_fail_on_bad_count, libsecp256k1_fail_on_bad_count2, FeatureSet,
+    },
 };
 
 pub const HASHED_PUBKEY_SERIALIZED_SIZE: usize = 20;
@@ -1040,7 +1037,6 @@ pub mod test {
     use {
         super::*,
         crate::{
-            feature_set,
             hash::Hash,
             keccak,
             secp256k1_instruction::{
@@ -1224,7 +1220,7 @@ pub mod test {
         let message_arr = b"hello";
         let mut secp_instruction = new_secp256k1_instruction(&secp_privkey, message_arr);
         let mint_keypair = Keypair::new();
-        let feature_set = feature_set::FeatureSet::all_enabled();
+        let feature_set = solana_feature_set::FeatureSet::all_enabled();
 
         let tx = Transaction::new_signed_with_payer(
             &[secp_instruction.clone()],

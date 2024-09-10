@@ -1,9 +1,9 @@
 use {
     log::*,
+    solana_feature_set::{FeatureSet, FEATURE_NAMES},
     solana_sdk::{
         account::{Account, AccountSharedData},
         feature::{self, Feature},
-        feature_set::{FeatureSet, FEATURE_NAMES},
         fee_calculator::FeeRateGovernor,
         genesis_config::{ClusterType, GenesisConfig},
         native_token::sol_to_lamports,

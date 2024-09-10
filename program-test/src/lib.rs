@@ -16,6 +16,7 @@ use {
     solana_banks_server::banks_server::start_local_server,
     solana_bpf_loader_program::serialization::serialize_parameters,
     solana_compute_budget::compute_budget::ComputeBudget,
+    solana_feature_set::FEATURE_NAMES,
     solana_log_collector::ic_msg,
     solana_program_runtime::{
         invoke_context::BuiltinFunctionWithContext, loaded_programs::ProgramCacheEntry, stable_log,
@@ -33,7 +34,6 @@ use {
         account_info::AccountInfo,
         clock::{Epoch, Slot},
         entrypoint::{deserialize, ProgramResult, SUCCESS},
-        feature_set::FEATURE_NAMES,
         fee_calculator::{FeeRateGovernor, DEFAULT_TARGET_LAMPORTS_PER_SIGNATURE},
         genesis_config::{ClusterType, GenesisConfig},
         hash::Hash,

@@ -5,10 +5,9 @@
     note = "Please use `solana_sdk::stake::program::id` or `solana_program::stake::program::id` instead"
 )]
 pub use solana_sdk::stake::program::{check_id, id};
-use solana_sdk::{
-    feature_set::{self, FeatureSet},
-    genesis_config::GenesisConfig,
-    native_token::LAMPORTS_PER_SOL,
+use {
+    solana_feature_set::{self as feature_set, FeatureSet},
+    solana_sdk::{genesis_config::GenesisConfig, native_token::LAMPORTS_PER_SOL},
 };
 
 pub mod config;
