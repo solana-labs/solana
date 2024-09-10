@@ -4059,7 +4059,7 @@ impl AccountsDb {
     /// for duplicate pubkeys, the account with the highest write_value is returned
     pub fn get_unique_accounts_from_storage(
         &self,
-        store: &Arc<AccountStorageEntry>,
+        store: &AccountStorageEntry,
     ) -> GetUniqueAccountsResult {
         let capacity = store.capacity();
         let mut stored_accounts = Vec::with_capacity(store.count());
@@ -4120,7 +4120,7 @@ impl AccountsDb {
 
     pub(crate) fn get_unique_accounts_from_storage_for_shrink(
         &self,
-        store: &Arc<AccountStorageEntry>,
+        store: &AccountStorageEntry,
         stats: &ShrinkStats,
     ) -> GetUniqueAccountsResult {
         let (result, storage_read_elapsed_us) =
@@ -4138,7 +4138,7 @@ impl AccountsDb {
     /// note 'unique_accounts' is passed by ref so we can return references to data within it, avoiding self-references
     pub(crate) fn shrink_collect<'a: 'b, 'b, T: ShrinkCollectRefs<'b>>(
         &self,
-        store: &'a Arc<AccountStorageEntry>,
+        store: &'a AccountStorageEntry,
         unique_accounts: &'b GetUniqueAccountsResult,
         stats: &ShrinkStats,
     ) -> ShrinkCollect<'b, T> {
@@ -4353,7 +4353,7 @@ impl AccountsDb {
         );
     }
 
-    fn do_shrink_slot_store(&self, slot: Slot, store: &Arc<AccountStorageEntry>) {
+    fn do_shrink_slot_store(&self, slot: Slot, store: &AccountStorageEntry) {
         if self.accounts_cache.contains(slot) {
             // It is not correct to shrink a slot while it is in the write cache until flush is complete and the slot is removed from the write cache.
             // There can exist a window after a slot is made a root and before the write cache flushing for that slot begins and then completes.
