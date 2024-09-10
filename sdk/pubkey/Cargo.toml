@@ -1,0 +1,80 @@
+[package]
+name = "solana-pubkey"
+description = "Solana account addresses"
+documentation = "https://docs.rs/solana-pubkey"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+arbitrary = { workspace = true, features = ["derive"], optional = true }
+borsh = { workspace = true, optional = true }
+borsh0-10 = { package = "borsh", version = "0.10.3", optional = true }
+bs58 = { workspace = true }
+bytemuck = { workspace = true, optional = true }
+bytemuck_derive = { workspace = true, optional = true }
+num-traits = { workspace = true }
+serde = { workspace = true, optional = true }
+serde_derive = { workspace = true, optional = true }
+solana-atomic-u64 = { workspace = true }
+solana-decode-error = { workspace = true }
+solana-frozen-abi = { workspace = true, optional = true }
+solana-frozen-abi-macro = { workspace = true, optional = true }
+solana-sanitize = { workspace = true }
+
+[target.'cfg(target_os = "solana")'.dependencies]
+solana-define-syscall = { workspace = true }
+solana-sha256-hasher = { workspace = true }
+
+[target.'cfg(not(target_os = "solana"))'.dependencies]
+curve25519-dalek = { workspace = true, optional = true }
+solana-sha256-hasher = { workspace = true, optional = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { workspace = true, features = ["js", "wasm-bindgen"] }
+js-sys = { workspace = true }
+wasm-bindgen = { workspace = true }
+
+[dev-dependencies]
+anyhow = { workspace = true }
+arbitrary = { workspace = true, features = ["derive"] }
+bs58 = { workspace = true, features = ["alloc"] }
+rand = { workspace = true }
+# circular dev deps need to be path deps for `cargo publish` to be happy,
+# and for now the doc tests need solana-program
+solana-program = { path = "../program" }
+solana-pubkey = { path = ".", features = [
+    "borsh",
+    "curve25519",
+    "dev-context-only-utils",
+    "std",
+] }
+strum = { workspace = true }
+strum_macros = { workspace = true }
+
+[build-dependencies]
+rustc_version = { workspace = true, optional = true }
+
+[features]
+borsh = ["dep:borsh", "dep:borsh0-10", "std"]
+bytemuck = ["dep:bytemuck", "dep:bytemuck_derive"]
+curve25519 = ["dep:curve25519-dalek", "sha2"]
+default = ["std"]
+dev-context-only-utils = ["dep:arbitrary", "std"]
+frozen-abi = [
+    "dep:rustc_version",
+    "dep:solana-frozen-abi",
+    "dep:solana-frozen-abi-macro"
+]
+serde = ["dep:serde", "dep:serde_derive"]
+sha2 = ["dep:solana-sha256-hasher", "solana-sha256-hasher/sha2"]
+std = []
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[lints]
+workspace = true

@@ -31,6 +31,7 @@ declare print_free_tree=(
   ':^sdk/msg/src/lib.rs'
   ':^sdk/program-option/src/lib.rs'
   ':^sdk/program/src/program_stubs.rs'
+  ':^sdk/pubkey/src/lib.rs'
   ':programs/**.rs'
   ':^**bin**.rs'
   ':^**bench**.rs'

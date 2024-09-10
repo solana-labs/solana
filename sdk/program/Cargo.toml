@@ -44,6 +44,7 @@ solana-hash = { workspace = true, features = [
 solana-msg = { workspace = true }
 solana-program-memory = { workspace = true }
 solana-program-option = { workspace = true }
+solana-pubkey = { workspace = true, features = ["bytemuck", "curve25519", "serde", "std"] }
 solana-sanitize = { workspace = true }
 solana-sdk-macro = { workspace = true }
 solana-secp256k1-recover = { workspace = true }
@@ -91,6 +92,7 @@ assert_matches = { workspace = true }
 itertools = { workspace = true }
 serde_json = { workspace = true }
 serial_test = { workspace = true }
+solana-pubkey = { workspace = true, features = ["dev-context-only-utils"] }
 static_assertions = { workspace = true }
 test-case = { workspace = true }
 
@@ -105,13 +107,14 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 default = ["borsh"]
-borsh = ["dep:borsh", "dep:borsh0-10", "solana-hash/borsh"]
+borsh = ["dep:borsh", "dep:borsh0-10", "solana-hash/borsh", "solana-pubkey/borsh"]
 dev-context-only-utils = ["dep:qualifier_attr"]
 frozen-abi = [
     "dep:rustc_version",
     "dep:solana-frozen-abi",
     "dep:solana-frozen-abi-macro",
     "solana-hash/frozen-abi",
+    "solana-pubkey/frozen-abi",
     "solana-short-vec/frozen-abi"
 ]
 

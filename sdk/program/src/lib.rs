@@ -511,7 +511,6 @@ pub mod program_error;
 pub mod program_pack;
 pub mod program_stubs;
 pub mod program_utils;
-pub mod pubkey;
 pub mod rent;
 pub mod secp256k1_program;
 pub mod serialize_utils;
@@ -539,7 +538,10 @@ pub use solana_serde_varint as serde_varint;
 pub use solana_short_vec as short_vec;
 #[cfg(target_arch = "wasm32")]
 pub use wasm_bindgen::prelude::wasm_bindgen;
-pub use {solana_clock as clock, solana_msg::msg, solana_program_option as program_option};
+pub use {
+    solana_clock as clock, solana_msg::msg, solana_program_option as program_option,
+    solana_pubkey as pubkey,
+};
 
 /// The [config native program][np].
 ///

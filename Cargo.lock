@@ -7082,6 +7082,7 @@ dependencies = [
  "solana-msg",
  "solana-program-memory",
  "solana-program-option",
+ "solana-pubkey",
  "solana-sanitize",
  "solana-sdk-macro",
  "solana-secp256k1-recover",
@@ -7173,6 +7174,39 @@ dependencies = [
  "test-case",
  "thiserror",
  "tokio",
+]
+
+[[package]]
+name = "solana-pubkey"
+version = "2.1.0"
+dependencies = [
+ "anyhow",
+ "arbitrary",
+ "borsh 0.10.3",
+ "borsh 1.5.1",
+ "bs58",
+ "bytemuck",
+ "bytemuck_derive",
+ "curve25519-dalek 4.1.3",
+ "getrandom 0.2.10",
+ "js-sys",
+ "num-traits",
+ "rand 0.8.5",
+ "rustc_version 0.4.1",
+ "serde",
+ "serde_derive",
+ "solana-atomic-u64",
+ "solana-decode-error",
+ "solana-define-syscall",
+ "solana-frozen-abi",
+ "solana-frozen-abi-macro",
+ "solana-program",
+ "solana-pubkey",
+ "solana-sanitize",
+ "solana-sha256-hasher",
+ "strum",
+ "strum_macros",
+ "wasm-bindgen",
 ]
 
 [[package]]

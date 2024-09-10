@@ -406,7 +406,7 @@ impl<I> CircBuf<I> {
 
 #[cfg_attr(
     feature = "frozen-abi",
-    frozen_abi(digest = "EeenjJaSrm9hRM39gK6raRNtzG61hnk7GciUCJJRDUSQ"),
+    frozen_abi(digest = "87ULMjjHnMsPmCTEyzj4KPn2u5gdX1rmgtSdycpbSaLs"),
     derive(AbiExample)
 )]
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone)]

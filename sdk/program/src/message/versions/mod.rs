@@ -34,7 +34,7 @@ pub const MESSAGE_VERSION_PREFIX: u8 = 0x80;
 /// format.
 #[cfg_attr(
     feature = "frozen-abi",
-    frozen_abi(digest = "3g49yJ9ZZPsT9iF6Za6FyWXV259vWcY6gfJ94uzQ5BcY"),
+    frozen_abi(digest = "EjjHMjAnRrd86DuTgysFXRicMiAQv3vTvzRzcMJCjYfC"),
     derive(AbiEnumVisitor, AbiExample)
 )]
 #[derive(Debug, PartialEq, Eq, Clone)]
