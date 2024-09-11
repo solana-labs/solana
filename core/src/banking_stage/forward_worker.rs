@@ -4,6 +4,7 @@ use {
         scheduler_messages::{FinishedForwardWork, ForwardWork},
         ForwardOption,
     },
+    crate::banking_stage::LikeClusterInfo,
     crossbeam_channel::{Receiver, RecvError, SendError, Sender},
     thiserror::Error,
 };
@@ -16,19 +17,19 @@ pub enum ForwardWorkerError {
     Send(#[from] SendError<FinishedForwardWork>),
 }
 
-pub(crate) struct ForwardWorker {
+pub(crate) struct ForwardWorker<T: LikeClusterInfo> {
     forward_receiver: Receiver<ForwardWork>,
     forward_option: ForwardOption,
-    forwarder: Forwarder,
+    forwarder: Forwarder<T>,
     forwarded_sender: Sender<FinishedForwardWork>,
 }
 
 #[allow(dead_code)]
-impl ForwardWorker {
+impl<T: LikeClusterInfo> ForwardWorker<T> {
     pub fn new(
         forward_receiver: Receiver<ForwardWork>,
         forward_option: ForwardOption,
-        forwarder: Forwarder,
+        forwarder: Forwarder<T>,
         forwarded_sender: Sender<FinishedForwardWork>,
     ) -> Self {
         Self {
@@ -90,6 +91,7 @@ mod tests {
         },
         crossbeam_channel::unbounded,
         solana_client::connection_cache::ConnectionCache,
+        solana_gossip::cluster_info::ClusterInfo,
         solana_ledger::{
             blockstore::Blockstore, genesis_utils::GenesisConfigInfo,
             get_tmp_ledger_path_auto_delete, leader_schedule_cache::LeaderScheduleCache,
@@ -121,7 +123,7 @@ mod tests {
         forwarded_receiver: Receiver<FinishedForwardWork>,
     }
 
-    fn setup_test_frame() -> (TestFrame, ForwardWorker) {
+    fn setup_test_frame() -> (TestFrame, ForwardWorker<Arc<ClusterInfo>>) {
         let GenesisConfigInfo {
             genesis_config,
             mint_keypair,

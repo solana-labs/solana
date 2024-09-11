@@ -6,14 +6,15 @@ use {
         ForwardOption,
     },
     crate::{
-        banking_stage::immutable_deserialized_packet::ImmutableDeserializedPacket,
+        banking_stage::{
+            immutable_deserialized_packet::ImmutableDeserializedPacket, LikeClusterInfo,
+        },
         next_leader::{next_leader, next_leader_tpu_vote},
         tracer_packet_stats::TracerPacketStats,
     },
     solana_client::connection_cache::ConnectionCache,
     solana_connection_cache::client_connection::ClientConnection as TpuConnection,
     solana_feature_set::FeatureSet,
-    solana_gossip::cluster_info::ClusterInfo,
     solana_measure::measure_us,
     solana_perf::{data_budget::DataBudget, packet::Packet},
     solana_poh::poh_recorder::PohRecorder,
@@ -27,21 +28,21 @@ use {
     },
 };
 
-pub struct Forwarder {
+pub struct Forwarder<T: LikeClusterInfo> {
     poh_recorder: Arc<RwLock<PohRecorder>>,
     bank_forks: Arc<RwLock<BankForks>>,
     socket: UdpSocket,
-    cluster_info: Arc<ClusterInfo>,
+    cluster_info: T,
     connection_cache: Arc<ConnectionCache>,
     data_budget: Arc<DataBudget>,
     forward_packet_batches_by_accounts: ForwardPacketBatchesByAccounts,
 }
 
-impl Forwarder {
+impl<T: LikeClusterInfo> Forwarder<T> {
     pub fn new(
         poh_recorder: Arc<RwLock<PohRecorder>>,
         bank_forks: Arc<RwLock<BankForks>>,
-        cluster_info: Arc<ClusterInfo>,
+        cluster_info: T,
         connection_cache: Arc<ConnectionCache>,
         data_budget: Arc<DataBudget>,
     ) -> Self {
@@ -307,7 +308,7 @@ mod tests {
             unprocessed_packet_batches::{DeserializedPacket, UnprocessedPacketBatches},
             unprocessed_transaction_storage::ThreadType,
         },
-        solana_gossip::cluster_info::Node,
+        solana_gossip::cluster_info::{ClusterInfo, Node},
         solana_ledger::{blockstore::Blockstore, genesis_utils::GenesisConfigInfo},
         solana_perf::packet::PacketFlags,
         solana_poh::{poh_recorder::create_test_recorder, poh_service::PohService},

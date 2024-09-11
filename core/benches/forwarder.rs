@@ -34,7 +34,7 @@ use {
 struct BenchSetup {
     exit: Arc<AtomicBool>,
     poh_service: PohService,
-    forwarder: Forwarder,
+    forwarder: Forwarder<Arc<ClusterInfo>>,
     unprocessed_packet_batches: UnprocessedTransactionStorage,
     tracker: LeaderSlotMetricsTracker,
     stats: BankingStageStats,

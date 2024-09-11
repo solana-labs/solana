@@ -299,6 +299,14 @@ impl SlotMetaWorkingSetEntry {
     }
 }
 
+pub fn banking_trace_path(path: &Path) -> PathBuf {
+    path.join("banking_trace")
+}
+
+pub fn banking_retrace_path(path: &Path) -> PathBuf {
+    path.join("banking_retrace")
+}
+
 impl Blockstore {
     pub fn db(self) -> Arc<Database> {
         self.db
@@ -309,7 +317,11 @@ impl Blockstore {
     }
 
     pub fn banking_trace_path(&self) -> PathBuf {
-        self.ledger_path.join("banking_trace")
+        banking_trace_path(&self.ledger_path)
+    }
+
+    pub fn banking_retracer_path(&self) -> PathBuf {
+        banking_retrace_path(&self.ledger_path)
     }
 
     /// Opens a Ledger in directory, provides "infinite" window of shreds

@@ -32,7 +32,7 @@ solana-bpf-loader-program = { workspace = true }
 solana-clap-utils = { workspace = true }
 solana-cli-output = { workspace = true }
 solana-compute-budget = { workspace = true }
-solana-core = { workspace = true }
+solana-core = { workspace = true, features = ["dev-context-only-utils"] }
 solana-cost-model = { workspace = true }
 solana-entry = { workspace = true }
 solana-feature-set = { workspace = true }

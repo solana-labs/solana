@@ -42,7 +42,7 @@ pub enum TraceError {
     TooSmallDirByteLimit(DirByteLimit, DirByteLimit),
 }
 
-const BASENAME: &str = "events";
+pub(crate) const BASENAME: &str = "events";
 const TRACE_FILE_ROTATE_COUNT: u64 = 14; // target 2 weeks retention under normal load
 const TRACE_FILE_WRITE_INTERVAL_MS: u64 = 100;
 const BUF_WRITER_CAPACITY: usize = 10 * 1024 * 1024;
@@ -358,6 +358,14 @@ impl TracedSender {
             }
         }
         self.sender.send(batch)
+    }
+
+    pub fn len(&self) -> usize {
+        self.sender.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 }
 

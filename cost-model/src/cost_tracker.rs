@@ -106,6 +106,16 @@ impl Default for CostTracker {
 }
 
 impl CostTracker {
+    pub fn new_from_parent_limits(&self) -> Self {
+        let mut new = Self::default();
+        new.set_limits(
+            self.account_cost_limit,
+            self.block_cost_limit,
+            self.vote_cost_limit,
+        );
+        new
+    }
+
     pub fn reset(&mut self) {
         self.cost_by_writable_accounts.clear();
         self.block_cost = 0;
@@ -190,6 +200,10 @@ impl CostTracker {
 
     pub fn block_cost(&self) -> u64 {
         self.block_cost
+    }
+
+    pub fn vote_cost(&self) -> u64 {
+        self.vote_cost
     }
 
     pub fn transaction_count(&self) -> u64 {

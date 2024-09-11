@@ -1,4 +1,5 @@
 use {
+    crate::banking_stage::LikeClusterInfo,
     itertools::Itertools,
     solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
     solana_poh::poh_recorder::PohRecorder,
@@ -34,14 +35,14 @@ pub(crate) fn upcoming_leader_tpu_vote_sockets(
 }
 
 pub(crate) fn next_leader_tpu_vote(
-    cluster_info: &ClusterInfo,
+    cluster_info: &impl LikeClusterInfo,
     poh_recorder: &RwLock<PohRecorder>,
 ) -> Option<(Pubkey, SocketAddr)> {
     next_leader(cluster_info, poh_recorder, ContactInfo::tpu_vote)
 }
 
 pub(crate) fn next_leader<F, E>(
-    cluster_info: &ClusterInfo,
+    cluster_info: &impl LikeClusterInfo,
     poh_recorder: &RwLock<PohRecorder>,
     port_selector: F,
 ) -> Option<(Pubkey, SocketAddr)>

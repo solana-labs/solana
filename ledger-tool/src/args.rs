@@ -214,6 +214,8 @@ pub fn parse_process_options(ledger_path: &Path, arg_matches: &ArgMatches<'_>) -
     let debug_keys = pubkeys_of(arg_matches, "debug_key")
         .map(|pubkeys| Arc::new(pubkeys.into_iter().collect::<HashSet<_>>()));
     let allow_dead_slots = arg_matches.is_present("allow_dead_slots");
+    let abort_on_invalid_block = arg_matches.is_present("abort_on_invalid_block");
+    let no_block_cost_limits = arg_matches.is_present("no_block_cost_limits");
 
     ProcessOptions {
         new_hard_forks,
@@ -230,6 +232,8 @@ pub fn parse_process_options(ledger_path: &Path, arg_matches: &ArgMatches<'_>) -
         allow_dead_slots,
         halt_at_slot,
         use_snapshot_archives_at_startup,
+        abort_on_invalid_block,
+        no_block_cost_limits,
         ..ProcessOptions::default()
     }
 }
