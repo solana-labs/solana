@@ -490,9 +490,10 @@ mod tests {
             [initial_num_active_validators + 2]
             .node_keypair
             .pubkey();
+        let now = timestamp();
         let super_old_validator_last_voted_slots = RestartLastVotedForkSlots::new(
             super_old_validator,
-            timestamp(),
+            now,
             &[root_slot - 1],
             Hash::default(),
             SHRED_VERSION,
@@ -506,7 +507,7 @@ mod tests {
                 last_voted_fork_slots: vec![],
                 last_vote_bankhash: Hash::default().to_string(),
                 shred_version: SHRED_VERSION as u32,
-                wallclock: timestamp(),
+                wallclock: now,
             }),
         );
         assert_eq!(
