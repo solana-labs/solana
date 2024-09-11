@@ -456,7 +456,10 @@ impl BankingStage {
         let batch_limit =
             TOTAL_BUFFERED_PACKETS / ((num_threads - NUM_VOTE_PROCESSING_THREADS) as usize);
         // Keeps track of extraneous vote transactions for the vote threads
-        let latest_unprocessed_votes = Arc::new(LatestUnprocessedVotes::new());
+        let latest_unprocessed_votes = {
+            let bank = bank_forks.read().unwrap().working_bank();
+            Arc::new(LatestUnprocessedVotes::new(&bank))
+        };
 
         let decision_maker = DecisionMaker::new(cluster_info.id(), poh_recorder.clone());
         let committer = Committer::new(
@@ -539,7 +542,10 @@ impl BankingStage {
         // Once an entry has been recorded, its blockhash is registered with the bank.
         let data_budget = Arc::new(DataBudget::default());
         // Keeps track of extraneous vote transactions for the vote threads
-        let latest_unprocessed_votes = Arc::new(LatestUnprocessedVotes::new());
+        let latest_unprocessed_votes = {
+            let bank = bank_forks.read().unwrap().working_bank();
+            Arc::new(LatestUnprocessedVotes::new(&bank))
+        };
 
         let decision_maker = DecisionMaker::new(cluster_info.id(), poh_recorder.clone());
         let committer = Committer::new(

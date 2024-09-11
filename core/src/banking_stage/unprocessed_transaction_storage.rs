@@ -414,6 +414,13 @@ impl UnprocessedTransactionStorage {
             ),
         }
     }
+
+    pub(crate) fn cache_epoch_boundary_info(&mut self, bank: &Bank) {
+        match self {
+            Self::LocalTransactionStorage(_) => (),
+            Self::VoteStorage(vote_storage) => vote_storage.cache_epoch_boundary_info(bank),
+        }
+    }
 }
 
 impl VoteStorage {
@@ -451,6 +458,8 @@ impl VoteStorage {
                     LatestValidatorVotePacket::new_from_immutable(
                         Arc::new(deserialized_packet),
                         self.vote_source,
+                        self.latest_unprocessed_votes
+                            .should_deprecate_legacy_vote_ixs(),
                     )
                     .ok()
                 }),
@@ -514,6 +523,10 @@ impl VoteStorage {
             should_process_packet,
         );
 
+        let deprecate_legacy_vote_ixs = self
+            .latest_unprocessed_votes
+            .should_deprecate_legacy_vote_ixs();
+
         while let Some((packets, payload)) = scanner.iterate() {
             let vote_packets = packets.iter().map(|p| (*p).clone()).collect_vec();
 
@@ -523,6 +536,7 @@ impl VoteStorage {
                         LatestValidatorVotePacket::new_from_immutable(
                             vote_packets[*i].clone(),
                             self.vote_source,
+                            deprecate_legacy_vote_ixs,
                         )
                         .ok()
                     }),
@@ -531,7 +545,12 @@ impl VoteStorage {
             } else {
                 self.latest_unprocessed_votes.insert_batch(
                     vote_packets.into_iter().filter_map(|packet| {
-                        LatestValidatorVotePacket::new_from_immutable(packet, self.vote_source).ok()
+                        LatestValidatorVotePacket::new_from_immutable(
+                            packet,
+                            self.vote_source,
+                            deprecate_legacy_vote_ixs,
+                        )
+                        .ok()
                     }),
                     true, // should_replenish_taken_votes
                 );
@@ -539,6 +558,14 @@ impl VoteStorage {
         }
 
         scanner.finalize().payload.reached_end_of_slot
+    }
+
+    fn cache_epoch_boundary_info(&mut self, bank: &Bank) {
+        if matches!(self.vote_source, VoteSource::Gossip) {
+            panic!("Gossip vote thread should not be checking epoch boundary");
+        }
+        self.latest_unprocessed_votes
+            .cache_epoch_boundary_info(bank);
     }
 }
 
@@ -1246,9 +1273,16 @@ mod tests {
             assert!(deserialized_packets.contains(&big_transfer));
         }
 
-        for vote_source in [VoteSource::Gossip, VoteSource::Tpu] {
+        for (vote_source, staked) in [VoteSource::Gossip, VoteSource::Tpu]
+            .into_iter()
+            .flat_map(|vs| [(vs, true), (vs, false)])
+        {
+            let latest_unprocessed_votes = LatestUnprocessedVotes::default();
+            if staked {
+                latest_unprocessed_votes.set_staked_nodes(&[keypair.pubkey()]);
+            }
             let mut transaction_storage = UnprocessedTransactionStorage::new_vote_storage(
-                Arc::new(LatestUnprocessedVotes::new()),
+                Arc::new(latest_unprocessed_votes),
                 vote_source,
             );
             transaction_storage.insert_batch(vec![
@@ -1256,7 +1290,7 @@ mod tests {
                 ImmutableDeserializedPacket::new(vote.clone())?,
                 ImmutableDeserializedPacket::new(big_transfer.clone())?,
             ]);
-            assert_eq!(1, transaction_storage.len());
+            assert_eq!(if staked { 1 } else { 0 }, transaction_storage.len());
         }
         Ok(())
     }
@@ -1282,8 +1316,10 @@ mod tests {
         )?;
         vote.meta_mut().flags.set(PacketFlags::SIMPLE_VOTE_TX, true);
 
+        let latest_unprocessed_votes = LatestUnprocessedVotes::default();
+        latest_unprocessed_votes.set_staked_nodes(&[node_keypair.pubkey()]);
         let mut transaction_storage = UnprocessedTransactionStorage::new_vote_storage(
-            Arc::new(LatestUnprocessedVotes::new()),
+            Arc::new(latest_unprocessed_votes),
             VoteSource::Tpu,
         );
 

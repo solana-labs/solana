@@ -102,6 +102,9 @@ impl<T: LikeClusterInfo> Forwarder<T> {
         // load all accounts from address loader;
         let current_bank = self.bank_forks.read().unwrap().working_bank();
 
+        // if we have crossed an epoch boundary, recache any state
+        unprocessed_transaction_storage.cache_epoch_boundary_info(&current_bank);
+
         // sanitize and filter packets that are no longer valid (could be too old, a duplicate of something
         // already processed), then add to forwarding buffer.
         let filter_forwarding_result = unprocessed_transaction_storage
