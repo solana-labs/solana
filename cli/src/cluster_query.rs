@@ -1436,9 +1436,10 @@ pub fn process_ping(
     rpc_client: &RpcClient,
 ) -> ProcessResult {
     let (signal_sender, signal_receiver) = unbounded();
-    match ctrlc::try_set_handler(move || {
+    let handler = move || {
         let _ = signal_sender.send(());
-    }) {
+    };
+    match ctrlc::try_set_handler(handler) {
         // It's possible to set the ctrl-c handler more than once in testing
         // situations, so let that case through
         Err(ctrlc::Error::MultipleHandlers) => {}
