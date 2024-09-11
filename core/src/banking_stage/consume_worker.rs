@@ -275,7 +275,6 @@ impl ConsumeWorkerMetrics {
             collect_balances_us,
             load_execute_us,
             freeze_lock_us,
-            last_blockhash_us,
             record_us,
             commit_us,
             find_and_send_votes_us,
@@ -291,9 +290,6 @@ impl ConsumeWorkerMetrics {
         self.timing_metrics
             .freeze_lock_us
             .fetch_add(*freeze_lock_us, Ordering::Relaxed);
-        self.timing_metrics
-            .last_blockhash_us
-            .fetch_add(*last_blockhash_us, Ordering::Relaxed);
         self.timing_metrics
             .record_us
             .fetch_add(*record_us, Ordering::Relaxed);
@@ -494,7 +490,6 @@ struct ConsumeWorkerTimingMetrics {
     collect_balances_us: AtomicU64,
     load_execute_us: AtomicU64,
     freeze_lock_us: AtomicU64,
-    last_blockhash_us: AtomicU64,
     record_us: AtomicU64,
     commit_us: AtomicU64,
     find_and_send_votes_us: AtomicU64,
@@ -525,11 +520,6 @@ impl ConsumeWorkerTimingMetrics {
             (
                 "freeze_lock_us",
                 self.freeze_lock_us.swap(0, Ordering::Relaxed),
-                i64
-            ),
-            (
-                "last_blockhash_us",
-                self.last_blockhash_us.swap(0, Ordering::Relaxed),
                 i64
             ),
             ("record_us", self.record_us.swap(0, Ordering::Relaxed), i64),

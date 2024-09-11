@@ -1,8 +1,8 @@
 use {
     core::borrow::Borrow,
     solana_sdk::{
-        account::AccountSharedData, nonce::state::DurableNonce, pubkey::Pubkey,
-        transaction::SanitizedTransaction, transaction_context::TransactionAccount,
+        account::AccountSharedData, pubkey::Pubkey, transaction::SanitizedTransaction,
+        transaction_context::TransactionAccount,
     },
     solana_svm::{
         rollback_accounts::RollbackAccounts,
@@ -51,9 +51,7 @@ fn max_number_of_accounts_to_collect(
 pub fn collect_accounts_to_store<'a, T: SVMMessage>(
     txs: &'a [T],
     txs_refs: &'a Option<Vec<impl Borrow<SanitizedTransaction>>>,
-    processing_results: &'a mut [TransactionProcessingResult],
-    durable_nonce: &DurableNonce,
-    lamports_per_signature: u64,
+    processing_results: &'a [TransactionProcessingResult],
 ) -> (
     Vec<(&'a Pubkey, &'a AccountSharedData)>,
     Option<Vec<&'a SanitizedTransaction>>,
@@ -63,10 +61,9 @@ pub fn collect_accounts_to_store<'a, T: SVMMessage>(
     let mut transactions = txs_refs
         .is_some()
         .then(|| Vec::with_capacity(collect_capacity));
-    for (index, (processing_result, transaction)) in
-        processing_results.iter_mut().zip(txs).enumerate()
+    for (index, (processing_result, transaction)) in processing_results.iter().zip(txs).enumerate()
     {
-        let Some(processed_tx) = processing_result.processed_transaction_mut() else {
+        let Some(processed_tx) = processing_result.processed_transaction() else {
             // Don't store any accounts if tx wasn't executed
             continue;
         };
@@ -88,9 +85,7 @@ pub fn collect_accounts_to_store<'a, T: SVMMessage>(
                         &mut transactions,
                         transaction,
                         transaction_ref,
-                        &mut executed_tx.loaded_transaction.rollback_accounts,
-                        durable_nonce,
-                        lamports_per_signature,
+                        &executed_tx.loaded_transaction.rollback_accounts,
                     );
                 }
             }
@@ -100,9 +95,7 @@ pub fn collect_accounts_to_store<'a, T: SVMMessage>(
                     &mut transactions,
                     transaction,
                     transaction_ref,
-                    &mut fees_only_tx.rollback_accounts,
-                    durable_nonce,
-                    lamports_per_signature,
+                    &fees_only_tx.rollback_accounts,
                 );
             }
         }
@@ -142,25 +135,18 @@ fn collect_accounts_for_failed_tx<'a, T: SVMMessage>(
     collected_account_transactions: &mut Option<Vec<&'a SanitizedTransaction>>,
     transaction: &'a T,
     transaction_ref: Option<&'a SanitizedTransaction>,
-    rollback_accounts: &'a mut RollbackAccounts,
-    durable_nonce: &DurableNonce,
-    lamports_per_signature: u64,
+    rollback_accounts: &'a RollbackAccounts,
 ) {
     let fee_payer_address = transaction.fee_payer();
     match rollback_accounts {
         RollbackAccounts::FeePayerOnly { fee_payer_account } => {
-            collected_accounts.push((fee_payer_address, &*fee_payer_account));
+            collected_accounts.push((fee_payer_address, fee_payer_account));
             if let Some(collected_account_transactions) = collected_account_transactions {
                 collected_account_transactions
                     .push(transaction_ref.expect("transaction ref must exist if collecting"));
             }
         }
         RollbackAccounts::SameNonceAndFeePayer { nonce } => {
-            // Since we know we are dealing with a valid nonce account,
-            // unwrap is safe here
-            nonce
-                .try_advance_nonce(*durable_nonce, lamports_per_signature)
-                .unwrap();
             collected_accounts.push((nonce.address(), nonce.account()));
             if let Some(collected_account_transactions) = collected_account_transactions {
                 collected_account_transactions
@@ -171,17 +157,12 @@ fn collect_accounts_for_failed_tx<'a, T: SVMMessage>(
             nonce,
             fee_payer_account,
         } => {
-            collected_accounts.push((fee_payer_address, &*fee_payer_account));
+            collected_accounts.push((fee_payer_address, fee_payer_account));
             if let Some(collected_account_transactions) = collected_account_transactions {
                 collected_account_transactions
                     .push(transaction_ref.expect("transaction ref must exist if collecting"));
             }
 
-            // Since we know we are dealing with a valid nonce account,
-            // unwrap is safe here
-            nonce
-                .try_advance_nonce(*durable_nonce, lamports_per_signature)
-                .unwrap();
             collected_accounts.push((nonce.address(), nonce.account()));
             if let Some(collected_account_transactions) = collected_account_transactions {
                 collected_account_transactions
@@ -204,7 +185,7 @@ mod tests {
             message::Message,
             native_loader,
             nonce::{
-                state::{Data as NonceData, Versions as NonceVersions},
+                state::{Data as NonceData, DurableNonce, Versions as NonceVersions},
                 State as NonceState,
             },
             nonce_account,
@@ -315,7 +296,7 @@ mod tests {
         };
 
         let txs = vec![tx0.clone(), tx1.clone()];
-        let mut processing_results = vec![
+        let processing_results = vec![
             new_executed_processing_result(Ok(()), loaded0),
             new_executed_processing_result(Ok(()), loaded1),
         ];
@@ -324,13 +305,8 @@ mod tests {
 
         for collect_transactions in [false, true] {
             let transaction_refs = collect_transactions.then(|| txs.iter().collect::<Vec<_>>());
-            let (collected_accounts, transactions) = collect_accounts_to_store(
-                &txs,
-                &transaction_refs,
-                &mut processing_results,
-                &DurableNonce::default(),
-                0,
-            );
+            let (collected_accounts, transactions) =
+                collect_accounts_to_store(&txs, &transaction_refs, &processing_results);
             assert_eq!(collected_accounts.len(), 2);
             assert!(collected_accounts
                 .iter()
@@ -383,7 +359,7 @@ mod tests {
         };
 
         let txs = vec![tx];
-        let mut processing_results = vec![new_executed_processing_result(
+        let processing_results = vec![new_executed_processing_result(
             Err(TransactionError::InstructionError(
                 1,
                 InstructionError::InvalidArgument,
@@ -392,17 +368,11 @@ mod tests {
         )];
         let max_collected_accounts = max_number_of_accounts_to_collect(&txs, &processing_results);
         assert_eq!(max_collected_accounts, 1);
-        let durable_nonce = DurableNonce::from_blockhash(&Hash::new_unique());
 
         for collect_transactions in [false, true] {
             let transaction_refs = collect_transactions.then(|| txs.iter().collect::<Vec<_>>());
-            let (collected_accounts, transactions) = collect_accounts_to_store(
-                &txs,
-                &transaction_refs,
-                &mut processing_results,
-                &durable_nonce,
-                0,
-            );
+            let (collected_accounts, transactions) =
+                collect_accounts_to_store(&txs, &transaction_refs, &processing_results);
             assert_eq!(collected_accounts.len(), 1);
             assert_eq!(
                 collected_accounts
@@ -483,9 +453,8 @@ mod tests {
             loaded_accounts_data_size: 0,
         };
 
-        let durable_nonce = DurableNonce::from_blockhash(&Hash::new_unique());
         let txs = vec![tx];
-        let mut processing_results = vec![new_executed_processing_result(
+        let processing_results = vec![new_executed_processing_result(
             Err(TransactionError::InstructionError(
                 1,
                 InstructionError::InvalidArgument,
@@ -497,13 +466,8 @@ mod tests {
 
         for collect_transactions in [false, true] {
             let transaction_refs = collect_transactions.then(|| txs.iter().collect::<Vec<_>>());
-            let (collected_accounts, transactions) = collect_accounts_to_store(
-                &txs,
-                &transaction_refs,
-                &mut processing_results,
-                &durable_nonce,
-                0,
-            );
+            let (collected_accounts, transactions) =
+                collect_accounts_to_store(&txs, &transaction_refs, &processing_results);
             assert_eq!(collected_accounts.len(), 2);
             assert_eq!(
                 collected_accounts
@@ -597,9 +561,8 @@ mod tests {
             loaded_accounts_data_size: 0,
         };
 
-        let durable_nonce = DurableNonce::from_blockhash(&Hash::new_unique());
         let txs = vec![tx];
-        let mut processing_results = vec![new_executed_processing_result(
+        let processing_results = vec![new_executed_processing_result(
             Err(TransactionError::InstructionError(
                 1,
                 InstructionError::InvalidArgument,
@@ -611,13 +574,8 @@ mod tests {
 
         for collect_transactions in [false, true] {
             let transaction_refs = collect_transactions.then(|| txs.iter().collect::<Vec<_>>());
-            let (collected_accounts, transactions) = collect_accounts_to_store(
-                &txs,
-                &transaction_refs,
-                &mut processing_results,
-                &durable_nonce,
-                0,
-            );
+            let (collected_accounts, transactions) =
+                collect_accounts_to_store(&txs, &transaction_refs, &processing_results);
             assert_eq!(collected_accounts.len(), 1);
             let collected_nonce_account = collected_accounts
                 .iter()
@@ -658,7 +616,7 @@ mod tests {
         let from_account_pre = AccountSharedData::new(4242, 0, &Pubkey::default());
 
         let txs = vec![tx];
-        let mut processing_results = vec![Ok(ProcessedTransaction::FeesOnly(Box::new(
+        let processing_results = vec![Ok(ProcessedTransaction::FeesOnly(Box::new(
             FeesOnlyTransaction {
                 load_error: TransactionError::InvalidProgramForExecution,
                 fee_details: FeeDetails::default(),
@@ -669,17 +627,11 @@ mod tests {
         )))];
         let max_collected_accounts = max_number_of_accounts_to_collect(&txs, &processing_results);
         assert_eq!(max_collected_accounts, 1);
-        let durable_nonce = DurableNonce::from_blockhash(&Hash::new_unique());
 
         for collect_transactions in [false, true] {
             let transaction_refs = collect_transactions.then(|| txs.iter().collect::<Vec<_>>());
-            let (collected_accounts, transactions) = collect_accounts_to_store(
-                &txs,
-                &transaction_refs,
-                &mut processing_results,
-                &durable_nonce,
-                0,
-            );
+            let (collected_accounts, transactions) =
+                collect_accounts_to_store(&txs, &transaction_refs, &processing_results);
             assert_eq!(collected_accounts.len(), 1);
             assert_eq!(
                 collected_accounts

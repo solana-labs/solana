@@ -1,7 +1,9 @@
+#[allow(deprecated)]
+use solana_sdk::sysvar::recent_blockhashes::{Entry as BlockhashesEntry, RecentBlockhashes};
 use {
     solana_bpf_loader_program::syscalls::{
-        SyscallAbort, SyscallGetClockSysvar, SyscallInvokeSignedRust, SyscallLog, SyscallMemcpy,
-        SyscallMemset, SyscallSetReturnData,
+        SyscallAbort, SyscallGetClockSysvar, SyscallGetRentSysvar, SyscallInvokeSignedRust,
+        SyscallLog, SyscallMemcpy, SyscallMemset, SyscallSetReturnData,
     },
     solana_compute_budget::compute_budget::ComputeBudget,
     solana_feature_set::FeatureSet,
@@ -21,6 +23,7 @@ use {
         clock::{Clock, UnixTimestamp},
         native_loader,
         pubkey::Pubkey,
+        rent::Rent,
         slot_hashes::Slot,
         sysvar::SysvarId,
     },
@@ -201,6 +204,8 @@ pub fn create_executable_environment(
     program_cache.fork_graph = Some(Arc::downgrade(&fork_graph));
 
     // We must fill in the sysvar cache entries
+
+    // clock contents are important because we use them for a sysvar loading test
     let clock = Clock {
         slot: DEPLOYMENT_SLOT,
         epoch_start_timestamp: WALLCLOCK_TIME.saturating_sub(10) as UnixTimestamp,
@@ -216,6 +221,31 @@ pub fn create_executable_environment(
         .write()
         .unwrap()
         .insert(Clock::id(), account_data);
+
+    // default rent is fine
+    let rent = Rent::default();
+
+    let mut account_data = AccountSharedData::default();
+    account_data.set_data(bincode::serialize(&rent).unwrap());
+    mock_bank
+        .account_shared_data
+        .write()
+        .unwrap()
+        .insert(Rent::id(), account_data);
+
+    // SystemInstruction::AdvanceNonceAccount asserts RecentBlockhashes is non-empty
+    // but then just gets the blockhash from InvokeContext. so the sysvar doesnt need real entries
+    #[allow(deprecated)]
+    let recent_blockhashes = vec![BlockhashesEntry::default()];
+
+    let mut account_data = AccountSharedData::default();
+    account_data.set_data(bincode::serialize(&recent_blockhashes).unwrap());
+    #[allow(deprecated)]
+    mock_bank
+        .account_shared_data
+        .write()
+        .unwrap()
+        .insert(RecentBlockhashes::id(), account_data);
 }
 
 #[allow(unused)]
@@ -302,6 +332,10 @@ fn create_custom_environment<'a>() -> BuiltinProgram<InvokeContext<'a>> {
 
     function_registry
         .register_function_hashed(*b"sol_get_clock_sysvar", SyscallGetClockSysvar::vm)
+        .expect("Registration failed");
+
+    function_registry
+        .register_function_hashed(*b"sol_get_rent_sysvar", SyscallGetRentSysvar::vm)
         .expect("Registration failed");
 
     BuiltinProgram::new_loader(vm_config, function_registry)

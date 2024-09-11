@@ -475,8 +475,8 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
             fee_details.total_fee(),
         )?;
 
-        // Capture fee-subtracted fee payer account and original nonce account state
-        // to rollback to if transaction execution fails.
+        // Capture fee-subtracted fee payer account and next nonce account state
+        // to commit if transaction execution fails.
         let rollback_accounts = RollbackAccounts::new(
             nonce,
             *fee_payer_address,
@@ -2180,13 +2180,14 @@ mod tests {
         let lamports_per_signature = 5000;
         let rent_collector = RentCollector::default();
         let compute_unit_limit = 2 * solana_compute_budget_program::DEFAULT_COMPUTE_UNITS;
+        let last_blockhash = Hash::new_unique();
         let message = new_unchecked_sanitized_message(Message::new_with_blockhash(
             &[
                 ComputeBudgetInstruction::set_compute_unit_limit(compute_unit_limit as u32),
                 ComputeBudgetInstruction::set_compute_unit_price(1_000_000),
             ],
             Some(&Pubkey::new_unique()),
-            &Hash::new_unique(),
+            &last_blockhash,
         ));
         let compute_budget_limits =
             process_compute_budget_instructions(SVMMessage::program_instructions_iter(&message))
@@ -2216,10 +2217,12 @@ mod tests {
 
             let mut error_counters = TransactionErrorMetrics::default();
             let batch_processor = TransactionBatchProcessor::<TestForkGraph>::default();
+
             let nonce = Some(NonceInfo::new(
                 *fee_payer_address,
                 fee_payer_account.clone(),
             ));
+
             let result = batch_processor.validate_transaction_fee_payer(
                 &mock_bank,
                 None,

@@ -666,17 +666,6 @@ impl Consumer {
         let (freeze_lock, freeze_lock_us) = measure_us!(bank.freeze_lock());
         execute_and_commit_timings.freeze_lock_us = freeze_lock_us;
 
-        // In order to avoid a race condition, leaders must get the last
-        // blockhash *before* recording transactions because recording
-        // transactions will only succeed if the block max tick height hasn't
-        // been reached yet. If they get the last blockhash *after* recording
-        // transactions, the block max tick height could have already been
-        // reached and the blockhash queue could have already been updated with
-        // a new blockhash.
-        let ((last_blockhash, lamports_per_signature), last_blockhash_us) =
-            measure_us!(bank.last_blockhash_and_lamports_per_signature());
-        execute_and_commit_timings.last_blockhash_us = last_blockhash_us;
-
         let (record_transactions_summary, record_us) = measure_us!(self
             .transaction_recorder
             .record_transactions(bank.slot(), processed_transactions));
@@ -713,8 +702,6 @@ impl Consumer {
                 self.committer.commit_transactions(
                     batch,
                     processing_results,
-                    last_blockhash,
-                    lamports_per_signature,
                     starting_transaction_index,
                     bank,
                     &mut pre_balance_info,

@@ -128,7 +128,6 @@ use {
         message::{AccountKeys, SanitizedMessage},
         native_loader,
         native_token::LAMPORTS_PER_SOL,
-        nonce::state::DurableNonce,
         packet::PACKET_DATA_SIZE,
         precompiles::get_precompiles,
         pubkey::Pubkey,
@@ -3017,8 +3016,11 @@ impl Bank {
             blockhash_queue.get_lamports_per_signature(message.recent_blockhash())
         }
         .or_else(|| {
-            self.load_message_nonce_account(message)
-                .map(|(_nonce, nonce_data)| nonce_data.get_lamports_per_signature())
+            self.load_message_nonce_account(message).map(
+                |(_nonce_address, _nonce_account, nonce_data)| {
+                    nonce_data.get_lamports_per_signature()
+                },
+            )
         })?;
         Some(self.get_fee_for_message_with_lamports_per_signature(message, lamports_per_signature))
     }
@@ -3762,9 +3764,7 @@ impl Bank {
     pub fn commit_transactions(
         &self,
         sanitized_txs: &[SanitizedTransaction],
-        mut processing_results: Vec<TransactionProcessingResult>,
-        last_blockhash: Hash,
-        lamports_per_signature: u64,
+        processing_results: Vec<TransactionProcessingResult>,
         processed_counts: &ProcessedTransactionCounts,
         timings: &mut ExecuteTimings,
     ) -> Vec<TransactionCommitResult> {
@@ -3799,8 +3799,6 @@ impl Bank {
         }
 
         let ((), store_accounts_us) = measure_us!({
-            let durable_nonce = DurableNonce::from_blockhash(&last_blockhash);
-
             // If geyser is present, we must collect `SanitizedTransaction`
             // references in order to comply with that interface - until it
             // is changed.
@@ -3813,9 +3811,7 @@ impl Bank {
             let (accounts_to_store, transactions) = collect_accounts_to_store(
                 sanitized_txs,
                 &maybe_transaction_refs,
-                &mut processing_results,
-                &durable_nonce,
-                lamports_per_signature,
+                &processing_results,
             );
             self.rc.accounts.store_cached(
                 (self.slot(), accounts_to_store.as_slice()),
@@ -4634,13 +4630,9 @@ impl Bank {
             },
         );
 
-        let (last_blockhash, lamports_per_signature) =
-            self.last_blockhash_and_lamports_per_signature();
         let commit_results = self.commit_transactions(
             batch.sanitized_transactions(),
             processing_results,
-            last_blockhash,
-            lamports_per_signature,
             &processed_counts,
             timings,
         );

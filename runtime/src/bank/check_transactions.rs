@@ -3,13 +3,21 @@ use {
     solana_accounts_db::blockhash_queue::BlockhashQueue,
     solana_perf::perf_libs,
     solana_sdk::{
+        account::AccountSharedData,
+        account_utils::StateMut,
         clock::{
             MAX_PROCESSING_AGE, MAX_TRANSACTION_FORWARDING_DELAY,
             MAX_TRANSACTION_FORWARDING_DELAY_GPU,
         },
         message::SanitizedMessage,
-        nonce::{self, state::DurableNonce, NONCED_TX_MARKER_IX_INDEX},
+        nonce::{
+            state::{
+                Data as NonceData, DurableNonce, State as NonceState, Versions as NonceVersions,
+            },
+            NONCED_TX_MARKER_IX_INDEX,
+        },
         nonce_account,
+        pubkey::Pubkey,
         transaction::{Result as TransactionResult, SanitizedTransaction, TransactionError},
     },
     solana_svm::{
@@ -71,6 +79,10 @@ impl Bank {
         let hash_queue = self.blockhash_queue.read().unwrap();
         let last_blockhash = hash_queue.last_hash();
         let next_durable_nonce = DurableNonce::from_blockhash(&last_blockhash);
+        // safe so long as the BlockhashQueue is consistent
+        let next_lamports_per_signature = hash_queue
+            .get_lamports_per_signature(&last_blockhash)
+            .unwrap();
 
         sanitized_txs
             .iter()
@@ -81,6 +93,7 @@ impl Bank {
                     max_age,
                     &next_durable_nonce,
                     &hash_queue,
+                    next_lamports_per_signature,
                     error_counters,
                 ),
                 Err(e) => Err(e.clone()),
@@ -94,6 +107,7 @@ impl Bank {
         max_age: usize,
         next_durable_nonce: &DurableNonce,
         hash_queue: &BlockhashQueue,
+        next_lamports_per_signature: u64,
         error_counters: &mut TransactionErrorMetrics,
     ) -> TransactionCheckResult {
         let recent_blockhash = tx.message().recent_blockhash();
@@ -102,12 +116,16 @@ impl Bank {
                 nonce: None,
                 lamports_per_signature: hash_info.lamports_per_signature(),
             })
-        } else if let Some((nonce, nonce_data)) =
-            self.check_and_load_message_nonce_account(tx.message(), next_durable_nonce)
+        } else if let Some((nonce, previous_lamports_per_signature)) = self
+            .check_load_and_advance_message_nonce_account(
+                tx.message(),
+                next_durable_nonce,
+                next_lamports_per_signature,
+            )
         {
             Ok(CheckedTransactionDetails {
                 nonce: Some(nonce),
-                lamports_per_signature: nonce_data.get_lamports_per_signature(),
+                lamports_per_signature: previous_lamports_per_signature,
             })
         } else {
             error_counters.blockhash_not_found += 1;
@@ -115,23 +133,40 @@ impl Bank {
         }
     }
 
-    pub(super) fn check_and_load_message_nonce_account(
+    pub(super) fn check_load_and_advance_message_nonce_account(
         &self,
         message: &SanitizedMessage,
         next_durable_nonce: &DurableNonce,
-    ) -> Option<(NonceInfo, nonce::state::Data)> {
+        next_lamports_per_signature: u64,
+    ) -> Option<(NonceInfo, u64)> {
         let nonce_is_advanceable = message.recent_blockhash() != next_durable_nonce.as_hash();
-        if nonce_is_advanceable {
-            self.load_message_nonce_account(message)
-        } else {
-            None
+        if !nonce_is_advanceable {
+            return None;
         }
+
+        let (nonce_address, mut nonce_account, nonce_data) =
+            self.load_message_nonce_account(message)?;
+
+        let previous_lamports_per_signature = nonce_data.get_lamports_per_signature();
+        let next_nonce_state = NonceState::new_initialized(
+            &nonce_data.authority,
+            *next_durable_nonce,
+            next_lamports_per_signature,
+        );
+        nonce_account
+            .set_state(&NonceVersions::new(next_nonce_state))
+            .ok()?;
+
+        Some((
+            NonceInfo::new(nonce_address, nonce_account),
+            previous_lamports_per_signature,
+        ))
     }
 
     pub(super) fn load_message_nonce_account(
         &self,
         message: &SanitizedMessage,
-    ) -> Option<(NonceInfo, nonce::state::Data)> {
+    ) -> Option<(Pubkey, AccountSharedData, NonceData)> {
         let nonce_address = message.get_durable_nonce()?;
         let nonce_account = self.get_account_with_fixed_root(nonce_address)?;
         let nonce_data =
@@ -144,7 +179,7 @@ impl Bank {
             return None;
         }
 
-        Some((NonceInfo::new(*nonce_address, nonce_account), nonce_data))
+        Some((*nonce_address, nonce_account, nonce_data))
     }
 
     fn check_status_cache(
@@ -200,6 +235,7 @@ mod tests {
 
     #[test]
     fn test_check_and_load_message_nonce_account_ok() {
+        const STALE_LAMPORTS_PER_SIGNATURE: u64 = 42;
         let (bank, _mint_keypair, custodian_keypair, nonce_keypair, _) = setup_nonce_with_bank(
             10_000_000,
             |_| {},
@@ -221,11 +257,37 @@ mod tests {
             Some(&custodian_pubkey),
             &nonce_hash,
         ));
-        let nonce_account = bank.get_account(&nonce_pubkey).unwrap();
+
+        // set a spurious lamports_per_signature value
+        let mut nonce_account = bank.get_account(&nonce_pubkey).unwrap();
         let nonce_data = get_nonce_data_from_account(&nonce_account).unwrap();
+        nonce_account
+            .set_state(&NonceVersions::new(NonceState::new_initialized(
+                &nonce_data.authority,
+                nonce_data.durable_nonce,
+                STALE_LAMPORTS_PER_SIGNATURE,
+            )))
+            .unwrap();
+        bank.store_account(&nonce_pubkey, &nonce_account);
+
+        let nonce_account = bank.get_account(&nonce_pubkey).unwrap();
+        let (_, next_lamports_per_signature) = bank.last_blockhash_and_lamports_per_signature();
+        let mut expected_nonce_info = NonceInfo::new(nonce_pubkey, nonce_account);
+        expected_nonce_info
+            .try_advance_nonce(bank.next_durable_nonce(), next_lamports_per_signature)
+            .unwrap();
+
+        // we now expect to:
+        // * advance the nonce account to the current durable nonce value
+        // * set the blockhash queue's last blockhash's lamports_per_signature value in the nonce data
+        // * retrieve the previous lamports_per_signature value set on the nonce data for transaction fee checks
         assert_eq!(
-            bank.check_and_load_message_nonce_account(&message, &bank.next_durable_nonce()),
-            Some((NonceInfo::new(nonce_pubkey, nonce_account), nonce_data))
+            bank.check_load_and_advance_message_nonce_account(
+                &message,
+                &bank.next_durable_nonce(),
+                next_lamports_per_signature
+            ),
+            Some((expected_nonce_info, STALE_LAMPORTS_PER_SIGNATURE)),
         );
     }
 
@@ -252,8 +314,13 @@ mod tests {
             Some(&custodian_pubkey),
             &nonce_hash,
         ));
+        let (_, lamports_per_signature) = bank.last_blockhash_and_lamports_per_signature();
         assert!(bank
-            .check_and_load_message_nonce_account(&message, &bank.next_durable_nonce())
+            .check_load_and_advance_message_nonce_account(
+                &message,
+                &bank.next_durable_nonce(),
+                lamports_per_signature
+            )
             .is_none());
     }
 
@@ -281,10 +348,12 @@ mod tests {
             &nonce_hash,
         );
         message.instructions[0].accounts.clear();
+        let (_, lamports_per_signature) = bank.last_blockhash_and_lamports_per_signature();
         assert!(bank
-            .check_and_load_message_nonce_account(
+            .check_load_and_advance_message_nonce_account(
                 &new_sanitized_message(message),
                 &bank.next_durable_nonce(),
+                lamports_per_signature,
             )
             .is_none());
     }
@@ -314,8 +383,13 @@ mod tests {
             Some(&custodian_pubkey),
             &nonce_hash,
         ));
+        let (_, lamports_per_signature) = bank.last_blockhash_and_lamports_per_signature();
         assert!(bank
-            .check_and_load_message_nonce_account(&message, &bank.next_durable_nonce())
+            .check_load_and_advance_message_nonce_account(
+                &message,
+                &bank.next_durable_nonce(),
+                lamports_per_signature
+            )
             .is_none());
     }
 
@@ -341,8 +415,13 @@ mod tests {
             Some(&custodian_pubkey),
             &Hash::default(),
         ));
+        let (_, lamports_per_signature) = bank.last_blockhash_and_lamports_per_signature();
         assert!(bank
-            .check_and_load_message_nonce_account(&message, &bank.next_durable_nonce())
+            .check_load_and_advance_message_nonce_account(
+                &message,
+                &bank.next_durable_nonce(),
+                lamports_per_signature
+            )
             .is_none());
     }
 }

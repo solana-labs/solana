@@ -15,7 +15,6 @@ pub trait TransactionProcessingResultExtensions {
     fn was_processed(&self) -> bool;
     fn was_processed_with_successful_result(&self) -> bool;
     fn processed_transaction(&self) -> Option<&ProcessedTransaction>;
-    fn processed_transaction_mut(&mut self) -> Option<&mut ProcessedTransaction>;
     fn flattened_result(&self) -> TransactionResult<()>;
 }
 
@@ -42,13 +41,6 @@ impl TransactionProcessingResultExtensions for TransactionProcessingResult {
     }
 
     fn processed_transaction(&self) -> Option<&ProcessedTransaction> {
-        match self {
-            Ok(processed_tx) => Some(processed_tx),
-            Err(_) => None,
-        }
-    }
-
-    fn processed_transaction_mut(&mut self) -> Option<&mut ProcessedTransaction> {
         match self {
             Ok(processed_tx) => Some(processed_tx),
             Err(_) => None,
