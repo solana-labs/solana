@@ -4353,7 +4353,9 @@ impl AccountsDb {
         );
     }
 
-    fn do_shrink_slot_store(&self, slot: Slot, store: &AccountStorageEntry) {
+    /// Shrinks `store` by rewriting the alive accounts to a new storage
+    fn shrink_storage(&self, store: &AccountStorageEntry) {
+        let slot = store.slot();
         if self.accounts_cache.contains(slot) {
             // It is not correct to shrink a slot while it is in the write cache until flush is complete and the slot is removed from the write cache.
             // There can exist a window after a slot is made a root and before the write cache flushing for that slot begins and then completes.
@@ -4555,10 +4557,9 @@ impl AccountsDb {
             .storage
             .get_slot_storage_entry_shrinking_in_progress_ok(slot)
         {
-            if !Self::is_shrinking_productive(slot, &store) {
-                return;
+            if Self::is_shrinking_productive(slot, &store) {
+                self.shrink_storage(&store)
             }
-            self.do_shrink_slot_store(slot, &store)
         }
     }
 
@@ -5104,7 +5105,7 @@ impl AccountsDb {
                             .fetch_add(1, Ordering::Relaxed);
                     }
                     let mut measure = Measure::start("shrink_candidate_slots-ms");
-                    self.do_shrink_slot_store(slot, &slot_shrink_candidate);
+                    self.shrink_storage(&slot_shrink_candidate);
                     measure.stop();
                     inc_new_counter_info!("shrink_candidate_slots-ms", measure.as_ms() as usize);
                 });
