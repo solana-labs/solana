@@ -299,7 +299,7 @@ fn create_custom_environment<'a>() -> BuiltinProgram<InvokeContext<'a>> {
         noop_instruction_rate: 256,
         sanitize_user_provided_values: true,
         external_internal_function_hash_collision: false,
-        reject_callx_r10: false,
+        reject_callx_r10: true,
         enable_sbpf_v1: true,
         enable_sbpf_v2: false,
         optimize_rodata: false,

@@ -863,6 +863,14 @@ pub mod deprecate_legacy_vote_ixs {
     solana_program::declare_id!("depVvnQ2UysGrhwdiwU42tCadZL8GcBb1i2GYhMopQv");
 }
 
+pub mod disable_sbpf_v1_execution {
+    solana_program::declare_id!("TestFeature11111111111111111111111111111111");
+}
+
+pub mod reenable_sbpf_v1_execution {
+    solana_program::declare_id!("TestFeature21111111111111111111111111111111");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -1073,6 +1081,8 @@ lazy_static! {
         (enable_turbine_extended_fanout_experiments::id(), "enable turbine extended fanout experiments #"),
         (deprecate_legacy_vote_ixs::id(), "Deprecate legacy vote instructions"),
         (partitioned_epoch_rewards_superfeature::id(), "replaces enable_partitioned_epoch_reward to enable partitioned rewards at epoch boundary SIMD-0118"),
+        (disable_sbpf_v1_execution::id(), "Disables execution of SBPFv1 programs"),
+        (reenable_sbpf_v1_execution::id(), "Re-enables execution of SBPFv1 programs"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

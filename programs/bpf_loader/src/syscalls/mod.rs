@@ -21,12 +21,12 @@ use {
     solana_feature_set::{
         self as feature_set, abort_on_invalid_curve, blake3_syscall_enabled,
         bpf_account_data_direct_mapping, curve25519_syscall_enabled,
-        disable_deploy_of_alloc_free_syscall, disable_fees_sysvar,
+        disable_deploy_of_alloc_free_syscall, disable_fees_sysvar, disable_sbpf_v1_execution,
         enable_alt_bn128_compression_syscall, enable_alt_bn128_syscall, enable_big_mod_exp_syscall,
         enable_get_epoch_stake_syscall, enable_partitioned_epoch_reward, enable_poseidon_syscall,
         error_on_syscall_bpf_function_hash_collisions, get_sysvar_syscall_enabled,
-        last_restart_slot_sysvar, partitioned_epoch_rewards_superfeature, reject_callx_r10,
-        remaining_compute_units_syscall_enabled, FeatureSet,
+        last_restart_slot_sysvar, partitioned_epoch_rewards_superfeature,
+        reenable_sbpf_v1_execution, remaining_compute_units_syscall_enabled, FeatureSet,
     },
     solana_log_collector::{ic_logger_msg, ic_msg},
     solana_poseidon as poseidon,
@@ -299,8 +299,9 @@ pub fn create_program_runtime_environment_v1<'a>(
         sanitize_user_provided_values: true,
         external_internal_function_hash_collision: feature_set
             .is_active(&error_on_syscall_bpf_function_hash_collisions::id()),
-        reject_callx_r10: feature_set.is_active(&reject_callx_r10::id()),
-        enable_sbpf_v1: true,
+        reject_callx_r10: true,
+        enable_sbpf_v1: !feature_set.is_active(&disable_sbpf_v1_execution::id())
+            || feature_set.is_active(&reenable_sbpf_v1_execution::id()),
         enable_sbpf_v2: false,
         optimize_rodata: false,
         aligned_memory_mapping: !feature_set.is_active(&bpf_account_data_direct_mapping::id()),
