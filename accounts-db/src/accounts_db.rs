@@ -822,7 +822,7 @@ pub type AtomicAccountsFileId = AtomicU32;
 pub type AccountsFileId = u32;
 
 type AccountSlots = HashMap<Pubkey, IntSet<Slot>>;
-type SlotOffsets = HashMap<Slot, IntSet<usize>>;
+type SlotOffsets = IntMap<Slot, IntSet<usize>>;
 type ReclaimResult = (AccountSlots, SlotOffsets);
 type PubkeysRemovedFromAccountsIndex = HashSet<Pubkey>;
 type ShrinkCandidates = IntSet<Slot>;
