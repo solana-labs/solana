@@ -56,6 +56,7 @@ use {
         transaction_commit_result::{TransactionCommitResult, TransactionCommitResultExtensions},
         transaction_processor::ExecutionRecordingConfig,
     },
+    solana_svm_transaction::svm_transaction::SVMTransaction,
     solana_timings::{report_execute_timings, ExecuteTimingType, ExecuteTimings},
     solana_transaction_status::token_balances::TransactionTokenBalancesSet,
     solana_vote::vote_account::VoteAccountsHashMap,
@@ -77,8 +78,8 @@ use {
 #[cfg(feature = "dev-context-only-utils")]
 use {qualifier_attr::qualifiers, solana_runtime::bank::HashOverrides};
 
-pub struct TransactionBatchWithIndexes<'a, 'b> {
-    pub batch: TransactionBatch<'a, 'b>,
+pub struct TransactionBatchWithIndexes<'a, 'b, Tx: SVMTransaction + Clone> {
+    pub batch: TransactionBatch<'a, 'b, Tx>,
     pub transaction_indexes: Vec<usize>,
 }
 
@@ -98,7 +99,7 @@ fn first_err(results: &[Result<()>]) -> Result<()> {
 
 // Includes transaction signature for unit-testing
 fn get_first_error(
-    batch: &TransactionBatch,
+    batch: &TransactionBatch<SanitizedTransaction>,
     commit_results: &[TransactionCommitResult],
 ) -> Option<(Result<()>, Signature)> {
     let mut first_err = None;
@@ -133,7 +134,7 @@ fn create_thread_pool(num_threads: usize) -> ThreadPool {
 }
 
 pub fn execute_batch(
-    batch: &TransactionBatchWithIndexes,
+    batch: &TransactionBatchWithIndexes<SanitizedTransaction>,
     bank: &Arc<Bank>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
@@ -282,7 +283,7 @@ impl ExecuteBatchesInternalMetrics {
 fn execute_batches_internal(
     bank: &Arc<Bank>,
     replay_tx_thread_pool: &ThreadPool,
-    batches: &[TransactionBatchWithIndexes],
+    batches: &[TransactionBatchWithIndexes<SanitizedTransaction>],
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     log_messages_bytes_limit: Option<usize>,
@@ -360,7 +361,7 @@ fn execute_batches_internal(
 fn process_batches(
     bank: &BankWithScheduler,
     replay_tx_thread_pool: &ThreadPool,
-    batches: &[TransactionBatchWithIndexes],
+    batches: &[TransactionBatchWithIndexes<SanitizedTransaction>],
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     batch_execution_timing: &mut BatchExecutionTiming,
@@ -415,7 +416,7 @@ fn process_batches(
 
 fn schedule_batches_for_execution(
     bank: &BankWithScheduler,
-    batches: &[TransactionBatchWithIndexes],
+    batches: &[TransactionBatchWithIndexes<SanitizedTransaction>],
 ) -> Result<()> {
     for TransactionBatchWithIndexes {
         batch,
@@ -439,7 +440,7 @@ fn rebatch_transactions<'a>(
     start: usize,
     end: usize,
     transaction_indexes: &'a [usize],
-) -> TransactionBatchWithIndexes<'a, 'a> {
+) -> TransactionBatchWithIndexes<'a, 'a, SanitizedTransaction> {
     let txs = &sanitized_txs[start..=end];
     let results = &lock_results[start..=end];
     let mut tx_batch = TransactionBatch::new(results.to_vec(), bank, Cow::from(txs));
@@ -455,7 +456,7 @@ fn rebatch_transactions<'a>(
 fn rebatch_and_execute_batches(
     bank: &Arc<Bank>,
     replay_tx_thread_pool: &ThreadPool,
-    batches: &[TransactionBatchWithIndexes],
+    batches: &[TransactionBatchWithIndexes<SanitizedTransaction>],
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     timing: &mut BatchExecutionTiming,
@@ -494,7 +495,7 @@ fn rebatch_and_execute_batches(
 
     let target_batch_count = get_thread_count() as u64;
 
-    let mut tx_batches: Vec<TransactionBatchWithIndexes> = vec![];
+    let mut tx_batches: Vec<TransactionBatchWithIndexes<SanitizedTransaction>> = vec![];
     let rebatched_txs = if total_cost > target_batch_count.saturating_mul(minimal_tx_cost) {
         let target_batch_cost = total_cost / target_batch_count;
         let mut batch_cost: u64 = 0;

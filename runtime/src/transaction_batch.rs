@@ -1,22 +1,21 @@
 use {
-    crate::bank::Bank,
-    solana_sdk::transaction::{Result, SanitizedTransaction},
-    std::borrow::Cow,
+    crate::bank::Bank, solana_sdk::transaction::Result,
+    solana_svm_transaction::svm_transaction::SVMTransaction, std::borrow::Cow,
 };
 
 // Represents the results of trying to lock a set of accounts
-pub struct TransactionBatch<'a, 'b> {
+pub struct TransactionBatch<'a, 'b, Tx: SVMTransaction + Clone> {
     lock_results: Vec<Result<()>>,
     bank: &'a Bank,
-    sanitized_txs: Cow<'b, [SanitizedTransaction]>,
+    sanitized_txs: Cow<'b, [Tx]>,
     needs_unlock: bool,
 }
 
-impl<'a, 'b> TransactionBatch<'a, 'b> {
+impl<'a, 'b, Tx: SVMTransaction + Clone> TransactionBatch<'a, 'b, Tx> {
     pub fn new(
         lock_results: Vec<Result<()>>,
         bank: &'a Bank,
-        sanitized_txs: Cow<'b, [SanitizedTransaction]>,
+        sanitized_txs: Cow<'b, [Tx]>,
     ) -> Self {
         assert_eq!(lock_results.len(), sanitized_txs.len());
         Self {
@@ -31,7 +30,7 @@ impl<'a, 'b> TransactionBatch<'a, 'b> {
         &self.lock_results
     }
 
-    pub fn sanitized_transactions(&self) -> &[SanitizedTransaction] {
+    pub fn sanitized_transactions(&self) -> &[Tx] {
         &self.sanitized_txs
     }
 
@@ -82,7 +81,7 @@ impl<'a, 'b> TransactionBatch<'a, 'b> {
 }
 
 // Unlock all locked accounts in destructor.
-impl<'a, 'b> Drop for TransactionBatch<'a, 'b> {
+impl<'a, 'b, Tx: SVMTransaction + Clone> Drop for TransactionBatch<'a, 'b, Tx> {
     fn drop(&mut self) {
         if self.needs_unlock() {
             self.set_needs_unlock(false);
@@ -100,7 +99,11 @@ mod tests {
     use {
         super::*,
         crate::genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo},
-        solana_sdk::{signature::Keypair, system_transaction, transaction::TransactionError},
+        solana_sdk::{
+            signature::Keypair,
+            system_transaction,
+            transaction::{SanitizedTransaction, TransactionError},
+        },
     };
 
     #[test]

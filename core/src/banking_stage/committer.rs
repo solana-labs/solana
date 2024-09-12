@@ -12,7 +12,7 @@ use {
         transaction_batch::TransactionBatch,
         vote_sender_types::ReplayVoteSender,
     },
-    solana_sdk::{pubkey::Pubkey, saturating_add_assign},
+    solana_sdk::{pubkey::Pubkey, saturating_add_assign, transaction::SanitizedTransaction},
     solana_svm::{
         transaction_commit_result::{TransactionCommitResult, TransactionCommitResultExtensions},
         transaction_processing_result::{
@@ -67,7 +67,7 @@ impl Committer {
 
     pub(super) fn commit_transactions(
         &self,
-        batch: &TransactionBatch,
+        batch: &TransactionBatch<SanitizedTransaction>,
         processing_results: Vec<TransactionProcessingResult>,
         starting_transaction_index: Option<usize>,
         bank: &Arc<Bank>,
@@ -129,7 +129,7 @@ impl Committer {
         &self,
         commit_results: Vec<TransactionCommitResult>,
         bank: &Arc<Bank>,
-        batch: &TransactionBatch,
+        batch: &TransactionBatch<SanitizedTransaction>,
         pre_balance_info: &mut PreBalanceInfo,
         starting_transaction_index: Option<usize>,
     ) {

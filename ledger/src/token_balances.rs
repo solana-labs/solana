@@ -6,7 +6,7 @@ use {
     solana_measure::measure::Measure,
     solana_metrics::datapoint_debug,
     solana_runtime::{bank::Bank, transaction_batch::TransactionBatch},
-    solana_sdk::{account::ReadableAccount, pubkey::Pubkey},
+    solana_sdk::{account::ReadableAccount, pubkey::Pubkey, transaction::SanitizedTransaction},
     solana_transaction_status::{
         token_balances::TransactionTokenBalances, TransactionTokenBalance,
     },
@@ -37,7 +37,7 @@ fn get_mint_decimals(bank: &Bank, mint: &Pubkey) -> Option<u8> {
 
 pub fn collect_token_balances(
     bank: &Bank,
-    batch: &TransactionBatch,
+    batch: &TransactionBatch<SanitizedTransaction>,
     mint_decimals: &mut HashMap<Pubkey, u8>,
 ) -> TransactionTokenBalances {
     let mut balances: TransactionTokenBalances = vec![];

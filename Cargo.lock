@@ -6729,6 +6729,7 @@ dependencies = [
  "solana-storage-bigtable",
  "solana-storage-proto",
  "solana-svm",
+ "solana-svm-transaction",
  "solana-timings",
  "solana-transaction-status",
  "solana-vote",
