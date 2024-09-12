@@ -5,7 +5,7 @@ sidebar_label: Native Programs
 ---
 
 Solana contains a small handful of native programs, which are required to run
-validator nodes. Unlike third-party programs, the native programs are part of
+validator nodes. Unlike the third-party programs, the native programs are part of
 the validator implementation and can be upgraded as part of cluster upgrades.
 Upgrades may occur to add features, fix bugs, or improve performance. Interface
 changes to individual instructions should rarely, if ever, occur. Instead, when
@@ -13,9 +13,9 @@ change is needed, new instructions are added and previous ones are marked
 deprecated. Apps can upgrade on their own timeline without concern of breakages
 across upgrades.
 
-For each native program the program id and description each supported
-instruction is provided. A transaction can mix and match instructions from different
-programs, as well include instructions from on-chain programs.
+For each native program, the program id and the description of each supported
+instruction are provided. A transaction can mix and match instructions from different
+programs, as well as include instructions from on-chain programs.
 
 ## System Program
 
@@ -27,15 +27,15 @@ transfer lamports from System Program owned accounts and pay transaction fees.
 
 ## Config Program
 
-Add configuration data to the chain and the list of public keys that are permitted to modify it
+Add configuration data to the chain, alongside the list of public keys that are allowed to modify it
 
 - Program id: `Config1111111111111111111111111111111111111`
 - Instructions: [config_instruction](https://docs.rs/solana-config-program/VERSION_FOR_DOCS_RS/solana_config_program/config_instruction/index.html)
 
 Unlike the other programs, the Config program does not define any individual
-instructions. It has just one implicit instruction, a "store" instruction. Its
-instruction data is a set of keys that gate access to the account, and the
-data to store in it.
+instructions. It has just one implicit instruction: "store". Its
+instruction data is a set of keys that gate access to the account and the
+data stored inside it.
 
 ## Stake Program
 
@@ -64,21 +64,21 @@ Deploys, upgrades, and executes programs on the chain.
 - Program id: `BPFLoaderUpgradeab1e11111111111111111111111`
 - Instructions: [LoaderInstruction](https://docs.rs/solana-sdk/VERSION_FOR_DOCS_RS/solana_sdk/loader_upgradeable_instruction/enum.UpgradeableLoaderInstruction.html)
 
-The BPF Upgradeable Loader marks itself as "owner" of the executable and
+The BPF Upgradeable Loader marks itself as the "owner" of the executable and
 program-data accounts it creates to store your program. When a user invokes an
-instruction via a program id, the Solana runtime will load both your the program
+instruction via a program id, the Solana runtime loads both your program
 and its owner, the BPF Upgradeable Loader. The runtime then passes your program
-to the BPF Upgradeable Loader to process the instruction.
+to the BPF Upgradeable Loader for it to process the instruction.
 
 [More information about deployment](../cli/examples/deploy-a-program.md)
 
 ## Ed25519 Program
 
-Verify ed25519 signature program. This program takes an ed25519 signature, public key, and message.
+The program for verifying ed25519 signatures. It takes an ed25519 signature, a public key, and a message.
 Multiple signatures can be verified. If any of the signatures fail to verify, an error is returned.
 
 - Program id: `Ed25519SigVerify111111111111111111111111111`
-- Instructions: [new_ed25519_instruction](https://github.com/solana-labs/solana/blob/master/sdk/src/ed25519_instruction.rs#L45)
+- Instructions: [ed25519_instruction](https://docs.rs/solana-sdk/1.18.18/solana_sdk/ed25519_instruction/index.html)
 
 The ed25519 program processes an instruction. The first `u8` is a count of the number of
 signatures to check, which is followed by a single byte padding. After that, the
@@ -96,7 +96,7 @@ struct Ed25519SignatureOffsets {
 }
 ```
 
-Pseudo code of the operation:
+The pseudo code of the signature verification:
 
 ```
 process_instruction() {
@@ -139,7 +139,7 @@ struct Secp256k1SignatureOffsets {
 }
 ```
 
-Pseudo code of the operation:
+The pseudo code of the verification:
 
 ```
 process_instruction() {
@@ -169,7 +169,7 @@ by the signature cost verify multiplier.
 
 ### Optimization notes
 
-The operation will have to take place after (at least partial) deserialization,
-but all inputs come from the transaction data itself, this allows it to be
-relatively easy to execute in parallel to transaction processing and PoH
+The operation will have to take place after (at least, partial) deserialization,
+but all inputs come from the transaction data itself, which allows it to be
+relatively easy to execute in parallel to the transaction processing and the PoH
 verification.
