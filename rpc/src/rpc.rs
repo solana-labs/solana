@@ -3293,7 +3293,7 @@ pub mod rpc_full {
     use {
         super::*,
         solana_sdk::message::{SanitizedVersionedMessage, VersionedMessage},
-        solana_transaction_status::UiInnerInstructions,
+        solana_transaction_status::parse_ui_inner_instructions,
     };
     #[rpc]
     pub trait Full {
@@ -3884,7 +3884,7 @@ pub mod rpc_full {
 
             let inner_instructions = inner_instructions.map(|info| {
                 map_inner_instructions(info)
-                    .map(|converted| UiInnerInstructions::parse(converted, &account_keys))
+                    .map(|converted| parse_ui_inner_instructions(converted, &account_keys))
                     .collect()
             });
 

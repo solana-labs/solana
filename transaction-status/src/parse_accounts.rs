@@ -2,22 +2,7 @@ use solana_sdk::{
     message::{v0::LoadedMessage, Message},
     reserved_account_keys::ReservedAccountKeys,
 };
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct ParsedAccount {
-    pub pubkey: String,
-    pub writable: bool,
-    pub signer: bool,
-    pub source: Option<ParsedAccountSource>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub enum ParsedAccountSource {
-    Transaction,
-    LookupTable,
-}
+pub use solana_transaction_status_client_types::{ParsedAccount, ParsedAccountSource};
 
 pub fn parse_legacy_message_accounts(message: &Message) -> Vec<ParsedAccount> {
     let reserved_account_keys = ReservedAccountKeys::new_all_activated().active;

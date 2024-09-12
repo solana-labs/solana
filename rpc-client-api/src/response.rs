@@ -8,7 +8,7 @@ use {
         inflation::Inflation,
         transaction::{Result, TransactionError},
     },
-    solana_transaction_status::{
+    solana_transaction_status_client_types::{
         ConfirmedTransactionStatusWithSignature, TransactionConfirmationStatus, UiConfirmedBlock,
         UiInnerInstructions, UiTransactionReturnData,
     },

@@ -141,6 +141,7 @@ members = [
     "transaction-dos",
     "transaction-metrics-tracker",
     "transaction-status",
+    "transaction-status-client-types",
     "transaction-view",
     "turbine",
     "type-overrides",
@@ -432,7 +433,7 @@ solana-remote-wallet = { path = "remote-wallet", version = "=2.1.0", default-fea
 solana-sanitize = { path = "sanitize", version = "=2.1.0" }
 solana-serde-varint = { path = "sdk/serde-varint", version = "=2.1.0" }
 solana-sha256-hasher = { path = "sdk/sha256-hasher", version = "=2.1.0" }
-solana-signature = { path = "sdk/signature", version = "=2.1.0" }
+solana-signature = { path = "sdk/signature", version = "=2.1.0", default-features = false }
 solana-timings = { path = "timings", version = "=2.1.0" }
 solana-unified-scheduler-logic = { path = "unified-scheduler-logic", version = "=2.1.0" }
 solana-unified-scheduler-pool = { path = "unified-scheduler-pool", version = "=2.1.0" }
@@ -461,6 +462,7 @@ solana-test-validator = { path = "test-validator", version = "=2.1.0" }
 solana-thin-client = { path = "thin-client", version = "=2.1.0" }
 solana-tpu-client = { path = "tpu-client", version = "=2.1.0", default-features = false }
 solana-transaction-status = { path = "transaction-status", version = "=2.1.0" }
+solana-transaction-status-client-types = { path = "transaction-status-client-types", version = "=2.1.0" }
 solana-transaction-metrics-tracker = { path = "transaction-metrics-tracker", version = "=2.1.0" }
 solana-turbine = { path = "turbine", version = "=2.1.0" }
 solana-type-overrides = { path = "type-overrides", version = "=2.1.0" }

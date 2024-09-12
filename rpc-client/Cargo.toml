@@ -25,7 +25,7 @@ serde_json = { workspace = true }
 solana-account-decoder = { workspace = true }
 solana-rpc-client-api = { workspace = true }
 solana-sdk = { workspace = true }
-solana-transaction-status = { workspace = true }
+solana-transaction-status-client-types = { workspace = true }
 solana-version = { workspace = true }
 solana-vote-program = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
