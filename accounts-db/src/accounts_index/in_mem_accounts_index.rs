@@ -980,6 +980,13 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> InMemAccountsIndex<T,
         thread_rng().gen_range(0..N) == 0
     }
 
+    /// assumes 1 entry in the slot list. Ignores overhead of the HashMap and such
+    pub const fn approx_size_of_one_entry() -> usize {
+        std::mem::size_of::<T>()
+            + std::mem::size_of::<Pubkey>()
+            + std::mem::size_of::<AccountMapEntry<T>>()
+    }
+
     fn should_evict_based_on_age(
         current_age: Age,
         entry: &AccountMapEntry<T>,
