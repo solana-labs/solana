@@ -4557,7 +4557,7 @@ impl AccountsDb {
             .storage
             .get_slot_storage_entry_shrinking_in_progress_ok(slot)
         {
-            if Self::is_shrinking_productive(slot, &store) {
+            if Self::is_shrinking_productive(&store) {
                 self.shrink_storage(&store)
             }
         }
@@ -8029,7 +8029,7 @@ impl AccountsDb {
         alive_bytes >= total_bytes
     }
 
-    fn is_shrinking_productive(slot: Slot, store: &AccountStorageEntry) -> bool {
+    fn is_shrinking_productive(store: &AccountStorageEntry) -> bool {
         let alive_count = store.count();
         let stored_count = store.approx_stored_count();
         let alive_bytes = store.alive_bytes() as u64;
@@ -8038,7 +8038,7 @@ impl AccountsDb {
         if Self::should_not_shrink(alive_bytes, total_bytes) {
             trace!(
                 "shrink_slot_forced ({}): not able to shrink at all: alive/stored: {}/{} ({}b / {}b) save: {}",
-                slot,
+                store.slot(),
                 alive_count,
                 stored_count,
                 alive_bytes,
@@ -8130,7 +8130,7 @@ impl AccountsDb {
                         offsets.sort_unstable();
                         let dead_bytes = store.accounts.get_account_sizes(&offsets).iter().sum();
                         store.remove_accounts(dead_bytes, reset_accounts, offsets.len());
-                        if Self::is_shrinking_productive(*slot, &store)
+                        if Self::is_shrinking_productive(&store)
                             && self.is_candidate_for_shrink(&store)
                         {
                             // Checking that this single storage entry is ready for shrinking,
@@ -14930,7 +14930,7 @@ pub mod tests {
             AccountsFileProvider::AppendVec,
         ));
         store.add_account(file_size as usize);
-        assert!(!AccountsDb::is_shrinking_productive(slot, &store));
+        assert!(!AccountsDb::is_shrinking_productive(&store));
 
         let store = Arc::new(AccountStorageEntry::new(
             path,
@@ -14942,10 +14942,10 @@ pub mod tests {
         store.add_account(file_size as usize / 2);
         store.add_account(file_size as usize / 4);
         store.remove_accounts(file_size as usize / 4, false, 1);
-        assert!(AccountsDb::is_shrinking_productive(slot, &store));
+        assert!(AccountsDb::is_shrinking_productive(&store));
 
         store.add_account(file_size as usize / 2);
-        assert!(!AccountsDb::is_shrinking_productive(slot, &store));
+        assert!(!AccountsDb::is_shrinking_productive(&store));
     }
 
     #[test]
