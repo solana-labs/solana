@@ -25,7 +25,7 @@ mod scan_account_storage;
 use qualifier_attr::qualifiers;
 use {
     crate::{
-        account_info::{AccountInfo, StorageLocation},
+        account_info::{AccountInfo, Offset, StorageLocation},
         account_storage::{
             meta::StoredAccountMeta, AccountStorage, AccountStorageStatus, ShrinkInProgress,
         },
@@ -822,7 +822,7 @@ pub type AtomicAccountsFileId = AtomicU32;
 pub type AccountsFileId = u32;
 
 type AccountSlots = HashMap<Pubkey, IntSet<Slot>>;
-type SlotOffsets = IntMap<Slot, IntSet<usize>>;
+type SlotOffsets = IntMap<Slot, IntSet<Offset>>;
 type ReclaimResult = (AccountSlots, SlotOffsets);
 type PubkeysRemovedFromAccountsIndex = HashSet<Pubkey>;
 type ShrinkCandidates = IntSet<Slot>;
