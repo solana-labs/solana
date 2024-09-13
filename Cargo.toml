@@ -110,6 +110,7 @@ members = [
     "sdk/feature-set",
     "sdk/gen-headers",
     "sdk/hash",
+    "sdk/instruction",
     "sdk/macro",
     "sdk/msg",
     "sdk/package-metadata-macro",
@@ -403,6 +404,7 @@ solana-geyser-plugin-manager = { path = "geyser-plugin-manager", version = "=2.1
 solana-gossip = { path = "gossip", version = "=2.1.0" }
 solana-hash = { path = "sdk/hash", version = "=2.1.0" }
 solana-inline-spl = { path = "inline-spl", version = "=2.1.0" }
+solana-instruction = { path = "sdk/instruction", version = "=2.1.0", default-features = false }
 solana-lattice-hash = { path = "lattice-hash", version = "=2.1.0" }
 solana-ledger = { path = "ledger", version = "=2.1.0" }
 solana-loader-v4-program = { path = "programs/loader-v4", version = "=2.1.0" }

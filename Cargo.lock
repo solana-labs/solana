@@ -6672,6 +6672,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-instruction"
+version = "2.1.0"
+dependencies = [
+ "bincode",
+ "borsh 1.5.1",
+ "getrandom 0.2.10",
+ "js-sys",
+ "num-traits",
+ "rustc_version 0.4.1",
+ "serde",
+ "serde_derive",
+ "solana-define-syscall",
+ "solana-frozen-abi",
+ "solana-frozen-abi-macro",
+ "solana-instruction",
+ "solana-pubkey",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "solana-keygen"
 version = "2.1.0"
 dependencies = [
@@ -7108,6 +7128,7 @@ dependencies = [
  "solana-frozen-abi",
  "solana-frozen-abi-macro",
  "solana-hash",
+ "solana-instruction",
  "solana-logger",
  "solana-msg",
  "solana-program-memory",
@@ -7191,6 +7212,7 @@ dependencies = [
  "solana-compute-budget",
  "solana-feature-set",
  "solana-inline-spl",
+ "solana-instruction",
  "solana-log-collector",
  "solana-logger",
  "solana-program-runtime",

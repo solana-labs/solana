@@ -1,0 +1,58 @@
+[package]
+name = "solana-instruction"
+description = "Types for directing the execution of Solana programs."
+documentation = "https://docs.rs/solana-instruction"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+bincode = { workspace = true, optional = true }
+borsh = { workspace = true, optional = true }
+num-traits = { workspace = true }
+serde = { workspace = true, optional = true }
+serde_derive = { workspace = true, optional = true }
+solana-frozen-abi = { workspace = true, optional = true }
+solana-frozen-abi-macro = { workspace = true, optional = true }
+solana-pubkey = { workspace = true, default-features = false }
+
+[target.'cfg(target_os = "solana")'.dependencies]
+solana-define-syscall = { workspace = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { workspace = true, features = ["js", "wasm-bindgen"] }
+js-sys = { workspace = true }
+wasm-bindgen = { workspace = true }
+
+[dev-dependencies]
+solana-instruction = { path = ".", features = ["borsh"] }
+
+[build-dependencies]
+rustc_version = { workspace = true, optional = true }
+
+[features]
+bincode = ["dep:bincode", "dep:serde"]
+borsh = ["dep:borsh"]
+default = ["std"]
+frozen-abi = [
+    "dep:rustc_version",
+    "dep:solana-frozen-abi",
+    "dep:solana-frozen-abi-macro",
+    "serde",
+    "std",
+]
+serde = [
+    "dep:serde",
+    "dep:serde_derive",
+    "solana-pubkey/serde",
+]
+std = []
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[lints]
+workspace = true

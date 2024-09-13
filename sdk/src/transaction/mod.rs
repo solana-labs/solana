@@ -200,7 +200,7 @@ pub struct Transaction {
 #[cfg_attr(
     feature = "frozen-abi",
     derive(AbiExample),
-    frozen_abi(digest = "5mA54x7skHmXUoVfvwNSDrSo4F8kXJSrDrKrLMcUkAib")
+    frozen_abi(digest = "H7xQFcd1MtMv9QKZWGatBAXwhg28tpeX59P3s8ZZLAY4")
 )]
 #[derive(Debug, PartialEq, Default, Eq, Clone, Serialize, Deserialize)]
 pub struct Transaction {

@@ -41,6 +41,11 @@ solana-hash = { workspace = true, features = [
     "serde",
     "std",
 ] }
+solana-instruction = { workspace = true, default-features = false, features = [
+    "bincode",
+    "serde",
+    "std",
+] }
 solana-msg = { workspace = true }
 solana-program-memory = { workspace = true }
 solana-program-option = { workspace = true }
@@ -107,13 +112,20 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 default = ["borsh"]
-borsh = ["dep:borsh", "dep:borsh0-10", "solana-hash/borsh", "solana-pubkey/borsh"]
+borsh = [
+    "dep:borsh",
+    "dep:borsh0-10",
+    "solana-hash/borsh",
+    "solana-instruction/borsh",
+    "solana-pubkey/borsh"
+]
 dev-context-only-utils = ["dep:qualifier_attr"]
 frozen-abi = [
     "dep:rustc_version",
     "dep:solana-frozen-abi",
     "dep:solana-frozen-abi-macro",
     "solana-hash/frozen-abi",
+    "solana-instruction/frozen-abi",
     "solana-pubkey/frozen-abi",
     "solana-short-vec/frozen-abi"
 ]

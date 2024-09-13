@@ -25,6 +25,7 @@ solana-bpf-loader-program = { workspace = true }
 solana-compute-budget = { workspace = true }
 solana-feature-set = { workspace = true }
 solana-inline-spl = { workspace = true }
+solana-instruction = { workspace = true }
 solana-log-collector = { workspace = true }
 solana-logger = { workspace = true }
 solana-program-runtime = { workspace = true }

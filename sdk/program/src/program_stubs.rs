@@ -4,10 +4,11 @@
 
 use {
     crate::{
-        account_info::AccountInfo, entrypoint::ProgramResult, instruction::Instruction,
-        program_error::UNSUPPORTED_SYSVAR, pubkey::Pubkey,
+        account_info::AccountInfo, entrypoint::ProgramResult, program_error::UNSUPPORTED_SYSVAR,
+        pubkey::Pubkey,
     },
     base64::{prelude::BASE64_STANDARD, Engine},
+    solana_instruction::Instruction,
     solana_program_memory::stubs,
     std::sync::{Arc, RwLock},
 };

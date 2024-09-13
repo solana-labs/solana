@@ -17,6 +17,7 @@ use {
     solana_bpf_loader_program::serialization::serialize_parameters,
     solana_compute_budget::compute_budget::ComputeBudget,
     solana_feature_set::FEATURE_NAMES,
+    solana_instruction::{error::InstructionError, Instruction},
     solana_log_collector::ic_msg,
     solana_program_runtime::{
         invoke_context::BuiltinFunctionWithContext, loaded_programs::ProgramCacheEntry, stable_log,
@@ -37,7 +38,6 @@ use {
         fee_calculator::{FeeRateGovernor, DEFAULT_TARGET_LAMPORTS_PER_SIGNATURE},
         genesis_config::{ClusterType, GenesisConfig},
         hash::Hash,
-        instruction::{Instruction, InstructionError},
         native_token::sol_to_lamports,
         poh_config::PohConfig,
         program_error::{ProgramError, UNSUPPORTED_SYSVAR},

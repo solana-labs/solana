@@ -256,7 +256,7 @@ fn do_derive_abi_enum_visitor(input: ItemEnum) -> TokenStream {
                 let enum_name = #type_str;
                 use ::serde::ser::Serialize;
                 use ::solana_frozen_abi::abi_example::AbiExample;
-                digester.update_with_string(format!("enum {} (variants = {})", enum_name, #variant_count));
+                digester.update_with_string(::std::format!("enum {} (variants = {})", enum_name, #variant_count));
                 #serialized_variants
                 digester.create_child()
             }
@@ -303,7 +303,7 @@ fn quote_for_test(
                     ::solana_frozen_abi::__private::log::error!("digest error: {:#?}", result);
                 }
                 result.unwrap();
-                let actual_digest = format!("{}", hash);
+                let actual_digest = ::std::format!("{}", hash);
                 if ::std::env::var("SOLANA_ABI_BULK_UPDATE").is_ok() {
                     if #expected_digest != actual_digest {
                         #p!("sed -i -e 's/{}/{}/g' $(git grep --files-with-matches frozen_abi)", #expected_digest, hash);
