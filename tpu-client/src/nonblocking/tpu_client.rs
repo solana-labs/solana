@@ -2,10 +2,7 @@ pub use crate::tpu_client::Result;
 use {
     crate::tpu_client::{RecentLeaderSlots, TpuClientConfig, MAX_FANOUT_SLOTS},
     bincode::serialize,
-    futures_util::{
-        future::{join_all, FutureExt},
-        stream::StreamExt,
-    },
+    futures_util::{future::join_all, stream::StreamExt},
     log::*,
     solana_connection_cache::{
         connection_cache::{
@@ -33,8 +30,6 @@ use {
     },
     std::{
         collections::{HashMap, HashSet},
-        future::Future,
-        iter,
         net::SocketAddr,
         str::FromStr,
         sync::{
@@ -51,10 +46,12 @@ use {
 #[cfg(feature = "spinner")]
 use {
     crate::tpu_client::{SEND_TRANSACTION_INTERVAL, TRANSACTION_RESEND_INTERVAL},
+    futures_util::FutureExt,
     indicatif::ProgressBar,
     solana_rpc_client::spinner::{self, SendTransactionProgress},
     solana_rpc_client_api::request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
     solana_sdk::{message::Message, signers::Signers, transaction::TransactionError},
+    std::{future::Future, iter},
 };
 
 #[derive(Error, Debug)]
@@ -308,6 +305,7 @@ where
 //
 // Useful for end-users who don't need a persistent connection to each validator,
 // and want to abort more quickly.
+#[cfg(feature = "spinner")]
 async fn timeout_future<Fut: Future<Output = TransportResult<()>>>(
     timeout_duration: Duration,
     future: Fut,
@@ -333,6 +331,7 @@ async fn sleep_and_set_message(
     Ok(())
 }
 
+#[cfg(feature = "spinner")]
 async fn sleep_and_send_wire_transaction_to_addr<P, M, C>(
     sleep_duration: Duration,
     connection_cache: &ConnectionCache<P, M, C>,
