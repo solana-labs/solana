@@ -2,7 +2,7 @@
 //! and provides an interface for sending data which is restricted by the
 //! server's flow control.
 use {
-    async_mutex::Mutex,
+    async_lock::Mutex,
     async_trait::async_trait,
     futures::future::{join_all, TryFutureExt},
     itertools::Itertools,
