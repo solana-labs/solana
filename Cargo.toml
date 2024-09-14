@@ -325,8 +325,8 @@ prost-types = "0.11.9"
 protobuf-src = "1.1.0"
 qstring = "0.7.2"
 qualifier_attr = { version = "0.2.2", default-features = false }
-quinn = "0.10.2"
-quinn-proto = "0.10.6"
+quinn = "0.11.4"
+quinn-proto = "0.11.7"
 quote = "1.0"
 rand = "0.8.5"
 rand_chacha = "0.3.1"
@@ -338,7 +338,7 @@ reqwest-middleware = "0.2.5"
 rolling-file = "0.2.0"
 rpassword = "7.3"
 rustc_version = "0.4"
-rustls = { version = "0.21.12", default-features = false, features = ["quic"] }
+rustls = { version = "0.23.9", default-features = false }
 scopeguard = "1.2.0"
 semver = "1.0.23"
 seqlock = "0.2.0"
@@ -522,7 +522,7 @@ winapi = "0.3.8"
 winreg = "0.50"
 x509-parser = "0.14.0"
 # See "zeroize versioning issues" below if you are updating this version.
-zeroize = { version = "1.3", default-features = false }
+zeroize = { version = "1.7", default-features = false }
 zstd = "0.13.2"
 
 [patch.crates-io]

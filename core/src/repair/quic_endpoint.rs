@@ -5,11 +5,15 @@ use {
     itertools::Itertools,
     log::error,
     quinn::{
-        ClientConfig, ConnectError, Connecting, Connection, ConnectionError, Endpoint,
-        EndpointConfig, IdleTimeout, ReadError, ReadToEndError, RecvStream, SendStream,
+        crypto::rustls::{QuicClientConfig, QuicServerConfig},
+        ClientConfig, ClosedStream, ConnectError, Connecting, Connection, ConnectionError,
+        Endpoint, EndpointConfig, IdleTimeout, ReadError, ReadToEndError, RecvStream, SendStream,
         ServerConfig, TokioRuntime, TransportConfig, VarInt, WriteError,
     },
-    rustls::{Certificate, KeyLogFile, PrivateKey},
+    rustls::{
+        pki_types::{CertificateDer, PrivateKeyDer},
+        CertificateError, KeyLogFile,
+    },
     serde_bytes::ByteBuf,
     solana_quic_client::nonblocking::quic_client::SkipServerVerification,
     solana_runtime::bank_forks::BankForks,
@@ -105,6 +109,8 @@ pub(crate) enum Error {
     TlsError(#[from] rustls::Error),
     #[error(transparent)]
     WriteError(#[from] WriteError),
+    #[error(transparent)]
+    ClosedStream(#[from] ClosedStream),
 }
 
 macro_rules! add_metric {
@@ -122,7 +128,7 @@ pub(crate) fn new_quic_endpoint(
     bank_forks: Arc<RwLock<BankForks>>,
 ) -> Result<(Endpoint, AsyncSender<LocalRequest>, AsyncTryJoinHandle), Error> {
     let (cert, key) = new_dummy_x509_certificate(keypair);
-    let server_config = new_server_config(cert.clone(), key.clone())?;
+    let server_config = new_server_config(cert.clone(), key.clone_key())?;
     let client_config = new_client_config(cert, key)?;
     let mut endpoint = {
         // Endpoint::new requires entering the runtime context,
@@ -168,29 +174,36 @@ pub(crate) fn close_quic_endpoint(endpoint: &Endpoint) {
     );
 }
 
-fn new_server_config(cert: Certificate, key: PrivateKey) -> Result<ServerConfig, rustls::Error> {
+fn new_server_config(
+    cert: CertificateDer<'static>,
+    key: PrivateKeyDer<'static>,
+) -> Result<ServerConfig, rustls::Error> {
     let mut config = rustls::ServerConfig::builder()
-        .with_safe_defaults()
-        .with_client_cert_verifier(Arc::new(SkipClientVerification {}))
+        .with_client_cert_verifier(SkipClientVerification::new())
         .with_single_cert(vec![cert], key)?;
     config.alpn_protocols = vec![ALPN_REPAIR_PROTOCOL_ID.to_vec()];
     config.key_log = Arc::new(KeyLogFile::new());
-    let mut config = ServerConfig::with_crypto(Arc::new(config));
+    let quic_server_config = QuicServerConfig::try_from(config)
+        .map_err(|_err| rustls::Error::InvalidCertificate(CertificateError::BadSignature))?;
+
+    let mut config = ServerConfig::with_crypto(Arc::new(quic_server_config));
     config
         .transport_config(Arc::new(new_transport_config()))
-        .use_retry(true)
         .migration(false);
     Ok(config)
 }
 
-fn new_client_config(cert: Certificate, key: PrivateKey) -> Result<ClientConfig, rustls::Error> {
+fn new_client_config(
+    cert: CertificateDer<'static>,
+    key: PrivateKeyDer<'static>,
+) -> Result<ClientConfig, rustls::Error> {
     let mut config = rustls::ClientConfig::builder()
-        .with_safe_defaults()
-        .with_custom_certificate_verifier(Arc::new(SkipServerVerification {}))
+        .dangerous()
+        .with_custom_certificate_verifier(SkipServerVerification::new())
         .with_client_auth_cert(vec![cert], key)?;
     config.enable_early_data = true;
     config.alpn_protocols = vec![ALPN_REPAIR_PROTOCOL_ID.to_vec()];
-    let mut config = ClientConfig::new(Arc::new(config));
+    let mut config = ClientConfig::new(Arc::new(QuicClientConfig::try_from(config).unwrap()));
     config.transport_config(Arc::new(new_transport_config()));
     Ok(config)
 }
@@ -219,17 +232,26 @@ async fn run_server(
     let stats = Arc::<RepairQuicStats>::default();
     let report_metrics_task =
         tokio::task::spawn(report_metrics_task("repair_quic_server", stats.clone()));
-    while let Some(connecting) = endpoint.accept().await {
-        tokio::task::spawn(handle_connecting_task(
-            endpoint.clone(),
-            connecting,
-            remote_request_sender.clone(),
-            bank_forks.clone(),
-            prune_cache_pending.clone(),
-            router.clone(),
-            cache.clone(),
-            stats.clone(),
-        ));
+    while let Some(incoming) = endpoint.accept().await {
+        let remote_addr: SocketAddr = incoming.remote_address();
+        let connecting = incoming.accept();
+        match connecting {
+            Ok(connecting) => {
+                tokio::task::spawn(handle_connecting_task(
+                    endpoint.clone(),
+                    connecting,
+                    remote_request_sender.clone(),
+                    bank_forks.clone(),
+                    prune_cache_pending.clone(),
+                    router.clone(),
+                    cache.clone(),
+                    stats.clone(),
+                ));
+            }
+            Err(error) => {
+                debug!("Error while accepting incoming connection: {error:?} from {remote_addr}");
+            }
+        }
     }
     report_metrics_task.abort();
 }
@@ -504,7 +526,7 @@ async fn handle_streams(
         send_stream.write_all(&size.to_le_bytes()).await?;
         send_stream.write_all(&chunk).await?;
     }
-    send_stream.finish().await.map_err(Error::from)
+    send_stream.finish().map_err(Error::from)
 }
 
 async fn send_requests_task(
@@ -565,7 +587,7 @@ async fn send_request(
     const READ_TIMEOUT_DURATION: Duration = Duration::from_secs(10);
     let (mut send_stream, mut recv_stream) = connection.open_bi().await?;
     send_stream.write_all(&bytes).await?;
-    send_stream.finish().await?;
+    send_stream.finish()?;
     // Each response is at most PACKET_DATA_SIZE bytes and requires
     // an additional 8 bytes to encode its length.
     let size = PACKET_DATA_SIZE
@@ -778,6 +800,7 @@ struct RepairQuicStats {
     connection_error_timed_out: AtomicU64,
     connection_error_transport_error: AtomicU64,
     connection_error_version_mismatch: AtomicU64,
+    connection_error_connection_limit_exceeded: AtomicU64,
     invalid_identity: AtomicU64,
     no_response_received: AtomicU64,
     read_to_end_error_connection_lost: AtomicU64,
@@ -792,6 +815,12 @@ struct RepairQuicStats {
     write_error_stopped: AtomicU64,
     write_error_unknown_stream: AtomicU64,
     write_error_zero_rtt_rejected: AtomicU64,
+    connect_error_cids_exhausted: AtomicU64,
+    connect_error_invalid_server_name: AtomicU64,
+    connection_error_cids_exhausted: AtomicU64,
+    closed_streams: AtomicU64,
+    read_to_end_error_closed_stream: AtomicU64,
+    write_error_closed_stream: AtomicU64,
 }
 
 async fn report_metrics_task(name: &'static str, stats: Arc<RepairQuicStats>) {
@@ -806,12 +835,6 @@ fn record_error(err: &Error, stats: &RepairQuicStats) {
     match err {
         Error::ChannelSendError => (),
         Error::ConnectError(ConnectError::EndpointStopping) => {
-            add_metric!(stats.connect_error_other)
-        }
-        Error::ConnectError(ConnectError::TooManyConnections) => {
-            add_metric!(stats.connect_error_too_many_connections)
-        }
-        Error::ConnectError(ConnectError::InvalidDnsName(_)) => {
             add_metric!(stats.connect_error_other)
         }
         Error::ConnectError(ConnectError::InvalidRemoteAddress(_)) => {
@@ -851,9 +874,6 @@ fn record_error(err: &Error, stats: &RepairQuicStats) {
         Error::ReadToEndError(ReadToEndError::Read(ReadError::ConnectionLost(_))) => {
             add_metric!(stats.read_to_end_error_connection_lost)
         }
-        Error::ReadToEndError(ReadToEndError::Read(ReadError::UnknownStream)) => {
-            add_metric!(stats.read_to_end_error_unknown_stream)
-        }
         Error::ReadToEndError(ReadToEndError::Read(ReadError::IllegalOrderedRead)) => {
             add_metric!(stats.read_to_end_error_illegal_ordered_read)
         }
@@ -869,11 +889,26 @@ fn record_error(err: &Error, stats: &RepairQuicStats) {
         Error::WriteError(WriteError::ConnectionLost(_)) => {
             add_metric!(stats.write_error_connection_lost)
         }
-        Error::WriteError(WriteError::UnknownStream) => {
-            add_metric!(stats.write_error_unknown_stream)
-        }
         Error::WriteError(WriteError::ZeroRttRejected) => {
             add_metric!(stats.write_error_zero_rtt_rejected)
+        }
+        Error::ConnectError(ConnectError::CidsExhausted) => {
+            add_metric!(stats.connect_error_cids_exhausted)
+        }
+        Error::ConnectError(ConnectError::InvalidServerName(_)) => {
+            add_metric!(stats.connect_error_invalid_server_name)
+        }
+        Error::ConnectionError(ConnectionError::CidsExhausted) => {
+            add_metric!(stats.connection_error_cids_exhausted)
+        }
+        Error::ClosedStream(_) => {
+            add_metric!(stats.closed_streams)
+        }
+        Error::ReadToEndError(ReadToEndError::Read(ReadError::ClosedStream)) => {
+            add_metric!(stats.read_to_end_error_closed_stream)
+        }
+        Error::WriteError(WriteError::ClosedStream) => {
+            add_metric!(stats.write_error_closed_stream)
         }
     }
 }
@@ -934,6 +969,11 @@ fn report_metrics(name: &'static str, stats: &RepairQuicStats) {
         (
             "connection_error_version_mismatch",
             reset_metric!(stats.connection_error_version_mismatch),
+            i64
+        ),
+        (
+            "connection_error_connection_limit_exceeded",
+            reset_metric!(stats.connection_error_connection_limit_exceeded),
             i64
         ),
         (

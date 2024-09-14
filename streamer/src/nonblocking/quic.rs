@@ -198,7 +198,7 @@ pub fn spawn_server_multi(
     let concurrent_connections =
         (max_staked_connections + max_unstaked_connections) / sockets.len();
     let max_concurrent_connections = concurrent_connections + concurrent_connections / 4;
-    let (config, _cert) = configure_server(keypair, max_concurrent_connections)?;
+    let (config, _) = configure_server(keypair)?;
 
     let endpoints = sockets
         .into_iter()
@@ -239,7 +239,7 @@ pub fn spawn_server_multi(
 #[allow(clippy::too_many_arguments)]
 async fn run_server(
     name: &'static str,
-    incoming: Vec<Endpoint>,
+    endpoints: Vec<Endpoint>,
     packet_sender: Sender<PacketBatch>,
     exit: Arc<AtomicBool>,
     max_connections_per_peer: usize,
@@ -268,7 +268,7 @@ async fn run_server(
     ));
     stats
         .quic_endpoints_count
-        .store(incoming.len(), Ordering::Relaxed);
+        .store(endpoints.len(), Ordering::Relaxed);
     let staked_connection_table: Arc<Mutex<ConnectionTable>> =
         Arc::new(Mutex::new(ConnectionTable::new()));
     let (sender, receiver) = async_unbounded();
@@ -280,7 +280,7 @@ async fn run_server(
         coalesce,
     ));
 
-    let mut accepts = incoming
+    let mut accepts = endpoints
         .iter()
         .enumerate()
         .map(|(i, incoming)| {
@@ -296,7 +296,7 @@ async fn run_server(
                 if let Some((connecting, i)) = ready {
                     accepts.push(
                         Box::pin(EndpointAccept {
-                            accept: incoming[i].accept(),
+                            accept: endpoints[i].accept(),
                             endpoint: i,
                         }
                     ));
@@ -316,11 +316,11 @@ async fn run_server(
             last_datapoint = Instant::now();
         }
 
-        if let Ok(Some(connection)) = timeout_connection {
+        if let Ok(Some(incoming)) = timeout_connection {
             stats
                 .total_incoming_connection_attempts
                 .fetch_add(1, Ordering::Relaxed);
-            let remote_address = connection.remote_address();
+            let remote_address = incoming.remote_address();
 
             // first check overall connection rate limit:
             if !overall_connection_rate_limiter.is_allowed() {
@@ -331,6 +331,7 @@ async fn run_server(
                 stats
                     .connection_rate_limited_across_all
                     .fetch_add(1, Ordering::Relaxed);
+                incoming.ignore();
                 continue;
             }
 
@@ -349,26 +350,35 @@ async fn run_server(
                 stats
                     .connection_rate_limited_per_ipaddr
                     .fetch_add(1, Ordering::Relaxed);
+                incoming.ignore();
                 continue;
             }
 
             stats
                 .outstanding_incoming_connection_attempts
                 .fetch_add(1, Ordering::Relaxed);
-            tokio::spawn(setup_connection(
-                connection,
-                unstaked_connection_table.clone(),
-                staked_connection_table.clone(),
-                sender.clone(),
-                max_connections_per_peer,
-                staked_nodes.clone(),
-                max_staked_connections,
-                max_unstaked_connections,
-                max_streams_per_ms,
-                stats.clone(),
-                wait_for_chunk_timeout,
-                stream_load_ema.clone(),
-            ));
+            let connecting = incoming.accept();
+            match connecting {
+                Ok(connecting) => {
+                    tokio::spawn(setup_connection(
+                        connecting,
+                        unstaked_connection_table.clone(),
+                        staked_connection_table.clone(),
+                        sender.clone(),
+                        max_connections_per_peer,
+                        staked_nodes.clone(),
+                        max_staked_connections,
+                        max_unstaked_connections,
+                        max_streams_per_ms,
+                        stats.clone(),
+                        wait_for_chunk_timeout,
+                        stream_load_ema.clone(),
+                    ));
+                }
+                Err(err) => {
+                    debug!("Incoming::accept(): error {:?}", err);
+                }
+            }
         } else {
             debug!("accept(): Timed out waiting for connection");
         }
@@ -394,7 +404,7 @@ pub fn get_remote_pubkey(connection: &Connection) -> Option<Pubkey> {
     // Use the client cert only if it is self signed and the chain length is 1.
     connection
         .peer_identity()?
-        .downcast::<Vec<rustls::Certificate>>()
+        .downcast::<Vec<rustls::pki_types::CertificateDer>>()
         .ok()
         .filter(|certs| certs.len() == 1)?
         .first()
@@ -1263,7 +1273,7 @@ impl Drop for ConnectionEntry {
     }
 }
 
-#[derive(Copy, Clone, Eq, Hash, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 enum ConnectionTableKey {
     IP(IpAddr),
     Pubkey(Pubkey),
@@ -1422,7 +1432,7 @@ struct EndpointAccept<'a> {
 }
 
 impl<'a> Future for EndpointAccept<'a> {
-    type Output = (Option<quinn::Connecting>, usize);
+    type Output = (Option<quinn::Incoming>, usize);
 
     fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context) -> Poll<Self::Output> {
         let i = self.endpoint;
@@ -1463,7 +1473,7 @@ pub mod test {
         for i in 0..total {
             let mut s1 = conn1.open_uni().await.unwrap();
             s1.write_all(&[0u8]).await.unwrap();
-            s1.finish().await.unwrap();
+            s1.finish().unwrap();
             info!("done {}", i);
             sleep(Duration::from_millis(1000)).await;
         }
@@ -1488,15 +1498,12 @@ pub mod test {
         let s2 = conn2.open_uni().await;
         if let Ok(mut s2) = s2 {
             s1.write_all(&[0u8]).await.unwrap();
-            s1.finish().await.unwrap();
+            s1.finish().unwrap();
             // Send enough data to create more than 1 chunks.
             // The first will try to open the connection (which should fail).
             // The following chunks will enable the detection of connection failure.
             let data = vec![1u8; PACKET_DATA_SIZE * 2];
             s2.write_all(&data)
-                .await
-                .expect_err("shouldn't be able to open 2 connections");
-            s2.finish()
                 .await
                 .expect_err("shouldn't be able to open 2 connections");
         } else {
@@ -1521,9 +1528,9 @@ pub mod test {
             let mut s1 = c1.open_uni().await.unwrap();
             let mut s2 = c2.open_uni().await.unwrap();
             s1.write_all(&[0u8]).await.unwrap();
-            s1.finish().await.unwrap();
+            s1.finish().unwrap();
             s2.write_all(&[0u8]).await.unwrap();
-            s2.finish().await.unwrap();
+            s2.finish().unwrap();
             num_expected_packets += 2;
             sleep(Duration::from_millis(200)).await;
         }
@@ -1563,7 +1570,7 @@ pub mod test {
         for _ in 0..num_bytes {
             s1.write_all(&[0u8]).await.unwrap();
         }
-        s1.finish().await.unwrap();
+        s1.finish().unwrap();
 
         let mut all_packets = vec![];
         let now = Instant::now();
@@ -1598,7 +1605,8 @@ pub mod test {
                 // Ignoring any errors here. s1.finish() will test the error condition
                 s1.write_all(&[0u8]).await.unwrap_or_default();
             }
-            s1.finish().await.unwrap_err();
+            s1.finish().unwrap_or_default();
+            s1.stopped().await.unwrap_err();
         }
     }
 
@@ -1712,7 +1720,6 @@ pub mod test {
         // Test that more writes to the stream will fail (i.e. the stream is no longer writable
         // after the timeouts)
         assert!(s1.write_all(&[0u8]).await.is_err());
-        assert!(s1.finish().await.is_err());
 
         exit.store(true, Ordering::Relaxed);
         join_handle.await.unwrap();
@@ -1775,7 +1782,7 @@ pub mod test {
 
         let mut s1 = conn1.open_uni().await.unwrap();
         s1.write_all(&[0u8]).await.unwrap();
-        s1.finish().await.unwrap();
+        s1.finish().unwrap();
 
         let mut s2 = conn2.open_uni().await.unwrap();
         conn1.close(
@@ -1789,7 +1796,7 @@ pub mod test {
         assert_eq!(stats.connection_removed.load(Ordering::Relaxed), 1);
 
         s2.write_all(&[0u8]).await.unwrap();
-        s2.finish().await.unwrap();
+        s2.finish().unwrap();
 
         conn2.close(
             CONNECTION_CLOSE_CODE_DROPPED_ENTRY.into(),
@@ -2308,7 +2315,7 @@ pub mod test {
             let mut send_stream = client_connection.open_uni().await.unwrap();
             let data = format!("{i}").into_bytes();
             send_stream.write_all(&data).await.unwrap();
-            send_stream.finish().await.unwrap();
+            send_stream.finish().unwrap();
         }
         let elapsed_sending: f64 = start_time.elapsed().as_secs_f64();
         info!("Elapsed sending: {elapsed_sending}");

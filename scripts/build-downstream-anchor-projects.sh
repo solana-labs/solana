@@ -69,6 +69,7 @@ anchor() {
   patch_crates_io_solana Cargo.toml "$solana_dir"
   patch_spl_crates . Cargo.toml "$spl_dir"
 
+  sed -i '/\[patch.crates-io\]/a curve25519-dalek = { git = "https://github.com/anza-xyz/curve25519-dalek.git", rev = "b500cdc2a920cd5bff9e2dd974d7b97349d61464" }' ./Cargo.toml
   $cargo test
   # serum_dex and mpl-token-metadata are using caret versions of solana and SPL dependencies
   # rather pull and patch those as well, ignore for now

@@ -3,7 +3,12 @@ use {
     x509_parser::{prelude::*, public_key::PublicKey},
 };
 
-pub fn new_dummy_x509_certificate(keypair: &Keypair) -> (rustls::Certificate, rustls::PrivateKey) {
+pub fn new_dummy_x509_certificate(
+    keypair: &Keypair,
+) -> (
+    rustls::pki_types::CertificateDer<'static>,
+    rustls::pki_types::PrivateKeyDer<'static>,
+) {
     // Unfortunately, rustls does not accept a "raw" Ed25519 key.
     // We have to convert it to DER and pass it to the library.
 
@@ -91,12 +96,14 @@ pub fn new_dummy_x509_certificate(keypair: &Keypair) -> (rustls::Certificate, ru
     ]);
 
     (
-        rustls::Certificate(cert_der),
-        rustls::PrivateKey(key_pkcs8_der),
+        rustls::pki_types::CertificateDer::from(cert_der),
+        rustls::pki_types::PrivateKeyDer::try_from(key_pkcs8_der).unwrap(),
     )
 }
 
-pub fn get_pubkey_from_tls_certificate(der_cert: &rustls::Certificate) -> Option<Pubkey> {
+pub fn get_pubkey_from_tls_certificate(
+    der_cert: &rustls::pki_types::CertificateDer,
+) -> Option<Pubkey> {
     let (_, cert) = X509Certificate::from_der(der_cert.as_ref()).ok()?;
     match cert.public_key().parsed().ok()? {
         PublicKey::Unknown(key) => Pubkey::try_from(key).ok(),

@@ -18,7 +18,7 @@ lazy_static = { workspace = true }
 log = { workspace = true }
 quinn = { workspace = true }
 quinn-proto = { workspace = true }
-rustls = { workspace = true, features = ["dangerous_configuration"] }
+rustls = { workspace = true }
 solana-connection-cache = { workspace = true }
 solana-measure = { workspace = true }
 solana-metrics = { workspace = true }

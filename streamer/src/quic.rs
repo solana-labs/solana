@@ -5,8 +5,15 @@ use {
     },
     crossbeam_channel::Sender,
     pem::Pem,
-    quinn::{Endpoint, IdleTimeout, ServerConfig},
-    rustls::{server::ClientCertVerified, Certificate, DistinguishedName, KeyLogFile},
+    quinn::{
+        crypto::rustls::{NoInitialCipherSuite, QuicServerConfig},
+        Endpoint, IdleTimeout, ServerConfig,
+    },
+    rustls::{
+        pki_types::{CertificateDer, UnixTime},
+        server::danger::ClientCertVerified,
+        DistinguishedName, KeyLogFile,
+    },
     solana_perf::packet::PacketBatch,
     solana_sdk::{
         packet::PACKET_DATA_SIZE,
@@ -20,7 +27,7 @@ use {
             Arc, Mutex, RwLock,
         },
         thread,
-        time::{Duration, SystemTime},
+        time::Duration,
     },
     tokio::runtime::Runtime,
 };
@@ -31,11 +38,12 @@ pub const MAX_UNSTAKED_CONNECTIONS: usize = 500;
 // This will be adjusted and parameterized in follow-on PRs.
 pub const DEFAULT_QUIC_ENDPOINTS: usize = 1;
 
-pub struct SkipClientVerification;
+#[derive(Debug)]
+pub struct SkipClientVerification(Arc<rustls::crypto::CryptoProvider>);
 
 impl SkipClientVerification {
     pub fn new() -> Arc<Self> {
-        Arc::new(Self)
+        Arc::new(Self(Arc::new(rustls::crypto::ring::default_provider())))
     }
 }
 
@@ -45,18 +53,58 @@ pub struct SpawnServerResult {
     pub key_updater: Arc<EndpointKeyUpdater>,
 }
 
-impl rustls::server::ClientCertVerifier for SkipClientVerification {
-    fn client_auth_root_subjects(&self) -> &[DistinguishedName] {
+impl rustls::server::danger::ClientCertVerifier for SkipClientVerification {
+    fn verify_client_cert(
+        &self,
+        _end_entity: &CertificateDer,
+        _intermediates: &[CertificateDer],
+        _now: UnixTime,
+    ) -> Result<ClientCertVerified, rustls::Error> {
+        Ok(rustls::server::danger::ClientCertVerified::assertion())
+    }
+
+    fn root_hint_subjects(&self) -> &[DistinguishedName] {
         &[]
     }
 
-    fn verify_client_cert(
+    fn verify_tls12_signature(
         &self,
-        _end_entity: &Certificate,
-        _intermediates: &[Certificate],
-        _now: SystemTime,
-    ) -> Result<ClientCertVerified, rustls::Error> {
-        Ok(rustls::server::ClientCertVerified::assertion())
+        message: &[u8],
+        cert: &rustls::pki_types::CertificateDer<'_>,
+        dss: &rustls::DigitallySignedStruct,
+    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+        rustls::crypto::verify_tls12_signature(
+            message,
+            cert,
+            dss,
+            &self.0.signature_verification_algorithms,
+        )
+    }
+
+    fn verify_tls13_signature(
+        &self,
+        message: &[u8],
+        cert: &rustls::pki_types::CertificateDer<'_>,
+        dss: &rustls::DigitallySignedStruct,
+    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+        rustls::crypto::verify_tls13_signature(
+            message,
+            cert,
+            dss,
+            &self.0.signature_verification_algorithms,
+        )
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
+        self.0.signature_verification_algorithms.supported_schemes()
+    }
+
+    fn offer_client_auth(&self) -> bool {
+        true
+    }
+
+    fn client_auth_mandatory(&self) -> bool {
+        self.offer_client_auth()
     }
 }
 
@@ -64,25 +112,22 @@ impl rustls::server::ClientCertVerifier for SkipClientVerification {
 #[allow(clippy::field_reassign_with_default)] // https://github.com/rust-lang/rust-clippy/issues/6527
 pub(crate) fn configure_server(
     identity_keypair: &Keypair,
-    max_concurrent_connections: usize,
 ) -> Result<(ServerConfig, String), QuicServerError> {
     let (cert, priv_key) = new_dummy_x509_certificate(identity_keypair);
     let cert_chain_pem_parts = vec![Pem {
         tag: "CERTIFICATE".to_string(),
-        contents: cert.0.clone(),
+        contents: cert.as_ref().to_vec(),
     }];
     let cert_chain_pem = pem::encode_many(&cert_chain_pem_parts);
 
     let mut server_tls_config = rustls::ServerConfig::builder()
-        .with_safe_defaults()
         .with_client_cert_verifier(SkipClientVerification::new())
         .with_single_cert(vec![cert], priv_key)?;
     server_tls_config.alpn_protocols = vec![ALPN_TPU_PROTOCOL_ID.to_vec()];
     server_tls_config.key_log = Arc::new(KeyLogFile::new());
+    let quic_server_config = QuicServerConfig::try_from(server_tls_config)?;
 
-    let mut server_config = ServerConfig::with_crypto(Arc::new(server_tls_config));
-    server_config.concurrent_connections(max_concurrent_connections as u32);
-    server_config.use_retry(true);
+    let mut server_config = ServerConfig::with_crypto(Arc::new(quic_server_config));
     let config = Arc::get_mut(&mut server_config.transport).unwrap();
 
     // QUIC_MAX_CONCURRENT_STREAMS doubled, which was found to improve reliability
@@ -122,16 +167,17 @@ pub enum QuicServerError {
     EndpointFailed(std::io::Error),
     #[error("TLS error: {0}")]
     TlsError(#[from] rustls::Error),
+    #[error("No initial cipher suite")]
+    NoInitialCipherSuite(#[from] NoInitialCipherSuite),
 }
 
 pub struct EndpointKeyUpdater {
     endpoints: Vec<Endpoint>,
-    max_concurrent_connections: usize,
 }
 
 impl NotifyKeyUpdate for EndpointKeyUpdater {
     fn update_key(&self, key: &Keypair) -> Result<(), Box<dyn std::error::Error>> {
-        let (config, _) = configure_server(key, self.max_concurrent_connections)?;
+        let (config, _) = configure_server(key)?;
         for endpoint in &self.endpoints {
             endpoint.set_server_config(Some(config.clone()));
         }
@@ -632,7 +678,6 @@ pub fn spawn_server_multi(
         .unwrap();
     let updater = EndpointKeyUpdater {
         endpoints: result.endpoints.clone(),
-        max_concurrent_connections: result.max_concurrent_connections,
     };
     Ok(SpawnServerResult {
         endpoints: result.endpoints,
