@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Trigger a Buildkite Build
-        uses: "buildkite/trigger-pipeline-action@v2.0.0"
+        uses: "buildkite/trigger-pipeline-action@v2.2.0"
         with:
           buildkite_api_access_token: ${{ secrets.TRIGGER_BK_BUILD_TOKEN }}
           pipeline: "anza/agave-secondary"
