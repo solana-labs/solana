@@ -12,8 +12,10 @@ use {
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
     },
     solana_runtime::{
-        bank::Bank, bank_forks::BankForks, prioritization_fee_cache::PrioritizationFeeCache,
-        transaction_batch::TransactionBatch,
+        bank::Bank,
+        bank_forks::BankForks,
+        prioritization_fee_cache::PrioritizationFeeCache,
+        transaction_batch::{OwnedOrBorrowed, TransactionBatch},
     },
     solana_sdk::{
         account::{Account, ReadableAccount},
@@ -24,10 +26,7 @@ use {
         transaction::SanitizedTransaction,
     },
     solana_timings::ExecuteTimings,
-    std::{
-        borrow::Cow,
-        sync::{Arc, RwLock},
-    },
+    std::sync::{Arc, RwLock},
     test::Bencher,
 };
 
@@ -136,8 +135,11 @@ fn bench_execute_batch(
     let batches: Vec<_> = transactions
         .chunks(batch_size)
         .map(|txs| {
-            let mut batch =
-                TransactionBatch::new(vec![Ok(()); txs.len()], &bank, Cow::Borrowed(txs));
+            let mut batch = TransactionBatch::new(
+                vec![Ok(()); txs.len()],
+                &bank,
+                OwnedOrBorrowed::Borrowed(txs),
+            );
             batch.set_needs_unlock(false);
             TransactionBatchWithIndexes {
                 batch,

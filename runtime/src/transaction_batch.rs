@@ -1,21 +1,37 @@
 use {
-    crate::bank::Bank, solana_sdk::transaction::Result,
-    solana_svm_transaction::svm_transaction::SVMTransaction, std::borrow::Cow,
+    crate::bank::Bank, core::ops::Deref, solana_sdk::transaction::Result,
+    solana_svm_transaction::svm_message::SVMMessage,
 };
 
+pub enum OwnedOrBorrowed<'a, T> {
+    Owned(Vec<T>),
+    Borrowed(&'a [T]),
+}
+
+impl<T> Deref for OwnedOrBorrowed<'_, T> {
+    type Target = [T];
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            OwnedOrBorrowed::Owned(v) => v,
+            OwnedOrBorrowed::Borrowed(v) => v,
+        }
+    }
+}
+
 // Represents the results of trying to lock a set of accounts
-pub struct TransactionBatch<'a, 'b, Tx: SVMTransaction + Clone> {
+pub struct TransactionBatch<'a, 'b, Tx: SVMMessage> {
     lock_results: Vec<Result<()>>,
     bank: &'a Bank,
-    sanitized_txs: Cow<'b, [Tx]>,
+    sanitized_txs: OwnedOrBorrowed<'b, Tx>,
     needs_unlock: bool,
 }
 
-impl<'a, 'b, Tx: SVMTransaction + Clone> TransactionBatch<'a, 'b, Tx> {
+impl<'a, 'b, Tx: SVMMessage> TransactionBatch<'a, 'b, Tx> {
     pub fn new(
         lock_results: Vec<Result<()>>,
         bank: &'a Bank,
-        sanitized_txs: Cow<'b, [Tx]>,
+        sanitized_txs: OwnedOrBorrowed<'b, Tx>,
     ) -> Self {
         assert_eq!(lock_results.len(), sanitized_txs.len());
         Self {
@@ -81,7 +97,7 @@ impl<'a, 'b, Tx: SVMTransaction + Clone> TransactionBatch<'a, 'b, Tx> {
 }
 
 // Unlock all locked accounts in destructor.
-impl<'a, 'b, Tx: SVMTransaction + Clone> Drop for TransactionBatch<'a, 'b, Tx> {
+impl<'a, 'b, Tx: SVMMessage> Drop for TransactionBatch<'a, 'b, Tx> {
     fn drop(&mut self) {
         if self.needs_unlock() {
             self.set_needs_unlock(false);

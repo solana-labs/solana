@@ -37,7 +37,7 @@ use {
         installed_scheduler_pool::BankWithScheduler,
         prioritization_fee_cache::PrioritizationFeeCache,
         runtime_config::RuntimeConfig,
-        transaction_batch::TransactionBatch,
+        transaction_batch::{OwnedOrBorrowed, TransactionBatch},
         vote_sender_types::ReplayVoteSender,
     },
     solana_sdk::{
@@ -56,12 +56,11 @@ use {
         transaction_commit_result::{TransactionCommitResult, TransactionCommitResultExtensions},
         transaction_processor::ExecutionRecordingConfig,
     },
-    solana_svm_transaction::svm_transaction::SVMTransaction,
+    solana_svm_transaction::svm_message::SVMMessage,
     solana_timings::{report_execute_timings, ExecuteTimingType, ExecuteTimings},
     solana_transaction_status::token_balances::TransactionTokenBalancesSet,
     solana_vote::vote_account::VoteAccountsHashMap,
     std::{
-        borrow::Cow,
         collections::{HashMap, HashSet},
         ops::Index,
         path::PathBuf,
@@ -78,7 +77,7 @@ use {
 #[cfg(feature = "dev-context-only-utils")]
 use {qualifier_attr::qualifiers, solana_runtime::bank::HashOverrides};
 
-pub struct TransactionBatchWithIndexes<'a, 'b, Tx: SVMTransaction + Clone> {
+pub struct TransactionBatchWithIndexes<'a, 'b, Tx: SVMMessage> {
     pub batch: TransactionBatch<'a, 'b, Tx>,
     pub transaction_indexes: Vec<usize>,
 }
@@ -443,7 +442,8 @@ fn rebatch_transactions<'a>(
 ) -> TransactionBatchWithIndexes<'a, 'a, SanitizedTransaction> {
     let txs = &sanitized_txs[start..=end];
     let results = &lock_results[start..=end];
-    let mut tx_batch = TransactionBatch::new(results.to_vec(), bank, Cow::from(txs));
+    let mut tx_batch =
+        TransactionBatch::new(results.to_vec(), bank, OwnedOrBorrowed::Borrowed(txs));
     tx_batch.set_needs_unlock(false);
 
     let transaction_indexes = transaction_indexes[start..=end].to_vec();
