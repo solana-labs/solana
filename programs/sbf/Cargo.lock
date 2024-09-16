@@ -5632,6 +5632,7 @@ dependencies = [
  "solana-hash",
  "solana-instruction",
  "solana-msg",
+ "solana-program-error",
  "solana-program-memory",
  "solana-program-option",
  "solana-pubkey",
@@ -5643,6 +5644,20 @@ dependencies = [
  "solana-short-vec",
  "thiserror",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "solana-program-error"
+version = "2.1.0"
+dependencies = [
+ "borsh 1.5.1",
+ "num-traits",
+ "serde",
+ "serde_derive",
+ "solana-decode-error",
+ "solana-instruction",
+ "solana-msg",
+ "solana-pubkey",
 ]
 
 [[package]]

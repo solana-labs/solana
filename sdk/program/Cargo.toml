@@ -47,6 +47,7 @@ solana-instruction = { workspace = true, default-features = false, features = [
     "std",
 ] }
 solana-msg = { workspace = true }
+solana-program-error = { workspace = true, features = ["serde"] }
 solana-program-memory = { workspace = true }
 solana-program-option = { workspace = true }
 solana-pubkey = { workspace = true, features = ["bytemuck", "curve25519", "serde", "std"] }
@@ -117,6 +118,7 @@ borsh = [
     "dep:borsh0-10",
     "solana-hash/borsh",
     "solana-instruction/borsh",
+    "solana-program-error/borsh",
     "solana-pubkey/borsh"
 ]
 dev-context-only-utils = ["dep:qualifier_attr"]
