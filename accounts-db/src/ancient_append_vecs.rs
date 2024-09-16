@@ -851,6 +851,12 @@ impl AccountsDb {
             }
         }
         let unpackable_slots_count = remove.len();
+
+        // Remove skipped slots
+        for i in remove.iter().rev() {
+            accounts_to_combine.remove(*i);
+        }
+
         target_slots_sorted.sort_unstable();
         self.shrink_ancient_stats
             .slots_cannot_move_count
@@ -1755,7 +1761,20 @@ pub mod tests {
                             &tuning,
                             many_ref_slots,
                         );
-                        let expected_accounts_to_combine = num_slots;
+                        let expected_accounts_to_combine = if num_slots >= 3
+                            && two_refs
+                            && many_ref_slots == IncludeManyRefSlots::Skip
+                        {
+                            // In this test setup, 2.5 regular slots fits into 1 ancient slot.
+                            // When there are two_refs and when slots < 3, all regular slots can fit into one ancient slots.
+                            // Therefore, we should have all slots that can be combined for slots < 3.
+                            // However, when slots >=3, we need more than one ancient slots. The pack algorithm will need to first
+                            // find at least [ceiling(num_slots/2.5) - 1] slots that's doesn't have many_refs before we can pack slots with many_refs.
+                            // Since all the slots have many_refs, we can't find any eligible slot to combine.
+                            0
+                        } else {
+                            num_slots
+                        };
                         (0..accounts_to_combine
                             .target_slots_sorted
                             .len()
@@ -1858,7 +1877,8 @@ pub mod tests {
                                 assert_eq!(
                                     accounts_to_combine.accounts_to_combine.len(),
                                     // if we are only trying to pack a single slot of multi-refs, it will succeed
-                                    if !two_refs || many_ref_slots == IncludeManyRefSlots::Include || num_slots == 1 || num_slots == 2 {num_slots} else {0},
+                                    // if num_slots = 2 and skip multi-ref slots, accounts_to_combine should be empty.
+                                    if !two_refs || many_ref_slots == IncludeManyRefSlots::Include || num_slots == 1 || (num_slots == 2 && many_ref_slots != IncludeManyRefSlots::Skip) {num_slots} else {0},
                                     "method: {method:?}, num_slots: {num_slots}, two_refs: {two_refs}, many_refs: {many_ref_slots:?}"
                                 );
 
