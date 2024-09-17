@@ -50,17 +50,17 @@ pub struct Meta {
     pub flags: PacketFlags,
 }
 
-#[cfg(all(RUSTC_WITH_SPECIALIZATION, feature = "frozen-abi"))]
+#[cfg(feature = "frozen-abi")]
 impl ::solana_frozen_abi::abi_example::AbiExample for PacketFlags {
     fn example() -> Self {
         Self::empty()
     }
 }
 
-#[cfg(all(RUSTC_WITH_SPECIALIZATION, feature = "frozen-abi"))]
+#[cfg(feature = "frozen-abi")]
 impl ::solana_frozen_abi::abi_example::TransparentAsHelper for PacketFlags {}
 
-#[cfg(all(RUSTC_WITH_SPECIALIZATION, feature = "frozen-abi"))]
+#[cfg(feature = "frozen-abi")]
 impl ::solana_frozen_abi::abi_example::EvenAsOpaque for PacketFlags {
     const TYPE_NAME_MATCHER: &'static str = "::_::InternalBitFlags";
 }

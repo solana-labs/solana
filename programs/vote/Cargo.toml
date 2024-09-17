@@ -17,8 +17,12 @@ num-traits = { workspace = true }
 serde = { workspace = true }
 serde_derive = { workspace = true }
 solana-feature-set = { workspace = true }
-solana-frozen-abi = { workspace = true, optional = true }
-solana-frozen-abi-macro = { workspace = true, optional = true }
+solana-frozen-abi = { workspace = true, optional = true, features = [
+    "frozen-abi",
+] }
+solana-frozen-abi-macro = { workspace = true, optional = true, features = [
+    "frozen-abi",
+] }
 solana-metrics = { workspace = true }
 solana-program = { workspace = true }
 solana-program-runtime = { workspace = true }
@@ -30,9 +34,6 @@ assert_matches = { workspace = true }
 solana-logger = { workspace = true }
 test-case = { workspace = true }
 
-[build-dependencies]
-rustc_version = { workspace = true, optional = true }
-
 [lib]
 crate-type = ["lib"]
 name = "solana_vote_program"
@@ -42,7 +43,6 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [features]
 frozen-abi = [
-    "dep:rustc_version",
     "dep:solana-frozen-abi",
     "dep:solana-frozen-abi-macro",
     "solana-program/frozen-abi",

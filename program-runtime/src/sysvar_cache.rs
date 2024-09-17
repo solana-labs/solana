@@ -16,7 +16,7 @@ use {
     solana_type_overrides::sync::Arc,
 };
 
-#[cfg(all(RUSTC_WITH_SPECIALIZATION, feature = "frozen-abi"))]
+#[cfg(feature = "frozen-abi")]
 impl ::solana_frozen_abi::abi_example::AbiExample for SysvarCache {
     fn example() -> Self {
         // SysvarCache is not Serialize so just rely on Default.

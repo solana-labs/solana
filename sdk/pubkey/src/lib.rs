@@ -1,6 +1,6 @@
 //! Solana account addresses.
 #![no_std]
-#![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(min_specialization))]
+#![cfg_attr(feature = "frozen-abi", feature(min_specialization))]
 #![allow(clippy::arithmetic_side_effects)]
 
 #[cfg(any(feature = "std", target_arch = "wasm32"))]

@@ -37,7 +37,6 @@ full = [
 borsh = ["dep:borsh", "solana-program/borsh", "solana-secp256k1-recover/borsh"]
 dev-context-only-utils = ["qualifier_attr"]
 frozen-abi = [
-    "dep:rustc_version",
     "dep:solana-frozen-abi",
     "dep:solana-frozen-abi-macro",
     "solana-feature-set/frozen-abi",
@@ -88,8 +87,12 @@ solana-bn254 = { workspace = true }
 solana-decode-error = { workspace = true }
 solana-derivation-path = { workspace = true }
 solana-feature-set = { workspace = true }
-solana-frozen-abi = { workspace = true, optional = true }
-solana-frozen-abi-macro = { workspace = true, optional = true }
+solana-frozen-abi = { workspace = true, optional = true, features = [
+    "frozen-abi",
+] }
+solana-frozen-abi-macro = { workspace = true, optional = true, features = [
+    "frozen-abi",
+] }
 solana-program = { workspace = true }
 solana-program-memory = { workspace = true }
 solana-sanitize = { workspace = true }
@@ -120,9 +123,6 @@ solana-program = { workspace = true, features = ["dev-context-only-utils"] }
 solana-sdk = { path = ".", features = ["dev-context-only-utils"] }
 static_assertions = { workspace = true }
 tiny-bip39 = { workspace = true }
-
-[build-dependencies]
-rustc_version = { workspace = true, optional = true }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

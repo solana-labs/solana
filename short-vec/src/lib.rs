@@ -1,5 +1,5 @@
 //! Compact serde-encoding of vectors with small length.
-#![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(min_specialization))]
+#![cfg_attr(feature = "frozen-abi", feature(min_specialization))]
 #![allow(clippy::arithmetic_side_effects)]
 #[cfg(feature = "frozen-abi")]
 use solana_frozen_abi_macro::AbiExample;

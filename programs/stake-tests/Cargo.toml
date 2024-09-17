@@ -20,8 +20,5 @@ solana-sdk = { workspace = true }
 solana-vote-program = { workspace = true }
 test-case = { workspace = true }
 
-[build-dependencies]
-rustc_version = { workspace = true, optional = true }
-
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

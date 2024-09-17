@@ -1,6 +1,6 @@
 //! 64-byte signature type.
 #![no_std]
-#![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(min_specialization))]
+#![cfg_attr(feature = "frozen-abi", feature(min_specialization))]
 #[cfg(any(test, feature = "verify"))]
 use core::convert::TryInto;
 #[cfg(feature = "serde")]

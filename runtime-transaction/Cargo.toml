@@ -31,9 +31,6 @@ solana-program = { workspace = true }
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
-[build-dependencies]
-rustc_version = { workspace = true, optional = true }
-
 [[bench]]
 name = "process_compute_budget_instructions"
 harness = false

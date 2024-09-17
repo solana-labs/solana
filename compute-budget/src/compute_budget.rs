@@ -1,6 +1,6 @@
 use crate::compute_budget_limits::{self, ComputeBudgetLimits, DEFAULT_HEAP_COST};
 
-#[cfg(all(RUSTC_WITH_SPECIALIZATION, feature = "frozen-abi"))]
+#[cfg(feature = "frozen-abi")]
 impl ::solana_frozen_abi::abi_example::AbiExample for ComputeBudget {
     fn example() -> Self {
         // ComputeBudget is not Serialize so just rely on Default.

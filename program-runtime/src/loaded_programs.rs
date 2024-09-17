@@ -1347,7 +1347,7 @@ impl<FG: ForkGraph> ProgramCache<FG> {
     }
 }
 
-#[cfg(all(RUSTC_WITH_SPECIALIZATION, feature = "frozen-abi"))]
+#[cfg(feature = "frozen-abi")]
 impl solana_frozen_abi::abi_example::AbiExample for ProgramCacheEntry {
     fn example() -> Self {
         // ProgramCacheEntry isn't serializable by definition.
@@ -1355,7 +1355,7 @@ impl solana_frozen_abi::abi_example::AbiExample for ProgramCacheEntry {
     }
 }
 
-#[cfg(all(RUSTC_WITH_SPECIALIZATION, feature = "frozen-abi"))]
+#[cfg(feature = "frozen-abi")]
 impl<FG: ForkGraph> solana_frozen_abi::abi_example::AbiExample for ProgramCache<FG> {
     fn example() -> Self {
         // ProgramCache isn't serializable by definition.

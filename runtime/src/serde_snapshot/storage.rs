@@ -36,5 +36,5 @@ impl From<&AccountStorageEntry> for SerializableAccountStorageEntry {
     }
 }
 
-#[cfg(all(RUSTC_WITH_SPECIALIZATION, feature = "frozen-abi"))]
+#[cfg(feature = "frozen-abi")]
 impl solana_frozen_abi::abi_example::TransparentAsHelper for SerializableAccountStorageEntry {}

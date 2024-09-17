@@ -11,8 +11,12 @@ edition = { workspace = true }
 
 [dependencies]
 borsh = { workspace = true, optional = true }
-solana-frozen-abi = { workspace = true, optional = true }
-solana-frozen-abi-macro = { workspace = true, optional = true }
+solana-frozen-abi = { workspace = true, optional = true, features = [
+    "frozen-abi",
+] }
+solana-frozen-abi-macro = { workspace = true, optional = true, features = [
+    "frozen-abi",
+] }
 thiserror = { workspace = true }
 
 [target.'cfg(target_os = "solana")'.dependencies]
@@ -28,12 +32,9 @@ borsh = { workspace = true }
 [target.'cfg(not(target_os = "solana"))'.dev-dependencies]
 libsecp256k1 = { workspace = true, features = ["hmac"] }
 
-[build-dependencies]
-rustc_version = { workspace = true, optional = true }
-
 [features]
 borsh = ["dep:borsh"]
-frozen-abi = ["dep:rustc_version", "dep:solana-frozen-abi", "dep:solana-frozen-abi-macro"]
+frozen-abi = ["dep:solana-frozen-abi", "dep:solana-frozen-abi-macro"]
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

@@ -20,8 +20,12 @@ bytemuck_derive = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }
 serde_derive = { workspace = true, optional = true }
 solana-atomic-u64 = { workspace = true }
-solana-frozen-abi = { workspace = true, optional = true }
-solana-frozen-abi-macro = { workspace = true, optional = true }
+solana-frozen-abi = { workspace = true, optional = true, features = [
+    "frozen-abi",
+] }
+solana-frozen-abi-macro = { workspace = true, optional = true, features = [
+    "frozen-abi",
+] }
 solana-sanitize = { workspace = true }
 
 [dev-dependencies]
@@ -31,16 +35,12 @@ solana-hash = { path = ".", features = ["dev-context-only-utils"] }
 js-sys = { workspace = true }
 wasm-bindgen = { workspace = true }
 
-[build-dependencies]
-rustc_version = { workspace = true, optional = true }
-
 [features]
 borsh = ["dep:borsh", "std"]
 bytemuck = ["dep:bytemuck", "dep:bytemuck_derive"]
 default = ["std"]
 dev-context-only-utils = ["bs58/alloc"]
 frozen-abi = [
-    "dep:rustc_version",
     "dep:solana-frozen-abi",
     "dep:solana-frozen-abi-macro",
     "std"

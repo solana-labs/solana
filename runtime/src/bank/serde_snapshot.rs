@@ -502,7 +502,7 @@ mod tests {
         assert_eq!(dbank.epoch_reward_status, EpochRewardStatus::Inactive);
     }
 
-    #[cfg(all(RUSTC_WITH_SPECIALIZATION, feature = "frozen-abi"))]
+    #[cfg(feature = "frozen-abi")]
     mod test_bank_serialize {
         use {
             super::*,

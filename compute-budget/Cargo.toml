@@ -10,15 +10,13 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
-solana-frozen-abi = { workspace = true, optional = true }
+solana-frozen-abi = { workspace = true, optional = true, features = [
+    "frozen-abi",
+] }
 solana-sdk = { workspace = true }
-
-[build-dependencies]
-rustc_version = { workspace = true, optional = true }
 
 [features]
 frozen-abi = [
-    "dep:rustc_version",
     "dep:solana-frozen-abi",
     "solana-sdk/frozen-abi",
 ]

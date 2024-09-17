@@ -283,7 +283,7 @@ impl From<BankFieldsToSerialize> for SerializableVersionedBank {
     }
 }
 
-#[cfg(all(RUSTC_WITH_SPECIALIZATION, feature = "frozen-abi"))]
+#[cfg(feature = "frozen-abi")]
 impl solana_frozen_abi::abi_example::TransparentAsHelper for SerializableVersionedBank {}
 
 /// Helper type to wrap BufReader streams when deserializing and reconstructing from either just a
@@ -817,7 +817,7 @@ impl<'a> Serialize for SerializableAccountsDb<'a> {
     }
 }
 
-#[cfg(all(RUSTC_WITH_SPECIALIZATION, feature = "frozen-abi"))]
+#[cfg(feature = "frozen-abi")]
 impl<'a> solana_frozen_abi::abi_example::TransparentAsHelper for SerializableAccountsDb<'a> {}
 
 #[allow(clippy::too_many_arguments)]

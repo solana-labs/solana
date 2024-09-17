@@ -1,4 +1,4 @@
-#![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(min_specialization))]
+#![cfg_attr(feature = "frozen-abi", feature(min_specialization))]
 
 extern crate serde_derive;
 pub use self::legacy::{LegacyVersion1, LegacyVersion2};

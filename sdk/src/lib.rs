@@ -30,7 +30,7 @@
 //! [`clap`]: https://docs.rs/clap
 
 #![allow(incomplete_features)]
-#![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(specialization))]
+#![cfg_attr(feature = "frozen-abi", feature(specialization))]
 
 // Allows macro expansion of `use ::solana_sdk::*` to work within this crate
 extern crate self as solana_sdk;

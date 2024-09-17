@@ -24,9 +24,6 @@ solana-log-collector = { workspace = true }
 solana-program-runtime = { workspace = true }
 solana-sdk = { workspace = true }
 
-[build-dependencies]
-rustc_version = { workspace = true, optional = true }
-
 [lib]
 crate-type = ["lib"]
 name = "solana_address_lookup_table_program"

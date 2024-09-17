@@ -10,7 +10,7 @@
 //! while executing a given instruction is also included in `Instruction`, as
 //! [`AccountMeta`] values. The runtime uses this information to efficiently
 //! schedule execution of transactions.
-#![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(min_specialization))]
+#![cfg_attr(feature = "frozen-abi", feature(min_specialization))]
 #![allow(clippy::arithmetic_side_effects)]
 #![no_std]
 

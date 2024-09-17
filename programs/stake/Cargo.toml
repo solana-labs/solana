@@ -27,9 +27,6 @@ solana-compute-budget = { workspace = true }
 solana-logger = { workspace = true }
 test-case = { workspace = true }
 
-[build-dependencies]
-rustc_version = { workspace = true, optional = true }
-
 [lib]
 crate-type = ["lib"]
 name = "solana_stake_program"

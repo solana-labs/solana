@@ -1,4 +1,4 @@
-#![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(min_specialization))]
+#![cfg_attr(feature = "frozen-abi", feature(min_specialization))]
 //! Public key recovery from [secp256k1] ECDSA signatures.
 //!
 //! [secp256k1]: https://en.bitcoin.it/wiki/Secp256k1

@@ -1,6 +1,6 @@
 use solana_compute_budget::compute_budget::ComputeBudget;
 
-#[cfg(all(RUSTC_WITH_SPECIALIZATION, feature = "frozen-abi"))]
+#[cfg(feature = "frozen-abi")]
 impl ::solana_frozen_abi::abi_example::AbiExample for RuntimeConfig {
     fn example() -> Self {
         // RuntimeConfig is not Serialize so just rely on Default.

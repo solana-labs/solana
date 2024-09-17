@@ -29,12 +29,10 @@ bitflags = { workspace = true, features = ["serde"] }
 serde_bytes = { workspace = true }
 solana-logger = { workspace = true }
 
-[build-dependencies]
-rustc_version = { workspace = true }
-
 [features]
-default = ["frozen-abi"]
-# no reason to deactivate this. It's needed because the build.rs is reused elsewhere
+default = []
+# activate the frozen-abi feature when we actually want to do frozen-abi testing,
+# otherwise leave it off because it requires nightly Rust
 frozen-abi = []
 
 [lints]
