@@ -8860,6 +8860,7 @@ impl AccountsDb {
                 }
                 items_local.push(info.index_info);
             });
+            let items_len = items_local.len();
             let items = items_local.into_iter().map(|info| {
                 if let Some(amount_to_top_off_rent_this_account) = Self::stats_for_rent_payers(
                     &info.pubkey,
@@ -8884,11 +8885,7 @@ impl AccountsDb {
                 )
             });
             self.accounts_index
-                .insert_new_if_missing_into_primary_index(
-                    slot,
-                    storage.approx_stored_count(),
-                    items,
-                )
+                .insert_new_if_missing_into_primary_index(slot, items_len, items)
         };
         if secondary {
             // scan storage a second time to update the secondary index
