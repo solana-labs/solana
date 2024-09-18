@@ -9472,7 +9472,7 @@ pub(crate) enum UpdateIndexThreadSelection {
 impl AccountStorageEntry {
     fn accounts_count(&self) -> usize {
         let mut count = 0;
-        self.accounts.scan_accounts(|_| {
+        self.accounts.scan_pubkeys(|_| {
             count += 1;
         });
         count
