@@ -9932,7 +9932,7 @@ pub mod tests {
             assert_eq!(append_vec.alive_bytes(), expected_alive_bytes);
         }
         // total # accounts in append vec
-        assert_eq!(append_vec.approx_stored_count(), 2);
+        assert_eq!(append_vec.accounts_count(), 2);
         // # alive accounts
         assert_eq!(append_vec.count(), 1);
         // all account data alive
@@ -10772,8 +10772,8 @@ pub mod tests {
             let slot_1_store = &db.storage.get_slot_storage_entry(1).unwrap();
             assert_eq!(slot_0_store.count(), 2);
             assert_eq!(slot_1_store.count(), 2);
-            assert_eq!(slot_0_store.approx_stored_count(), 2);
-            assert_eq!(slot_1_store.approx_stored_count(), 2);
+            assert_eq!(slot_0_store.accounts_count(), 2);
+            assert_eq!(slot_1_store.accounts_count(), 2);
         }
 
         // overwrite old rooted account version; only the r_slot_0_stores.count() should be
@@ -10786,8 +10786,8 @@ pub mod tests {
             let slot_1_store = &db.storage.get_slot_storage_entry(1).unwrap();
             assert_eq!(slot_0_store.count(), 1);
             assert_eq!(slot_1_store.count(), 2);
-            assert_eq!(slot_0_store.approx_stored_count(), 2);
-            assert_eq!(slot_1_store.approx_stored_count(), 2);
+            assert_eq!(slot_0_store.accounts_count(), 2);
+            assert_eq!(slot_1_store.accounts_count(), 2);
         }
     });
 
