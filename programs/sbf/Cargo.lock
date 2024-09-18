@@ -235,9 +235,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.87"
+version = "1.0.89"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "10f00e1f6e58a40e807377c75c6a7f97bf9044fab57816f2414e6f5f4499d7b8"
+checksum = "86fdf8605db99b54d3cd748a44c6d04df638eb5dafb219b135d0149bd0db01f6"
 
 [[package]]
 name = "aquamarine"
@@ -2657,7 +2657,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c2a198fb6b0eada2a8df47933734e6d35d350665a33a3593d7164fa52c75c19"
 dependencies = [
  "cfg-if 1.0.0",
- "windows-targets 0.48.0",
+ "windows-targets 0.52.6",
 ]
 
 [[package]]
