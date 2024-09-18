@@ -249,8 +249,16 @@ fn main() {
             for entry in dir.flatten() {
                 if let Some(name) = entry.path().file_name() {
                     let name = name.to_str().unwrap().split_once(".").unwrap().0;
-                    let len = fs::metadata(entry.path()).unwrap().len();
-                    info.push((name.parse::<usize>().unwrap(), len as usize));
+                    match fs::metadata(entry.path()) {
+                        Ok(meta) => {
+                            info.push((name.parse::<usize>().unwrap(), meta.len() as usize));
+                        }
+                        Err(_) => {
+                            // skip when metadata fails. This can happen when you are running this tool while a validator is running.
+                            // It could clean something away and delete it after getting the dir but before opening the file.
+                            continue;
+                        }
+                    }
                     // eprintln!("{name}, {len}");
                 }
             }
