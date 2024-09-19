@@ -4322,8 +4322,8 @@ impl Bank {
             let rent_epoch_post = account.rent_epoch();
 
             // did the account change in any way due to rent collection?
-            let account_changed =
-                rent_collected_info.rent_amount != 0 || rent_epoch_post != rent_epoch_pre;
+            let rent_epoch_changed = rent_epoch_post != rent_epoch_pre;
+            let account_changed = rent_collected_info.rent_amount != 0 || rent_epoch_changed;
 
             // always store the account, regardless if it changed or not
             let always_store_accounts =
@@ -4360,6 +4360,17 @@ impl Bank {
                                 partition_from_pubkey,
                             );
                         }
+                    }
+                } else {
+                    debug_assert_eq!(rent_collected_info.rent_amount, 0);
+                    if rent_epoch_changed {
+                        datapoint_info!(
+                            "bank-rent_collection_updated_only_rent_epoch",
+                            ("slot", self.slot(), i64),
+                            ("pubkey", pubkey.to_string(), String),
+                            ("rent_epoch_pre", rent_epoch_pre, i64),
+                            ("rent_epoch_post", rent_epoch_post, i64),
+                        );
                     }
                 }
                 total_rent_collected_info += rent_collected_info;
