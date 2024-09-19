@@ -9557,15 +9557,11 @@ impl AccountsDb {
         }
     }
 
-    pub fn check_storage(&self, slot: Slot, count: usize) {
-        assert!(self.storage.get_slot_storage_entry(slot).is_some());
+    pub fn check_storage(&self, slot: Slot, alive_count: usize, total_count: usize) {
         let store = self.storage.get_slot_storage_entry(slot).unwrap();
-        let total_count = store.count();
         assert_eq!(store.status(), AccountStorageStatus::Available);
-        assert_eq!(total_count, count);
-        let (expected_store_count, actual_store_count): (usize, usize) =
-            (store.approx_stored_count(), store.accounts_count());
-        assert_eq!(expected_store_count, actual_store_count);
+        assert_eq!(store.count(), alive_count);
+        assert_eq!(store.accounts_count(), total_count);
     }
 
     pub fn create_account(
@@ -10758,7 +10754,7 @@ pub mod tests {
         let mut pubkeys: Vec<Pubkey> = vec![];
         db.create_account(&mut pubkeys, 0, 2, DEFAULT_FILE_SIZE as usize / 3, 0);
         db.add_root_and_flush_write_cache(0);
-        db.check_storage(0, 2);
+        db.check_storage(0, 2, 2);
 
         let pubkey = solana_sdk::pubkey::new_rand();
         let account = AccountSharedData::new(1, DEFAULT_FILE_SIZE as usize / 3, &pubkey);
@@ -10910,7 +10906,7 @@ pub mod tests {
         accounts.create_account(&mut pubkeys, 0, 100, 0, 0);
         update_accounts(&accounts, &pubkeys, 0, 99);
         accounts.add_root_and_flush_write_cache(0);
-        accounts.check_storage(0, 100);
+        accounts.check_storage(0, 100, 100);
     }
 
     #[test]
@@ -11834,9 +11830,9 @@ pub mod tests {
 
         // storage for slot 1 had 2 accounts, now has 1 after pubkey 1
         // was reclaimed
-        accounts.check_storage(1, 1);
+        accounts.check_storage(1, 1, 2);
         // storage for slot 2 had 1 accounts, now has 1
-        accounts.check_storage(2, 1);
+        accounts.check_storage(2, 1, 1);
     }
 
     #[test]

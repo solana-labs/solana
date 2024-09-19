@@ -324,7 +324,7 @@ mod serde_snapshot_tests {
             accounts.create_account(&mut pubkeys, 0, 100, 0, 0);
             if pass == 0 {
                 accounts.add_root_and_flush_write_cache(0);
-                accounts.check_storage(0, 100);
+                accounts.check_storage(0, 100, 100);
                 accounts.clean_accounts_for_tests();
                 accounts.check_accounts(&pubkeys, 0, 100, 1);
                 // clean should have done nothing
@@ -334,7 +334,7 @@ mod serde_snapshot_tests {
             // do some updates to those accounts and re-check
             accounts.modify_accounts(&pubkeys, 0, 100, 2);
             accounts.add_root_and_flush_write_cache(0);
-            accounts.check_storage(0, 100);
+            accounts.check_storage(0, 100, 100);
             accounts.check_accounts(&pubkeys, 0, 100, 2);
             accounts.calculate_accounts_delta_hash(0);
 
@@ -356,7 +356,7 @@ mod serde_snapshot_tests {
 
             accounts.calculate_accounts_delta_hash(latest_slot);
             accounts.add_root_and_flush_write_cache(latest_slot);
-            accounts.check_storage(1, 21);
+            accounts.check_storage(1, 21, 21);
 
             // CREATE SLOT 2
             let latest_slot = 2;
@@ -376,7 +376,7 @@ mod serde_snapshot_tests {
 
             accounts.calculate_accounts_delta_hash(latest_slot);
             accounts.add_root_and_flush_write_cache(latest_slot);
-            accounts.check_storage(2, 31);
+            accounts.check_storage(2, 31, 31);
 
             let ancestors = linear_ancestors(latest_slot);
             accounts.update_accounts_hash_for_tests(latest_slot, &ancestors, false, false);
@@ -385,11 +385,11 @@ mod serde_snapshot_tests {
             // The first 20 accounts of slot 0 have been updated in slot 2, as well as
             // accounts 30 and  31 (overwritten with zero-lamport accounts in slot 1 and
             // slot 2 respectively), so only 78 accounts are left in slot 0's storage entries.
-            accounts.check_storage(0, 78);
+            accounts.check_storage(0, 78, 100);
             // 10 of the 21 accounts have been modified in slot 2, so only 11
             // accounts left in slot 1.
-            accounts.check_storage(1, 11);
-            accounts.check_storage(2, 31);
+            accounts.check_storage(1, 11, 21);
+            accounts.check_storage(2, 31, 31);
 
             let daccounts =
                 reconstruct_accounts_db_via_serialization(&accounts, latest_slot, storage_access);
@@ -417,9 +417,9 @@ mod serde_snapshot_tests {
             // Don't check the first 35 accounts which have not been modified on slot 0
             daccounts.check_accounts(&pubkeys[35..], 0, 65, 37);
             daccounts.check_accounts(&pubkeys1, 1, 10, 1);
-            daccounts.check_storage(0, 100);
-            daccounts.check_storage(1, 21);
-            daccounts.check_storage(2, 31);
+            daccounts.check_storage(0, 100, 100);
+            daccounts.check_storage(1, 21, 21);
+            daccounts.check_storage(2, 31, 31);
 
             assert_eq!(
                 daccounts.update_accounts_hash_for_tests(latest_slot, &ancestors, false, false,),
