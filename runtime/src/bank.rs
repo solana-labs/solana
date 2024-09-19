@@ -4304,14 +4304,14 @@ impl Bank {
         let mut time_collecting_rent_us = 0;
         let mut time_storing_accounts_us = 0;
         let can_skip_rewrites = self.bank_hash_skips_rent_rewrites();
-        let test_skip_rewrites_but_include_hash_in_bank_hash = !can_skip_rewrites
-            && self
-                .rc
-                .accounts
-                .accounts_db
-                .test_skip_rewrites_but_include_in_bank_hash;
+        let test_skip_rewrites_but_include_in_bank_hash = self
+            .rc
+            .accounts
+            .accounts_db
+            .test_skip_rewrites_but_include_in_bank_hash;
         let mut skipped_rewrites = Vec::default();
         for (pubkey, account, _loaded_slot) in accounts.iter_mut() {
+            let rent_epoch_pre = account.rent_epoch();
             let (rent_collected_info, collect_rent_us) = measure_us!(collect_rent_from_account(
                 &self.feature_set,
                 &self.rent_collector,
@@ -4319,15 +4319,22 @@ impl Bank {
                 account
             ));
             time_collecting_rent_us += collect_rent_us;
+            let rent_epoch_post = account.rent_epoch();
+
+            // did the account change in any way due to rent collection?
+            let account_changed =
+                rent_collected_info.rent_amount != 0 || rent_epoch_post != rent_epoch_pre;
+
+            // always store the account, regardless if it changed or not
+            let always_store_accounts =
+                !can_skip_rewrites && !test_skip_rewrites_but_include_in_bank_hash;
 
             // only store accounts where we collected rent
             // but get the hash for all these accounts even if collected rent is 0 (= not updated).
             // Also, there's another subtle side-effect from rewrites: this
             // ensures we verify the whole on-chain state (= all accounts)
             // via the bank delta hash slowly once per an epoch.
-            if (!can_skip_rewrites && !test_skip_rewrites_but_include_hash_in_bank_hash)
-                || !Self::skip_rewrite(rent_collected_info.rent_amount, account)
-            {
+            if account_changed || always_store_accounts {
                 if rent_collected_info.rent_amount > 0 {
                     if let Some(rent_paying_pubkeys) = rent_paying_pubkeys {
                         if !rent_paying_pubkeys.contains(pubkey) {
@@ -4357,7 +4364,10 @@ impl Bank {
                 }
                 total_rent_collected_info += rent_collected_info;
                 accounts_to_store.push((pubkey, account));
-            } else if test_skip_rewrites_but_include_hash_in_bank_hash {
+            } else if !account_changed
+                && !can_skip_rewrites
+                && test_skip_rewrites_but_include_in_bank_hash
+            {
                 // include rewrites that we skipped in the accounts delta hash.
                 // This is what consensus requires prior to activation of bank_hash_skips_rent_rewrites.
                 // This code path exists to allow us to test the long term effects on validators when the skipped rewrites
@@ -4511,14 +4521,6 @@ impl Bank {
                 .fetch_add(results.time_storing_accounts_us, Relaxed);
             metrics.count.fetch_add(results.num_accounts, Relaxed);
         });
-    }
-
-    /// return true iff storing this account is just a rewrite and can be skipped
-    fn skip_rewrite(rent_amount: u64, account: &AccountSharedData) -> bool {
-        // if rent was != 0
-        // or special case for default rent value
-        // these cannot be skipped and must be written
-        rent_amount == 0 && account.rent_epoch() != 0
     }
 
     pub(crate) fn fixed_cycle_partitions_between_slots(

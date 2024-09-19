@@ -1762,7 +1762,9 @@ fn test_collect_rent_from_accounts() {
     solana_logger::setup();
 
     for skip_rewrites in [false, true] {
-        let zero_lamport_pubkey = Pubkey::from([0; 32]);
+        let address1 = Pubkey::new_unique();
+        let address2 = Pubkey::new_unique();
+        let address3 = Pubkey::new_unique();
 
         let (genesis_bank, bank_forks) = create_simple_test_arc_bank(100000);
         let mut first_bank = new_from_parent(genesis_bank.clone());
@@ -1784,12 +1786,20 @@ fn test_collect_rent_from_accounts() {
 
         let data_size = 0; // make sure we're rent exempt
         let lamports = later_bank.get_minimum_balance_for_rent_exemption(data_size); // cannot be 0 or we zero out rent_epoch in rent collection and we need to be rent exempt
-        let mut account = AccountSharedData::new(lamports, data_size, &Pubkey::default());
-        account.set_rent_epoch(later_bank.epoch() - 1); // non-zero, but less than later_bank's epoch
+        let mut account1 = AccountSharedData::new(lamports, data_size, &Pubkey::default());
+        let mut account2 = AccountSharedData::new(lamports, data_size, &Pubkey::default());
+        let mut account3 = AccountSharedData::new(lamports, data_size, &Pubkey::default());
+        account1.set_rent_epoch(later_bank.epoch() - 1); // non-zero, but less than later_bank's epoch
+        account2.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH); // already marked as rent exempt
+        account3.set_rent_epoch(0); // stake accounts in genesis have a rent epoch of 0
 
         // loaded from previous slot, so we skip rent collection on it
         let _result = later_bank.collect_rent_from_accounts(
-            vec![(zero_lamport_pubkey, account, later_slot - 1)],
+            vec![
+                (address1, account1, later_slot - 1),
+                (address2, account2, later_slot - 1),
+                (address3, account3, later_slot - 1),
+            ],
             None,
             PartitionIndex::default(),
         );
@@ -1800,12 +1810,22 @@ fn test_collect_rent_from_accounts() {
             .accounts_db
             .get_pubkey_hash_for_slot(later_slot)
             .0;
+
+        // ensure account1 *is* stored because the account *did* change
+        // (its rent epoch must be updated to RENT_EXEMPT_RENT_EPOCH)
+        assert!(deltas.iter().map(|(pubkey, _)| pubkey).contains(&address1));
+
+        // if doing rewrites, ensure account2 *is* stored
+        // if skipping rewrites, ensure account2 is *not* stored
+        // (because the account did *not* change)
         assert_eq!(
-            !deltas
-                .iter()
-                .any(|(pubkey, _)| pubkey == &zero_lamport_pubkey),
-            skip_rewrites
+            deltas.iter().map(|(pubkey, _)| pubkey).contains(&address2),
+            !skip_rewrites,
         );
+
+        // ensure account3 *is* stored because the account *did* change
+        // (same as account1 above)
+        assert!(deltas.iter().map(|(pubkey, _)| pubkey).contains(&address3));
     }
 }
 
@@ -11044,39 +11064,6 @@ fn test_update_accounts_data_size() {
     }
 }
 
-#[test]
-fn test_skip_rewrite() {
-    solana_logger::setup();
-    let mut account = AccountSharedData::default();
-    let bank_slot = 10;
-    for account_rent_epoch in 0..3 {
-        account.set_rent_epoch(account_rent_epoch);
-        for rent_amount in [0, 1] {
-            for loaded_slot in (bank_slot - 1)..=bank_slot {
-                for old_rent_epoch in account_rent_epoch.saturating_sub(1)..=account_rent_epoch {
-                    let skip = Bank::skip_rewrite(rent_amount, &account);
-                    let mut should_skip = true;
-                    if rent_amount != 0 || account_rent_epoch == 0 {
-                        should_skip = false;
-                    }
-                    assert_eq!(
-                        skip,
-                        should_skip,
-                        "{:?}",
-                        (
-                            account_rent_epoch,
-                            old_rent_epoch,
-                            rent_amount,
-                            loaded_slot,
-                            old_rent_epoch
-                        )
-                    );
-                }
-            }
-        }
-    }
-}
-
 #[derive(Serialize, Deserialize)]
 enum MockReallocInstruction {
     Realloc(usize, u64, Pubkey),
@@ -12266,6 +12253,11 @@ where
         .transfer_and_confirm(mint_lamports, &mint_keypair, &alice_pubkey)
         .unwrap();
 
+    // create and freeze a bank a few epochs in the future to trigger rent
+    // collection to visit (and rewrite) all accounts
+    let bank = new_from_parent_next_epoch(bank, &bank_forks, 2);
+    bank.freeze(); // trigger rent collection
+
     // create zero-lamports account to be cleaned
     let account = AccountSharedData::new(0, len1, &program);
     let slot = bank.slot() + 1;
@@ -12313,9 +12305,9 @@ fn test_create_zero_lamport_with_clean() {
         bank.squash();
         bank.force_flush_accounts_cache();
         // do clean and assert that it actually did its job
-        assert_eq!(4, bank.get_snapshot_storages(None).len());
+        assert_eq!(5, bank.get_snapshot_storages(None).len());
         bank.clean_accounts();
-        assert_eq!(3, bank.get_snapshot_storages(None).len());
+        assert_eq!(4, bank.get_snapshot_storages(None).len());
     });
 }
 
