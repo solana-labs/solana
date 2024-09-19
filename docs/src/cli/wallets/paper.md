@@ -150,14 +150,14 @@ By default, `prompt:` will derive solana's base derivation path `m/44'/501'`. To
 derive a child key, supply the `?key=<ACCOUNT>/<CHANGE>` query string.
 
 ```bash
-solana-keygen pubkey prompt://?key=0/1
+solana-keygen pubkey 'prompt://?key=0/1'
 ```
 
 To use a derivation path other than solana's standard BIP44, you can supply
 `?full-path=m/<PURPOSE>/<COIN_TYPE>/<ACCOUNT>/<CHANGE>`.
 
 ```bash
-solana-keygen pubkey prompt://?full-path=m/44/2017/0/1
+solana-keygen pubkey 'prompt://?full-path=m/44/2017/0/1'
 ```
 
 Because Solana uses Ed25519 keypairs, as per
