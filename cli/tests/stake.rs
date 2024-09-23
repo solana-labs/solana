@@ -31,6 +31,7 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_test_validator::{TestValidator, TestValidatorGenesis},
+    test_case::test_case,
 };
 
 #[test]
@@ -196,8 +197,9 @@ fn test_stake_delegation_force() {
     process_command(&config).unwrap();
 }
 
-#[test]
-fn test_seed_stake_delegation_and_deactivation() {
+#[test_case(None; "base")]
+#[test_case(Some(1_000_000); "with_compute_unit_price")]
+fn test_seed_stake_delegation_and_deactivation(compute_unit_price: Option<u64>) {
     solana_logger::setup();
 
     let mint_keypair = Keypair::new();
@@ -252,7 +254,7 @@ fn test_seed_stake_delegation_and_deactivation() {
         memo: None,
         fee_payer: 0,
         from: 0,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config_validator).unwrap();
 
@@ -269,7 +271,7 @@ fn test_seed_stake_delegation_and_deactivation() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config_validator).unwrap();
 
@@ -286,13 +288,14 @@ fn test_seed_stake_delegation_and_deactivation() {
         memo: None,
         seed: None,
         fee_payer: 0,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config_validator).unwrap();
 }
 
-#[test]
-fn test_stake_delegation_and_deactivation() {
+#[test_case(None; "base")]
+#[test_case(Some(1_000_000); "with_compute_unit_price")]
+fn test_stake_delegation_and_deactivation(compute_unit_price: Option<u64>) {
     solana_logger::setup();
 
     let mint_keypair = Keypair::new();
@@ -342,7 +345,7 @@ fn test_stake_delegation_and_deactivation() {
         memo: None,
         fee_payer: 0,
         from: 0,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config_validator).unwrap();
 
@@ -360,7 +363,7 @@ fn test_stake_delegation_and_deactivation() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config_validator).unwrap();
 
@@ -377,13 +380,14 @@ fn test_stake_delegation_and_deactivation() {
         memo: None,
         seed: None,
         fee_payer: 0,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config_validator).unwrap();
 }
 
-#[test]
-fn test_offline_stake_delegation_and_deactivation() {
+#[test_case(None; "base")]
+#[test_case(Some(1_000_000); "with_compute_unit_price")]
+fn test_offline_stake_delegation_and_deactivation(compute_unit_price: Option<u64>) {
     solana_logger::setup();
 
     let mint_keypair = Keypair::new();
@@ -457,7 +461,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         memo: None,
         fee_payer: 0,
         from: 0,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config_validator).unwrap();
 
@@ -475,7 +479,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     config_offline.output_format = OutputFormat::JsonCompact;
     let sig_response = process_command(&config_offline).unwrap();
@@ -497,7 +501,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config_payer).unwrap();
 
@@ -515,7 +519,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         memo: None,
         seed: None,
         fee_payer: 0,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     let sig_response = process_command(&config_offline).unwrap();
     let sign_only = parse_sign_only_reply_string(&sig_response);
@@ -536,13 +540,14 @@ fn test_offline_stake_delegation_and_deactivation() {
         memo: None,
         seed: None,
         fee_payer: 0,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config_payer).unwrap();
 }
 
-#[test]
-fn test_nonced_stake_delegation_and_deactivation() {
+#[test_case(None; "base")]
+#[test_case(Some(1_000_000); "with_compute_unit_price")]
+fn test_nonced_stake_delegation_and_deactivation(compute_unit_price: Option<u64>) {
     solana_logger::setup();
 
     let mint_keypair = Keypair::new();
@@ -590,7 +595,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
         memo: None,
         fee_payer: 0,
         from: 0,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config).unwrap();
 
@@ -603,7 +608,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
         nonce_authority: Some(config.signers[0].pubkey()),
         memo: None,
         amount: SpendAmount::Some(minimum_nonce_balance),
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config).unwrap();
 
@@ -634,7 +639,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config).unwrap();
 
@@ -664,13 +669,14 @@ fn test_nonced_stake_delegation_and_deactivation() {
         memo: None,
         seed: None,
         fee_payer: 0,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config).unwrap();
 }
 
-#[test]
-fn test_stake_authorize() {
+#[test_case(None; "base")]
+#[test_case(Some(1_000_000); "with_compute_unit_price")]
+fn test_stake_authorize(compute_unit_price: Option<u64>) {
     solana_logger::setup();
 
     let mint_keypair = Keypair::new();
@@ -732,7 +738,7 @@ fn test_stake_authorize() {
         memo: None,
         fee_payer: 0,
         from: 0,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config).unwrap();
 
@@ -757,7 +763,7 @@ fn test_stake_authorize() {
         fee_payer: 0,
         custodian: None,
         no_wait: false,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
@@ -799,7 +805,7 @@ fn test_stake_authorize() {
         fee_payer: 0,
         custodian: None,
         no_wait: false,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
@@ -831,7 +837,7 @@ fn test_stake_authorize() {
         fee_payer: 0,
         custodian: None,
         no_wait: false,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
@@ -863,7 +869,7 @@ fn test_stake_authorize() {
         fee_payer: 0,
         custodian: None,
         no_wait: false,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     config_offline.output_format = OutputFormat::JsonCompact;
     let sign_reply = process_command(&config_offline).unwrap();
@@ -888,7 +894,7 @@ fn test_stake_authorize() {
         fee_payer: 0,
         custodian: None,
         no_wait: false,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
@@ -911,7 +917,7 @@ fn test_stake_authorize() {
         nonce_authority: Some(offline_authority_pubkey),
         memo: None,
         amount: SpendAmount::Some(minimum_nonce_balance),
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config).unwrap();
 
@@ -946,7 +952,7 @@ fn test_stake_authorize() {
         fee_payer: 0,
         custodian: None,
         no_wait: false,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     let sign_reply = process_command(&config_offline).unwrap();
     let sign_only = parse_sign_only_reply_string(&sign_reply);
@@ -975,7 +981,7 @@ fn test_stake_authorize() {
         fee_payer: 0,
         custodian: None,
         no_wait: false,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
@@ -1178,8 +1184,9 @@ fn test_stake_authorize_with_fee_payer() {
     );
 }
 
-#[test]
-fn test_stake_split() {
+#[test_case(None; "base")]
+#[test_case(Some(1_000_000); "with_compute_unit_price")]
+fn test_stake_split(compute_unit_price: Option<u64>) {
     solana_logger::setup();
 
     let mint_keypair = Keypair::new();
@@ -1252,7 +1259,7 @@ fn test_stake_split() {
         memo: None,
         fee_payer: 0,
         from: 0,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config).unwrap();
     check_balance!(10 * stake_balance, &rpc_client, &stake_account_pubkey,);
@@ -1269,7 +1276,7 @@ fn test_stake_split() {
         nonce_authority: Some(offline_pubkey),
         memo: None,
         amount: SpendAmount::Some(minimum_nonce_balance),
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config).unwrap();
     check_balance!(minimum_nonce_balance, &rpc_client, &nonce_account.pubkey());
@@ -1301,7 +1308,7 @@ fn test_stake_split() {
         seed: None,
         lamports: 2 * stake_balance,
         fee_payer: 0,
-        compute_unit_price: None,
+        compute_unit_price,
         rent_exempt_reserve: Some(minimum_balance),
     };
     config_offline.output_format = OutputFormat::JsonCompact;
@@ -1326,7 +1333,7 @@ fn test_stake_split() {
         seed: None,
         lamports: 2 * stake_balance,
         fee_payer: 0,
-        compute_unit_price: None,
+        compute_unit_price,
         rent_exempt_reserve: None,
     };
     process_command(&config).unwrap();
@@ -1338,8 +1345,9 @@ fn test_stake_split() {
     );
 }
 
-#[test]
-fn test_stake_set_lockup() {
+#[test_case(None; "base")]
+#[test_case(Some(1_000_000); "with_compute_unit_price")]
+fn test_stake_set_lockup(compute_unit_price: Option<u64>) {
     solana_logger::setup();
 
     let mint_keypair = Keypair::new();
@@ -1418,10 +1426,9 @@ fn test_stake_set_lockup() {
         memo: None,
         fee_payer: 0,
         from: 0,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config).unwrap();
-    check_balance!(10 * stake_balance, &rpc_client, &stake_account_pubkey,);
     check_balance!(10 * stake_balance, &rpc_client, &stake_account_pubkey,);
 
     // Online set lockup
@@ -1443,7 +1450,7 @@ fn test_stake_set_lockup() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
@@ -1480,7 +1487,7 @@ fn test_stake_set_lockup() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config).unwrap();
 
@@ -1502,7 +1509,7 @@ fn test_stake_set_lockup() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
@@ -1536,7 +1543,7 @@ fn test_stake_set_lockup() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config).unwrap();
 
@@ -1553,7 +1560,7 @@ fn test_stake_set_lockup() {
         nonce_authority: Some(offline_pubkey),
         memo: None,
         amount: SpendAmount::Some(minimum_nonce_balance),
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config).unwrap();
     check_balance!(minimum_nonce_balance, &rpc_client, &nonce_account_pubkey);
@@ -1586,7 +1593,7 @@ fn test_stake_set_lockup() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     config_offline.output_format = OutputFormat::JsonCompact;
     let sig_response = process_command(&config_offline).unwrap();
@@ -1609,7 +1616,7 @@ fn test_stake_set_lockup() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
@@ -1626,8 +1633,9 @@ fn test_stake_set_lockup() {
     assert_eq!(current_lockup.custodian, offline_pubkey);
 }
 
-#[test]
-fn test_offline_nonced_create_stake_account_and_withdraw() {
+#[test_case(None; "base")]
+#[test_case(Some(1_000_000); "with_compute_unit_price")]
+fn test_offline_nonced_create_stake_account_and_withdraw(compute_unit_price: Option<u64>) {
     solana_logger::setup();
 
     let mint_keypair = Keypair::new();
@@ -1683,7 +1691,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         nonce_authority: Some(offline_pubkey),
         memo: None,
         amount: SpendAmount::Some(minimum_nonce_balance),
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config).unwrap();
 
@@ -1717,7 +1725,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         memo: None,
         fee_payer: 0,
         from: 0,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     config_offline.output_format = OutputFormat::JsonCompact;
     let sig_response = process_command(&config_offline).unwrap();
@@ -1745,7 +1753,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         memo: None,
         fee_payer: 0,
         from: 0,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config).unwrap();
     check_balance!(50_000_000_000, &rpc_client, &stake_pubkey);
@@ -1778,7 +1786,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         memo: None,
         seed: None,
         fee_payer: 0,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     let sig_response = process_command(&config_offline).unwrap();
     let sign_only = parse_sign_only_reply_string(&sig_response);
@@ -1801,7 +1809,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         memo: None,
         seed: None,
         fee_payer: 0,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config).unwrap();
     check_balance!(50_000_000_000, &rpc_client, &recipient_pubkey);
@@ -1835,7 +1843,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         memo: None,
         fee_payer: 0,
         from: 0,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     let sig_response = process_command(&config_offline).unwrap();
     let sign_only = parse_sign_only_reply_string(&sig_response);
@@ -1861,7 +1869,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         memo: None,
         fee_payer: 0,
         from: 0,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config).unwrap();
     let seed_address =

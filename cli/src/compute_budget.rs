@@ -12,12 +12,12 @@ use {
     },
 };
 
-// This enum is equivalent to an Option but was added to self-document
-// the ok variants and has the benefit of not forcing the caller to use
-// the result if they don't care about it.
+/// Enum capturing the possible results of updating a message based on the
+/// compute unit limits consumed during simulation.
 pub(crate) enum UpdateComputeUnitLimitResult {
     UpdatedInstructionIndex(usize),
     NoInstructionFound,
+    SimulationNotConfigured,
 }
 
 fn get_compute_unit_limit_instruction_index(message: &Message) -> Option<usize> {
@@ -83,8 +83,14 @@ pub(crate) fn simulate_for_compute_unit_limit(
     simulate_for_compute_unit_limit_unchecked(rpc_client, message)
 }
 
-// Returns the index of the compute unit limit instruction
+/// Simulates a message and returns the index of the compute unit limit
+/// instruction
+///
+/// If the message does not contain a compute unit limit instruction, or if
+/// simulation was not configured, then the function will not simulate the
+/// message.
 pub(crate) fn simulate_and_update_compute_unit_limit(
+    compute_unit_limit: &ComputeUnitLimit,
     rpc_client: &RpcClient,
     message: &mut Message,
 ) -> Result<UpdateComputeUnitLimitResult, Box<dyn std::error::Error>> {
@@ -93,15 +99,23 @@ pub(crate) fn simulate_and_update_compute_unit_limit(
         return Ok(UpdateComputeUnitLimitResult::NoInstructionFound);
     };
 
-    let compute_unit_limit = simulate_for_compute_unit_limit_unchecked(rpc_client, message)?;
+    match compute_unit_limit {
+        ComputeUnitLimit::Simulated => {
+            let compute_unit_limit =
+                simulate_for_compute_unit_limit_unchecked(rpc_client, message)?;
 
-    // Overwrite the compute unit limit instruction with the actual units consumed
-    message.instructions[compute_unit_limit_ix_index].data =
-        ComputeBudgetInstruction::set_compute_unit_limit(compute_unit_limit).data;
+            // Overwrite the compute unit limit instruction with the actual units consumed
+            message.instructions[compute_unit_limit_ix_index].data =
+                ComputeBudgetInstruction::set_compute_unit_limit(compute_unit_limit).data;
 
-    Ok(UpdateComputeUnitLimitResult::UpdatedInstructionIndex(
-        compute_unit_limit_ix_index,
-    ))
+            Ok(UpdateComputeUnitLimitResult::UpdatedInstructionIndex(
+                compute_unit_limit_ix_index,
+            ))
+        }
+        ComputeUnitLimit::Static(_) | ComputeUnitLimit::Default => {
+            Ok(UpdateComputeUnitLimitResult::SimulationNotConfigured)
+        }
+    }
 }
 
 pub(crate) struct ComputeUnitConfig {

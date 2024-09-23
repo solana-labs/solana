@@ -5,7 +5,9 @@ use {
             log_instruction_custom_error, CliCommand, CliCommandInfo, CliConfig, CliError,
             ProcessResult,
         },
-        compute_budget::{ComputeUnitConfig, WithComputeUnitConfig},
+        compute_budget::{
+            simulate_and_update_compute_unit_limit, ComputeUnitConfig, WithComputeUnitConfig,
+        },
         feature::get_feature_activation_epoch,
         memo::WithMemo,
         nonce::check_nonce_account,
@@ -1393,7 +1395,10 @@ pub fn process_create_stake_account(
     let fee_payer = config.signers[fee_payer];
     let nonce_authority = config.signers[nonce_authority];
 
-    let compute_unit_limit = ComputeUnitLimit::Default;
+    let compute_unit_limit = match blockhash_query {
+        BlockhashQuery::None(_) | BlockhashQuery::FeeCalculator(_, _) => ComputeUnitLimit::Default,
+        BlockhashQuery::All(_) => ComputeUnitLimit::Simulated,
+    };
     let build_message = |lamports| {
         let authorized = Authorized {
             staker: staker.unwrap_or(from.pubkey()),
@@ -1601,11 +1606,15 @@ pub fn process_stake_authorize(
             ));
         }
     }
+    let compute_unit_limit = match blockhash_query {
+        BlockhashQuery::None(_) | BlockhashQuery::FeeCalculator(_, _) => ComputeUnitLimit::Default,
+        BlockhashQuery::All(_) => ComputeUnitLimit::Simulated,
+    };
     ixs = ixs
         .with_memo(memo)
         .with_compute_unit_config(&ComputeUnitConfig {
             compute_unit_price,
-            compute_unit_limit: ComputeUnitLimit::Default,
+            compute_unit_limit,
         });
 
     let recent_blockhash = blockhash_query.get_blockhash(rpc_client, config.commitment)?;
@@ -1613,7 +1622,7 @@ pub fn process_stake_authorize(
     let nonce_authority = config.signers[nonce_authority];
     let fee_payer = config.signers[fee_payer];
 
-    let message = if let Some(nonce_account) = &nonce_account {
+    let mut message = if let Some(nonce_account) = &nonce_account {
         Message::new_with_nonce(
             ixs,
             Some(&fee_payer.pubkey()),
@@ -1623,6 +1632,7 @@ pub fn process_stake_authorize(
     } else {
         Message::new(&ixs, Some(&fee_payer.pubkey()))
     };
+    simulate_and_update_compute_unit_limit(&compute_unit_limit, rpc_client, &mut message)?;
     let mut tx = Transaction::new_unsigned(message);
 
     if sign_only {
@@ -1684,6 +1694,10 @@ pub fn process_deactivate_stake_account(
         *stake_account_pubkey
     };
 
+    let compute_unit_limit = match blockhash_query {
+        BlockhashQuery::None(_) | BlockhashQuery::FeeCalculator(_, _) => ComputeUnitLimit::Default,
+        BlockhashQuery::All(_) => ComputeUnitLimit::Simulated,
+    };
     let ixs = vec![if deactivate_delinquent {
         let stake_account = rpc_client.get_account(&stake_account_address)?;
         if stake_account.owner != stake::program::id() {
@@ -1753,13 +1767,13 @@ pub fn process_deactivate_stake_account(
     .with_memo(memo)
     .with_compute_unit_config(&ComputeUnitConfig {
         compute_unit_price,
-        compute_unit_limit: ComputeUnitLimit::Default,
+        compute_unit_limit,
     });
 
     let nonce_authority = config.signers[nonce_authority];
     let fee_payer = config.signers[fee_payer];
 
-    let message = if let Some(nonce_account) = &nonce_account {
+    let mut message = if let Some(nonce_account) = &nonce_account {
         Message::new_with_nonce(
             ixs,
             Some(&fee_payer.pubkey()),
@@ -1769,6 +1783,7 @@ pub fn process_deactivate_stake_account(
     } else {
         Message::new(&ixs, Some(&fee_payer.pubkey()))
     };
+    simulate_and_update_compute_unit_limit(&compute_unit_limit, rpc_client, &mut message)?;
     let mut tx = Transaction::new_unsigned(message);
 
     if sign_only {
@@ -1834,7 +1849,10 @@ pub fn process_withdraw_stake(
     let fee_payer = config.signers[fee_payer];
     let nonce_authority = config.signers[nonce_authority];
 
-    let compute_unit_limit = ComputeUnitLimit::Default;
+    let compute_unit_limit = match blockhash_query {
+        BlockhashQuery::None(_) | BlockhashQuery::FeeCalculator(_, _) => ComputeUnitLimit::Default,
+        BlockhashQuery::All(_) => ComputeUnitLimit::Simulated,
+    };
     let build_message = |lamports| {
         let ixs = vec![stake_instruction::withdraw(
             &stake_account_address,
@@ -2016,6 +2034,10 @@ pub fn process_split_stake(
             rent_exempt_reserve,
         ));
     }
+    let compute_unit_limit = match blockhash_query {
+        BlockhashQuery::None(_) | BlockhashQuery::FeeCalculator(_, _) => ComputeUnitLimit::Default,
+        BlockhashQuery::All(_) => ComputeUnitLimit::Simulated,
+    };
     if let Some(seed) = split_stake_account_seed {
         ixs.append(
             &mut stake_instruction::split_with_seed(
@@ -2029,7 +2051,7 @@ pub fn process_split_stake(
             .with_memo(memo)
             .with_compute_unit_config(&ComputeUnitConfig {
                 compute_unit_price,
-                compute_unit_limit: ComputeUnitLimit::Default,
+                compute_unit_limit,
             }),
         )
     } else {
@@ -2043,14 +2065,14 @@ pub fn process_split_stake(
             .with_memo(memo)
             .with_compute_unit_config(&ComputeUnitConfig {
                 compute_unit_price,
-                compute_unit_limit: ComputeUnitLimit::Default,
+                compute_unit_limit,
             }),
         )
     };
 
     let nonce_authority = config.signers[nonce_authority];
 
-    let message = if let Some(nonce_account) = &nonce_account {
+    let mut message = if let Some(nonce_account) = &nonce_account {
         Message::new_with_nonce(
             ixs,
             Some(&fee_payer.pubkey()),
@@ -2060,6 +2082,7 @@ pub fn process_split_stake(
     } else {
         Message::new(&ixs, Some(&fee_payer.pubkey()))
     };
+    simulate_and_update_compute_unit_limit(&compute_unit_limit, rpc_client, &mut message)?;
     let mut tx = Transaction::new_unsigned(message);
 
     if sign_only {
@@ -2146,6 +2169,10 @@ pub fn process_merge_stake(
 
     let recent_blockhash = blockhash_query.get_blockhash(rpc_client, config.commitment)?;
 
+    let compute_unit_limit = match blockhash_query {
+        BlockhashQuery::None(_) | BlockhashQuery::FeeCalculator(_, _) => ComputeUnitLimit::Default,
+        BlockhashQuery::All(_) => ComputeUnitLimit::Simulated,
+    };
     let ixs = stake_instruction::merge(
         stake_account_pubkey,
         source_stake_account_pubkey,
@@ -2154,12 +2181,12 @@ pub fn process_merge_stake(
     .with_memo(memo)
     .with_compute_unit_config(&ComputeUnitConfig {
         compute_unit_price,
-        compute_unit_limit: ComputeUnitLimit::Default,
+        compute_unit_limit,
     });
 
     let nonce_authority = config.signers[nonce_authority];
 
-    let message = if let Some(nonce_account) = &nonce_account {
+    let mut message = if let Some(nonce_account) = &nonce_account {
         Message::new_with_nonce(
             ixs,
             Some(&fee_payer.pubkey()),
@@ -2169,6 +2196,7 @@ pub fn process_merge_stake(
     } else {
         Message::new(&ixs, Some(&fee_payer.pubkey()))
     };
+    simulate_and_update_compute_unit_limit(&compute_unit_limit, rpc_client, &mut message)?;
     let mut tx = Transaction::new_unsigned(message);
 
     if sign_only {
@@ -2225,6 +2253,10 @@ pub fn process_stake_set_lockup(
     let recent_blockhash = blockhash_query.get_blockhash(rpc_client, config.commitment)?;
     let custodian = config.signers[custodian];
 
+    let compute_unit_limit = match blockhash_query {
+        BlockhashQuery::None(_) | BlockhashQuery::FeeCalculator(_, _) => ComputeUnitLimit::Default,
+        BlockhashQuery::All(_) => ComputeUnitLimit::Simulated,
+    };
     let ixs = vec![if new_custodian_signer.is_some() {
         stake_instruction::set_lockup_checked(stake_account_pubkey, lockup, &custodian.pubkey())
     } else {
@@ -2233,7 +2265,7 @@ pub fn process_stake_set_lockup(
     .with_memo(memo)
     .with_compute_unit_config(&ComputeUnitConfig {
         compute_unit_price,
-        compute_unit_limit: ComputeUnitLimit::Default,
+        compute_unit_limit,
     });
     let nonce_authority = config.signers[nonce_authority];
     let fee_payer = config.signers[fee_payer];
@@ -2257,7 +2289,7 @@ pub fn process_stake_set_lockup(
         }
     }
 
-    let message = if let Some(nonce_account) = &nonce_account {
+    let mut message = if let Some(nonce_account) = &nonce_account {
         Message::new_with_nonce(
             ixs,
             Some(&fee_payer.pubkey()),
@@ -2267,6 +2299,7 @@ pub fn process_stake_set_lockup(
     } else {
         Message::new(&ixs, Some(&fee_payer.pubkey()))
     };
+    simulate_and_update_compute_unit_limit(&compute_unit_limit, rpc_client, &mut message)?;
     let mut tx = Transaction::new_unsigned(message);
 
     if sign_only {
@@ -2707,6 +2740,10 @@ pub fn process_delegate_stake(
 
     let recent_blockhash = blockhash_query.get_blockhash(rpc_client, config.commitment)?;
 
+    let compute_unit_limit = match blockhash_query {
+        BlockhashQuery::None(_) | BlockhashQuery::FeeCalculator(_, _) => ComputeUnitLimit::Default,
+        BlockhashQuery::All(_) => ComputeUnitLimit::Simulated,
+    };
     let ixs = vec![stake_instruction::delegate_stake(
         stake_account_pubkey,
         &stake_authority.pubkey(),
@@ -2715,13 +2752,13 @@ pub fn process_delegate_stake(
     .with_memo(memo)
     .with_compute_unit_config(&ComputeUnitConfig {
         compute_unit_price,
-        compute_unit_limit: ComputeUnitLimit::Default,
+        compute_unit_limit,
     });
 
     let nonce_authority = config.signers[nonce_authority];
     let fee_payer = config.signers[fee_payer];
 
-    let message = if let Some(nonce_account) = &nonce_account {
+    let mut message = if let Some(nonce_account) = &nonce_account {
         Message::new_with_nonce(
             ixs,
             Some(&fee_payer.pubkey()),
@@ -2731,6 +2768,7 @@ pub fn process_delegate_stake(
     } else {
         Message::new(&ixs, Some(&fee_payer.pubkey()))
     };
+    simulate_and_update_compute_unit_limit(&compute_unit_limit, rpc_client, &mut message)?;
     let mut tx = Transaction::new_unsigned(message);
 
     if sign_only {

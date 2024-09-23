@@ -2420,6 +2420,7 @@ fn do_process_program_deploy(
     use_rpc: bool,
 ) -> ProcessResult {
     let blockhash = rpc_client.get_latest_blockhash()?;
+    let compute_unit_limit = ComputeUnitLimit::Simulated;
 
     let (initial_instructions, balance_needed, buffer_program_data) =
         if let Some(buffer_program_data) = buffer_program_data {
@@ -2442,7 +2443,7 @@ fn do_process_program_deploy(
         Some(Message::new_with_blockhash(
             &initial_instructions.with_compute_unit_config(&ComputeUnitConfig {
                 compute_unit_price,
-                compute_unit_limit: ComputeUnitLimit::Simulated,
+                compute_unit_limit,
             }),
             Some(&fee_payer_signer.pubkey()),
             &blockhash,
@@ -2462,7 +2463,7 @@ fn do_process_program_deploy(
 
         let instructions = vec![instruction].with_compute_unit_config(&ComputeUnitConfig {
             compute_unit_price,
-            compute_unit_limit: ComputeUnitLimit::Simulated,
+            compute_unit_limit,
         });
         Message::new_with_blockhash(&instructions, Some(&fee_payer_signer.pubkey()), &blockhash)
     };
@@ -2489,7 +2490,7 @@ fn do_process_program_deploy(
         )?
         .with_compute_unit_config(&ComputeUnitConfig {
             compute_unit_price,
-            compute_unit_limit: ComputeUnitLimit::Simulated,
+            compute_unit_limit,
         });
 
         Some(Message::new_with_blockhash(
@@ -2523,6 +2524,7 @@ fn do_process_program_deploy(
         Some(program_signers),
         max_sign_attempts,
         use_rpc,
+        &compute_unit_limit,
     )?;
 
     let program_id = CliProgramId {
@@ -2550,6 +2552,7 @@ fn do_process_write_buffer(
     use_rpc: bool,
 ) -> ProcessResult {
     let blockhash = rpc_client.get_latest_blockhash()?;
+    let compute_unit_limit = ComputeUnitLimit::Simulated;
 
     let (initial_instructions, balance_needed, buffer_program_data) =
         if let Some(buffer_program_data) = buffer_program_data {
@@ -2572,7 +2575,7 @@ fn do_process_write_buffer(
         Some(Message::new_with_blockhash(
             &initial_instructions.with_compute_unit_config(&ComputeUnitConfig {
                 compute_unit_price,
-                compute_unit_limit: ComputeUnitLimit::Simulated,
+                compute_unit_limit,
             }),
             Some(&fee_payer_signer.pubkey()),
             &blockhash,
@@ -2592,7 +2595,7 @@ fn do_process_write_buffer(
 
         let instructions = vec![instruction].with_compute_unit_config(&ComputeUnitConfig {
             compute_unit_price,
-            compute_unit_limit: ComputeUnitLimit::Simulated,
+            compute_unit_limit,
         });
         Message::new_with_blockhash(&instructions, Some(&fee_payer_signer.pubkey()), &blockhash)
     };
@@ -2630,6 +2633,7 @@ fn do_process_write_buffer(
         None,
         max_sign_attempts,
         use_rpc,
+        &compute_unit_limit,
     )?;
 
     let buffer = CliProgramBuffer {
@@ -2658,6 +2662,7 @@ fn do_process_program_upgrade(
     use_rpc: bool,
 ) -> ProcessResult {
     let blockhash = rpc_client.get_latest_blockhash()?;
+    let compute_unit_limit = ComputeUnitLimit::Simulated;
 
     let (initial_message, write_messages, balance_needed) = if let Some(buffer_signer) =
         buffer_signer
@@ -2714,7 +2719,7 @@ fn do_process_program_upgrade(
             )]
             .with_compute_unit_config(&ComputeUnitConfig {
                 compute_unit_price,
-                compute_unit_limit: ComputeUnitLimit::Simulated,
+                compute_unit_limit,
             });
             Message::new_with_blockhash(&instructions, Some(&fee_payer_signer.pubkey()), &blockhash)
         };
@@ -2743,7 +2748,7 @@ fn do_process_program_upgrade(
     )]
     .with_compute_unit_config(&ComputeUnitConfig {
         compute_unit_price,
-        compute_unit_limit: ComputeUnitLimit::Simulated,
+        compute_unit_limit,
     });
     let final_message = Message::new_with_blockhash(
         &final_instructions,
@@ -2776,6 +2781,7 @@ fn do_process_program_upgrade(
         Some(&[upgrade_authority]),
         max_sign_attempts,
         use_rpc,
+        &compute_unit_limit,
     )?;
 
     let program_id = CliProgramId {
@@ -2912,11 +2918,12 @@ fn send_deploy_messages(
     final_signers: Option<&[&dyn Signer]>,
     max_sign_attempts: usize,
     use_rpc: bool,
+    compute_unit_limit: &ComputeUnitLimit,
 ) -> Result<Option<Signature>, Box<dyn std::error::Error>> {
     if let Some(mut message) = initial_message {
         if let Some(initial_signer) = initial_signer {
             trace!("Preparing the required accounts");
-            simulate_and_update_compute_unit_limit(&rpc_client, &mut message)?;
+            simulate_and_update_compute_unit_limit(compute_unit_limit, &rpc_client, &mut message)?;
             let mut initial_transaction = Transaction::new_unsigned(message.clone());
             let blockhash = rpc_client.get_latest_blockhash()?;
 
@@ -2947,7 +2954,11 @@ fn send_deploy_messages(
             {
                 let mut message = write_messages[0].clone();
                 if let UpdateComputeUnitLimitResult::UpdatedInstructionIndex(ix_index) =
-                    simulate_and_update_compute_unit_limit(&rpc_client, &mut message)?
+                    simulate_and_update_compute_unit_limit(
+                        compute_unit_limit,
+                        &rpc_client,
+                        &mut message,
+                    )?
                 {
                     for msg in &mut write_messages {
                         // Write messages are all assumed to be identical except
@@ -3024,7 +3035,7 @@ fn send_deploy_messages(
         if let Some(final_signers) = final_signers {
             trace!("Deploying program");
 
-            simulate_and_update_compute_unit_limit(&rpc_client, &mut message)?;
+            simulate_and_update_compute_unit_limit(compute_unit_limit, &rpc_client, &mut message)?;
             let mut final_tx = Transaction::new_unsigned(message);
             let blockhash = rpc_client.get_latest_blockhash()?;
             let mut signers = final_signers.to_vec();
