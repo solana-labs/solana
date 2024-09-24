@@ -13,7 +13,7 @@ rust-version = "1.79.0"                          # solana platform-tools rust ve
 
 [dependencies]
 bincode = { workspace = true }
-blake3 = { workspace = true, features = ["digest", "traits-preview"] }
+blake3 = { workspace = true, features = ["traits-preview"] }
 borsh = { workspace = true, optional = true }
 borsh0-10 = { package = "borsh", version = "0.10.3", optional = true }
 bs58 = { workspace = true, features = ["alloc"] }
