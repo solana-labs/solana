@@ -3079,11 +3079,34 @@ impl AccountsDb {
     ) {
         let uncleaned_slots = self.collect_uncleaned_slots_up_to_slot(max_slot_inclusive);
         for uncleaned_slot in uncleaned_slots.into_iter() {
-            if let Some((_removed_slot, removed_pubkeys)) =
+            if let Some((_removed_slot, mut removed_pubkeys)) =
                 self.uncleaned_pubkeys.remove(&uncleaned_slot)
             {
-                for removed_pubkey in removed_pubkeys {
-                    self.insert_pubkey(candidates, removed_pubkey);
+                // Sort all keys by bin index so that we can insert
+                // them in `candidates` more efficiently.
+                removed_pubkeys.sort_by(|a, b| {
+                    self.accounts_index
+                        .bin_calculator
+                        .bin_from_pubkey(a)
+                        .cmp(&self.accounts_index.bin_calculator.bin_from_pubkey(b))
+                });
+                if let Some(first_removed_pubkey) = removed_pubkeys.first() {
+                    let mut prev_bin = self
+                        .accounts_index
+                        .bin_calculator
+                        .bin_from_pubkey(first_removed_pubkey);
+                    let mut candidates_bin = candidates[prev_bin].write().unwrap();
+                    for removed_pubkey in removed_pubkeys {
+                        let curr_bin = self
+                            .accounts_index
+                            .bin_calculator
+                            .bin_from_pubkey(&removed_pubkey);
+                        if curr_bin != prev_bin {
+                            candidates_bin = candidates[curr_bin].write().unwrap();
+                            prev_bin = curr_bin;
+                        }
+                        candidates_bin.insert(removed_pubkey, CleaningInfo::default());
+                    }
                 }
             }
         }
