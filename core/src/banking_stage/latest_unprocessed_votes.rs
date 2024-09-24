@@ -351,6 +351,28 @@ impl LatestUnprocessedVotes {
                 .is_active(&feature_set::deprecate_legacy_vote_ixs::id()),
             Ordering::Relaxed,
         );
+
+        // Evict any now unstaked pubkeys
+        let mut latest_votes_per_pubkey = self.latest_votes_per_pubkey.write().unwrap();
+        let mut unstaked_votes = 0;
+        latest_votes_per_pubkey.retain(|pubkey, vote| {
+            let is_present = !vote.read().unwrap().is_vote_taken();
+            let should_evict = match staked_nodes.get(pubkey) {
+                None => true,
+                Some(stake) => *stake == 0,
+            };
+            if is_present && should_evict {
+                unstaked_votes += 1;
+            }
+            !should_evict
+        });
+        self.num_unprocessed_votes
+            .fetch_sub(unstaked_votes, Ordering::Relaxed);
+        datapoint_info!(
+            "latest_unprocessed_votes-epoch-boundary",
+            ("epoch", bank.epoch(), i64),
+            ("evicted_unstaked_votes", unstaked_votes, i64)
+        );
     }
 
     /// Returns how many packets were forwardable
@@ -943,8 +965,10 @@ mod tests {
 
         let vote_a = from_slots(vec![(1, 1)], VoteSource::Gossip, &keypair_a, None);
         let vote_b = from_slots(vec![(2, 1)], VoteSource::Tpu, &keypair_b, None);
-        latest_unprocessed_votes.update_latest_vote(vote_a, false /* should replenish */);
-        latest_unprocessed_votes.update_latest_vote(vote_b, false /* should replenish */);
+        latest_unprocessed_votes
+            .update_latest_vote(vote_a.clone(), false /* should replenish */);
+        latest_unprocessed_votes
+            .update_latest_vote(vote_b.clone(), false /* should replenish */);
 
         // Recache on epoch boundary and don't forward 0 stake accounts
         latest_unprocessed_votes.cache_epoch_boundary_info(&bank);
@@ -976,6 +1000,10 @@ mod tests {
 
         // Don't forward votes from gossip
         latest_unprocessed_votes.cache_epoch_boundary_info(&bank);
+        latest_unprocessed_votes
+            .update_latest_vote(vote_a.clone(), false /* should replenish */);
+        latest_unprocessed_votes
+            .update_latest_vote(vote_b.clone(), false /* should replenish */);
         let forwarded = latest_unprocessed_votes.get_and_insert_forwardable_packets(
             Arc::new(bank),
             &mut forward_packet_batches_by_accounts,
@@ -1007,6 +1035,8 @@ mod tests {
 
         // Forward from TPU
         latest_unprocessed_votes.cache_epoch_boundary_info(&bank);
+        latest_unprocessed_votes.update_latest_vote(vote_a, false /* should replenish */);
+        latest_unprocessed_votes.update_latest_vote(vote_b, false /* should replenish */);
         let forwarded = latest_unprocessed_votes.get_and_insert_forwardable_packets(
             bank.clone(),
             &mut forward_packet_batches_by_accounts,
@@ -1150,7 +1180,7 @@ mod tests {
             Some(vote_b.slot())
         );
 
-        // Previously unstaked votes are not (yet) removed
+        // Previously unstaked votes are removed
         let config = genesis_utils::create_genesis_config_with_leader(
             100,
             &keypair_c.node_keypair.pubkey(),
@@ -1165,12 +1195,9 @@ mod tests {
         );
         assert_eq!(bank.epoch(), 2);
         latest_unprocessed_votes.cache_epoch_boundary_info(&bank);
+        assert_eq!(latest_unprocessed_votes.len(), 0);
         latest_unprocessed_votes.insert_batch(votes.clone(), true);
-        assert_eq!(latest_unprocessed_votes.len(), 2);
-        assert_eq!(
-            latest_unprocessed_votes.get_latest_vote_slot(keypair_b.node_keypair.pubkey()),
-            Some(vote_b.slot())
-        );
+        assert_eq!(latest_unprocessed_votes.len(), 1);
         assert_eq!(
             latest_unprocessed_votes.get_latest_vote_slot(keypair_c.node_keypair.pubkey()),
             Some(vote_c.slot())
