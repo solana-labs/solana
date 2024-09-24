@@ -5,7 +5,9 @@ use {
             log_instruction_custom_error, CliCommand, CliCommandInfo, CliConfig, CliError,
             ProcessResult,
         },
-        compute_budget::{ComputeUnitConfig, WithComputeUnitConfig},
+        compute_budget::{
+            simulate_and_update_compute_unit_limit, ComputeUnitConfig, WithComputeUnitConfig,
+        },
         memo::WithMemo,
         nonce::check_nonce_account,
         spend_utils::{resolve_spend_tx_and_check_account_balances, SpendAmount},
@@ -821,7 +823,10 @@ pub fn process_create_vote_account(
     let nonce_authority = config.signers[nonce_authority];
     let space = VoteStateVersions::vote_state_size_of(true) as u64;
 
-    let compute_unit_limit = ComputeUnitLimit::Default;
+    let compute_unit_limit = match blockhash_query {
+        BlockhashQuery::None(_) | BlockhashQuery::FeeCalculator(_, _) => ComputeUnitLimit::Default,
+        BlockhashQuery::All(_) => ComputeUnitLimit::Simulated,
+    };
     let build_message = |lamports| {
         let vote_init = VoteInit {
             node_pubkey: identity_pubkey,
@@ -1001,11 +1006,16 @@ pub fn process_vote_authorize(
             vote_authorize,        // vote or withdraw
         )
     };
+
+    let compute_unit_limit = match blockhash_query {
+        BlockhashQuery::None(_) | BlockhashQuery::FeeCalculator(_, _) => ComputeUnitLimit::Default,
+        BlockhashQuery::All(_) => ComputeUnitLimit::Simulated,
+    };
     let ixs = vec![vote_ix]
         .with_memo(memo)
         .with_compute_unit_config(&ComputeUnitConfig {
             compute_unit_price,
-            compute_unit_limit: ComputeUnitLimit::Default,
+            compute_unit_limit,
         });
 
     let recent_blockhash = blockhash_query.get_blockhash(rpc_client, config.commitment)?;
@@ -1013,7 +1023,7 @@ pub fn process_vote_authorize(
     let nonce_authority = config.signers[nonce_authority];
     let fee_payer = config.signers[fee_payer];
 
-    let message = if let Some(nonce_account) = &nonce_account {
+    let mut message = if let Some(nonce_account) = &nonce_account {
         Message::new_with_nonce(
             ixs,
             Some(&fee_payer.pubkey()),
@@ -1023,6 +1033,7 @@ pub fn process_vote_authorize(
     } else {
         Message::new(&ixs, Some(&fee_payer.pubkey()))
     };
+    simulate_and_update_compute_unit_limit(&compute_unit_limit, rpc_client, &mut message)?;
     let mut tx = Transaction::new_unsigned(message);
 
     if sign_only {
@@ -1079,6 +1090,10 @@ pub fn process_vote_update_validator(
         (&new_identity_pubkey, "new_identity_account".to_string()),
     )?;
     let recent_blockhash = blockhash_query.get_blockhash(rpc_client, config.commitment)?;
+    let compute_unit_limit = match blockhash_query {
+        BlockhashQuery::None(_) | BlockhashQuery::FeeCalculator(_, _) => ComputeUnitLimit::Default,
+        BlockhashQuery::All(_) => ComputeUnitLimit::Simulated,
+    };
     let ixs = vec![vote_instruction::update_validator_identity(
         vote_account_pubkey,
         &authorized_withdrawer.pubkey(),
@@ -1087,12 +1102,12 @@ pub fn process_vote_update_validator(
     .with_memo(memo)
     .with_compute_unit_config(&ComputeUnitConfig {
         compute_unit_price,
-        compute_unit_limit: ComputeUnitLimit::Default,
+        compute_unit_limit,
     });
     let nonce_authority = config.signers[nonce_authority];
     let fee_payer = config.signers[fee_payer];
 
-    let message = if let Some(nonce_account) = &nonce_account {
+    let mut message = if let Some(nonce_account) = &nonce_account {
         Message::new_with_nonce(
             ixs,
             Some(&fee_payer.pubkey()),
@@ -1102,6 +1117,7 @@ pub fn process_vote_update_validator(
     } else {
         Message::new(&ixs, Some(&fee_payer.pubkey()))
     };
+    simulate_and_update_compute_unit_limit(&compute_unit_limit, rpc_client, &mut message)?;
     let mut tx = Transaction::new_unsigned(message);
 
     if sign_only {
@@ -1152,6 +1168,10 @@ pub fn process_vote_update_commission(
 ) -> ProcessResult {
     let authorized_withdrawer = config.signers[withdraw_authority];
     let recent_blockhash = blockhash_query.get_blockhash(rpc_client, config.commitment)?;
+    let compute_unit_limit = match blockhash_query {
+        BlockhashQuery::None(_) | BlockhashQuery::FeeCalculator(_, _) => ComputeUnitLimit::Default,
+        BlockhashQuery::All(_) => ComputeUnitLimit::Simulated,
+    };
     let ixs = vec![vote_instruction::update_commission(
         vote_account_pubkey,
         &authorized_withdrawer.pubkey(),
@@ -1160,12 +1180,12 @@ pub fn process_vote_update_commission(
     .with_memo(memo)
     .with_compute_unit_config(&ComputeUnitConfig {
         compute_unit_price,
-        compute_unit_limit: ComputeUnitLimit::Default,
+        compute_unit_limit,
     });
     let nonce_authority = config.signers[nonce_authority];
     let fee_payer = config.signers[fee_payer];
 
-    let message = if let Some(nonce_account) = &nonce_account {
+    let mut message = if let Some(nonce_account) = &nonce_account {
         Message::new_with_nonce(
             ixs,
             Some(&fee_payer.pubkey()),
@@ -1175,6 +1195,7 @@ pub fn process_vote_update_commission(
     } else {
         Message::new(&ixs, Some(&fee_payer.pubkey()))
     };
+    simulate_and_update_compute_unit_limit(&compute_unit_limit, rpc_client, &mut message)?;
     let mut tx = Transaction::new_unsigned(message);
     if sign_only {
         tx.try_partial_sign(&config.signers, recent_blockhash)?;
@@ -1318,7 +1339,10 @@ pub fn process_withdraw_from_vote_account(
     let fee_payer = config.signers[fee_payer];
     let nonce_authority = config.signers[nonce_authority];
 
-    let compute_unit_limit = ComputeUnitLimit::Default;
+    let compute_unit_limit = match blockhash_query {
+        BlockhashQuery::None(_) | BlockhashQuery::FeeCalculator(_, _) => ComputeUnitLimit::Default,
+        BlockhashQuery::All(_) => ComputeUnitLimit::Simulated,
+    };
     let build_message = |lamports| {
         let ixs = vec![withdraw(
             vote_account_pubkey,
@@ -1441,6 +1465,7 @@ pub fn process_close_vote_account(
 
     let current_balance = rpc_client.get_balance(vote_account_pubkey)?;
 
+    let compute_unit_limit = ComputeUnitLimit::Simulated;
     let ixs = vec![withdraw(
         vote_account_pubkey,
         &withdraw_authority.pubkey(),
@@ -1450,10 +1475,11 @@ pub fn process_close_vote_account(
     .with_memo(memo)
     .with_compute_unit_config(&ComputeUnitConfig {
         compute_unit_price,
-        compute_unit_limit: ComputeUnitLimit::Default,
+        compute_unit_limit,
     });
 
-    let message = Message::new(&ixs, Some(&fee_payer.pubkey()));
+    let mut message = Message::new(&ixs, Some(&fee_payer.pubkey()));
+    simulate_and_update_compute_unit_limit(&compute_unit_limit, rpc_client, &mut message)?;
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, latest_blockhash)?;
     check_account_for_fee_with_commitment(

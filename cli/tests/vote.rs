@@ -17,10 +17,12 @@ use {
     solana_streamer::socket::SocketAddrSpace,
     solana_test_validator::TestValidator,
     solana_vote_program::vote_state::{VoteAuthorize, VoteState, VoteStateVersions},
+    test_case::test_case,
 };
 
-#[test]
-fn test_vote_authorize_and_withdraw() {
+#[test_case(None; "base")]
+#[test_case(Some(1_000_000); "with_compute_unit_price")]
+fn test_vote_authorize_and_withdraw(compute_unit_price: Option<u64>) {
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
@@ -56,7 +58,7 @@ fn test_vote_authorize_and_withdraw() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config).unwrap();
     let vote_account = rpc_client
@@ -88,7 +90,7 @@ fn test_vote_authorize_and_withdraw() {
         fee_payer: 0,
         derived_address_seed: None,
         derived_address_program_id: None,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config).unwrap();
     let expected_balance = expected_balance + 10_000;
@@ -110,7 +112,7 @@ fn test_vote_authorize_and_withdraw() {
         fee_payer: 0,
         authorized: 0,
         new_authorized: None,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config).unwrap();
     let vote_account = rpc_client
@@ -136,7 +138,7 @@ fn test_vote_authorize_and_withdraw() {
         fee_payer: 0,
         authorized: 1,
         new_authorized: Some(1),
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config).unwrap_err(); // unsigned by new authority should fail
     config.signers = vec![
@@ -157,7 +159,7 @@ fn test_vote_authorize_and_withdraw() {
         fee_payer: 0,
         authorized: 1,
         new_authorized: Some(2),
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config).unwrap();
     let vote_account = rpc_client
@@ -182,7 +184,7 @@ fn test_vote_authorize_and_withdraw() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config).unwrap();
     let expected_balance = expected_balance - 1_000;
@@ -203,7 +205,7 @@ fn test_vote_authorize_and_withdraw() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config).unwrap();
 
@@ -216,15 +218,16 @@ fn test_vote_authorize_and_withdraw() {
         destination_account_pubkey: destination_account,
         memo: None,
         fee_payer: 0,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config).unwrap();
     check_balance!(0, &rpc_client, &vote_account_pubkey);
     check_balance!(expected_balance, &rpc_client, &destination_account);
 }
 
-#[test]
-fn test_offline_vote_authorize_and_withdraw() {
+#[test_case(None; "base")]
+#[test_case(Some(1_000_000); "with_compute_unit_price")]
+fn test_offline_vote_authorize_and_withdraw(compute_unit_price: Option<u64>) {
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
@@ -283,7 +286,7 @@ fn test_offline_vote_authorize_and_withdraw() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config_payer).unwrap();
     let vote_account = rpc_client
@@ -315,7 +318,7 @@ fn test_offline_vote_authorize_and_withdraw() {
         fee_payer: 0,
         derived_address_seed: None,
         derived_address_program_id: None,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config_payer).unwrap();
     let expected_balance = expected_balance + 10_000;
@@ -337,7 +340,7 @@ fn test_offline_vote_authorize_and_withdraw() {
         fee_payer: 0,
         authorized: 0,
         new_authorized: None,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     config_offline.output_format = OutputFormat::JsonCompact;
     let sig_response = process_command(&config_offline).unwrap();
@@ -360,7 +363,7 @@ fn test_offline_vote_authorize_and_withdraw() {
         fee_payer: 0,
         authorized: 0,
         new_authorized: None,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config_payer).unwrap();
     let vote_account = rpc_client
@@ -387,7 +390,7 @@ fn test_offline_vote_authorize_and_withdraw() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     config_offline.output_format = OutputFormat::JsonCompact;
     let sig_response = process_command(&config_offline).unwrap();
@@ -408,7 +411,7 @@ fn test_offline_vote_authorize_and_withdraw() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config_payer).unwrap();
     let expected_balance = expected_balance - 1_000;
@@ -435,7 +438,7 @@ fn test_offline_vote_authorize_and_withdraw() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config_offline).unwrap();
     config_offline.output_format = OutputFormat::JsonCompact;
@@ -456,7 +459,7 @@ fn test_offline_vote_authorize_and_withdraw() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config_payer).unwrap();
 
@@ -476,7 +479,7 @@ fn test_offline_vote_authorize_and_withdraw() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config_offline).unwrap();
     config_offline.output_format = OutputFormat::JsonCompact;
@@ -498,7 +501,7 @@ fn test_offline_vote_authorize_and_withdraw() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
-        compute_unit_price: None,
+        compute_unit_price,
     };
     process_command(&config_payer).unwrap();
     check_balance!(0, &rpc_client, &vote_account_pubkey);
