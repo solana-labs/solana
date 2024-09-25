@@ -1,15 +1,13 @@
 use {
-    crate::{
-        instruction::InstructionError,
-        pubkey::{Pubkey, PUBKEY_BYTES},
-    },
+    solana_instruction::error::InstructionError,
+    solana_pubkey::{Pubkey, PUBKEY_BYTES},
     std::{
         io::{BufRead as _, Cursor, Read},
         ptr,
     },
 };
 
-pub(crate) fn read_u8<T: AsRef<[u8]>>(cursor: &mut Cursor<T>) -> Result<u8, InstructionError> {
+pub fn read_u8<T: AsRef<[u8]>>(cursor: &mut Cursor<T>) -> Result<u8, InstructionError> {
     let mut buf = [0; 1];
     cursor
         .read_exact(&mut buf)
@@ -18,7 +16,7 @@ pub(crate) fn read_u8<T: AsRef<[u8]>>(cursor: &mut Cursor<T>) -> Result<u8, Inst
     Ok(buf[0])
 }
 
-pub(crate) fn read_u32<T: AsRef<[u8]>>(cursor: &mut Cursor<T>) -> Result<u32, InstructionError> {
+pub fn read_u32<T: AsRef<[u8]>>(cursor: &mut Cursor<T>) -> Result<u32, InstructionError> {
     let mut buf = [0; 4];
     cursor
         .read_exact(&mut buf)
@@ -27,7 +25,7 @@ pub(crate) fn read_u32<T: AsRef<[u8]>>(cursor: &mut Cursor<T>) -> Result<u32, In
     Ok(u32::from_le_bytes(buf))
 }
 
-pub(crate) fn read_u64<T: AsRef<[u8]>>(cursor: &mut Cursor<T>) -> Result<u64, InstructionError> {
+pub fn read_u64<T: AsRef<[u8]>>(cursor: &mut Cursor<T>) -> Result<u64, InstructionError> {
     let mut buf = [0; 8];
     cursor
         .read_exact(&mut buf)
@@ -36,7 +34,7 @@ pub(crate) fn read_u64<T: AsRef<[u8]>>(cursor: &mut Cursor<T>) -> Result<u64, In
     Ok(u64::from_le_bytes(buf))
 }
 
-pub(crate) fn read_option_u64<T: AsRef<[u8]>>(
+pub fn read_option_u64<T: AsRef<[u8]>>(
     cursor: &mut Cursor<T>,
 ) -> Result<Option<u64>, InstructionError> {
     let variant = read_u8(cursor)?;
@@ -47,7 +45,7 @@ pub(crate) fn read_option_u64<T: AsRef<[u8]>>(
     }
 }
 
-pub(crate) fn read_i64<T: AsRef<[u8]>>(cursor: &mut Cursor<T>) -> Result<i64, InstructionError> {
+pub fn read_i64<T: AsRef<[u8]>>(cursor: &mut Cursor<T>) -> Result<i64, InstructionError> {
     let mut buf = [0; 8];
     cursor
         .read_exact(&mut buf)
@@ -56,7 +54,7 @@ pub(crate) fn read_i64<T: AsRef<[u8]>>(cursor: &mut Cursor<T>) -> Result<i64, In
     Ok(i64::from_le_bytes(buf))
 }
 
-pub(crate) fn read_pubkey_into(
+pub fn read_pubkey_into(
     cursor: &mut Cursor<&[u8]>,
     pubkey: *mut Pubkey,
 ) -> Result<(), InstructionError> {
@@ -77,9 +75,7 @@ pub(crate) fn read_pubkey_into(
     Ok(())
 }
 
-pub(crate) fn read_pubkey<T: AsRef<[u8]>>(
-    cursor: &mut Cursor<T>,
-) -> Result<Pubkey, InstructionError> {
+pub fn read_pubkey<T: AsRef<[u8]>>(cursor: &mut Cursor<T>) -> Result<Pubkey, InstructionError> {
     let mut buf = [0; 32];
     cursor
         .read_exact(&mut buf)
@@ -88,7 +84,7 @@ pub(crate) fn read_pubkey<T: AsRef<[u8]>>(
     Ok(Pubkey::from(buf))
 }
 
-pub(crate) fn read_bool<T: AsRef<[u8]>>(cursor: &mut Cursor<T>) -> Result<bool, InstructionError> {
+pub fn read_bool<T: AsRef<[u8]>>(cursor: &mut Cursor<T>) -> Result<bool, InstructionError> {
     let byte = read_u8(cursor)?;
     match byte {
         0 => Ok(false),
@@ -97,7 +93,6 @@ pub(crate) fn read_bool<T: AsRef<[u8]>>(cursor: &mut Cursor<T>) -> Result<bool, 
     }
 }
 
-#[cfg(feature = "borsh")]
 #[cfg(test)]
 mod test {
     use {super::*, rand::Rng, std::fmt::Debug};
@@ -158,7 +153,7 @@ mod test {
         test_read(read_bool, true);
     }
 
-    fn test_read<T: Debug + PartialEq + serde::Serialize + borsh0_10::BorshSerialize>(
+    fn test_read<T: Debug + PartialEq + serde::Serialize + borsh::BorshSerialize>(
         reader: fn(&mut Cursor<Vec<u8>>) -> Result<T, InstructionError>,
         test_value: T,
     ) {
@@ -166,7 +161,7 @@ mod test {
         let mut cursor = Cursor::new(bincode_bytes);
         let bincode_read = reader(&mut cursor).unwrap();
 
-        let borsh_bytes = borsh0_10::to_vec(&test_value).unwrap();
+        let borsh_bytes = borsh::to_vec(&test_value).unwrap();
         let mut cursor = Cursor::new(borsh_bytes);
         let borsh_read = reader(&mut cursor).unwrap();
 

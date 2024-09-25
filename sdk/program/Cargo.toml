@@ -15,7 +15,7 @@ rust-version = "1.79.0"                          # solana platform-tools rust ve
 bincode = { workspace = true }
 blake3 = { workspace = true, features = ["traits-preview"] }
 borsh = { workspace = true, optional = true }
-borsh0-10 = { package = "borsh", version = "0.10.3", optional = true }
+borsh0-10 = { workspace = true, optional = true }
 bs58 = { workspace = true, features = ["alloc"] }
 bv = { workspace = true, features = ["serde"] }
 bytemuck = { workspace = true }
@@ -55,6 +55,7 @@ solana-sanitize = { workspace = true }
 solana-sdk-macro = { workspace = true }
 solana-secp256k1-recover = { workspace = true }
 solana-serde-varint = { workspace = true }
+solana-serialize-utils = { workspace = true }
 solana-sha256-hasher = { workspace = true, features = ["sha2"] }
 solana-short-vec = { workspace = true }
 thiserror = { workspace = true }

@@ -5640,6 +5640,7 @@ dependencies = [
  "solana-sdk-macro",
  "solana-secp256k1-recover",
  "solana-serde-varint",
+ "solana-serialize-utils",
  "solana-sha256-hasher",
  "solana-short-vec",
  "thiserror",
@@ -6619,6 +6620,15 @@ name = "solana-serde-varint"
 version = "2.1.0"
 dependencies = [
  "serde",
+]
+
+[[package]]
+name = "solana-serialize-utils"
+version = "2.1.0"
+dependencies = [
+ "solana-instruction",
+ "solana-pubkey",
+ "solana-sanitize",
 ]
 
 [[package]]

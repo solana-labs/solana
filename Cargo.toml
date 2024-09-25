@@ -120,6 +120,7 @@ members = [
     "sdk/program-option",
     "sdk/pubkey",
     "sdk/serde-varint",
+    "sdk/serialize-utils",
     "sdk/sha256-hasher",
     "sdk/signature",
     "send-transaction-service",
@@ -207,6 +208,7 @@ bincode = "1.3.3"
 bitflags = { version = "2.6.0" }
 blake3 = "1.5.4"
 borsh = { version = "1.5.1", features = ["derive", "unstable__schema"] }
+borsh0-10 = { package = "borsh", version = "0.10.3" }
 bs58 = { version = "0.5.1", default-features = false }
 bv = "0.11.1"
 byte-unit = "4.0.19"
@@ -433,6 +435,7 @@ solana-rayon-threadlimit = { path = "rayon-threadlimit", version = "=2.1.0" }
 solana-remote-wallet = { path = "remote-wallet", version = "=2.1.0", default-features = false }
 solana-sanitize = { path = "sanitize", version = "=2.1.0" }
 solana-serde-varint = { path = "sdk/serde-varint", version = "=2.1.0" }
+solana-serialize-utils = { path = "sdk/serialize-utils", version = "=2.1.0" }
 solana-sha256-hasher = { path = "sdk/sha256-hasher", version = "=2.1.0" }
 solana-signature = { path = "sdk/signature", version = "=2.1.0", default-features = false }
 solana-timings = { path = "timings", version = "=2.1.0" }

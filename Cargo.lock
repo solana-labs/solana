@@ -7229,6 +7229,7 @@ dependencies = [
  "solana-sdk-macro",
  "solana-secp256k1-recover",
  "solana-serde-varint",
+ "solana-serialize-utils",
  "solana-sha256-hasher",
  "solana-short-vec",
  "static_assertions",
@@ -7837,6 +7838,19 @@ dependencies = [
  "serde",
  "serde_derive",
  "solana-short-vec",
+]
+
+[[package]]
+name = "solana-serialize-utils"
+version = "2.1.0"
+dependencies = [
+ "bincode",
+ "borsh 1.5.1",
+ "rand 0.8.5",
+ "serde",
+ "solana-instruction",
+ "solana-pubkey",
+ "solana-sanitize",
 ]
 
 [[package]]

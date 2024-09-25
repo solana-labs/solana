@@ -1,0 +1,30 @@
+[package]
+name = "solana-serialize-utils"
+description = "Solana helpers for reading and writing bytes."
+documentation = "https://docs.rs/solana-serialize-utils"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+solana-instruction = { workspace = true, default-features = false, features = [
+    "std",
+] }
+solana-pubkey = { workspace = true, default-features = false }
+solana-sanitize = { workspace = true }
+
+[dev-dependencies]
+bincode = { workspace = true }
+borsh = { workspace = true }
+rand = { workspace = true }
+serde = { workspace = true }
+solana-pubkey = { workspace = true, default-features = false, features = [
+    "borsh",
+    "serde",
+] }
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
