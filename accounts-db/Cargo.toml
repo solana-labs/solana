@@ -65,7 +65,6 @@ name = "solana_accounts_db"
 [dev-dependencies]
 assert_matches = { workspace = true }
 criterion = { workspace = true }
-ed25519-dalek = { workspace = true }
 libsecp256k1 = { workspace = true }
 memoffset = { workspace = true }
 rand_chacha = { workspace = true }

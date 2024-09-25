@@ -5706,7 +5706,6 @@ dependencies = [
  "criterion",
  "crossbeam-channel",
  "dashmap",
- "ed25519-dalek",
  "index_list",
  "indexmap 2.5.0",
  "itertools 0.12.1",
