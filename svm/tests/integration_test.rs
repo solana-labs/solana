@@ -524,9 +524,14 @@ fn program_medley() -> Vec<SvmTestEntry> {
     vec![test_entry]
 }
 
-fn simple_transfer() -> Vec<SvmTestEntry> {
+fn simple_transfer(enable_fee_only_transactions: bool) -> Vec<SvmTestEntry> {
     let mut test_entry = SvmTestEntry::default();
     let transfer_amount = LAMPORTS_PER_SOL;
+    if enable_fee_only_transactions {
+        test_entry
+            .enabled_features
+            .push(feature_set::enable_transaction_loading_failure_fees::id());
+    }
 
     // 0: a transfer that succeeds
     {
@@ -578,7 +583,7 @@ fn simple_transfer() -> Vec<SvmTestEntry> {
         test_entry.decrease_expected_lamports(&source, LAMPORTS_PER_SIGNATURE);
     }
 
-    // 2: a non-executable transfer that fails before loading
+    // 2: a non-processable transfer that fails before loading
     {
         test_entry.transaction_batch.push(TransactionBatchItem {
             transaction: system_transaction::transfer(
@@ -592,8 +597,7 @@ fn simple_transfer() -> Vec<SvmTestEntry> {
         });
     }
 
-    // 3: a non-executable transfer that fails loading the fee-payer
-    // NOTE when we support the processed/executed distinction, this is NOT processed
+    // 3: a non-processable transfer that fails loading the fee-payer
     {
         test_entry.push_transaction_with_status(
             system_transaction::transfer(
@@ -606,9 +610,7 @@ fn simple_transfer() -> Vec<SvmTestEntry> {
         );
     }
 
-    // 4: a non-executable transfer that fails loading the program
-    // NOTE when we support the processed/executed distinction, this IS processed
-    // thus this test case will fail with the feature enabled
+    // 4: a processable non-executable transfer that fails loading the program
     {
         let source_keypair = Keypair::new();
         let source = source_keypair.pubkey();
@@ -625,6 +627,13 @@ fn simple_transfer() -> Vec<SvmTestEntry> {
             system_instruction::transfer(&source, &Pubkey::new_unique(), transfer_amount);
         instruction.program_id = Pubkey::new_unique();
 
+        let expected_status = if enable_fee_only_transactions {
+            test_entry.decrease_expected_lamports(&source, LAMPORTS_PER_SIGNATURE);
+            ExecutionStatus::ProcessedFailed
+        } else {
+            ExecutionStatus::Discarded
+        };
+
         test_entry.push_transaction_with_status(
             Transaction::new_signed_with_payer(
                 &[instruction],
@@ -632,17 +641,14 @@ fn simple_transfer() -> Vec<SvmTestEntry> {
                 &[&source_keypair],
                 Hash::default(),
             ),
-            ExecutionStatus::Discarded,
+            expected_status,
         );
     }
 
     vec![test_entry]
 }
 
-fn simple_nonce_fee_only(
-    enable_fee_only_transactions: bool,
-    fee_paying_nonce: bool,
-) -> Vec<SvmTestEntry> {
+fn simple_nonce(enable_fee_only_transactions: bool, fee_paying_nonce: bool) -> Vec<SvmTestEntry> {
     let mut test_entry = SvmTestEntry::default();
     if enable_fee_only_transactions {
         test_entry
@@ -842,11 +848,12 @@ fn simple_nonce_fee_only(
 }
 
 #[test_case(program_medley())]
-#[test_case(simple_transfer())]
-#[test_case(simple_nonce_fee_only(false, false))]
-#[test_case(simple_nonce_fee_only(true, false))]
-#[test_case(simple_nonce_fee_only(false, true))]
-#[test_case(simple_nonce_fee_only(true, true))]
+#[test_case(simple_transfer(false))]
+#[test_case(simple_transfer(true))]
+#[test_case(simple_nonce(false, false))]
+#[test_case(simple_nonce(true, false))]
+#[test_case(simple_nonce(false, true))]
+#[test_case(simple_nonce(true, true))]
 fn svm_integration(test_entries: Vec<SvmTestEntry>) {
     for test_entry in test_entries {
         execute_test_entry(test_entry);
