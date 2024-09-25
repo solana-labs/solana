@@ -791,9 +791,7 @@ use {
     crate::{instruction::Instruction, precompiles::PrecompileError},
     digest::Digest,
     serde_derive::{Deserialize, Serialize},
-    solana_feature_set::{
-        libsecp256k1_fail_on_bad_count, libsecp256k1_fail_on_bad_count2, FeatureSet,
-    },
+    solana_feature_set::FeatureSet,
 };
 
 pub const HASHED_PUBKEY_SERIALIZED_SIZE: usize = 20;
@@ -926,17 +924,13 @@ pub fn construct_eth_pubkey(
 pub fn verify(
     data: &[u8],
     instruction_datas: &[&[u8]],
-    feature_set: &FeatureSet,
+    _feature_set: &FeatureSet,
 ) -> Result<(), PrecompileError> {
     if data.is_empty() {
         return Err(PrecompileError::InvalidInstructionDataSize);
     }
     let count = data[0] as usize;
-    if (feature_set.is_active(&libsecp256k1_fail_on_bad_count::id())
-        || feature_set.is_active(&libsecp256k1_fail_on_bad_count2::id()))
-        && count == 0
-        && data.len() > 1
-    {
+    if count == 0 && data.len() > 1 {
         // count is zero but the instruction data indicates that is probably not
         // correct, fail the instruction to catch probable invalid secp256k1
         // instruction construction.
