@@ -1,0 +1,23 @@
+[package]
+name = "solana-account-info"
+description = "Solana AccountInfo and related definitions."
+documentation = "https://docs.rs/solana-account-info"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+bincode = { workspace = true, optional = true }
+serde = { workspace = true, optional = true }
+solana-program-error = { workspace = true }
+solana-program-memory = { workspace = true }
+solana-pubkey = { workspace = true, default-features = false }
+
+[features]
+bincode = ["dep:bincode", "dep:serde"]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

@@ -1,12 +1,9 @@
 //! Account information.
 
 use {
-    crate::{
-        debug_account_data::*, entrypoint::MAX_PERMITTED_DATA_INCREASE,
-        program_error::ProgramError, pubkey::Pubkey,
-    },
-    solana_clock::Epoch,
+    solana_program_error::ProgramError,
     solana_program_memory::sol_memset,
+    solana_pubkey::Pubkey,
     std::{
         cell::{Ref, RefCell, RefMut},
         fmt,
@@ -14,6 +11,10 @@ use {
         slice::from_raw_parts_mut,
     },
 };
+pub mod debug_account_data;
+
+/// Maximum number of bytes a program may add to an account during a single realloc
+pub const MAX_PERMITTED_DATA_INCREASE: usize = 1_024 * 10;
 
 /// Account information
 #[derive(Clone)]
@@ -28,7 +29,7 @@ pub struct AccountInfo<'a> {
     /// Program that owns this account
     pub owner: &'a Pubkey,
     /// The epoch at which this account will next owe rent
-    pub rent_epoch: Epoch,
+    pub rent_epoch: u64,
     /// Was the transaction signed by this account's public key?
     pub is_signer: bool,
     /// Is the account writable?
@@ -49,7 +50,7 @@ impl<'a> fmt::Debug for AccountInfo<'a> {
             .field("rent_epoch", &self.rent_epoch)
             .field("lamports", &self.lamports())
             .field("data.len", &self.data_len());
-        debug_account_data(&self.data.borrow(), &mut f);
+        debug_account_data::debug_account_data(&self.data.borrow(), &mut f);
 
         f.finish_non_exhaustive()
     }
@@ -203,7 +204,7 @@ impl<'a> AccountInfo<'a> {
         data: &'a mut [u8],
         owner: &'a Pubkey,
         executable: bool,
-        rent_epoch: Epoch,
+        rent_epoch: u64,
     ) -> Self {
         Self {
             key,
@@ -217,10 +218,12 @@ impl<'a> AccountInfo<'a> {
         }
     }
 
+    #[cfg(feature = "bincode")]
     pub fn deserialize_data<T: serde::de::DeserializeOwned>(&self) -> Result<T, bincode::Error> {
         bincode::deserialize(&self.data.borrow())
     }
 
+    #[cfg(feature = "bincode")]
     pub fn serialize_data<T: serde::Serialize>(&self, state: &T) -> Result<(), bincode::Error> {
         if bincode::serialized_size(state)? > self.data_len() as u64 {
             return Err(Box::new(bincode::ErrorKind::SizeLimit));
@@ -242,7 +245,7 @@ impl<'a, T: IntoAccountInfo<'a>> From<T> for AccountInfo<'a> {
 /// Provides information required to construct an `AccountInfo`, used in
 /// conversion implementations.
 pub trait Account {
-    fn get(&mut self) -> (&mut u64, &mut [u8], &Pubkey, bool, Epoch);
+    fn get(&mut self) -> (&mut u64, &mut [u8], &Pubkey, bool, u64);
 }
 
 /// Convert (&'a Pubkey, &'a mut T) where T: Account into an `AccountInfo`
@@ -293,12 +296,10 @@ impl<'a, T: Account> IntoAccountInfo<'a> for &'a mut (Pubkey, T) {
 /// # Examples
 ///
 /// ```
-/// use solana_program::{
-///    account_info::{AccountInfo, next_account_info},
-///    entrypoint::ProgramResult,
-///    pubkey::Pubkey,
-/// };
-/// # use solana_program::program_error::ProgramError;
+/// use solana_program_error::ProgramResult;
+/// use solana_account_info::{AccountInfo, next_account_info};
+/// use solana_pubkey::Pubkey;
+/// # use solana_program_error::ProgramError;
 ///
 /// pub fn process_instruction(
 ///     program_id: &Pubkey,
@@ -344,12 +345,10 @@ pub fn next_account_info<'a, 'b, I: Iterator<Item = &'a AccountInfo<'b>>>(
 /// # Examples
 ///
 /// ```
-/// use solana_program::{
-///    account_info::{AccountInfo, next_account_info, next_account_infos},
-///    entrypoint::ProgramResult,
-///    pubkey::Pubkey,
-/// };
-/// # use solana_program::program_error::ProgramError;
+/// use solana_program_error::ProgramResult;
+/// use solana_account_info::{AccountInfo, next_account_info, next_account_infos};
+/// use solana_pubkey::Pubkey;
+/// # use solana_program_error::ProgramError;
 ///
 /// pub fn process_instruction(
 ///     program_id: &Pubkey,
@@ -398,7 +397,10 @@ impl<'a> AsRef<AccountInfo<'a>> for AccountInfo<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use {
+        super::*,
+        crate::debug_account_data::{Hex, MAX_DEBUG_ACCOUNT_DATA},
+    };
 
     #[test]
     fn test_next_account_infos() {
