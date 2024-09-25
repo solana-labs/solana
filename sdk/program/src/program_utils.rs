@@ -25,7 +25,7 @@ pub mod tests {
     #[test]
     fn test_limited_deserialize_advance_nonce_account() {
         let item = SystemInstruction::AdvanceNonceAccount;
-        let serialized = bincode::serialize(&item).unwrap();
+        let mut serialized = bincode::serialize(&item).unwrap();
 
         assert_eq!(
             serialized.len(),
@@ -38,5 +38,11 @@ pub mod tests {
             Ok(&item)
         );
         assert!(limited_deserialize::<SystemInstruction>(&serialized, 3).is_err());
+
+        serialized.push(0);
+        assert_eq!(
+            limited_deserialize::<SystemInstruction>(&serialized, 4).as_ref(),
+            Ok(&item)
+        );
     }
 }
