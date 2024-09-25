@@ -433,6 +433,18 @@ pub struct TransactionSignatureDetails {
 }
 
 impl TransactionSignatureDetails {
+    pub fn new(
+        num_transaction_signatures: u64,
+        num_secp256k1_instruction_signatures: u64,
+        num_ed25519_instruction_signatures: u64,
+    ) -> Self {
+        Self {
+            num_transaction_signatures,
+            num_secp256k1_instruction_signatures,
+            num_ed25519_instruction_signatures,
+        }
+    }
+
     /// return total number of signature, treating pre-processor operations as signature
     pub(crate) fn total_signatures(&self) -> u64 {
         self.num_transaction_signatures

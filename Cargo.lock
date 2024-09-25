@@ -7723,6 +7723,7 @@ dependencies = [
  "solana-builtins-default-costs",
  "solana-compute-budget",
  "solana-program",
+ "solana-pubkey",
  "solana-sdk",
  "solana-svm-transaction",
  "thiserror",
