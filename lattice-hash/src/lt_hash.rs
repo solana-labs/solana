@@ -112,12 +112,14 @@ mod tests {
         }
     }
 
+    impl Copy for LtHash {}
+
     // Ensure that if you mix-in then mix-out a hash, you get the original value
     #[test]
     fn test_inverse() {
         let a = LtHash::new_random();
         let b = LtHash::new_random();
-        assert_eq!(a.clone(), a.clone() + b.clone() - b.clone());
+        assert_eq!(a, a + b - b);
     }
 
     // Ensure that mixing is commutative
@@ -125,7 +127,7 @@ mod tests {
     fn test_commutative() {
         let a = LtHash::new_random();
         let b = LtHash::new_random();
-        assert_eq!(a.clone() + b.clone(), b.clone() + a.clone());
+        assert_eq!(a + b, b + a);
     }
 
     // Ensure that mixing is associative
@@ -134,10 +136,7 @@ mod tests {
         let a = LtHash::new_random();
         let b = LtHash::new_random();
         let c = LtHash::new_random();
-        assert_eq!(
-            (a.clone() + b.clone()) + c.clone(),
-            a.clone() + (b.clone() + c.clone()),
-        );
+        assert_eq!((a + b) + c, a + (b + c));
     }
 
     // Ensure the correct lattice hash and checksum values are produced
