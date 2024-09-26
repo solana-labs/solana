@@ -503,13 +503,12 @@ impl BroadcastRun for StandardBroadcastRun {
     }
 }
 
-fn should_chain_merkle_shreds(slot: Slot, cluster_type: ClusterType) -> bool {
+fn should_chain_merkle_shreds(_slot: Slot, cluster_type: ClusterType) -> bool {
     match cluster_type {
         ClusterType::Development => true,
         ClusterType::Devnet => false,
         ClusterType::MainnetBeta => false,
-        // Roll out chained Merkle shreds to ~53% of testnet slots.
-        ClusterType::Testnet => slot % 19 < 10,
+        ClusterType::Testnet => true,
     }
 }
 
