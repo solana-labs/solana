@@ -14,6 +14,7 @@ use {
         compute_budget_instruction_details::*,
         transaction_meta::{DynamicMeta, StaticMeta, TransactionMeta},
     },
+    core::ops::Deref,
     solana_compute_budget::compute_budget_limits::ComputeBudgetLimits,
     solana_sdk::{
         feature_set::FeatureSet,
@@ -62,7 +63,15 @@ impl<T: StaticMetaAccess> StaticMeta for RuntimeTransaction<T> {
     }
 }
 
-impl<M: DynamicMetaAccess> DynamicMeta for RuntimeTransaction<M> {}
+impl<T: DynamicMetaAccess> DynamicMeta for RuntimeTransaction<T> {}
+
+impl<T> Deref for RuntimeTransaction<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.transaction
+    }
+}
 
 impl RuntimeTransaction<SanitizedVersionedTransaction> {
     pub fn try_from(
