@@ -1082,14 +1082,6 @@ pub struct AccountStorageEntry {
     ///  the append_vec, once maxed out, then emptied, can be reclaimed
     count_and_status: SeqLock<(usize, AccountStorageStatus)>,
 
-    /// This is the total number of accounts stored ever since initialized to keep
-    /// track of lifetime count of all store operations. And this differs from
-    /// count_and_status in that this field won't be decremented.
-    ///
-    /// This is used as a rough estimate for slot shrinking. As such a relaxed
-    /// use case, this value ARE NOT strictly synchronized with count_and_status!
-    approx_store_count: AtomicUsize,
-
     alive_bytes: AtomicUsize,
 }
 
@@ -1110,7 +1102,6 @@ impl AccountStorageEntry {
             slot,
             accounts,
             count_and_status: SeqLock::new((0, AccountStorageStatus::Available)),
-            approx_store_count: AtomicUsize::new(0),
             alive_bytes: AtomicUsize::new(0),
         }
     }
@@ -1127,7 +1118,6 @@ impl AccountStorageEntry {
             id: self.id,
             slot: self.slot,
             count_and_status: SeqLock::new(*count_and_status),
-            approx_store_count: AtomicUsize::new(self.approx_stored_count()),
             alive_bytes: AtomicUsize::new(self.alive_bytes()),
             accounts,
         })
@@ -1137,14 +1127,13 @@ impl AccountStorageEntry {
         slot: Slot,
         id: AccountsFileId,
         accounts: AccountsFile,
-        num_accounts: usize,
+        _num_accounts: usize,
     ) -> Self {
         Self {
             id,
             slot,
             accounts,
             count_and_status: SeqLock::new((0, AccountStorageStatus::Available)),
-            approx_store_count: AtomicUsize::new(num_accounts),
             alive_bytes: AtomicUsize::new(0),
         }
     }
@@ -1176,10 +1165,6 @@ impl AccountStorageEntry {
 
     pub fn count(&self) -> usize {
         self.count_and_status.read().0
-    }
-
-    pub fn approx_stored_count(&self) -> usize {
-        self.approx_store_count.load(Ordering::Relaxed)
     }
 
     pub fn alive_bytes(&self) -> usize {
@@ -1217,8 +1202,6 @@ impl AccountStorageEntry {
     fn add_accounts(&self, num_accounts: usize, num_bytes: usize) {
         let mut count_and_status = self.count_and_status.lock_write();
         *count_and_status = (count_and_status.0 + num_accounts, count_and_status.1);
-        self.approx_store_count
-            .fetch_add(num_accounts, Ordering::Relaxed);
         self.alive_bytes.fetch_add(num_bytes, Ordering::Release);
     }
 
@@ -4385,7 +4368,7 @@ impl AccountsDb {
         let shrink_collect =
             self.shrink_collect::<AliveAccounts<'_>>(store, &unique_accounts, &self.shrink_stats);
 
-        // This shouldn't happen if alive_bytes/approx_stored_count are accurate.
+        // This shouldn't happen if alive_bytes is accurate.
         // However, it is possible that the remaining alive bytes could be 0. In that case, the whole slot should be marked dead by clean.
         if Self::should_not_shrink(
             shrink_collect.alive_total_bytes as u64,
@@ -8040,16 +8023,14 @@ impl AccountsDb {
 
     fn is_shrinking_productive(store: &AccountStorageEntry) -> bool {
         let alive_count = store.count();
-        let stored_count = store.approx_stored_count();
         let alive_bytes = store.alive_bytes() as u64;
         let total_bytes = store.capacity();
 
         if Self::should_not_shrink(alive_bytes, total_bytes) {
             trace!(
-                "shrink_slot_forced ({}): not able to shrink at all: alive/stored: {}/{} ({}b / {}b) save: {}",
+                "shrink_slot_forced ({}): not able to shrink at all: num alive: {}, bytes alive: {}, bytes total: {}, bytes saved: {}",
                 store.slot(),
                 alive_count,
-                stored_count,
                 alive_bytes,
                 total_bytes,
                 total_bytes.saturating_sub(alive_bytes),
@@ -9378,12 +9359,6 @@ impl AccountsDb {
                 store
                     .alive_bytes
                     .store(entry.stored_size, Ordering::Release);
-                assert!(
-                    store.approx_stored_count() >= entry.count,
-                    "{}, {}",
-                    store.approx_stored_count(),
-                    entry.count
-                );
             } else {
                 trace!("id: {} clearing count", id);
                 store.count_and_status.lock_write().0 = 0;
@@ -9424,11 +9399,10 @@ impl AccountsDb {
         for slot in &slots {
             let entry = self.storage.get_slot_storage_entry(*slot).unwrap();
             info!(
-                "  slot: {} id: {} count_and_status: {:?} approx_store_count: {} len: {} capacity: {}",
+                "  slot: {} id: {} count_and_status: {:?} len: {} capacity: {}",
                 slot,
                 entry.id(),
                 entry.count_and_status.read(),
-                entry.approx_store_count.load(Ordering::Relaxed),
                 entry.accounts.len(),
                 entry.accounts.capacity(),
             );
@@ -9653,10 +9627,7 @@ impl AccountsDb {
     pub fn all_account_count_in_accounts_file(&self, slot: Slot) -> usize {
         let store = self.storage.get_slot_storage_entry(slot);
         if let Some(store) = store {
-            let count = store.accounts_count();
-            let stored_count = store.approx_stored_count();
-            assert_eq!(stored_count, count);
-            count
+            store.accounts_count()
         } else {
             0
         }
@@ -9921,10 +9892,6 @@ pub mod tests {
 
         // construct append vec with account to generate an index from
         append_vec.accounts.append_accounts(&storable_accounts, 0);
-        // append vecs set this at load
-        append_vec
-            .approx_store_count
-            .store(data.len(), Ordering::Relaxed);
 
         let genesis_config = GenesisConfig::default();
         assert!(!db.accounts_index.contains(&pubkey));
