@@ -12,6 +12,7 @@
 use {
     crate::{
         compute_budget_instruction_details::*,
+        signature_details::get_precompile_signature_details,
         transaction_meta::{DynamicMeta, StaticMeta, TransactionMeta},
     },
     core::ops::Deref,
@@ -19,7 +20,7 @@ use {
     solana_sdk::{
         feature_set::FeatureSet,
         hash::Hash,
-        message::AddressLoader,
+        message::{AddressLoader, TransactionSignatureDetails},
         pubkey::Pubkey,
         simple_vote_transaction_checker::is_simple_vote_transaction,
         transaction::{Result, SanitizedTransaction, SanitizedVersionedTransaction},
@@ -28,7 +29,6 @@ use {
     std::collections::HashSet,
 };
 
-#[cfg_attr(test, derive(Eq, PartialEq))]
 #[derive(Debug)]
 pub struct RuntimeTransaction<T> {
     transaction: T,
@@ -55,6 +55,9 @@ impl<T: StaticMetaAccess> StaticMeta for RuntimeTransaction<T> {
     }
     fn is_simple_vote_tx(&self) -> bool {
         self.meta.is_simple_vote_tx
+    }
+    fn signature_details(&self) -> &TransactionSignatureDetails {
+        &self.meta.signature_details
     }
     fn compute_budget_limits(&self, _feature_set: &FeatureSet) -> Result<ComputeBudgetLimits> {
         self.meta
@@ -83,6 +86,24 @@ impl RuntimeTransaction<SanitizedVersionedTransaction> {
             .unwrap_or_else(|| is_simple_vote_transaction(&sanitized_versioned_tx));
         let message_hash =
             message_hash.unwrap_or_else(|| sanitized_versioned_tx.get_message().message.hash());
+
+        let precompile_signature_details = get_precompile_signature_details(
+            sanitized_versioned_tx
+                .get_message()
+                .program_instructions_iter()
+                .map(|(program_id, ix)| (program_id, SVMInstruction::from(ix))),
+        );
+        let signature_details = TransactionSignatureDetails::new(
+            u64::from(
+                sanitized_versioned_tx
+                    .get_message()
+                    .message
+                    .header()
+                    .num_required_signatures,
+            ),
+            precompile_signature_details.num_secp256k1_instruction_signatures,
+            precompile_signature_details.num_ed25519_instruction_signatures,
+        );
         let compute_budget_instruction_details = ComputeBudgetInstructionDetails::try_from(
             sanitized_versioned_tx
                 .get_message()
@@ -95,6 +116,7 @@ impl RuntimeTransaction<SanitizedVersionedTransaction> {
             meta: TransactionMeta {
                 message_hash,
                 is_simple_vote_tx,
+                signature_details,
                 compute_budget_instruction_details,
             },
         })
@@ -299,6 +321,12 @@ mod tests {
 
         assert_eq!(&hash, runtime_transaction_static.message_hash());
         assert!(!runtime_transaction_static.is_simple_vote_tx());
+
+        let signature_details = &runtime_transaction_static.meta.signature_details;
+        assert_eq!(1, signature_details.num_transaction_signatures());
+        assert_eq!(0, signature_details.num_secp256k1_instruction_signatures());
+        assert_eq!(0, signature_details.num_ed25519_instruction_signatures());
+
         let compute_budget_limits = runtime_transaction_static
             .compute_budget_limits(&FeatureSet::default())
             .unwrap();
