@@ -12,7 +12,7 @@ use {
     std::{cmp::Ordering, collections::HashMap},
 };
 
-const WRITABLE_ACCOUNTS_PER_BLOCK: usize = 512;
+const WRITABLE_ACCOUNTS_PER_BLOCK: usize = 4096;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CostTrackerError {
