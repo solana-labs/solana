@@ -6,11 +6,12 @@ use {
         },
         result::Result,
     },
+    core::fmt::{Debug, Formatter},
     solana_svm_transaction::instruction::SVMInstruction,
 };
 
 /// Contains metadata about the instructions in a transaction packet.
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub(crate) struct InstructionsFrame {
     /// The number of instructions in the transaction.
     pub(crate) num_instructions: u16,
@@ -71,6 +72,7 @@ impl InstructionsFrame {
     }
 }
 
+#[derive(Clone)]
 pub struct InstructionsIterator<'a> {
     pub(crate) bytes: &'a [u8],
     pub(crate) offset: usize,
@@ -135,6 +137,12 @@ impl<'a> Iterator for InstructionsIterator<'a> {
 impl ExactSizeIterator for InstructionsIterator<'_> {
     fn len(&self) -> usize {
         usize::from(self.num_instructions.wrapping_sub(self.index))
+    }
+}
+
+impl Debug for InstructionsIterator<'_> {
+    fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
+        f.debug_list().entries(self.clone()).finish()
     }
 }
 

@@ -6,6 +6,7 @@ use {
         },
         result::{Result, TransactionViewError},
     },
+    core::fmt::{Debug, Formatter},
     solana_sdk::{hash::Hash, packet::PACKET_DATA_SIZE, pubkey::Pubkey, signature::Signature},
     solana_svm_transaction::message_address_table_lookup::SVMMessageAddressTableLookup,
 };
@@ -46,6 +47,7 @@ const MAX_ATLS_PER_PACKET: u8 =
     ((PACKET_DATA_SIZE - MIN_SIZED_PACKET_WITH_ATLS) / MIN_SIZED_ATL) as u8;
 
 /// Contains metadata about the address table lookups in a transaction packet.
+#[derive(Debug)]
 pub(crate) struct AddressTableLookupFrame {
     /// The number of address table lookups in the transaction.
     pub(crate) num_address_table_lookups: u8,
@@ -127,6 +129,7 @@ impl AddressTableLookupFrame {
     }
 }
 
+#[derive(Clone)]
 pub struct AddressTableLookupIterator<'a> {
     pub(crate) bytes: &'a [u8],
     pub(crate) offset: usize,
@@ -197,6 +200,12 @@ impl<'a> Iterator for AddressTableLookupIterator<'a> {
 impl ExactSizeIterator for AddressTableLookupIterator<'_> {
     fn len(&self) -> usize {
         usize::from(self.num_address_table_lookups.wrapping_sub(self.index))
+    }
+}
+
+impl Debug for AddressTableLookupIterator<'_> {
+    fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
+        f.debug_list().entries(self.clone()).finish()
     }
 }
 

@@ -3,6 +3,7 @@
 pub enum TransactionViewError {
     ParseError,
     SanitizeError,
+    AddressLookupMismatch,
 }
 
 pub type Result<T> = core::result::Result<T, TransactionViewError>;

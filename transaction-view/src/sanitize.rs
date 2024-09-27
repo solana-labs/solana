@@ -30,7 +30,7 @@ fn sanitize_account_access(view: &UnsanitizedTransactionView<impl TransactionDat
     // Check there is no overlap of signing area and readonly non-signing area.
     // We have already checked that `num_required_signatures` is less than or equal to `num_static_account_keys`,
     // so it is safe to use wrapping arithmetic.
-    if view.num_readonly_unsigned_accounts()
+    if view.num_readonly_unsigned_static_accounts()
         > view
             .num_static_account_keys()
             .wrapping_sub(view.num_required_signatures())
@@ -39,7 +39,7 @@ fn sanitize_account_access(view: &UnsanitizedTransactionView<impl TransactionDat
     }
 
     // Check there is at least 1 writable fee-payer account.
-    if view.num_readonly_signed_accounts() >= view.num_required_signatures() {
+    if view.num_readonly_signed_static_accounts() >= view.num_required_signatures() {
         return Err(TransactionViewError::SanitizeError);
     }
 

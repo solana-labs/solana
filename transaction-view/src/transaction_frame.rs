@@ -11,6 +11,7 @@ use {
     solana_sdk::{hash::Hash, pubkey::Pubkey, signature::Signature},
 };
 
+#[derive(Debug)]
 pub(crate) struct TransactionFrame {
     /// Signature framing data.
     signature: SignatureFrame,
@@ -85,15 +86,15 @@ impl TransactionFrame {
         self.message_header.num_required_signatures
     }
 
-    /// Return the number of readonly signed accounts in the transaction.
+    /// Return the number of readonly signed static accounts in the transaction.
     #[inline]
-    pub(crate) fn num_readonly_signed_accounts(&self) -> u8 {
+    pub(crate) fn num_readonly_signed_static_accounts(&self) -> u8 {
         self.message_header.num_readonly_signed_accounts
     }
 
-    /// Return the number of readonly unsigned accounts in the transaction.
+    /// Return the number of readonly unsigned static accounts in the transaction.
     #[inline]
-    pub(crate) fn num_readonly_unsigned_accounts(&self) -> u8 {
+    pub(crate) fn num_readonly_unsigned_static_accounts(&self) -> u8 {
         self.message_header.num_readonly_unsigned_accounts
     }
 
@@ -525,8 +526,8 @@ mod tests {
         assert_eq!(frame.num_signatures(), 1);
         assert!(matches!(frame.version(), TransactionVersion::Legacy));
         assert_eq!(frame.num_required_signatures(), 1);
-        assert_eq!(frame.num_readonly_signed_accounts(), 0);
-        assert_eq!(frame.num_readonly_unsigned_accounts(), 1);
+        assert_eq!(frame.num_readonly_signed_static_accounts(), 0);
+        assert_eq!(frame.num_readonly_unsigned_static_accounts(), 1);
         assert_eq!(frame.num_static_account_keys(), 3);
         assert_eq!(frame.num_instructions(), 1);
         assert_eq!(frame.num_address_table_lookups(), 0);

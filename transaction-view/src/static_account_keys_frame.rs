@@ -14,7 +14,7 @@ pub const MAX_STATIC_ACCOUNTS_PER_PACKET: u8 =
     (PACKET_DATA_SIZE / core::mem::size_of::<Pubkey>()) as u8;
 
 /// Contains metadata about the static account keys in a transaction packet.
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub(crate) struct StaticAccountKeysFrame {
     /// The number of static accounts in the transaction.
     pub(crate) num_static_accounts: u8,

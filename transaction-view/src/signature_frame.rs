@@ -17,6 +17,7 @@ const MAX_SIGNATURES_PER_PACKET: u8 =
     (PACKET_DATA_SIZE / (core::mem::size_of::<Signature>() + core::mem::size_of::<Pubkey>())) as u8;
 
 /// Metadata for accessing transaction-level signatures in a transaction view.
+#[derive(Debug)]
 pub(crate) struct SignatureFrame {
     /// The number of signatures in the transaction.
     pub(crate) num_signatures: u8,

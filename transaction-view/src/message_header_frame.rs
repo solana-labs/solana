@@ -7,7 +7,7 @@ use {
 };
 
 /// A byte that represents the version of the transaction.
-#[derive(Copy, Clone, Default)]
+#[derive(Copy, Clone, Debug, Default)]
 #[repr(u8)]
 pub enum TransactionVersion {
     #[default]
@@ -16,6 +16,7 @@ pub enum TransactionVersion {
 }
 
 /// Metadata for accessing message header fields in a transaction view.
+#[derive(Debug)]
 pub(crate) struct MessageHeaderFrame {
     /// The offset to the first byte of the message in the transaction packet.
     pub(crate) offset: u16,
