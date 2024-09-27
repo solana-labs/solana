@@ -2397,9 +2397,6 @@ impl ClusterInfo {
                     .collect()
             })
         };
-        if prune_messages.is_empty() {
-            return;
-        }
         let mut packet_batch = PacketBatch::new_unpinned_with_recycler_data_and_dests(
             recycler,
             "handle_batch_push_messages",
@@ -2429,7 +2426,9 @@ impl ClusterInfo {
         self.stats
             .packets_sent_push_messages_count
             .add_relaxed((packet_batch.len() - num_prune_packets) as u64);
-        let _ = response_sender.send(packet_batch);
+        if !packet_batch.is_empty() {
+            let _ = response_sender.send(packet_batch);
+        }
     }
 
     fn require_stake_for_gossip(&self, stakes: &HashMap<Pubkey, u64>) -> bool {
