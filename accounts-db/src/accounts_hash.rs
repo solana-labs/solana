@@ -1265,6 +1265,10 @@ pub struct AccountLtHash(pub LtHash);
 pub const ZERO_LAMPORT_ACCOUNT_LT_HASH: AccountLtHash =
     AccountLtHash(LtHash([0; LtHash::NUM_ELEMENTS]));
 
+/// Lattice hash of all accounts
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct AccountsLtHash(pub LtHash);
+
 /// Hash of accounts
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum AccountsHashKind {

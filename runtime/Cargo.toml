@@ -46,6 +46,7 @@ regex = { workspace = true }
 serde = { workspace = true, features = ["rc"] }
 serde_derive = { workspace = true }
 serde_json = { workspace = true }
+serde_with = { workspace = true }
 solana-accounts-db = { workspace = true }
 solana-address-lookup-table-program = { workspace = true }
 solana-bpf-loader-program = { workspace = true }
@@ -63,6 +64,7 @@ solana-frozen-abi-macro = { workspace = true, optional = true, features = [
     "frozen-abi",
 ] }
 solana-inline-spl = { workspace = true }
+solana-lattice-hash = { workspace = true }
 solana-loader-v4-program = { workspace = true }
 solana-measure = { workspace = true }
 solana-metrics = { workspace = true }

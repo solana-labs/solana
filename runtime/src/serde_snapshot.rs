@@ -57,10 +57,12 @@ use {
         thread::Builder,
     },
     storage::SerializableStorage,
+    types::SerdeAccountsLtHash,
 };
 
 mod storage;
 mod tests;
+mod types;
 mod utils;
 
 pub(crate) use {
@@ -400,6 +402,9 @@ struct ExtraFieldsToDeserialize {
     epoch_accounts_hash: Option<Hash>,
     #[serde(deserialize_with = "default_on_eof")]
     versioned_epoch_stakes: HashMap<u64, VersionedEpochStakes>,
+    #[serde(deserialize_with = "default_on_eof")]
+    #[allow(dead_code)]
+    accounts_lt_hash: Option<SerdeAccountsLtHash>,
 }
 
 /// Extra fields that are serialized at the end of snapshots.
@@ -441,6 +446,7 @@ where
         incremental_snapshot_persistence,
         epoch_accounts_hash,
         versioned_epoch_stakes,
+        accounts_lt_hash: _,
     } = extra_fields;
 
     bank_fields.fee_rate_governor = bank_fields
