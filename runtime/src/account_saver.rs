@@ -110,18 +110,19 @@ fn collect_accounts_for_successful_tx<'a, T: SVMMessage>(
     transaction_ref: Option<&'a SanitizedTransaction>,
     transaction_accounts: &'a [TransactionAccount],
 ) {
-    for (_, (address, account)) in (0..transaction.account_keys().len())
-        .zip(transaction_accounts)
-        .filter(|(i, _)| {
-            transaction.is_writable(*i) && {
-                // Accounts that are invoked and also not passed as an instruction
-                // account to a program don't need to be stored because it's assumed
-                // to be impossible for a committable transaction to modify an
-                // invoked account if said account isn't passed to some program.
-                !transaction.is_invoked(*i) || transaction.is_instruction_account(*i)
-            }
-        })
-    {
+    for (i, (address, account)) in (0..transaction.account_keys().len()).zip(transaction_accounts) {
+        if !transaction.is_writable(i) {
+            continue;
+        }
+
+        // Accounts that are invoked and also not passed as an instruction
+        // account to a program don't need to be stored because it's assumed
+        // to be impossible for a committable transaction to modify an
+        // invoked account if said account isn't passed to some program.
+        if transaction.is_invoked(i) && !transaction.is_instruction_account(i) {
+            continue;
+        }
+
         collected_accounts.push((address, account));
         if let Some(collected_account_transactions) = collected_account_transactions {
             collected_account_transactions
