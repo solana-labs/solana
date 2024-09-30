@@ -3147,11 +3147,19 @@ impl fmt::Display for CliBalance {
 #[serde(rename_all = "camelCase")]
 pub struct CliFindProgramDerivedAddress {
     pub address: String,
+    pub seeds: Vec<Vec<u8>>,
     pub bump_seed: u8,
 }
 
 impl QuietDisplay for CliFindProgramDerivedAddress {}
-impl VerboseDisplay for CliFindProgramDerivedAddress {}
+impl VerboseDisplay for CliFindProgramDerivedAddress {
+    fn write_str(&self, w: &mut dyn std::fmt::Write) -> std::fmt::Result {
+        writeln!(w, "Seeds: {:?}", self.seeds)?;
+        writeln!(w, "Bump: {}", self.bump_seed)?;
+        write!(w, "{}", self.address)?;
+        Ok(())
+    }
+}
 
 impl fmt::Display for CliFindProgramDerivedAddress {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
