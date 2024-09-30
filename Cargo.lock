@@ -6617,6 +6617,7 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_derive",
+ "serde_with",
  "sha2 0.10.8",
  "solana-frozen-abi-macro",
  "solana-logger",

@@ -245,6 +245,14 @@ impl<T: BlockType> EvenAsOpaque for BitVec<T> {
     const TYPE_NAME_MATCHER: &'static str = "bv::bit_vec::inner::";
 }
 
+use serde_with::ser::SerializeAsWrap;
+impl<'a, T: ?Sized, U: ?Sized> TransparentAsHelper for SerializeAsWrap<'a, T, U> {}
+// This (EvenAsOpaque) marker trait is needed for serde_with's serde_as(...) because this struct is
+// basically a wrapper struct.
+impl<'a, T: ?Sized, U: ?Sized> EvenAsOpaque for SerializeAsWrap<'a, T, U> {
+    const TYPE_NAME_MATCHER: &'static str = "serde_with::ser::SerializeAsWrap<";
+}
+
 pub(crate) fn normalize_type_name(type_name: &str) -> String {
     type_name.chars().filter(|c| *c != '&').collect()
 }

@@ -15,6 +15,7 @@ bv = { workspace = true, features = ["serde"] }
 log = { workspace = true, features = ["std"] }
 serde = { workspace = true, features = ["rc"] }
 serde_derive = { workspace = true }
+serde_with = { workspace = true }
 sha2 = { workspace = true }
 solana-frozen-abi-macro = { workspace = true }
 thiserror = { workspace = true }
@@ -28,6 +29,7 @@ memmap2 = { workspace = true }
 bitflags = { workspace = true, features = ["serde"] }
 serde_bytes = { workspace = true }
 solana-logger = { workspace = true }
+serde_with = { workspace = true, features = ["macros"] }
 
 [features]
 default = []

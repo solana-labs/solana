@@ -684,6 +684,36 @@ mod tests {
         }
     }
 
+    mod serde_with_abi {
+        use serde_with::{serde_as, Bytes};
+
+        // This is a minimized testcase based on solana_sdk::packet::Packet
+        #[serde_as]
+        #[derive(serde_derive::Serialize, AbiExample)]
+        #[frozen_abi(digest = "DcR9EB87D4uQBjUrsendvcFgS5KSF7okjnxGx8ZaDE8Z")]
+        struct U8ArrayWithBytes {
+            #[serde_as(as = "Bytes")]
+            foo: [u8; 42],
+        }
+
+        #[serde_as]
+        #[derive(serde_derive::Serialize, AbiExample)]
+        #[frozen_abi(digest = "CVqaXh4pWCiUyAuZ6dZPCmbCEtJyNH3e6uwUpJzymT6b")]
+        struct U8ArrayWithGenericAs {
+            #[serde_as(as = "[_; 42]")]
+            foo: [u8; 42],
+        }
+
+        // This is a minimized testcase based on solana_lattice_hash::lt_hash::LtHash
+        #[serde_as]
+        #[derive(serde_derive::Serialize, AbiExample)]
+        #[frozen_abi(digest = "A1J57qgtrhpqk6vD4tjV1CHLPagacBKsXJBBUB5mdp5W")]
+        struct NotU8ArrayWithGenericAs {
+            #[serde_as(as = "[_; 42]")]
+            bar: [u16; 42],
+        }
+    }
+
     mod skip_should_be_same {
         #[frozen_abi(digest = "4LbuvQLX78XPbm4hqqZcHFHpseDJcw4qZL9EUZXSi2Ss")]
         #[derive(serde_derive::Serialize, AbiExample)]
