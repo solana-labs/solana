@@ -1217,8 +1217,15 @@ impl Bank {
             epoch_schedule,
             collected_rent: AtomicU64::new(0),
             rent_collector: Self::get_rent_collector_from(&parent.rent_collector, epoch),
-            max_tick_height: (slot + 1) * parent.ticks_per_slot,
-            block_height: parent.block_height + 1,
+            max_tick_height: slot
+                .checked_add(1)
+                .expect("max tick height addition overflowed")
+                .checked_mul(parent.ticks_per_slot)
+                .expect("max tick height multiplication overflowed"),
+            block_height: parent
+                .block_height
+                .checked_add(1)
+                .expect("block height addition overflowed"),
             fee_rate_governor,
             capitalization: AtomicU64::new(parent.capitalization()),
             vote_only_bank,
