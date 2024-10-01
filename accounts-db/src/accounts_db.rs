@@ -4576,17 +4576,13 @@ impl AccountsDb {
             alive_ratio: f64,
             store: Arc<AccountStorageEntry>,
         }
-        let mut measure = Measure::start("select_top_sparse_storage_entries-ms");
         let mut store_usage: Vec<StoreUsageInfo> = Vec::with_capacity(shrink_slots.len());
         let mut total_alive_bytes: u64 = 0;
-        let mut candidates_count: usize = 0;
         let mut total_bytes: u64 = 0;
-        let mut total_candidate_stores: usize = 0;
         for slot in shrink_slots {
             let Some(store) = self.storage.get_slot_storage_entry(*slot) else {
                 continue;
             };
-            candidates_count += 1;
             let alive_bytes = store.alive_bytes();
             total_alive_bytes += alive_bytes as u64;
             total_bytes += store.capacity();
@@ -4596,7 +4592,6 @@ impl AccountsDb {
                 alive_ratio,
                 store: store.clone(),
             });
-            total_candidate_stores += 1;
         }
         store_usage.sort_by(|a, b| {
             a.alive_ratio
@@ -4633,20 +4628,6 @@ impl AccountsDb {
                 shrink_slots.insert(usage.slot, Arc::clone(store));
             }
         }
-        measure.stop();
-        inc_new_counter_debug!(
-            "shrink_select_top_sparse_storage_entries-ms",
-            measure.as_ms() as usize
-        );
-        inc_new_counter_debug!(
-            "shrink_select_top_sparse_storage_entries-seeds",
-            candidates_count
-        );
-        inc_new_counter_debug!(
-            "shrink_total_preliminary_candidate_stores",
-            total_candidate_stores
-        );
-
         (shrink_slots, shrink_slots_next_batch)
     }
 
@@ -5050,8 +5031,8 @@ impl AccountsDb {
 
         let shrink_candidates_slots =
             std::mem::take(&mut *self.shrink_candidate_slots.lock().unwrap());
-
-        let (shrink_slots, shrink_slots_next_batch) = {
+        let candidates_count = shrink_candidates_slots.len();
+        let ((shrink_slots, shrink_slots_next_batch), select_time_us) = measure_us!({
             if let AccountShrinkThreshold::TotalSpace { shrink_ratio } = self.shrink_ratio {
                 let (shrink_slots, shrink_slots_next_batch) =
                     self.select_candidates_by_total_usage(&shrink_candidates_slots, shrink_ratio);
@@ -5070,7 +5051,7 @@ impl AccountsDb {
                     None,
                 )
             }
-        };
+        });
 
         if shrink_slots.is_empty()
             && shrink_slots_next_batch
@@ -5084,41 +5065,43 @@ impl AccountsDb {
         let _guard = (!shrink_slots.is_empty())
             .then_some(|| self.active_stats.activate(ActiveStatItem::Shrink));
 
-        let mut measure_shrink_all_candidates = Measure::start("shrink_all_candidate_slots-ms");
-        let num_candidates = shrink_slots.len();
-        let shrink_candidates_count = shrink_slots.len();
-        self.thread_pool_clean.install(|| {
-            shrink_slots
-                .into_par_iter()
-                .for_each(|(slot, slot_shrink_candidate)| {
-                    if self.ancient_append_vec_offset.is_some() && slot < oldest_non_ancient_slot {
-                        self.shrink_stats
-                            .num_ancient_slots_shrunk
-                            .fetch_add(1, Ordering::Relaxed);
-                    }
-                    let mut measure = Measure::start("shrink_candidate_slots-ms");
-                    self.shrink_storage(&slot_shrink_candidate);
-                    measure.stop();
-                    inc_new_counter_info!("shrink_candidate_slots-ms", measure.as_ms() as usize);
-                });
+        let num_selected = shrink_slots.len();
+        let (_, shrink_all_us) = measure_us!({
+            self.thread_pool_clean.install(|| {
+                shrink_slots
+                    .into_par_iter()
+                    .for_each(|(slot, slot_shrink_candidate)| {
+                        if self.ancient_append_vec_offset.is_some()
+                            && slot < oldest_non_ancient_slot
+                        {
+                            self.shrink_stats
+                                .num_ancient_slots_shrunk
+                                .fetch_add(1, Ordering::Relaxed);
+                        }
+                        self.shrink_storage(&slot_shrink_candidate);
+                    });
+            })
         });
-        measure_shrink_all_candidates.stop();
-        inc_new_counter_info!(
-            "shrink_all_candidate_slots-ms",
-            measure_shrink_all_candidates.as_ms() as usize
-        );
-        inc_new_counter_info!("shrink_all_candidate_slots-count", shrink_candidates_count);
+
         let mut pended_counts: usize = 0;
         if let Some(shrink_slots_next_batch) = shrink_slots_next_batch {
             let mut shrink_slots = self.shrink_candidate_slots.lock().unwrap();
-            pended_counts += shrink_slots_next_batch.len();
+            pended_counts = shrink_slots_next_batch.len();
             for slot in shrink_slots_next_batch {
                 shrink_slots.insert(slot);
             }
         }
-        inc_new_counter_info!("shrink_pended_stores-count", pended_counts);
 
-        num_candidates
+        datapoint_info!(
+            "shrink_candidate_slots",
+            ("select_time_us", select_time_us, i64),
+            ("shrink_all_us", shrink_all_us, i64),
+            ("candidates_count", candidates_count, i64),
+            ("selected_count", num_selected, i64),
+            ("deferred_to_next_round_count", pended_counts, i64)
+        );
+
+        num_selected
     }
 
     /// This is only called at startup from bank when we are being extra careful such as when we downloaded a snapshot.
