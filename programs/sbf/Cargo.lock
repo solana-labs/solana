@@ -5497,10 +5497,6 @@ dependencies = [
 [[package]]
 name = "solana-measure"
 version = "2.1.0"
-dependencies = [
- "log",
- "solana-sdk",
-]
 
 [[package]]
 name = "solana-merkle-tree"
