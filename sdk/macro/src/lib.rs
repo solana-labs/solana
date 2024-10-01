@@ -319,7 +319,7 @@ pub fn derive_clone_zeroed(input: proc_macro::TokenStream) -> proc_macro::TokenS
                 syn::Fields::Named(ref fields) => fields.named.iter().map(|f| {
                     let name = &f.ident;
                     quote! {
-                        std::ptr::addr_of_mut!((*ptr).#name).write(self.#name);
+                        core::ptr::addr_of_mut!((*ptr).#name).write(self.#name);
                     }
                 }),
                 _ => unimplemented!(),
@@ -332,9 +332,9 @@ pub fn derive_clone_zeroed(input: proc_macro::TokenStream) -> proc_macro::TokenS
                     // This is not the case here, and intentionally so because we want to
                     // guarantee zeroed padding.
                     fn clone(&self) -> Self {
-                        let mut value = std::mem::MaybeUninit::<Self>::uninit();
+                        let mut value = core::mem::MaybeUninit::<Self>::uninit();
                         unsafe {
-                            std::ptr::write_bytes(&mut value, 0, 1);
+                            core::ptr::write_bytes(&mut value, 0, 1);
                             let ptr = value.as_mut_ptr();
                             #(#clone_statements)*
                             value.assume_init()

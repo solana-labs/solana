@@ -19,6 +19,7 @@
 //! validator set][oracle].
 //!
 //! [oracle]: https://docs.solanalabs.com/implemented-proposals/validator-timestamp-oracle
+#![no_std]
 
 #[cfg(feature = "serde")]
 use serde_derive::{Deserialize, Serialize};
