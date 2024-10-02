@@ -4,8 +4,7 @@
 use {
     async_lock::Mutex,
     async_trait::async_trait,
-    futures::future::{join_all, TryFutureExt},
-    itertools::Itertools,
+    futures::future::TryFutureExt,
     log::*,
     quinn::{
         crypto::rustls::QuicClientConfig, ClientConfig, ClosedStream, ConnectError, Connection,
@@ -20,10 +19,7 @@ use {
     solana_net_utils::VALIDATOR_PORT_RANGE,
     solana_rpc_client_api::client_error::ErrorKind as ClientErrorKind,
     solana_sdk::{
-        quic::{
-            QUIC_CONNECTION_HANDSHAKE_TIMEOUT, QUIC_KEEP_ALIVE, QUIC_MAX_TIMEOUT,
-            QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS,
-        },
+        quic::{QUIC_CONNECTION_HANDSHAKE_TIMEOUT, QUIC_KEEP_ALIVE, QUIC_MAX_TIMEOUT},
         signature::Keypair,
         transport::Result as TransportResult,
     },
@@ -284,21 +280,15 @@ pub struct QuicClient {
     connection: Arc<Mutex<Option<QuicNewConnection>>>,
     addr: SocketAddr,
     stats: Arc<ClientStats>,
-    chunk_size: usize,
 }
 
 impl QuicClient {
-    pub fn new(
-        endpoint: Arc<QuicLazyInitializedEndpoint>,
-        addr: SocketAddr,
-        chunk_size: usize,
-    ) -> Self {
+    pub fn new(endpoint: Arc<QuicLazyInitializedEndpoint>, addr: SocketAddr) -> Self {
         Self {
             endpoint,
             connection: Arc::new(Mutex::new(None)),
             addr,
             stats: Arc::new(ClientStats::default()),
-            chunk_size,
         }
     }
 
@@ -307,7 +297,6 @@ impl QuicClient {
         connection: &Connection,
     ) -> Result<(), QuicError> {
         let mut send_stream = connection.open_uni().await?;
-
         send_stream.write_all(data).await?;
         Ok(())
     }
@@ -520,28 +509,8 @@ impl QuicClient {
             .await
             .map_err(Into::<ClientErrorKind>::into)?;
 
-        // Used to avoid dereferencing the Arc multiple times below
-        // by just getting a reference to the NewConnection once
-        let connection_ref: &Connection = &connection;
-
-        let chunks = buffers[1..buffers.len()].iter().chunks(self.chunk_size);
-
-        let futures: Vec<_> = chunks
-            .into_iter()
-            .map(|buffs| {
-                join_all(
-                    buffs
-                        .into_iter()
-                        .map(|buf| Self::_send_buffer_using_conn(buf.as_ref(), connection_ref)),
-                )
-            })
-            .collect();
-
-        for f in futures {
-            f.await
-                .into_iter()
-                .try_for_each(|res| res)
-                .map_err(Into::<ClientErrorKind>::into)?;
+        for data in buffers[1..buffers.len()].iter() {
+            Self::_send_buffer_using_conn(data.as_ref(), &connection).await?;
         }
         Ok(())
     }
@@ -574,11 +543,7 @@ impl QuicClientConnection {
         addr: SocketAddr,
         connection_stats: Arc<ConnectionCacheStats>,
     ) -> Self {
-        let client = Arc::new(QuicClient::new(
-            endpoint,
-            addr,
-            QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS,
-        ));
+        let client = Arc::new(QuicClient::new(endpoint, addr));
         Self::new_with_client(client, connection_stats)
     }
 
