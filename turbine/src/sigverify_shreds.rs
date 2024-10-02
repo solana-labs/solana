@@ -13,7 +13,6 @@ use {
         sigverify_shreds::{verify_shreds_gpu, LruCache},
     },
     solana_perf::{self, deduper::Deduper, packet::PacketBatch, recycler_cache::RecyclerCache},
-    solana_rayon_threadlimit::get_thread_count,
     solana_runtime::{
         bank::{Bank, MAX_LEADER_SCHEDULE_STAKES},
         bank_forks::BankForks,
@@ -26,6 +25,7 @@ use {
     static_assertions::const_assert_eq,
     std::{
         collections::HashMap,
+        num::NonZeroUsize,
         sync::{
             atomic::{AtomicUsize, Ordering},
             Arc, RwLock,
@@ -66,6 +66,7 @@ pub fn spawn_shred_sigverify(
     shred_fetch_receiver: Receiver<PacketBatch>,
     retransmit_sender: Sender<Vec</*shred:*/ Vec<u8>>>,
     verified_sender: Sender<Vec<PacketBatch>>,
+    num_sigverify_threads: NonZeroUsize,
 ) -> JoinHandle<()> {
     let recycler_cache = RecyclerCache::warmed();
     let mut stats = ShredSigVerifyStats::new(Instant::now());
@@ -75,10 +76,10 @@ pub fn spawn_shred_sigverify(
         CLUSTER_NODES_CACHE_TTL,
     );
     let thread_pool = ThreadPoolBuilder::new()
-        .num_threads(get_thread_count())
+        .num_threads(num_sigverify_threads.get())
         .thread_name(|i| format!("solSvrfyShred{i:02}"))
         .build()
-        .unwrap();
+        .expect("new rayon threadpool");
     let run_shred_sigverify = move || {
         let mut rng = rand::thread_rng();
         let mut deduper = Deduper::<2, [u8]>::new(&mut rng, DEDUPER_NUM_BITS);
