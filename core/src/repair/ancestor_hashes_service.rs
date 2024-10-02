@@ -7,23 +7,22 @@ use {
             },
             outstanding_requests::OutstandingRequests,
             packet_threshold::DynamicPacketToProcessThreshold,
-            quic_endpoint::LocalRequest,
             repair_service::{AncestorDuplicateSlotsSender, RepairInfo, RepairStatsGroup},
-            request_response::RequestResponse,
             serve_repair::{
                 self, AncestorHashesRepairType, AncestorHashesResponse, RepairProtocol, ServeRepair,
             },
         },
         replay_stage::DUPLICATE_THRESHOLD,
-        shred_fetch_stage::receive_repair_quic_packets,
+        shred_fetch_stage::receive_quic_datagrams,
     },
     bincode::serialize,
+    bytes::Bytes,
     crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, Sender},
     dashmap::{mapref::entry::Entry::Occupied, DashMap},
     solana_gossip::{cluster_info::ClusterInfo, contact_info::Protocol, ping_pong::Pong},
     solana_ledger::blockstore::Blockstore,
     solana_perf::{
-        packet::{deserialize_from_with_limit, Packet, PacketBatch},
+        packet::{deserialize_from_with_limit, Packet, PacketBatch, PacketFlags},
         recycler::Recycler,
     },
     solana_runtime::bank::Bank,
@@ -153,7 +152,8 @@ impl AncestorHashesService {
         exit: Arc<AtomicBool>,
         blockstore: Arc<Blockstore>,
         ancestor_hashes_request_socket: Arc<UdpSocket>,
-        quic_endpoint_sender: AsyncSender<LocalRequest>,
+        ancestor_hashes_request_quic_sender: AsyncSender<(SocketAddr, Bytes)>,
+        ancestor_hashes_response_quic_receiver: Receiver<(Pubkey, SocketAddr, Bytes)>,
         repair_info: RepairInfo,
         ancestor_hashes_replay_update_receiver: AncestorHashesReplayUpdateReceiver,
     ) -> Self {
@@ -171,17 +171,17 @@ impl AncestorHashesService {
             Duration::from_millis(1), // coalesce
             false,                    // use_pinned_memory
             None,                     // in_vote_only_mode
-            false,                    //  is_staked_service
+            false,                    // is_staked_service
         );
 
-        let (quic_endpoint_response_sender, quic_endpoint_response_receiver) = unbounded();
         let t_receiver_quic = {
             let exit = exit.clone();
             Builder::new()
                 .name(String::from("solAncHashQuic"))
                 .spawn(|| {
-                    receive_repair_quic_packets(
-                        quic_endpoint_response_receiver,
+                    receive_quic_datagrams(
+                        ancestor_hashes_response_quic_receiver,
+                        PacketFlags::REPAIR,
                         response_sender,
                         Recycler::default(),
                         exit,
@@ -210,8 +210,7 @@ impl AncestorHashesService {
         let t_ancestor_requests = Self::run_manage_ancestor_requests(
             ancestor_hashes_request_statuses,
             ancestor_hashes_request_socket,
-            quic_endpoint_sender,
-            quic_endpoint_response_sender,
+            ancestor_hashes_request_quic_sender,
             repair_info,
             outstanding_requests,
             exit,
@@ -586,8 +585,7 @@ impl AncestorHashesService {
     fn run_manage_ancestor_requests(
         ancestor_hashes_request_statuses: Arc<DashMap<Slot, AncestorRequestStatus>>,
         ancestor_hashes_request_socket: Arc<UdpSocket>,
-        quic_endpoint_sender: AsyncSender<LocalRequest>,
-        quic_endpoint_response_sender: Sender<(SocketAddr, Vec<u8>)>,
+        ancestor_hashes_request_quic_sender: AsyncSender<(SocketAddr, Bytes)>,
         repair_info: RepairInfo,
         outstanding_requests: Arc<RwLock<OutstandingAncestorHashesRepairs>>,
         exit: Arc<AtomicBool>,
@@ -627,8 +625,7 @@ impl AncestorHashesService {
                 Self::manage_ancestor_requests(
                     &ancestor_hashes_request_statuses,
                     &ancestor_hashes_request_socket,
-                    &quic_endpoint_sender,
-                    &quic_endpoint_response_sender,
+                    &ancestor_hashes_request_quic_sender,
                     &repair_info,
                     &outstanding_requests,
                     &ancestor_hashes_replay_update_receiver,
@@ -650,8 +647,7 @@ impl AncestorHashesService {
     fn manage_ancestor_requests(
         ancestor_hashes_request_statuses: &DashMap<Slot, AncestorRequestStatus>,
         ancestor_hashes_request_socket: &UdpSocket,
-        quic_endpoint_sender: &AsyncSender<LocalRequest>,
-        quic_endpoint_response_sender: &Sender<(SocketAddr, Vec<u8>)>,
+        ancestor_hashes_request_quic_sender: &AsyncSender<(SocketAddr, Bytes)>,
         repair_info: &RepairInfo,
         outstanding_requests: &RwLock<OutstandingAncestorHashesRepairs>,
         ancestor_hashes_replay_update_receiver: &AncestorHashesReplayUpdateReceiver,
@@ -750,8 +746,7 @@ impl AncestorHashesService {
             if Self::initiate_ancestor_hashes_requests_for_duplicate_slot(
                 ancestor_hashes_request_statuses,
                 ancestor_hashes_request_socket,
-                quic_endpoint_sender,
-                quic_endpoint_response_sender,
+                ancestor_hashes_request_quic_sender,
                 &repair_info.cluster_slots,
                 serve_repair,
                 &repair_info.repair_validators,
@@ -829,8 +824,7 @@ impl AncestorHashesService {
     fn initiate_ancestor_hashes_requests_for_duplicate_slot(
         ancestor_hashes_request_statuses: &DashMap<Slot, AncestorRequestStatus>,
         ancestor_hashes_request_socket: &UdpSocket,
-        quic_endpoint_sender: &AsyncSender<LocalRequest>,
-        quic_endpoint_response_sender: &Sender<(SocketAddr, Vec<u8>)>,
+        ancestor_hashes_request_quic_sender: &AsyncSender<(SocketAddr, Bytes)>,
         cluster_slots: &ClusterSlots,
         serve_repair: &ServeRepair,
         repair_validators: &Option<HashSet<Pubkey>>,
@@ -873,16 +867,10 @@ impl AncestorHashesService {
                     let _ = ancestor_hashes_request_socket.send_to(&request_bytes, socket_addr);
                 }
                 Protocol::QUIC => {
-                    let num_expected_responses =
-                        usize::try_from(ancestor_hashes_repair_type.num_expected_responses())
-                            .unwrap();
-                    let request = LocalRequest {
-                        remote_address: *socket_addr,
-                        bytes: request_bytes,
-                        num_expected_responses,
-                        response_sender: quic_endpoint_response_sender.clone(),
-                    };
-                    if quic_endpoint_sender.blocking_send(request).is_err() {
+                    if ancestor_hashes_request_quic_sender
+                        .blocking_send((*socket_addr, Bytes::from(request_bytes)))
+                        .is_err()
+                    {
                         // The receiver end of the channel is disconnected.
                         break;
                     }
@@ -1316,10 +1304,12 @@ mod test {
             let t_packet_adapter = Builder::new()
                 .spawn(|| adapt_repair_requests_packets(requests_receiver, remote_request_sender))
                 .unwrap();
+            let (repair_response_quic_sender, _) = tokio::sync::mpsc::channel(/*buffer:*/ 128);
             let t_listen = responder_serve_repair.listen(
                 blockstore,
                 remote_request_receiver,
                 response_sender,
+                repair_response_quic_sender,
                 exit.clone(),
             );
 
@@ -1511,14 +1501,12 @@ mod test {
             repair_validators,
             ..
         } = repair_info;
-        let (quic_endpoint_response_sender, _quic_endpoint_response_receiver) = unbounded();
-        let (quic_endpoint_sender, _quic_endpoint_sender) =
+        let (ancestor_hashes_request_quic_sender, _) =
             tokio::sync::mpsc::channel(/*buffer:*/ 128);
         AncestorHashesService::initiate_ancestor_hashes_requests_for_duplicate_slot(
             &ancestor_hashes_request_statuses,
             &ancestor_hashes_request_socket,
-            &quic_endpoint_sender,
-            &quic_endpoint_response_sender,
+            &ancestor_hashes_request_quic_sender,
             &cluster_slots,
             &requester_serve_repair,
             &repair_validators,
@@ -1568,8 +1556,7 @@ mod test {
         AncestorHashesService::initiate_ancestor_hashes_requests_for_duplicate_slot(
             &ancestor_hashes_request_statuses,
             &ancestor_hashes_request_socket,
-            &quic_endpoint_sender,
-            &quic_endpoint_response_sender,
+            &ancestor_hashes_request_quic_sender,
             &cluster_slots,
             &requester_serve_repair,
             &repair_validators,
@@ -1631,8 +1618,7 @@ mod test {
         AncestorHashesService::initiate_ancestor_hashes_requests_for_duplicate_slot(
             &ancestor_hashes_request_statuses,
             &ancestor_hashes_request_socket,
-            &quic_endpoint_sender,
-            &quic_endpoint_response_sender,
+            &ancestor_hashes_request_quic_sender,
             &cluster_slots,
             &requester_serve_repair,
             &repair_validators,
@@ -1718,15 +1704,13 @@ mod test {
         } = repair_info;
         cluster_info.insert_info(responder_node.info);
         bank_forks.read().unwrap().root_bank().epoch_schedule();
-        let (quic_endpoint_response_sender, _quic_endpoint_response_receiver) = unbounded();
-        let (quic_endpoint_sender, _quic_endpoint_sender) =
+        let (ancestor_hashes_request_quic_sender, _) =
             tokio::sync::mpsc::channel(/*buffer:*/ 128);
         // 1) No signals from ReplayStage, no requests should be made
         AncestorHashesService::manage_ancestor_requests(
             &ancestor_hashes_request_statuses,
             &ancestor_hashes_request_socket,
-            &quic_endpoint_sender,
-            &quic_endpoint_response_sender,
+            &ancestor_hashes_request_quic_sender,
             &repair_info,
             &outstanding_requests,
             &ancestor_hashes_replay_update_receiver,
@@ -1769,8 +1753,7 @@ mod test {
         AncestorHashesService::manage_ancestor_requests(
             &ancestor_hashes_request_statuses,
             &ancestor_hashes_request_socket,
-            &quic_endpoint_sender,
-            &quic_endpoint_response_sender,
+            &ancestor_hashes_request_quic_sender,
             &repair_info,
             &outstanding_requests,
             &ancestor_hashes_replay_update_receiver,
@@ -1810,8 +1793,7 @@ mod test {
         AncestorHashesService::manage_ancestor_requests(
             &ancestor_hashes_request_statuses,
             &ancestor_hashes_request_socket,
-            &quic_endpoint_sender,
-            &quic_endpoint_response_sender,
+            &ancestor_hashes_request_quic_sender,
             &repair_info,
             &outstanding_requests,
             &ancestor_hashes_replay_update_receiver,
@@ -1843,8 +1825,7 @@ mod test {
         AncestorHashesService::manage_ancestor_requests(
             &ancestor_hashes_request_statuses,
             &ancestor_hashes_request_socket,
-            &quic_endpoint_sender,
-            &quic_endpoint_response_sender,
+            &ancestor_hashes_request_quic_sender,
             &repair_info,
             &outstanding_requests,
             &ancestor_hashes_replay_update_receiver,
@@ -1882,8 +1863,7 @@ mod test {
         AncestorHashesService::manage_ancestor_requests(
             &ancestor_hashes_request_statuses,
             &ancestor_hashes_request_socket,
-            &quic_endpoint_sender,
-            &quic_endpoint_response_sender,
+            &ancestor_hashes_request_quic_sender,
             &repair_info,
             &outstanding_requests,
             &ancestor_hashes_replay_update_receiver,
@@ -1926,8 +1906,7 @@ mod test {
         AncestorHashesService::manage_ancestor_requests(
             &ancestor_hashes_request_statuses,
             &ancestor_hashes_request_socket,
-            &quic_endpoint_sender,
-            &quic_endpoint_response_sender,
+            &ancestor_hashes_request_quic_sender,
             &repair_info,
             &outstanding_requests,
             &ancestor_hashes_replay_update_receiver,
@@ -2084,15 +2063,13 @@ mod test {
             &leader_schedule_cache,
         );
 
-        let (quic_endpoint_response_sender, _quic_endpoint_response_receiver) = unbounded();
-        let (quic_endpoint_sender, _quic_endpoint_sender) =
+        let (ancestor_hashes_request_quic_sender, _) =
             tokio::sync::mpsc::channel(/*buffer:*/ 128);
         // Simulate making a request
         AncestorHashesService::manage_ancestor_requests(
             &ancestor_hashes_request_statuses,
             &ancestor_hashes_request_socket,
-            &quic_endpoint_sender,
-            &quic_endpoint_response_sender,
+            &ancestor_hashes_request_quic_sender,
             &repair_info,
             &outstanding_requests,
             &ancestor_hashes_replay_update_receiver,
@@ -2188,8 +2165,7 @@ mod test {
             &repair_info.ancestor_duplicate_slots_sender,
             &retryable_slots_sender,
         );
-        let (quic_endpoint_response_sender, _quic_endpoint_response_receiver) = unbounded();
-        let (quic_endpoint_sender, _quic_endpoint_sender) =
+        let (ancestor_hashes_request_quic_sender, _) =
             tokio::sync::mpsc::channel(/*buffer:*/ 128);
 
         // Simulate ancestor request thread getting the retry signal
@@ -2199,8 +2175,7 @@ mod test {
         AncestorHashesService::manage_ancestor_requests(
             &ancestor_hashes_request_statuses,
             &ancestor_hashes_request_socket,
-            &quic_endpoint_sender,
-            &quic_endpoint_response_sender,
+            &ancestor_hashes_request_quic_sender,
             &repair_info,
             &outstanding_requests,
             &ancestor_hashes_replay_update_receiver,
@@ -2239,8 +2214,7 @@ mod test {
         AncestorHashesService::manage_ancestor_requests(
             &ancestor_hashes_request_statuses,
             &ancestor_hashes_request_socket,
-            &quic_endpoint_sender,
-            &quic_endpoint_response_sender,
+            &ancestor_hashes_request_quic_sender,
             &repair_info,
             &outstanding_requests,
             &ancestor_hashes_replay_update_receiver,

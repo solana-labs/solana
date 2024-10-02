@@ -13,7 +13,6 @@ use {
             ancestor_hashes_service::{AncestorHashesReplayUpdateReceiver, AncestorHashesService},
             duplicate_repair_status::AncestorDuplicateSlotToRepair,
             outstanding_requests::OutstandingRequests,
-            quic_endpoint::LocalRequest,
             repair_weight::RepairWeight,
             serve_repair::{
                 self, RepairProtocol, RepairRequestHeader, ServeRepair, ShredRepairType,
@@ -21,6 +20,7 @@ use {
             },
         },
     },
+    bytes::Bytes,
     crossbeam_channel::{Receiver as CrossbeamReceiver, Sender as CrossbeamSender},
     lru::LruCache,
     rand::seq::SliceRandom,
@@ -254,8 +254,9 @@ impl RepairService {
         exit: Arc<AtomicBool>,
         repair_socket: Arc<UdpSocket>,
         ancestor_hashes_socket: Arc<UdpSocket>,
-        quic_endpoint_sender: AsyncSender<LocalRequest>,
-        quic_endpoint_response_sender: CrossbeamSender<(SocketAddr, Vec<u8>)>,
+        repair_request_quic_sender: AsyncSender<(SocketAddr, Bytes)>,
+        ancestor_hashes_request_quic_sender: AsyncSender<(SocketAddr, Bytes)>,
+        ancestor_hashes_response_quic_receiver: CrossbeamReceiver<(Pubkey, SocketAddr, Bytes)>,
         repair_info: RepairInfo,
         verified_vote_receiver: VerifiedVoteReceiver,
         outstanding_requests: Arc<RwLock<OutstandingShredRepairs>>,
@@ -267,7 +268,6 @@ impl RepairService {
             let blockstore = blockstore.clone();
             let exit = exit.clone();
             let repair_info = repair_info.clone();
-            let quic_endpoint_sender = quic_endpoint_sender.clone();
             Builder::new()
                 .name("solRepairSvc".to_string())
                 .spawn(move || {
@@ -275,8 +275,7 @@ impl RepairService {
                         &blockstore,
                         &exit,
                         &repair_socket,
-                        &quic_endpoint_sender,
-                        &quic_endpoint_response_sender,
+                        &repair_request_quic_sender,
                         repair_info,
                         verified_vote_receiver,
                         &outstanding_requests,
@@ -291,7 +290,8 @@ impl RepairService {
             exit,
             blockstore,
             ancestor_hashes_socket,
-            quic_endpoint_sender,
+            ancestor_hashes_request_quic_sender,
+            ancestor_hashes_response_quic_receiver,
             repair_info,
             ancestor_hashes_replay_update_receiver,
         );
@@ -307,8 +307,7 @@ impl RepairService {
         blockstore: &Blockstore,
         exit: &AtomicBool,
         repair_socket: &UdpSocket,
-        quic_endpoint_sender: &AsyncSender<LocalRequest>,
-        quic_endpoint_response_sender: &CrossbeamSender<(SocketAddr, Vec<u8>)>,
+        repair_request_quic_sender: &AsyncSender<(SocketAddr, Bytes)>,
         repair_info: RepairInfo,
         verified_vote_receiver: VerifiedVoteReceiver,
         outstanding_requests: &RwLock<OutstandingShredRepairs>,
@@ -464,8 +463,7 @@ impl RepairService {
                                 &repair_info.repair_validators,
                                 &mut outstanding_requests,
                                 identity_keypair,
-                                quic_endpoint_sender,
-                                quic_endpoint_response_sender,
+                                repair_request_quic_sender,
                                 repair_protocol,
                             )
                             .ok()??;
@@ -1124,8 +1122,7 @@ mod test {
         let remote_request = RemoteRequest {
             remote_pubkey: None,
             remote_address: packet.meta().socket_addr(),
-            bytes,
-            response_sender: None,
+            bytes: Bytes::from(bytes),
         };
 
         // Deserialize and check the request

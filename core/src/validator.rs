@@ -15,7 +15,12 @@ use {
             ExternalRootSource, Tower,
         },
         poh_timing_report_service::PohTimingReportService,
-        repair::{self, serve_repair::ServeRepair, serve_repair_service::ServeRepairService},
+        repair::{
+            self,
+            quic_endpoint::{RepairQuicAsyncSenders, RepairQuicSenders, RepairQuicSockets},
+            serve_repair::ServeRepair,
+            serve_repair_service::ServeRepairService,
+        },
         rewards_recorder_service::{RewardsRecorderSender, RewardsRecorderService},
         sample_performance_service::SamplePerformanceService,
         sigverify,
@@ -499,9 +504,9 @@ pub struct Validator {
     turbine_quic_endpoint: Option<Endpoint>,
     turbine_quic_endpoint_runtime: Option<TokioRuntime>,
     turbine_quic_endpoint_join_handle: Option<solana_turbine::quic_endpoint::AsyncTryJoinHandle>,
-    repair_quic_endpoint: Option<Endpoint>,
-    repair_quic_endpoint_runtime: Option<TokioRuntime>,
-    repair_quic_endpoint_join_handle: Option<repair::quic_endpoint::AsyncTryJoinHandle>,
+    repair_quic_endpoints: Option<[Endpoint; 3]>,
+    repair_quic_endpoints_runtime: Option<TokioRuntime>,
+    repair_quic_endpoints_join_handle: Option<repair::quic_endpoint::AsyncTryJoinHandle>,
 }
 
 impl Validator {
@@ -1158,19 +1163,10 @@ impl Validator {
             bank_forks.clone(),
             config.repair_whitelist.clone(),
         );
-        let (repair_quic_endpoint_sender, repair_quic_endpoint_receiver) = unbounded();
-        let serve_repair_service = ServeRepairService::new(
-            serve_repair,
-            // Incoming UDP repair requests are adapted into RemoteRequest
-            // and also sent through the same channel.
-            repair_quic_endpoint_sender.clone(),
-            repair_quic_endpoint_receiver,
-            blockstore.clone(),
-            node.sockets.serve_repair,
-            socket_addr_space,
-            stats_reporter_sender,
-            exit.clone(),
-        );
+        let (repair_request_quic_sender, repair_request_quic_receiver) = unbounded();
+        let (repair_response_quic_sender, repair_response_quic_receiver) = unbounded();
+        let (ancestor_hashes_response_quic_sender, ancestor_hashes_response_quic_receiver) =
+            unbounded();
 
         let waited_for_supermajority = wait_for_supermajority(
             config,
@@ -1267,7 +1263,7 @@ impl Validator {
         };
 
         // Repair quic endpoint.
-        let repair_quic_endpoint_runtime = (current_runtime_handle.is_err()
+        let repair_quic_endpoints_runtime = (current_runtime_handle.is_err()
             && genesis_config.cluster_type != ClusterType::MainnetBeta)
             .then(|| {
                 tokio::runtime::Builder::new_multi_thread()
@@ -1276,24 +1272,48 @@ impl Validator {
                     .build()
                     .unwrap()
             });
-        let (repair_quic_endpoint, repair_quic_endpoint_sender, repair_quic_endpoint_join_handle) =
+        let (repair_quic_endpoints, repair_quic_async_senders, repair_quic_endpoints_join_handle) =
             if genesis_config.cluster_type == ClusterType::MainnetBeta {
-                let (sender, _receiver) = tokio::sync::mpsc::channel(1);
-                (None, sender, None)
+                (None, RepairQuicAsyncSenders::new_dummy(), None)
             } else {
-                repair::quic_endpoint::new_quic_endpoint(
-                    repair_quic_endpoint_runtime
+                let repair_quic_sockets = RepairQuicSockets {
+                    repair_server_quic_socket: node.sockets.serve_repair_quic,
+                    repair_client_quic_socket: node.sockets.repair_quic,
+                    ancestor_hashes_quic_socket: node.sockets.ancestor_hashes_requests_quic,
+                };
+                let repair_quic_senders = RepairQuicSenders {
+                    repair_request_quic_sender: repair_request_quic_sender.clone(),
+                    repair_response_quic_sender,
+                    ancestor_hashes_response_quic_sender,
+                };
+                repair::quic_endpoint::new_quic_endpoints(
+                    repair_quic_endpoints_runtime
                         .as_ref()
                         .map(TokioRuntime::handle)
                         .unwrap_or_else(|| current_runtime_handle.as_ref().unwrap()),
                     &identity_keypair,
-                    node.sockets.serve_repair_quic,
-                    repair_quic_endpoint_sender,
+                    repair_quic_sockets,
+                    repair_quic_senders,
                     bank_forks.clone(),
                 )
-                .map(|(endpoint, sender, join_handle)| (Some(endpoint), sender, Some(join_handle)))
+                .map(|(endpoints, senders, join_handle)| {
+                    (Some(endpoints), senders, Some(join_handle))
+                })
                 .unwrap()
             };
+        let serve_repair_service = ServeRepairService::new(
+            serve_repair,
+            // Incoming UDP repair requests are adapted into RemoteRequest
+            // and also sent through the same channel.
+            repair_request_quic_sender,
+            repair_request_quic_receiver,
+            repair_quic_async_senders.repair_response_quic_sender,
+            blockstore.clone(),
+            node.sockets.serve_repair,
+            socket_addr_space,
+            stats_reporter_sender,
+            exit.clone(),
+        );
 
         let in_wen_restart = config.wen_restart_proto_path.is_some() && !waited_for_supermajority;
         let wen_restart_repair_slots = if in_wen_restart {
@@ -1373,7 +1393,10 @@ impl Validator {
             banking_tracer.clone(),
             turbine_quic_endpoint_sender.clone(),
             turbine_quic_endpoint_receiver,
-            repair_quic_endpoint_sender,
+            repair_response_quic_receiver,
+            repair_quic_async_senders.repair_request_quic_sender,
+            repair_quic_async_senders.ancestor_hashes_request_quic_sender,
+            ancestor_hashes_response_quic_receiver,
             outstanding_repair_requests.clone(),
             cluster_slots.clone(),
             wen_restart_repair_slots.clone(),
@@ -1501,9 +1524,9 @@ impl Validator {
             turbine_quic_endpoint,
             turbine_quic_endpoint_runtime,
             turbine_quic_endpoint_join_handle,
-            repair_quic_endpoint,
-            repair_quic_endpoint_runtime,
-            repair_quic_endpoint_join_handle,
+            repair_quic_endpoints,
+            repair_quic_endpoints_runtime,
+            repair_quic_endpoints_join_handle,
         })
     }
 
@@ -1615,18 +1638,19 @@ impl Validator {
         }
 
         self.gossip_service.join().expect("gossip_service");
-        if let Some(repair_quic_endpoint) = &self.repair_quic_endpoint {
-            repair::quic_endpoint::close_quic_endpoint(repair_quic_endpoint);
-        }
+        self.repair_quic_endpoints
+            .iter()
+            .flatten()
+            .for_each(repair::quic_endpoint::close_quic_endpoint);
         self.serve_repair_service
             .join()
             .expect("serve_repair_service");
-        if let Some(repair_quic_endpoint_join_handle) = self.repair_quic_endpoint_join_handle {
-            self.repair_quic_endpoint_runtime
-                .map(|runtime| runtime.block_on(repair_quic_endpoint_join_handle))
+        if let Some(repair_quic_endpoints_join_handle) = self.repair_quic_endpoints_join_handle {
+            self.repair_quic_endpoints_runtime
+                .map(|runtime| runtime.block_on(repair_quic_endpoints_join_handle))
                 .transpose()
                 .unwrap();
-        };
+        }
         self.stats_reporter_service
             .join()
             .expect("stats_reporter_service");
