@@ -733,8 +733,7 @@ mod tests {
         let decision_maker = DecisionMaker::new(Pubkey::new_unique(), poh_recorder.clone());
 
         let (banking_packet_sender, banking_packet_receiver) = unbounded();
-        let packet_deserializer =
-            PacketDeserializer::new(banking_packet_receiver, bank_forks.clone());
+        let packet_deserializer = PacketDeserializer::new(banking_packet_receiver);
 
         let (consume_work_senders, consume_work_receivers) = create_channels(num_threads);
         let (finished_consume_work_sender, finished_consume_work_receiver) = unbounded();

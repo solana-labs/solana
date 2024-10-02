@@ -507,7 +507,6 @@ impl BankingStage {
                 Self::spawn_thread_local_multi_iterator_thread(
                     id,
                     packet_receiver,
-                    bank_forks.clone(),
                     decision_maker.clone(),
                     committer.clone(),
                     transaction_recorder.clone(),
@@ -566,7 +565,6 @@ impl BankingStage {
             bank_thread_hdls.push(Self::spawn_thread_local_multi_iterator_thread(
                 id,
                 packet_receiver,
-                bank_forks.clone(),
                 decision_maker.clone(),
                 committer.clone(),
                 transaction_recorder.clone(),
@@ -631,8 +629,7 @@ impl BankingStage {
 
         // Spawn the central scheduler thread
         bank_thread_hdls.push({
-            let packet_deserializer =
-                PacketDeserializer::new(non_vote_receiver, bank_forks.clone());
+            let packet_deserializer = PacketDeserializer::new(non_vote_receiver);
             let scheduler = PrioGraphScheduler::new(work_senders, finished_work_receiver);
             let scheduler_controller = SchedulerController::new(
                 decision_maker.clone(),
@@ -660,7 +657,6 @@ impl BankingStage {
     fn spawn_thread_local_multi_iterator_thread<T: LikeClusterInfo>(
         id: u32,
         packet_receiver: BankingPacketReceiver,
-        bank_forks: Arc<RwLock<BankForks>>,
         decision_maker: DecisionMaker,
         committer: Committer,
         transaction_recorder: TransactionRecorder,
@@ -668,7 +664,7 @@ impl BankingStage {
         mut forwarder: Forwarder<T>,
         unprocessed_transaction_storage: UnprocessedTransactionStorage,
     ) -> JoinHandle<()> {
-        let mut packet_receiver = PacketReceiver::new(id, packet_receiver, bank_forks);
+        let mut packet_receiver = PacketReceiver::new(id, packet_receiver);
         let consumer = Consumer::new(
             committer,
             transaction_recorder,

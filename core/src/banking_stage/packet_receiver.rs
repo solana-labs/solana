@@ -9,12 +9,8 @@ use {
     crate::{banking_trace::BankingPacketReceiver, tracer_packet_stats::TracerPacketStats},
     crossbeam_channel::RecvTimeoutError,
     solana_measure::{measure::Measure, measure_us},
-    solana_runtime::bank_forks::BankForks,
     solana_sdk::{saturating_add_assign, timing::timestamp},
-    std::{
-        sync::{atomic::Ordering, Arc, RwLock},
-        time::Duration,
-    },
+    std::{sync::atomic::Ordering, time::Duration},
 };
 
 pub struct PacketReceiver {
@@ -23,14 +19,10 @@ pub struct PacketReceiver {
 }
 
 impl PacketReceiver {
-    pub fn new(
-        id: u32,
-        banking_packet_receiver: BankingPacketReceiver,
-        bank_forks: Arc<RwLock<BankForks>>,
-    ) -> Self {
+    pub fn new(id: u32, banking_packet_receiver: BankingPacketReceiver) -> Self {
         Self {
             id,
-            packet_deserializer: PacketDeserializer::new(banking_packet_receiver, bank_forks),
+            packet_deserializer: PacketDeserializer::new(banking_packet_receiver),
         }
     }
 
