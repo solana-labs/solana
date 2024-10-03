@@ -7048,13 +7048,11 @@ dependencies = [
 name = "solana-version"
 version = "2.1.0"
 dependencies = [
- "log",
  "semver",
  "serde",
  "serde_derive",
  "solana-feature-set",
  "solana-sanitize",
- "solana-sdk",
  "solana-serde-varint",
 ]
 
