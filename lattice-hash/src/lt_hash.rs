@@ -14,15 +14,21 @@ pub struct LtHash(pub [u16; LtHash::NUM_ELEMENTS]);
 impl LtHash {
     pub const NUM_ELEMENTS: usize = 1024;
 
+    /// Returns the identity value for LtHash
+    #[must_use]
+    pub const fn identity() -> Self {
+        Self([0; Self::NUM_ELEMENTS])
+    }
+
     /// Creates a new LtHash from `hasher`
     ///
     /// The caller should hash in all inputs of interest prior to calling.
     #[must_use]
     pub fn with(hasher: &blake3::Hasher) -> Self {
         let mut reader = hasher.finalize_xof();
-        let mut inner = [0; Self::NUM_ELEMENTS];
-        reader.fill(bytemuck::must_cast_slice_mut(inner.as_mut_slice()));
-        Self(inner)
+        let mut new = Self::identity();
+        reader.fill(bytemuck::must_cast_slice_mut(new.0.as_mut_slice()));
+        new
     }
 
     /// Mixes `other` into `self`
@@ -85,12 +91,8 @@ mod tests {
     };
 
     impl LtHash {
-        const fn new_zeroed() -> Self {
-            Self([0; Self::NUM_ELEMENTS])
-        }
-
         fn new_random() -> Self {
-            let mut new = Self::new_zeroed();
+            let mut new = Self::identity();
             thread_rng().fill(&mut new.0);
             new
         }
@@ -113,6 +115,14 @@ mod tests {
     }
 
     impl Copy for LtHash {}
+
+    // Ensure that if you mix-in or mix-out with the identity, you get the original value
+    #[test]
+    fn test_identity() {
+        let a = LtHash::new_random();
+        assert_eq!(a, a + LtHash::identity());
+        assert_eq!(a, a - LtHash::identity());
+    }
 
     // Ensure that if you mix-in then mix-out a hash, you get the original value
     #[test]
