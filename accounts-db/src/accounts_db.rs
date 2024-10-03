@@ -1335,6 +1335,10 @@ impl StoreAccountsTiming {
 struct CleaningInfo {
     slot_list: SlotList<AccountInfo>,
     ref_count: u64,
+    /// Indicates if this account might have a zero lamport index entry.
+    /// If false, the account *shall* not have zero lamport index entries.
+    /// If true, the account *might* have zero lamport index entries.
+    might_contain_zero_lamport_entry: bool,
 }
 
 /// This is the return type of AccountsDb::construct_candidate_clean_keys.
@@ -2832,6 +2836,7 @@ impl AccountsDb {
                 CleaningInfo {
                     slot_list,
                     ref_count,
+                    ..
                 },
             ) in bin.iter()
             {
@@ -3088,7 +3093,18 @@ impl AccountsDb {
                             candidates_bin = candidates[curr_bin].write().unwrap();
                             prev_bin = curr_bin;
                         }
-                        candidates_bin.insert(removed_pubkey, CleaningInfo::default());
+                        // Conservatively mark the candidate might have a zero lamport entry for
+                        // correctness so that scan WILL try to look in disk if it is
+                        // not in-mem. These keys are from 1) recently processed
+                        // slots, 2) zero lamports found in shrink. Therefore, they are very likely
+                        // to be in-memory, and seldomly do we need to look them up in disk.
+                        candidates_bin.insert(
+                            removed_pubkey,
+                            CleaningInfo {
+                                might_contain_zero_lamport_entry: true,
+                                ..Default::default()
+                            },
+                        );
                     }
                 }
             }
@@ -3100,12 +3116,6 @@ impl AccountsDb {
             .iter()
             .map(|x| x.read().unwrap().len())
             .sum::<usize>() as u64
-    }
-
-    fn insert_pubkey(&self, candidates: &[RwLock<HashMap<Pubkey, CleaningInfo>>], pubkey: Pubkey) {
-        let index = self.accounts_index.bin_calculator.bin_from_pubkey(&pubkey);
-        let mut candidates_bin = candidates[index].write().unwrap();
-        candidates_bin.insert(pubkey, CleaningInfo::default());
     }
 
     /// Construct a list of candidates for cleaning from:
@@ -3145,6 +3155,16 @@ impl AccountsDb {
             std::iter::repeat_with(|| RwLock::new(HashMap::<Pubkey, CleaningInfo>::new()))
                 .take(num_bins)
                 .collect();
+
+        let insert_candidate = |pubkey, is_zero_lamport| {
+            let index = self.accounts_index.bin_calculator.bin_from_pubkey(&pubkey);
+            let mut candidates_bin = candidates[index].write().unwrap();
+            candidates_bin
+                .entry(pubkey)
+                .or_default()
+                .might_contain_zero_lamport_entry |= is_zero_lamport;
+        };
+
         let dirty_ancient_stores = AtomicUsize::default();
         let mut dirty_store_routine = || {
             let chunk_size = 1.max(dirty_stores_len.saturating_div(rayon::current_num_threads()));
@@ -3157,9 +3177,12 @@ impl AccountsDb {
                             dirty_ancient_stores.fetch_add(1, Ordering::Relaxed);
                         }
                         oldest_dirty_slot = oldest_dirty_slot.min(*slot);
-                        store
-                            .accounts
-                            .scan_pubkeys(|pubkey| self.insert_pubkey(&candidates, *pubkey));
+
+                        store.accounts.scan_index(|index| {
+                            let pubkey = index.index_info.pubkey;
+                            let is_zero_lamport = index.index_info.lamports == 0;
+                            insert_candidate(pubkey, is_zero_lamport);
+                        });
                     });
                     oldest_dirty_slot
                 })
@@ -3209,7 +3232,7 @@ impl AccountsDb {
                     let is_candidate_for_clean =
                         max_slot_inclusive >= *slot && latest_full_snapshot_slot >= *slot;
                     if is_candidate_for_clean {
-                        self.insert_pubkey(&candidates, *pubkey);
+                        insert_candidate(*pubkey, true);
                     }
                     !is_candidate_for_clean
                 });
@@ -3425,7 +3448,11 @@ impl AccountsDb {
                         },
                         None,
                         false,
-                        ScanFilter::All,
+                        if candidate_info.might_contain_zero_lamport_entry {
+                            ScanFilter::All
+                        } else {
+                            self.scan_filter_for_shrinking
+                        },
                     );
                     if should_purge {
                         let reclaims_new = self.collect_reclaims(
@@ -3476,6 +3503,7 @@ impl AccountsDb {
                 CleaningInfo {
                     slot_list,
                     ref_count,
+                    ..
                 },
             ) in candidates_bin.write().unwrap().iter_mut()
             {
@@ -3555,6 +3583,7 @@ impl AccountsDb {
                     let CleaningInfo {
                         slot_list,
                         ref_count: _,
+                        ..
                     } = cleaning_info;
                     (!slot_list.is_empty()).then_some((
                         *pubkey,
@@ -3858,6 +3887,7 @@ impl AccountsDb {
                 let CleaningInfo {
                     slot_list,
                     ref_count: _,
+                    ..
                 } = cleaning_info;
                 debug_assert!(!slot_list.is_empty(), "candidate slot_list can't be empty");
                 // Only keep candidates where the entire history of the account in the root set
@@ -12909,6 +12939,7 @@ pub mod tests {
                 CleaningInfo {
                     slot_list: rooted_entries,
                     ref_count,
+                    ..Default::default()
                 },
             );
         }
@@ -12919,6 +12950,7 @@ pub mod tests {
                 CleaningInfo {
                     slot_list: list,
                     ref_count,
+                    ..
                 },
             ) in candidates_bin.iter()
             {
@@ -15171,6 +15203,7 @@ pub mod tests {
                 CleaningInfo {
                     slot_list: vec![(slot, account_info)],
                     ref_count: 1,
+                    ..Default::default()
                 },
             );
             let accounts_db = AccountsDb::new_single_for_tests();
