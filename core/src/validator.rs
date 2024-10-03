@@ -674,6 +674,10 @@ impl Validator {
             .as_ref()
             .and_then(|geyser_plugin_service| geyser_plugin_service.get_block_metadata_notifier());
 
+        let slot_status_notifier = geyser_plugin_service
+            .as_ref()
+            .and_then(|geyser_plugin_service| geyser_plugin_service.get_slot_status_notifier());
+
         info!(
             "Geyser plugin: accounts_update_notifier: {}, transaction_notifier: {}, \
              entry_notifier: {}",
@@ -1405,6 +1409,7 @@ impl Validator {
             outstanding_repair_requests.clone(),
             cluster_slots.clone(),
             wen_restart_repair_slots.clone(),
+            slot_status_notifier,
         )
         .map_err(ValidatorError::Other)?;
 

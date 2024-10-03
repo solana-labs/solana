@@ -17,6 +17,9 @@ pub trait SlotStatusNotifierInterface {
 
     /// Notified when a slot is rooted.
     fn notify_slot_rooted(&self, slot: Slot, parent: Option<Slot>);
+
+    /// Notified when the first shred is received for a slot.
+    fn notify_first_shred_received(&self, slot: Slot);
 }
 
 pub type SlotStatusNotifier = Arc<RwLock<dyn SlotStatusNotifierInterface + Sync + Send>>;
@@ -36,6 +39,10 @@ impl SlotStatusNotifierInterface for SlotStatusNotifierImpl {
 
     fn notify_slot_rooted(&self, slot: Slot, parent: Option<Slot>) {
         self.notify_slot_status(slot, parent, SlotStatus::Rooted);
+    }
+
+    fn notify_first_shred_received(&self, slot: Slot) {
+        self.notify_slot_status(slot, None, SlotStatus::FirstShredReceived);
     }
 }
 

@@ -9,6 +9,7 @@ use {
     lru::LruCache,
     rand::Rng,
     rayon::{prelude::*, ThreadPool, ThreadPoolBuilder},
+    solana_geyser_plugin_manager::slot_status_notifier::SlotStatusNotifier,
     solana_gossip::{cluster_info::ClusterInfo, contact_info::Protocol},
     solana_ledger::{
         leader_schedule_cache::LeaderScheduleCache,
@@ -184,6 +185,7 @@ fn retransmit(
     shred_deduper: &mut ShredDeduper<2>,
     max_slots: &MaxSlots,
     rpc_subscriptions: Option<&RpcSubscriptions>,
+    slot_status_notifier: Option<&SlotStatusNotifier>,
 ) -> Result<(), RecvTimeoutError> {
     const RECV_TIMEOUT: Duration = Duration::from_secs(1);
     let mut shreds = shreds_receiver.recv_timeout(RECV_TIMEOUT)?;
@@ -299,7 +301,12 @@ fn retransmit(
                 .reduce(HashMap::new, RetransmitSlotStats::merge)
         })
     };
-    stats.upsert_slot_stats(slot_stats, root_bank.slot(), rpc_subscriptions);
+    stats.upsert_slot_stats(
+        slot_stats,
+        root_bank.slot(),
+        rpc_subscriptions,
+        slot_status_notifier,
+    );
     timer_start.stop();
     stats.total_time += timer_start.as_us();
     stats.maybe_submit(&root_bank, &working_bank, cluster_info, cluster_nodes_cache);
@@ -381,6 +388,7 @@ pub fn retransmitter(
     shreds_receiver: Receiver<Vec</*shred:*/ Vec<u8>>>,
     max_slots: Arc<MaxSlots>,
     rpc_subscriptions: Option<Arc<RpcSubscriptions>>,
+    slot_status_notifier: Option<SlotStatusNotifier>,
 ) -> JoinHandle<()> {
     let cluster_nodes_cache = ClusterNodesCache::<RetransmitStage>::new(
         CLUSTER_NODES_CACHE_NUM_EPOCH_CAP,
@@ -412,6 +420,7 @@ pub fn retransmitter(
                 &mut shred_deduper,
                 &max_slots,
                 rpc_subscriptions.as_deref(),
+                slot_status_notifier.as_ref(),
             ) {
                 Ok(()) => (),
                 Err(RecvTimeoutError::Timeout) => (),
@@ -435,6 +444,7 @@ impl RetransmitStage {
         retransmit_receiver: Receiver<Vec</*shred:*/ Vec<u8>>>,
         max_slots: Arc<MaxSlots>,
         rpc_subscriptions: Option<Arc<RpcSubscriptions>>,
+        slot_status_notifier: Option<SlotStatusNotifier>,
     ) -> Self {
         let retransmit_thread_handle = retransmitter(
             retransmit_sockets,
@@ -445,6 +455,7 @@ impl RetransmitStage {
             retransmit_receiver,
             max_slots,
             rpc_subscriptions,
+            slot_status_notifier,
         );
 
         Self {
@@ -507,6 +518,7 @@ impl RetransmitStats {
         feed: I,
         root: Slot,
         rpc_subscriptions: Option<&RpcSubscriptions>,
+        slot_status_notifier: Option<&SlotStatusNotifier>,
     ) where
         I: IntoIterator<Item = (Slot, RetransmitSlotStats)>,
     {
@@ -523,6 +535,16 @@ impl RetransmitStats {
                             datapoint_info!("retransmit-first-shred", ("slot", slot, i64));
                         }
                     }
+
+                    if let Some(slot_status_notifier) = slot_status_notifier {
+                        if slot > root {
+                            slot_status_notifier
+                                .read()
+                                .unwrap()
+                                .notify_first_shred_received(slot);
+                        }
+                    }
+
                     self.slot_stats.put(slot, slot_stats);
                 }
                 Some(entry) => {
