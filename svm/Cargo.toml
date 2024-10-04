@@ -46,20 +46,46 @@ name = "solana_svm"
 
 [dev-dependencies]
 assert_matches = { workspace = true }
+base64 = { workspace = true }
 bincode = { workspace = true }
+borsh = { version = "1.5.1", features = ["derive"] }
+bs58 = { workspace = true }
+clap = { workspace = true }
+crossbeam-channel = { workspace = true }
+env_logger = { workspace = true }
+home = "0.5"
+jsonrpc-core = { workspace = true }
+jsonrpc-core-client = { workspace = true }
+jsonrpc-derive = { workspace = true }
+jsonrpc-http-server = { workspace = true }
 lazy_static = { workspace = true }
 libsecp256k1 = { workspace = true }
 prost = { workspace = true }
 rand = { workspace = true }
+serde_derive = { workspace = true }
+serde_json = { workspace = true }
 shuttle = { workspace = true }
+solana-account-decoder = { workspace = true }
+solana-accounts-db = { workspace = true }
 solana-bpf-loader-program = { workspace = true }
+solana-client = { workspace = true }
 solana-compute-budget-program = { workspace = true }
 solana-logger = { workspace = true }
+solana-perf = { workspace = true }
+solana-program = { workspace = true }
+solana-rpc-client = { workspace = true }
+solana-rpc-client-api = { workspace = true }
 solana-sdk = { workspace = true, features = ["dev-context-only-utils"] }
 # See order-crates-for-publishing.py for using this unusual `path = "."`
 solana-svm = { path = ".", features = ["dev-context-only-utils"] }
 solana-svm-conformance = { workspace = true }
+solana-transaction-status = { workspace = true }
+solana-version = { workspace = true }
+spl-token-2022 = { workspace = true, features = ["no-entrypoint"] }
 test-case = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+tokio-util = { workspace = true, features = ["codec", "compat"] }
+yaml-rust = "0.4"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -79,6 +105,21 @@ shuttle-test = [
     "solana-bpf-loader-program/shuttle-test",
     "solana-loader-v4-program/shuttle-test",
 ]
+
+[[example]]
+name = "json-rpc-server"
+path = "examples/json-rpc/server/src/main.rs"
+crate-type = ["bin"]
+
+[[example]]
+name = "json-rpc-client"
+path = "examples/json-rpc/client/src/main.rs"
+crate-type = ["bin"]
+
+[[example]]
+name = "json-rpc-example-program"
+path = "examples/json-rpc/program/src/lib.rs"
+crate-type = ["cdylib", "lib"]
 
 [lints]
 workspace = true

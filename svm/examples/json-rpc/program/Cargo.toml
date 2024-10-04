@@ -1,0 +1,19 @@
+[package]
+name = "json-rpc-example-program"
+version = "2.1.0"
+edition = "2021"
+
+[features]
+# This was needed for ci
+dummy-for-ci-check = []
+frozen-abi = []
+
+[dependencies]
+borsh = "0.9"
+solana-program = { path = "../../../../sdk/program", version = "=2.1.0" }
+
+[lib]
+name = "program"
+crate-type = ["cdylib", "lib"]
+
+[workspace]
