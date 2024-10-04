@@ -7239,6 +7239,7 @@ dependencies = [
  "solana-program-error",
  "solana-program-memory",
  "solana-program-option",
+ "solana-program-pack",
  "solana-pubkey",
  "solana-sanitize",
  "solana-sdk-macro",
@@ -7278,6 +7279,13 @@ dependencies = [
 [[package]]
 name = "solana-program-option"
 version = "2.1.0"
+
+[[package]]
+name = "solana-program-pack"
+version = "2.1.0"
+dependencies = [
+ "solana-program-error",
+]
 
 [[package]]
 name = "solana-program-runtime"

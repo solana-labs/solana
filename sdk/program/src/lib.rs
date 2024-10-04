@@ -248,7 +248,7 @@
 //!   language-independent serialization format. It is not generally recommended
 //!   for new code.
 //!
-//!   [`Pack`]: program_pack::Pack
+//!   [`Pack`]: https://docs.rs/solana-program-pack/latest/trait.Pack.html
 //!
 //! Developers should carefully consider the CPU cost of serialization, balanced
 //! against the need for correctness and ease of use: off-the-shelf
@@ -506,7 +506,6 @@ pub mod native_token;
 pub mod nonce;
 pub mod program;
 pub mod program_error;
-pub mod program_pack;
 pub mod program_stubs;
 pub mod program_utils;
 pub mod rent;
@@ -525,6 +524,8 @@ pub mod wasm;
 
 #[deprecated(since = "2.1.0", note = "Use `solana-program-memory` crate instead")]
 pub use solana_program_memory as program_memory;
+#[deprecated(since = "2.1.0", note = "Use `solana-program-pack` crate instead")]
+pub use solana_program_pack as program_pack;
 #[deprecated(since = "2.1.0", note = "Use `solana-sanitize` crate instead")]
 pub use solana_sanitize as sanitize;
 #[deprecated(since = "2.1.0", note = "Use `solana-secp256k1-recover` crate instead")]
