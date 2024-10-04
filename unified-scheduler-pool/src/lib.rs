@@ -1411,9 +1411,10 @@ impl<TH: TaskHandler> InstalledScheduler for PooledScheduler<TH> {
 
     fn schedule_execution(
         &self,
-        &(transaction, index): &(&SanitizedTransaction, usize),
+        transaction: SanitizedTransaction,
+        index: usize,
     ) -> ScheduleResult {
-        let task = SchedulingStateMachine::create_task(transaction.clone(), index, &mut |pubkey| {
+        let task = SchedulingStateMachine::create_task(transaction, index, &mut |pubkey| {
             self.inner.usage_queue_loader.load(pubkey)
         });
         self.inner.thread_manager.send_task(task)
@@ -1776,25 +1777,25 @@ mod tests {
         pool.register_timeout_listener(bank.create_timeout_listener());
 
         let tx_before_stale =
-            &SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+            SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
                 &mint_keypair,
                 &solana_sdk::pubkey::new_rand(),
                 2,
                 genesis_config.hash(),
             ));
-        bank.schedule_transaction_executions([(tx_before_stale, &0)].into_iter())
+        bank.schedule_transaction_executions([(tx_before_stale, 0)].into_iter())
             .unwrap();
         sleepless_testing::at(TestCheckPoint::BeforeTimeoutListenerTriggered);
 
         sleepless_testing::at(TestCheckPoint::AfterTimeoutListenerTriggered);
         let tx_after_stale =
-            &SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+            SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
                 &mint_keypair,
                 &solana_sdk::pubkey::new_rand(),
                 2,
                 genesis_config.hash(),
             ));
-        bank.schedule_transaction_executions([(tx_after_stale, &1)].into_iter())
+        bank.schedule_transaction_executions([(tx_after_stale, 1)].into_iter())
             .unwrap();
 
         // Observe second occurrence of TimeoutListenerTriggered(1), which indicates a new timeout
@@ -1896,26 +1897,26 @@ mod tests {
         pool.register_timeout_listener(bank.create_timeout_listener());
 
         let tx_before_stale =
-            &SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+            SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
                 &mint_keypair,
                 &solana_sdk::pubkey::new_rand(),
                 2,
                 genesis_config.hash(),
             ));
-        bank.schedule_transaction_executions([(tx_before_stale, &0)].into_iter())
+        bank.schedule_transaction_executions([(tx_before_stale, 0)].into_iter())
             .unwrap();
         sleepless_testing::at(TestCheckPoint::BeforeTimeoutListenerTriggered);
         sleepless_testing::at(TestCheckPoint::AfterSchedulerThreadAborted);
 
         sleepless_testing::at(TestCheckPoint::AfterTimeoutListenerTriggered);
         let tx_after_stale =
-            &SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+            SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
                 &mint_keypair,
                 &solana_sdk::pubkey::new_rand(),
                 2,
                 genesis_config.hash(),
             ));
-        let result = bank.schedule_transaction_executions([(tx_after_stale, &1)].into_iter());
+        let result = bank.schedule_transaction_executions([(tx_after_stale, 1)].into_iter());
         assert_matches!(result, Err(TransactionError::AccountNotFound));
 
         let (result, _timings) = bank.wait_for_completed_scheduler().unwrap();
@@ -1960,7 +1961,7 @@ mod tests {
             ..
         } = create_genesis_config(10_000);
 
-        let tx = &SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+        let tx = SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
             &mint_keypair,
             &solana_sdk::pubkey::new_rand(),
             2,
@@ -1979,7 +1980,7 @@ mod tests {
         );
         let context = SchedulingContext::new(bank.clone());
         let scheduler = pool.do_take_scheduler(context);
-        scheduler.schedule_execution(&(tx, 0)).unwrap();
+        scheduler.schedule_execution(tx, 0).unwrap();
 
         match abort_case {
             AbortCase::Unhandled => {
@@ -2082,13 +2083,13 @@ mod tests {
 
         for i in 0..MAX_TASK_COUNT {
             let tx =
-                &SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+                SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
                     &mint_keypair,
                     &solana_sdk::pubkey::new_rand(),
                     2,
                     genesis_config.hash(),
                 ));
-            scheduler.schedule_execution(&(tx, i)).unwrap();
+            scheduler.schedule_execution(tx, i).unwrap();
         }
 
         // Make sure ThreadManager::drop() is properly short-circuiting for non-aborting scheduler.
@@ -2233,7 +2234,7 @@ mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(10_000);
-        let tx0 = &SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+        let tx0 = SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
             &mint_keypair,
             &solana_sdk::pubkey::new_rand(),
             2,
@@ -2248,7 +2249,7 @@ mod tests {
 
         assert_eq!(bank.transaction_count(), 0);
         let scheduler = pool.take_scheduler(context);
-        scheduler.schedule_execution(&(tx0, 0)).unwrap();
+        scheduler.schedule_execution(tx0, 0).unwrap();
         let bank = BankWithScheduler::new(bank, Some(scheduler));
         assert_matches!(bank.wait_for_completed_scheduler(), Some((Ok(()), _)));
         assert_eq!(bank.transaction_count(), 1);
@@ -2294,19 +2295,19 @@ mod tests {
 
         let unfunded_keypair = Keypair::new();
         let bad_tx =
-            &SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+            SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
                 &unfunded_keypair,
                 &solana_sdk::pubkey::new_rand(),
                 2,
                 genesis_config.hash(),
             ));
         assert_eq!(bank.transaction_count(), 0);
-        scheduler.schedule_execution(&(bad_tx, 0)).unwrap();
+        scheduler.schedule_execution(bad_tx, 0).unwrap();
         sleepless_testing::at(TestCheckPoint::AfterTaskHandled);
         assert_eq!(bank.transaction_count(), 0);
 
         let good_tx_after_bad_tx =
-            &SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+            SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
                 &mint_keypair,
                 &solana_sdk::pubkey::new_rand(),
                 3,
@@ -2314,7 +2315,7 @@ mod tests {
             ));
         // make sure this tx is really a good one to execute.
         assert_matches!(
-            bank.simulate_transaction_unchecked(good_tx_after_bad_tx, false)
+            bank.simulate_transaction_unchecked(&good_tx_after_bad_tx, false)
                 .result,
             Ok(_)
         );
@@ -2322,7 +2323,7 @@ mod tests {
         let bank = BankWithScheduler::new(bank, Some(scheduler));
         if extra_tx_after_failure {
             assert_matches!(
-                bank.schedule_transaction_executions([(good_tx_after_bad_tx, &1)].into_iter()),
+                bank.schedule_transaction_executions([(good_tx_after_bad_tx, 1)].into_iter()),
                 Err(TransactionError::AccountNotFound)
             );
         }
@@ -2425,13 +2426,13 @@ mod tests {
         for index in 0..TX_COUNT {
             // Use 2 non-conflicting txes to exercise the channel disconnected case as well.
             let tx =
-                &SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+                SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
                     &Keypair::new(),
                     &solana_sdk::pubkey::new_rand(),
                     1,
                     genesis_config.hash(),
                 ));
-            scheduler.schedule_execution(&(tx, index)).unwrap();
+            scheduler.schedule_execution(tx, index).unwrap();
         }
         // finally unblock the scheduler thread; otherwise the above schedule_execution could
         // return SchedulerAborted...
@@ -2499,13 +2500,13 @@ mod tests {
 
         for i in 0..10 {
             let tx =
-                &SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+                SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
                     &mint_keypair,
                     &solana_sdk::pubkey::new_rand(),
                     2,
                     genesis_config.hash(),
                 ));
-            scheduler.schedule_execution(&(tx, i)).unwrap();
+            scheduler.schedule_execution(tx, i).unwrap();
         }
         // finally unblock the scheduler thread; otherwise the above schedule_execution could
         // return SchedulerAborted...
@@ -2563,13 +2564,13 @@ mod tests {
         } = create_genesis_config(10_000);
 
         // tx0 and tx1 is definitely conflicting to write-lock the mint address
-        let tx0 = &SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+        let tx0 = SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
             &mint_keypair,
             &solana_sdk::pubkey::new_rand(),
             2,
             genesis_config.hash(),
         ));
-        let tx1 = &SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+        let tx1 = SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
             &mint_keypair,
             &solana_sdk::pubkey::new_rand(),
             2,
@@ -2594,10 +2595,10 @@ mod tests {
         // Stall handling tx0 and tx1
         let lock_to_stall = LOCK_TO_STALL.lock().unwrap();
         scheduler
-            .schedule_execution(&(tx0, STALLED_TRANSACTION_INDEX))
+            .schedule_execution(tx0, STALLED_TRANSACTION_INDEX)
             .unwrap();
         scheduler
-            .schedule_execution(&(tx1, BLOCKED_TRANSACTION_INDEX))
+            .schedule_execution(tx1, BLOCKED_TRANSACTION_INDEX)
             .unwrap();
 
         // Wait a bit for the scheduler thread to decide to block tx1
@@ -2656,7 +2657,7 @@ mod tests {
 
         // Create a dummy tx and two contexts
         let dummy_tx =
-            &SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+            SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
                 &mint_keypair,
                 &solana_sdk::pubkey::new_rand(),
                 2,
@@ -2672,7 +2673,9 @@ mod tests {
             .take(10000)
         {
             let scheduler = pool.take_scheduler(context.clone());
-            scheduler.schedule_execution(&(dummy_tx, index)).unwrap();
+            scheduler
+                .schedule_execution(dummy_tx.clone(), index)
+                .unwrap();
             scheduler.wait_for_termination(false).1.return_to_pool();
         }
     }
@@ -2714,9 +2717,10 @@ mod tests {
 
         fn schedule_execution(
             &self,
-            &(transaction, index): &(&SanitizedTransaction, usize),
+            transaction: SanitizedTransaction,
+            index: usize,
         ) -> ScheduleResult {
-            let transaction_and_index = (transaction.clone(), index);
+            let transaction_and_index = (transaction, index);
             let context = self.context().clone();
             let pool = self.3.clone();
 
@@ -2854,7 +2858,7 @@ mod tests {
         assert_eq!(bank.transaction_count(), 0);
 
         // schedule but not immediately execute transaction
-        bank.schedule_transaction_executions([(&very_old_valid_tx, &0)].into_iter())
+        bank.schedule_transaction_executions([(very_old_valid_tx, 0)].into_iter())
             .unwrap();
         // this calls register_recent_blockhash internally
         bank.fill_bank_with_ticks_for_tests();
@@ -2917,7 +2921,7 @@ mod tests {
         );
         // mangle the transfer tx to try to lock fee_payer (= mint_keypair) address twice!
         tx.message.account_keys.push(tx.message.account_keys[0]);
-        let tx = &SanitizedTransaction::from_transaction_for_tests(tx);
+        let tx = SanitizedTransaction::from_transaction_for_tests(tx);
 
         // this internally should call SanitizedTransaction::get_account_locks().
         let result = &mut Ok(());
@@ -2930,7 +2934,7 @@ mod tests {
             prioritization_fee_cache,
         };
 
-        DefaultTaskHandler::handle(result, timings, bank, tx, 0, handler_context);
+        DefaultTaskHandler::handle(result, timings, bank, &tx, 0, handler_context);
         assert_matches!(result, Err(TransactionError::AccountLoadedTwice));
     }
 }

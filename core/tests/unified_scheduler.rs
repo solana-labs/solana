@@ -108,7 +108,7 @@ fn test_scheduler_waited_by_drop_bank_service() {
     // been started
     let lock_to_stall = LOCK_TO_STALL.lock().unwrap();
     pruned_bank
-        .schedule_transaction_executions([(&tx, &0)].into_iter())
+        .schedule_transaction_executions([(tx, 0)].into_iter())
         .unwrap();
     drop(pruned_bank);
     assert_eq!(pool_raw.pooled_scheduler_count(), 0);
