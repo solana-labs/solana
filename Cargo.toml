@@ -272,7 +272,7 @@ hyper = "0.14.30"
 hyper-proxy = "0.9.1"
 im = "15.1.0"
 index_list = "0.2.13"
-indexmap = "2.5.0"
+indexmap = "2.6.0"
 indicatif = "0.17.8"
 itertools = "0.12.1"
 jemallocator = { package = "tikv-jemallocator", version = "0.4.1", features = [
