@@ -41,6 +41,12 @@ cargo_audit_ignores=(
 
   # openssl
   --ignore RUSTSEC-2024-0357
+
+  # tonic
+  # When using tonic::transport::Server there is a remote DoS attack that can cause
+  # the server to exit cleanly on accepting a tcp/tls stream.
+  # Ignoring because we do not use this functionality.
+  --ignore RUSTSEC-2024-0376
 )
 scripts/cargo-for-all-lock-files.sh audit "${cargo_audit_ignores[@]}" | $dep_tree_filter
 # we want the `cargo audit` exit code, not `$dep_tree_filter`'s
