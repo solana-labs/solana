@@ -6,13 +6,7 @@ on:
 
 jobs:
   main:
-    # As this is a cron job, it is better to avoid running it for all the forks.
-    # They are unlike to benefit from these executions, and they could easily
-    # eat up all the minutes GitHub allocation to free accounts.
-    if: >
-      github.event_name != 'schedule'
-      || github.repository == 'solana-labs/solana'
-
+    if: github.repository == 'anza-xyz/agave'
     strategy:
       fail-fast: false
       matrix:

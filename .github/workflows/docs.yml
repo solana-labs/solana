@@ -14,6 +14,7 @@ on:
 
 jobs:
   check:
+    if: github.repository == 'anza-xyz/agave'
     outputs:
       continue: ${{ steps.check.outputs.need_to_build }}
     runs-on: ubuntu-20.04

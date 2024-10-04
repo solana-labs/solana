@@ -7,6 +7,7 @@ on:
 
 jobs:
   trigger-buildkite-pipeline:
+    if: github.repository == 'anza-xyz/agave'
     runs-on: ubuntu-latest
     steps:
       - name: Trigger a Buildkite Build
@@ -20,6 +21,7 @@ jobs:
           message: ":github: Triggered from a GitHub Action"
 
   draft-release:
+    if: github.repository == 'anza-xyz/agave'
     runs-on: ubuntu-latest
     steps:
       - name: Create Release
@@ -38,6 +40,7 @@ jobs:
             })
 
   version-bump:
+    if: github.repository == 'anza-xyz/agave'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code

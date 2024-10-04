@@ -37,6 +37,7 @@ env:
 
 jobs:
   check:
+    if: github.repository == 'anza-xyz/agave'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
