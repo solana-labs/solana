@@ -107,6 +107,7 @@ assert_matches = { workspace = true }
 ed25519-dalek = { workspace = true }
 libsecp256k1 = { workspace = true }
 memoffset = { workspace = true }
+rand0-7 = { package = "rand", version = "0.7" }
 rand_chacha = { workspace = true }
 solana-accounts-db = { workspace = true, features = ["dev-context-only-utils"] }
 solana-logger = { workspace = true }

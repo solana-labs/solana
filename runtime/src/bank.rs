@@ -57,6 +57,7 @@ use {
         stakes::{InvalidCacheEntryReason, Stakes, StakesCache, StakesEnum},
         status_cache::{SlotDelta, StatusCache},
         transaction_batch::{OwnedOrBorrowed, TransactionBatch},
+        verify_precompiles::verify_precompiles,
     },
     byteorder::{ByteOrder, LittleEndian},
     dashmap::{DashMap, DashSet},
@@ -5664,7 +5665,7 @@ impl Bank {
             verification_mode == TransactionVerificationMode::HashAndVerifyPrecompiles
                 || verification_mode == TransactionVerificationMode::FullVerification
         } {
-            sanitized_tx.verify_precompiles(&self.feature_set)?;
+            verify_precompiles(&sanitized_tx, &self.feature_set)?;
         }
 
         Ok(sanitized_tx)

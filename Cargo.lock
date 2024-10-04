@@ -7652,6 +7652,7 @@ dependencies = [
  "num_enum",
  "percentage",
  "qualifier_attr",
+ "rand 0.7.3",
  "rand 0.8.5",
  "rand_chacha 0.3.1",
  "rayon",

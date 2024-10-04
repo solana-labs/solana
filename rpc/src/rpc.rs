@@ -59,6 +59,7 @@ use {
         prioritization_fee_cache::PrioritizationFeeCache,
         snapshot_config::SnapshotConfig,
         snapshot_utils,
+        verify_precompiles::verify_precompiles,
     },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
@@ -2260,7 +2261,7 @@ fn verify_transaction(
     let move_precompile_verification_to_svm =
         feature_set.is_active(&feature_set::move_precompile_verification_to_svm::id());
     if !move_precompile_verification_to_svm {
-        if let Err(e) = transaction.verify_precompiles(feature_set) {
+        if let Err(e) = verify_precompiles(transaction, feature_set) {
             return Err(RpcCustomError::TransactionPrecompileVerificationFailure(e).into());
         }
     }

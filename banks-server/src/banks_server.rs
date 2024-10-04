@@ -13,6 +13,7 @@ use {
         bank::{Bank, TransactionSimulationResult},
         bank_forks::BankForks,
         commitment::BlockCommitmentCache,
+        verify_precompiles::verify_precompiles,
     },
     solana_sdk::{
         account::Account,
@@ -167,7 +168,7 @@ fn verify_transaction(
     let move_precompile_verification_to_svm =
         feature_set.is_active(&move_precompile_verification_to_svm::id());
     if !move_precompile_verification_to_svm {
-        transaction.verify_precompiles(feature_set)?;
+        verify_precompiles(transaction, feature_set)?;
     }
 
     Ok(())
