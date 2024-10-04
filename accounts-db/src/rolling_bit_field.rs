@@ -9,7 +9,7 @@ use {
 };
 
 #[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct RollingBitField {
     max_width: u64,
     min: u64,
@@ -35,6 +35,60 @@ impl PartialEq<RollingBitField> for RollingBitField {
             }
             true
         }
+    }
+}
+
+impl std::fmt::Debug for RollingBitField {
+    /// Custom debug formatter that outputs the possibly long and
+    /// sparse vector of bits in a compact representation, where each
+    /// sequence of equal values is compacted into value;length pair
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut bits = String::from("[");
+        let mut prev = self.bits[0];
+        bits.push_str(&format!("{}", prev));
+        let mut index = 1;
+        while index < self.bits.len() {
+            if self.bits[index] != prev {
+                prev = self.bits[index];
+                break;
+            }
+            index += 1;
+        }
+        if index > 1 {
+            bits.push_str(&format!(";{}", index));
+        }
+        if index < self.bits.len() {
+            bits.push_str(&format!(", {}", prev));
+        }
+        let mut count = 0;
+        while index < self.bits.len() {
+            if self.bits[index] != prev {
+                if count > 1 {
+                    bits.push_str(&format!(";{}", count));
+                }
+                count = 0;
+                prev = self.bits[index];
+                bits.push_str(&format!(", {}", prev));
+            }
+            count += 1;
+            index += 1;
+        }
+        if count > 1 {
+            bits.push_str(&format!(";{}", count));
+        }
+        bits.push(']');
+        // The order of the `count` and `bits` fields is changed on
+        // purpose so that possibly very long output of `bits` doesn't
+        // make it more difficult to read the value of the `count`
+        // field.
+        f.debug_struct("RollingBitField")
+            .field("max_width", &self.max_width)
+            .field("min", &self.min)
+            .field("max_exclusive", &self.max_exclusive)
+            .field("count", &self.count)
+            .field("bits", &bits)
+            .field("excess", &self.excess)
+            .finish()
     }
 }
 
@@ -1001,5 +1055,27 @@ pub mod tests {
             );
             assert_eq!(count, count2);
         }
+    }
+
+    #[test]
+    fn test_debug_formatter() {
+        let mut bitfield = RollingBitField::new(1);
+        assert_eq!("RollingBitField { max_width: 1, min: 0, max_exclusive: 0, count: 0, bits: \"[false]\", excess: {} }", format!("{bitfield:?}"));
+        bitfield.insert(0);
+        assert_eq!("RollingBitField { max_width: 1, min: 0, max_exclusive: 1, count: 1, bits: \"[true]\", excess: {} }", format!("{bitfield:?}"));
+        let mut bitfield = RollingBitField::new(2);
+        assert_eq!("RollingBitField { max_width: 2, min: 0, max_exclusive: 0, count: 0, bits: \"[false;2]\", excess: {} }", format!("{bitfield:?}"));
+        bitfield.insert(0);
+        assert_eq!("RollingBitField { max_width: 2, min: 0, max_exclusive: 1, count: 1, bits: \"[true, false]\", excess: {} }", format!("{bitfield:?}"));
+        bitfield.insert(1);
+        assert_eq!("RollingBitField { max_width: 2, min: 0, max_exclusive: 2, count: 2, bits: \"[true;2]\", excess: {} }", format!("{bitfield:?}"));
+        let mut bitfield = RollingBitField::new(4096);
+        assert_eq!("RollingBitField { max_width: 4096, min: 0, max_exclusive: 0, count: 0, bits: \"[false;4096]\", excess: {} }", format!("{bitfield:?}"));
+        bitfield.insert(4095);
+        assert_eq!("RollingBitField { max_width: 4096, min: 4095, max_exclusive: 4096, count: 1, bits: \"[false;4095, true]\", excess: {} }", format!("{bitfield:?}"));
+        bitfield.clear();
+        bitfield.insert(2);
+        bitfield.insert(3);
+        assert_eq!("RollingBitField { max_width: 4096, min: 2, max_exclusive: 4, count: 2, bits: \"[false;2, true;2, false;4092]\", excess: {} }", format!("{bitfield:?}"));
     }
 }
