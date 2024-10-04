@@ -73,7 +73,7 @@ async fn test_failure_without_move_precompiles_feature() {
     assert_matches!(
         client.process_transaction(transaction).await,
         Err(BanksClientError::TransactionError(
-            TransactionError::InvalidAccountIndex
+            TransactionError::InstructionError(0, InstructionError::Custom(3))
         ))
     );
 }
