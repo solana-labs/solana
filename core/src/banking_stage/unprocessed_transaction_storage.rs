@@ -1278,10 +1278,12 @@ mod tests {
             [VoteSource::Gossip, VoteSource::Tpu].into_iter(),
             [true, false].into_iter()
         ) {
-            let latest_unprocessed_votes = LatestUnprocessedVotes::default();
-            if staked {
-                latest_unprocessed_votes.set_staked_nodes(&[keypair.pubkey()]);
-            }
+            let staked_keys = if staked {
+                vec![vote_keypair.pubkey()]
+            } else {
+                vec![]
+            };
+            let latest_unprocessed_votes = LatestUnprocessedVotes::new_for_tests(&staked_keys);
             let mut transaction_storage = UnprocessedTransactionStorage::new_vote_storage(
                 Arc::new(latest_unprocessed_votes),
                 vote_source,
@@ -1317,8 +1319,8 @@ mod tests {
         )?;
         vote.meta_mut().flags.set(PacketFlags::SIMPLE_VOTE_TX, true);
 
-        let latest_unprocessed_votes = LatestUnprocessedVotes::default();
-        latest_unprocessed_votes.set_staked_nodes(&[node_keypair.pubkey()]);
+        let latest_unprocessed_votes =
+            LatestUnprocessedVotes::new_for_tests(&[vote_keypair.pubkey()]);
         let mut transaction_storage = UnprocessedTransactionStorage::new_vote_storage(
             Arc::new(latest_unprocessed_votes),
             VoteSource::Tpu,
