@@ -1262,8 +1262,7 @@ pub const ZERO_LAMPORT_ACCOUNT_HASH: AccountHash =
 pub struct AccountLtHash(pub LtHash);
 
 /// The AccountLtHash for a zero-lamport account
-pub const ZERO_LAMPORT_ACCOUNT_LT_HASH: AccountLtHash =
-    AccountLtHash(LtHash([0; LtHash::NUM_ELEMENTS]));
+pub const ZERO_LAMPORT_ACCOUNT_LT_HASH: AccountLtHash = AccountLtHash(LtHash::identity());
 
 /// Lattice hash of all accounts
 #[derive(Debug, Clone, Eq, PartialEq)]

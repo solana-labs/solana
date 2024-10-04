@@ -1301,6 +1301,8 @@ pub fn main() {
             .is_present("accounts_db_test_skip_rewrites"),
         storage_access,
         scan_filter_for_shrinking,
+        enable_experimental_accumulator_hash: matches
+            .is_present("accounts_db_experimental_accumulator_hash"),
         ..AccountsDbConfig::default()
     };
 

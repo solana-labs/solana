@@ -7632,6 +7632,7 @@ name = "solana-runtime"
 version = "2.1.0"
 dependencies = [
  "agave-transaction-view",
+ "ahash 0.8.10",
  "aquamarine",
  "arrayref",
  "assert_matches",

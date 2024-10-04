@@ -36,8 +36,8 @@ use {
         },
         accounts_hash::{
             AccountHash, AccountLtHash, AccountsDeltaHash, AccountsHash, AccountsHashKind,
-            AccountsHasher, CalcAccountsHashConfig, CalculateHashIntermediate, HashStats,
-            IncrementalAccountsHash, SerdeAccountsDeltaHash, SerdeAccountsHash,
+            AccountsHasher, AccountsLtHash, CalcAccountsHashConfig, CalculateHashIntermediate,
+            HashStats, IncrementalAccountsHash, SerdeAccountsDeltaHash, SerdeAccountsHash,
             SerdeIncrementalAccountsHash, ZeroLamportAccounts, ZERO_LAMPORT_ACCOUNT_HASH,
             ZERO_LAMPORT_ACCOUNT_LT_HASH,
         },
@@ -501,6 +501,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
     test_skip_rewrites_but_include_in_bank_hash: false,
     storage_access: StorageAccess::Mmap,
     scan_filter_for_shrinking: ScanFilter::OnlyAbnormalWithVerify,
+    enable_experimental_accumulator_hash: false,
 };
 pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS),
@@ -517,6 +518,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig
     test_skip_rewrites_but_include_in_bank_hash: false,
     storage_access: StorageAccess::Mmap,
     scan_filter_for_shrinking: ScanFilter::OnlyAbnormalWithVerify,
+    enable_experimental_accumulator_hash: false,
 };
 
 pub type BinnedHashData = Vec<Vec<CalculateHashIntermediate>>;
@@ -612,6 +614,7 @@ pub struct AccountsDbConfig {
     pub test_partitioned_epoch_rewards: TestPartitionedEpochRewards,
     pub storage_access: StorageAccess,
     pub scan_filter_for_shrinking: ScanFilter,
+    pub enable_experimental_accumulator_hash: bool,
 }
 
 #[cfg(not(test))]
@@ -1508,6 +1511,10 @@ pub struct AccountsDb {
 
     /// The latest full snapshot slot dictates how to handle zero lamport accounts
     latest_full_snapshot_slot: SeqLock<Option<Slot>>,
+
+    /// Flag to indicate if the experimental accounts lattice hash is enabled.
+    /// (For R&D only; a feature-gate also exists to turn this on and make it a part of consensus.)
+    pub is_experimental_accumulator_hash_enabled: AtomicBool,
 }
 
 #[derive(Debug, Default)]
@@ -2477,6 +2484,8 @@ impl AccountsDb {
         // rayon needs a lot of stack
         const ACCOUNTS_STACK_SIZE: usize = 8 * 1024 * 1024;
 
+        let default_accounts_db_config = AccountsDbConfig::default();
+
         AccountsDb {
             create_ancient_storage: CreateAncientStorage::default(),
             verify_accounts_hash_in_bg: VerifyAccountsHashInBackground::default(),
@@ -2541,6 +2550,9 @@ impl AccountsDb {
             epoch_accounts_hash_manager: EpochAccountsHashManager::new_invalid(),
             test_skip_rewrites_but_include_in_bank_hash: false,
             latest_full_snapshot_slot: SeqLock::new(None),
+            is_experimental_accumulator_hash_enabled: default_accounts_db_config
+                .enable_experimental_accumulator_hash
+                .into(),
         }
     }
 
@@ -2587,6 +2599,8 @@ impl AccountsDb {
         accounts_update_notifier: Option<AccountsUpdateNotifier>,
         exit: Arc<AtomicBool>,
     ) -> Self {
+        let default_accounts_db_config = AccountsDbConfig::default();
+
         let accounts_index = AccountsIndex::new(
             accounts_db_config.as_mut().and_then(|x| x.index.take()),
             exit,
@@ -2648,6 +2662,12 @@ impl AccountsDb {
             .map(|config| config.scan_filter_for_shrinking)
             .unwrap_or_default();
 
+        let enable_experimental_accumulator_hash = accounts_db_config
+            .as_ref()
+            .map(|config| config.enable_experimental_accumulator_hash)
+            .unwrap_or(default_accounts_db_config.enable_experimental_accumulator_hash)
+            .into();
+
         let paths_is_empty = paths.is_empty();
         let mut new = Self {
             paths,
@@ -2671,6 +2691,7 @@ impl AccountsDb {
             test_skip_rewrites_but_include_in_bank_hash,
             storage_access,
             scan_filter_for_shrinking,
+            is_experimental_accumulator_hash_enabled: enable_experimental_accumulator_hash,
             ..Self::default_with_accounts_index(
                 accounts_index,
                 base_working_path,
@@ -2735,6 +2756,18 @@ impl AccountsDb {
     pub fn expected_cluster_type(&self) -> ClusterType {
         self.cluster_type
             .expect("Cluster type must be set at initialization")
+    }
+
+    /// Returns if the experimental accounts lattice hash is enabled
+    pub fn is_experimental_accumulator_hash_enabled(&self) -> bool {
+        self.is_experimental_accumulator_hash_enabled
+            .load(Ordering::Acquire)
+    }
+
+    /// Sets if the experimental accounts lattice hash is enabled
+    pub fn set_is_experimental_accumulator_hash_enabled(&self, is_enabled: bool) {
+        self.is_experimental_accumulator_hash_enabled
+            .store(is_enabled, Ordering::Release);
     }
 
     /// While scanning cleaning candidates obtain slots that can be
@@ -7145,6 +7178,71 @@ impl AccountsDb {
 
         let accounts_hash = AccountsHash(accumulated_hash);
         (accounts_hash, total_lamports)
+    }
+
+    /// Calculates the accounts lt hash
+    ///
+    /// Only intended to be called at startup (or by tests).
+    /// Only intended to be used while testing the experimental accumulator hash.
+    pub fn calculate_accounts_lt_hash_at_startup(
+        &self,
+        ancestors: &Ancestors,
+        startup_slot: Slot,
+    ) -> AccountsLtHash {
+        debug_assert!(self.is_experimental_accumulator_hash_enabled());
+
+        // This impl iterates over all the index bins in parallel, and computes the lt hash
+        // sequentially per bin.  Then afterwards reduces to a single lt hash.
+        // This implementation is quite fast.  Runtime is about 150 seconds on mnb as of 10/2/2024.
+        // The sequential implementation took about 6,275 seconds!
+        // A different parallel implementation that iterated over the bins *sequentially* and then
+        // hashed the accounts *within* a bin in parallel took about 600 seconds.  That impl uses
+        // less memory, as only a single index bin is loaded into mem at a time.
+        let lt_hash = self
+            .accounts_index
+            .account_maps
+            .par_iter()
+            .fold(
+                LtHash::identity,
+                |mut accumulator_lt_hash, accounts_index_bin| {
+                    for pubkey in accounts_index_bin.keys() {
+                        let account_lt_hash = self
+                            .accounts_index
+                            .get_with_and_then(
+                                &pubkey,
+                                Some(ancestors),
+                                Some(startup_slot),
+                                false,
+                                |(slot, account_info)| {
+                                    (!account_info.is_zero_lamport()).then(|| {
+                                        self.get_account_accessor(
+                                            slot,
+                                            &pubkey,
+                                            &account_info.storage_location(),
+                                        )
+                                        .get_loaded_account(|loaded_account| {
+                                            Self::lt_hash_account(&loaded_account, &pubkey)
+                                        })
+                                        // SAFETY: The index said this pubkey exists, so
+                                        // there must be an account to load.
+                                        .unwrap()
+                                    })
+                                },
+                            )
+                            .flatten();
+                        if let Some(account_lt_hash) = account_lt_hash {
+                            accumulator_lt_hash.mix_in(&account_lt_hash.0);
+                        }
+                    }
+                    accumulator_lt_hash
+                },
+            )
+            .reduce(LtHash::identity, |mut accum, elem| {
+                accum.mix_in(&elem);
+                accum
+            });
+
+        AccountsLtHash(lt_hash)
     }
 
     /// This is only valid to call from tests.
