@@ -5395,19 +5395,22 @@ impl Bank {
     /// Hash the `accounts` HashMap. This represents a validator's interpretation
     ///  of the delta of the ledger since the last vote and up to now
     fn hash_internal_state(&self) -> Hash {
+        let measure_total = Measure::start("");
+
         let slot = self.slot();
         let ignore = (!self.is_partitioned_rewards_feature_enabled()
             && self.force_partition_rewards_in_first_block_of_epoch())
         .then_some(sysvar::epoch_rewards::id());
-        let accounts_delta_hash = self
-            .rc
-            .accounts
-            .accounts_db
-            .calculate_accounts_delta_hash_internal(
-                slot,
-                ignore,
-                self.skipped_rewrites.lock().unwrap().clone(),
-            );
+        let (accounts_delta_hash, accounts_delta_hash_us) = measure_us!({
+            self.rc
+                .accounts
+                .accounts_db
+                .calculate_accounts_delta_hash_internal(
+                    slot,
+                    ignore,
+                    self.skipped_rewrites.lock().unwrap().clone(),
+                )
+        });
 
         let mut signature_count_buf = [0u8; 8];
         LittleEndian::write_u64(&mut signature_count_buf[..], self.signature_count());
@@ -5469,6 +5472,12 @@ impl Bank {
             .get_bank_hash_stats(slot)
             .expect("No bank hash stats were found for this bank, that should not be possible");
 
+        let total_us = measure_total.end_as_us();
+        datapoint_info!(
+            "bank-hash_internal_state",
+            ("total_us", total_us, i64),
+            ("accounts_delta_hash_us", accounts_delta_hash_us, i64),
+        );
         info!(
             "bank frozen: {slot} hash: {hash} accounts_delta: {} signature_count: {} last_blockhash: {} capitalization: {}{}, stats: {bank_hash_stats:?}{}",
             accounts_delta_hash.0,
