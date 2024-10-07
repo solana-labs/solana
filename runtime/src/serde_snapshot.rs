@@ -19,8 +19,8 @@ use {
         account_storage::meta::StoredMetaWriteVersion,
         accounts::Accounts,
         accounts_db::{
-            AccountShrinkThreshold, AccountStorageEntry, AccountsDb, AccountsDbConfig,
-            AccountsFileId, AtomicAccountsFileId, BankHashStats, IndexGenerationInfo,
+            stats::BankHashStats, AccountShrinkThreshold, AccountStorageEntry, AccountsDb,
+            AccountsDbConfig, AccountsFileId, AtomicAccountsFileId, IndexGenerationInfo,
         },
         accounts_file::{AccountsFile, StorageAccess},
         accounts_hash::{AccountsDeltaHash, AccountsHash},

@@ -9,7 +9,9 @@ use {
         prelude::ParallelSlice,
     },
     solana_accounts_db::{
-        accounts_db::{AccountStorageEntry, AccountsDb, GetUniqueAccountsResult, PurgeStats},
+        accounts_db::{
+            stats::PurgeStats, AccountStorageEntry, AccountsDb, GetUniqueAccountsResult,
+        },
         accounts_partition,
         storable_accounts::StorableAccountsBySlot,
     },

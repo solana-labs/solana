@@ -24,7 +24,7 @@ use {
     regex::Regex,
     solana_accounts_db::{
         account_storage::{meta::StoredMetaWriteVersion, AccountStorageMap},
-        accounts_db::{AccountStorageEntry, AtomicAccountsFileId, BankHashStats},
+        accounts_db::{stats::BankHashStats, AccountStorageEntry, AtomicAccountsFileId},
         accounts_file::{AccountsFile, AccountsFileError, InternalsForArchive, StorageAccess},
         accounts_hash::{AccountsDeltaHash, AccountsHash},
         epoch_accounts_hash::EpochAccountsHash,

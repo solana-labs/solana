@@ -8,9 +8,9 @@ use {
     crate::{
         account_storage::ShrinkInProgress,
         accounts_db::{
+            stats::{ShrinkAncientStats, ShrinkStatsSub},
             AccountFromStorage, AccountStorageEntry, AccountsDb, AliveAccounts,
-            GetUniqueAccountsResult, ShrinkAncientStats, ShrinkCollect,
-            ShrinkCollectAliveSeparatedByRefs, ShrinkStatsSub,
+            GetUniqueAccountsResult, ShrinkCollect, ShrinkCollectAliveSeparatedByRefs,
         },
         accounts_file::AccountsFile,
         active_stats::ActiveStatItem,

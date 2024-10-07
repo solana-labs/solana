@@ -8,7 +8,7 @@ use {
     solana_accounts_db::{
         account_storage::meta::StoredMetaWriteVersion,
         accounts::Accounts,
-        accounts_db::{AccountStorageEntry, BankHashStats},
+        accounts_db::{stats::BankHashStats, AccountStorageEntry},
         accounts_hash::{AccountsDeltaHash, AccountsHash, AccountsHashKind},
         epoch_accounts_hash::EpochAccountsHash,
     },
