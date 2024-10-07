@@ -121,6 +121,7 @@ members = [
     "sdk/program-option",
     "sdk/program-pack",
     "sdk/pubkey",
+    "sdk/rent",
     "sdk/serde-varint",
     "sdk/serialize-utils",
     "sdk/sha256-hasher",
@@ -440,6 +441,7 @@ solana-pubsub-client = { path = "pubsub-client", version = "=2.1.0" }
 solana-quic-client = { path = "quic-client", version = "=2.1.0" }
 solana-rayon-threadlimit = { path = "rayon-threadlimit", version = "=2.1.0" }
 solana-remote-wallet = { path = "remote-wallet", version = "=2.1.0", default-features = false }
+solana-rent = { path = "sdk/rent", version = "=2.1.0", default-features = false }
 solana-sanitize = { path = "sanitize", version = "=2.1.0" }
 solana-serde-varint = { path = "sdk/serde-varint", version = "=2.1.0" }
 solana-serialize-utils = { path = "sdk/serialize-utils", version = "=2.1.0" }

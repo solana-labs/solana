@@ -508,7 +508,6 @@ pub mod program;
 pub mod program_error;
 pub mod program_stubs;
 pub mod program_utils;
-pub mod rent;
 pub mod secp256k1_program;
 pub mod slot_hashes;
 pub mod slot_history;
@@ -542,7 +541,7 @@ pub use {
     solana_account_info::{self as account_info, debug_account_data},
     solana_clock as clock,
     solana_msg::msg,
-    solana_program_option as program_option, solana_pubkey as pubkey,
+    solana_program_option as program_option, solana_pubkey as pubkey, solana_rent as rent,
 };
 
 /// The [config native program][np].

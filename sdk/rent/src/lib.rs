@@ -3,13 +3,29 @@
 //! [rent]: https://docs.solanalabs.com/implemented-proposals/rent
 
 #![allow(clippy::arithmetic_side_effects)]
+#![no_std]
+#![cfg_attr(feature = "frozen-abi", feature(min_specialization))]
+#[cfg(feature = "frozen-abi")]
+extern crate std;
 
-use {solana_clock::DEFAULT_SLOTS_PER_EPOCH, solana_sdk_macro::CloneZeroed};
+use solana_sdk_macro::CloneZeroed;
+
+// inlined to avoid solana_clock dep
+const DEFAULT_SLOTS_PER_EPOCH: u64 = 432_000;
+#[cfg(test)]
+static_assertions::const_assert_eq!(
+    DEFAULT_SLOTS_PER_EPOCH,
+    solana_clock::DEFAULT_SLOTS_PER_EPOCH
+);
 
 /// Configuration of network rent.
 #[repr(C)]
-#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
-#[derive(Serialize, Deserialize, PartialEq, CloneZeroed, Debug)]
+#[cfg_attr(feature = "frozen-abi", derive(solana_frozen_abi_macro::AbiExample))]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde_derive::Deserialize, serde_derive::Serialize)
+)]
+#[derive(PartialEq, CloneZeroed, Debug)]
 pub struct Rent {
     /// Rental rate in lamports/byte-year.
     pub lamports_per_byte_year: u64,

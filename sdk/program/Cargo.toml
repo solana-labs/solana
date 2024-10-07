@@ -53,6 +53,7 @@ solana-program-memory = { workspace = true }
 solana-program-option = { workspace = true }
 solana-program-pack = { workspace = true }
 solana-pubkey = { workspace = true, features = ["bytemuck", "curve25519", "serde", "std"] }
+solana-rent = { workspace = true, features = ["serde"] }
 solana-sanitize = { workspace = true }
 solana-sdk-macro = { workspace = true }
 solana-secp256k1-recover = { workspace = true }
@@ -128,6 +129,7 @@ frozen-abi = [
     "solana-hash/frozen-abi",
     "solana-instruction/frozen-abi",
     "solana-pubkey/frozen-abi",
+    "solana-rent/frozen-abi",
     "solana-short-vec/frozen-abi"
 ]
 
