@@ -5475,6 +5475,7 @@ impl Bank {
         let total_us = measure_total.end_as_us();
         datapoint_info!(
             "bank-hash_internal_state",
+            ("slot", slot, i64),
             ("total_us", total_us, i64),
             ("accounts_delta_hash_us", accounts_delta_hash_us, i64),
         );
