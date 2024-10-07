@@ -5855,10 +5855,6 @@ impl Bank {
         SnapshotHash::new(&accounts_hash, epoch_accounts_hash.as_ref())
     }
 
-    pub fn get_thread_pool(&self) -> &ThreadPool {
-        &self.rc.accounts.accounts_db.thread_pool_clean
-    }
-
     pub fn load_account_into_read_cache(&self, key: &Pubkey) {
         self.rc
             .accounts
