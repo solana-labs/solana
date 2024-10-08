@@ -39,7 +39,7 @@ pub enum DeserializedPacketError {
     FailedFilter(#[from] PacketFilterFailure),
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Eq)]
 pub struct ImmutableDeserializedPacket {
     original_packet: Packet,
     transaction: SanitizedVersionedTransaction,
@@ -129,6 +129,13 @@ impl ImmutableDeserializedPacket {
         )
         .ok()?;
         Some(tx)
+    }
+}
+
+// PartialEq MUST be consistent with PartialOrd and Ord
+impl PartialEq for ImmutableDeserializedPacket {
+    fn eq(&self, other: &Self) -> bool {
+        self.compute_unit_price() == other.compute_unit_price()
     }
 }
 
