@@ -68,6 +68,7 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         generator_config: config.generator_config.clone(),
         use_snapshot_archives_at_startup: config.use_snapshot_archives_at_startup,
         wen_restart_proto_path: config.wen_restart_proto_path.clone(),
+        wen_restart_coordinator: config.wen_restart_coordinator,
         unified_scheduler_handler_threads: config.unified_scheduler_handler_threads,
         ip_echo_server_threads: config.ip_echo_server_threads,
         replay_forks_threads: config.replay_forks_threads,

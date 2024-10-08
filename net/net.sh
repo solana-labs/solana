@@ -146,7 +146,7 @@ Operate a configured testnet
    -i [ip address]                    - IP Address of the node to start or stop
 
  startnode specific option:
-   --wen-restart [proto_file]         - Use given proto file (create if non-exist) and apply wen_restat
+   --wen-restart [coordinator_pubkey]      - Use given coordinator pubkey and apply wen_restat
 
  startclients-specific options:
    $CLIENT_OPTIONS

@@ -44,7 +44,7 @@ use {
             purge_all_bank_snapshots,
         },
     },
-    solana_sdk::{shred_version::compute_shred_version, timing::timestamp},
+    solana_sdk::{pubkey::Pubkey, shred_version::compute_shred_version, timing::timestamp},
     solana_timings::ExecuteTimings,
     solana_vote_program::vote_state::VoteTransaction,
     std::{
@@ -874,6 +874,7 @@ pub(crate) fn aggregate_restart_heaviest_fork(
 #[derive(Clone)]
 pub struct WenRestartConfig {
     pub wen_restart_path: PathBuf,
+    pub wen_restart_coordinator: Pubkey,
     pub last_vote: VoteTransaction,
     pub blockstore: Arc<Blockstore>,
     pub cluster_info: Arc<ClusterInfo>,
@@ -1333,6 +1334,7 @@ mod tests {
     const TICKS_PER_SLOT: u64 = 2;
     const TOTAL_VALIDATOR_COUNT: u16 = 20;
     const MY_INDEX: usize = TOTAL_VALIDATOR_COUNT as usize - 1;
+    const COORDINATOR_INDEX: usize = 0;
     const WAIT_FOR_THREAD_TIMEOUT: u64 = 10_000;
     const WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT: u64 = 80;
     const NON_CONFORMING_VALIDATOR_PERCENT: u64 = 5;
@@ -1404,6 +1406,7 @@ mod tests {
         pub bank_forks: Arc<RwLock<BankForks>>,
         pub last_voted_fork_slots: Vec<Slot>,
         pub wen_restart_proto_path: PathBuf,
+        pub wen_restart_coordinator: Pubkey,
         pub last_blockhash: Hash,
         pub genesis_config_hash: Hash,
     }
@@ -1439,6 +1442,9 @@ mod tests {
                 .node_keypair
                 .insecure_clone(),
         );
+        let wen_restart_coordinator = validator_voting_keypairs[COORDINATOR_INDEX]
+            .node_keypair
+            .pubkey();
         let cluster_info = Arc::new(ClusterInfo::new(
             {
                 let mut contact_info =
@@ -1500,6 +1506,7 @@ mod tests {
             bank_forks,
             last_voted_fork_slots,
             wen_restart_proto_path,
+            wen_restart_coordinator,
             last_blockhash,
             genesis_config_hash: genesis_config.hash(),
         }
@@ -1556,6 +1563,7 @@ mod tests {
         let last_vote_slot: Slot = test_state.last_voted_fork_slots[0];
         let wen_restart_config = WenRestartConfig {
             wen_restart_path: test_state.wen_restart_proto_path.clone(),
+            wen_restart_coordinator: test_state.wen_restart_coordinator,
             last_vote: VoteTransaction::from(Vote::new(vec![last_vote_slot], last_vote_bankhash)),
             blockstore: test_state.blockstore.clone(),
             cluster_info: test_state.cluster_info.clone(),
@@ -1623,6 +1631,7 @@ mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let wen_restart_config = WenRestartConfig {
             wen_restart_path: test_state.wen_restart_proto_path.clone(),
+            wen_restart_coordinator: test_state.wen_restart_coordinator,
             last_vote: VoteTransaction::from(Vote::new(vec![last_vote_slot], last_vote_bankhash)),
             blockstore: test_state.blockstore.clone(),
             cluster_info: test_state.cluster_info.clone(),
@@ -1984,6 +1993,7 @@ mod tests {
         assert_eq!(
             wait_for_wen_restart(WenRestartConfig {
                 wen_restart_path: test_state.wen_restart_proto_path,
+                wen_restart_coordinator: test_state.wen_restart_coordinator,
                 last_vote: VoteTransaction::from(Vote::new(
                     vec![new_root_slot],
                     last_vote_bankhash
@@ -3375,6 +3385,7 @@ mod tests {
         let last_vote_bankhash = Hash::new_unique();
         let config = WenRestartConfig {
             wen_restart_path: test_state.wen_restart_proto_path.clone(),
+            wen_restart_coordinator: test_state.wen_restart_coordinator,
             last_vote: VoteTransaction::from(Vote::new(vec![last_vote_slot], last_vote_bankhash)),
             blockstore: test_state.blockstore.clone(),
             cluster_info: test_state.cluster_info.clone(),
