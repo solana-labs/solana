@@ -742,6 +742,14 @@ impl StakeSubCommands for App<'_, '_> {
                         .help("Format stake rewards data in csv"),
                 )
                 .arg(
+                    Arg::with_name("starting_epoch")
+                        .long("starting-epoch")
+                        .takes_value(true)
+                        .value_name("NUM")
+                        .requires("with_rewards")
+                        .help("Start displaying from epoch NUM"),
+                )
+                .arg(
                     Arg::with_name("num_rewards_epochs")
                         .long("num-rewards-epochs")
                         .takes_value(true)
@@ -1329,12 +1337,14 @@ pub fn parse_show_stake_account(
     } else {
         None
     };
+    let starting_epoch = value_of(matches, "starting_epoch");
     Ok(CliCommandInfo::without_signers(
         CliCommand::ShowStakeAccount {
             pubkey: stake_account_pubkey,
             use_lamports_unit,
             with_rewards,
             use_csv,
+            starting_epoch,
         },
     ))
 }
@@ -2541,10 +2551,18 @@ pub(crate) fn fetch_epoch_rewards(
     rpc_client: &RpcClient,
     address: &Pubkey,
     mut num_epochs: usize,
+    starting_epoch: Option<u64>,
 ) -> Result<Vec<CliEpochReward>, Box<dyn std::error::Error>> {
     let mut all_epoch_rewards = vec![];
     let epoch_schedule = rpc_client.get_epoch_schedule()?;
-    let mut rewards_epoch = rpc_client.get_epoch_info()?.epoch;
+    let mut rewards_epoch = if let Some(epoch) = starting_epoch {
+        epoch
+    } else {
+        rpc_client
+            .get_epoch_info()?
+            .epoch
+            .saturating_sub(num_epochs as u64)
+    };
 
     let mut process_reward =
         |reward: &Option<RpcInflationReward>| -> Result<(), Box<dyn std::error::Error>> {
@@ -2559,14 +2577,14 @@ pub(crate) fn fetch_epoch_rewards(
             Ok(())
         };
 
-    while num_epochs > 0 && rewards_epoch > 0 {
-        rewards_epoch = rewards_epoch.saturating_sub(1);
+    while num_epochs > 0 {
         if let Ok(rewards) = rpc_client.get_inflation_reward(&[*address], Some(rewards_epoch)) {
             process_reward(&rewards[0])?;
         } else {
             eprintln!("Rewards not available for epoch {rewards_epoch}");
         }
         num_epochs = num_epochs.saturating_sub(1);
+        rewards_epoch = rewards_epoch.saturating_add(1);
     }
 
     Ok(all_epoch_rewards)
@@ -2579,6 +2597,7 @@ pub fn process_show_stake_account(
     use_lamports_unit: bool,
     with_rewards: Option<usize>,
     use_csv: bool,
+    starting_epoch: Option<u64>,
 ) -> ProcessResult {
     let stake_account = rpc_client.get_account(stake_account_address)?;
     if stake_account.owner != stake::program::id() {
@@ -2614,7 +2633,12 @@ pub fn process_show_stake_account(
 
             if state.stake_type == CliStakeType::Stake && state.activation_epoch.is_some() {
                 let epoch_rewards = with_rewards.and_then(|num_epochs| {
-                    match fetch_epoch_rewards(rpc_client, stake_account_address, num_epochs) {
+                    match fetch_epoch_rewards(
+                        rpc_client,
+                        stake_account_address,
+                        num_epochs,
+                        starting_epoch,
+                    ) {
                         Ok(rewards) => Some(rewards),
                         Err(error) => {
                             eprintln!("Failed to fetch epoch rewards: {error:?}");

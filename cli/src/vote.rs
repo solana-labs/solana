@@ -351,6 +351,14 @@ impl VoteSubCommands for App<'_, '_> {
                         .help("Format rewards in a CSV table"),
                 )
                 .arg(
+                    Arg::with_name("starting_epoch")
+                        .long("starting-epoch")
+                        .takes_value(true)
+                        .value_name("NUM")
+                        .requires("with_rewards")
+                        .help("Start displaying from epoch NUM"),
+                )
+                .arg(
                     Arg::with_name("num_rewards_epochs")
                         .long("num-rewards-epochs")
                         .takes_value(true)
@@ -675,12 +683,14 @@ pub fn parse_vote_get_account_command(
     } else {
         None
     };
+    let starting_epoch = value_of(matches, "starting_epoch");
     Ok(CliCommandInfo::without_signers(
         CliCommand::ShowVoteAccount {
             pubkey: vote_account_pubkey,
             use_lamports_unit,
             use_csv,
             with_rewards,
+            starting_epoch,
         },
     ))
 }
@@ -1261,6 +1271,7 @@ pub fn process_show_vote_account(
     use_lamports_unit: bool,
     use_csv: bool,
     with_rewards: Option<usize>,
+    starting_epoch: Option<u64>,
 ) -> ProcessResult {
     let (vote_account, vote_state) =
         get_vote_account(rpc_client, vote_account_address, config.commitment)?;
@@ -1288,7 +1299,12 @@ pub fn process_show_vote_account(
 
     let epoch_rewards =
         with_rewards.and_then(|num_epochs| {
-            match crate::stake::fetch_epoch_rewards(rpc_client, vote_account_address, num_epochs) {
+            match crate::stake::fetch_epoch_rewards(
+                rpc_client,
+                vote_account_address,
+                num_epochs,
+                starting_epoch,
+            ) {
                 Ok(rewards) => Some(rewards),
                 Err(error) => {
                     eprintln!("Failed to fetch epoch rewards: {error:?}");
