@@ -506,7 +506,7 @@ fn start_verify_transactions_gpu(
 
     let entries = verify_transactions(entries, thread_pool, Arc::new(verify_func))?;
 
-    let entry_txs: Vec<&SanitizedTransaction> = entries
+    let transactions: Vec<&SanitizedTransaction> = entries
         .iter()
         .filter_map(|entry_type| match entry_type {
             EntryType::Tick(_) => None,
@@ -515,7 +515,7 @@ fn start_verify_transactions_gpu(
         .flatten()
         .collect::<Vec<_>>();
 
-    if entry_txs.is_empty() {
+    if transactions.is_empty() {
         return Ok(EntrySigVerificationState {
             verification_status: EntryVerificationStatus::Success,
             entries: Some(entries),
@@ -524,46 +524,48 @@ fn start_verify_transactions_gpu(
         });
     }
 
-    let mut packet_batches = entry_txs
-        .par_iter()
-        .chunks(PACKETS_PER_BATCH)
-        .map(|slice| {
-            let vec_size = slice.len();
-            let mut packet_batch = PacketBatch::new_with_recycler(
-                &verify_recyclers.packet_recycler,
-                vec_size,
-                "entry-sig-verify",
-            );
-            // We use set_len here instead of resize(vec_size, Packet::default()), to save
-            // memory bandwidth and avoid writing a large amount of data that will be overwritten
-            // soon afterwards. As well, Packet::default() actually leaves the packet data
-            // uninitialized, so the initialization would simply write junk into
-            // the vector anyway.
-            unsafe {
-                packet_batch.set_len(vec_size);
-            }
-            let entry_tx_iter = slice
-                .into_par_iter()
-                .map(|tx| tx.to_versioned_transaction());
+    let packet_batches = thread_pool.install(|| {
+        transactions
+            .par_chunks(PACKETS_PER_BATCH)
+            .map(|transaction_chunk| {
+                let num_transactions = transaction_chunk.len();
+                let mut packet_batch = PacketBatch::new_with_recycler(
+                    &verify_recyclers.packet_recycler,
+                    num_transactions,
+                    "entry-sig-verify",
+                );
+                // We use set_len here instead of resize(num_txs, Packet::default()), to save
+                // memory bandwidth and avoid writing a large amount of data that will be overwritten
+                // soon afterwards. As well, Packet::default() actually leaves the packet data
+                // uninitialized, so the initialization would simply write junk into
+                // the vector anyway.
+                unsafe {
+                    packet_batch.set_len(num_transactions);
+                }
+                let transaction_iter = transaction_chunk
+                    .iter()
+                    .map(|tx| tx.to_versioned_transaction());
 
-            let res = packet_batch
-                .par_iter_mut()
-                .zip(entry_tx_iter)
-                .all(|(packet, tx)| {
-                    *packet.meta_mut() = Meta::default();
-                    Packet::populate_packet(packet, None, &tx).is_ok()
-                });
-            if res {
-                Ok(packet_batch)
-            } else {
-                Err(TransactionError::SanitizeFailure)
-            }
-        })
-        .collect::<Result<Vec<_>>>()?;
+                let res = packet_batch
+                    .iter_mut()
+                    .zip(transaction_iter)
+                    .all(|(packet, tx)| {
+                        *packet.meta_mut() = Meta::default();
+                        Packet::populate_packet(packet, None, &tx).is_ok()
+                    });
+                if res {
+                    Ok(packet_batch)
+                } else {
+                    Err(TransactionError::SanitizeFailure)
+                }
+            })
+            .collect::<Result<Vec<_>>>()
+    });
+    let mut packet_batches = packet_batches?;
 
     let tx_offset_recycler = verify_recyclers.tx_offset_recycler;
     let out_recycler = verify_recyclers.out_recycler;
-    let num_packets = entry_txs.len();
+    let num_packets = transactions.len();
     let gpu_verify_thread = thread::Builder::new()
         .name("solGpuSigVerify".into())
         .spawn(move || {
