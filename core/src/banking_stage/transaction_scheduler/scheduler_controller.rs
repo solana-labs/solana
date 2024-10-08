@@ -438,7 +438,7 @@ impl<T: LikeClusterInfo> SchedulerController<T> {
     fn receive_and_buffer_packets(&mut self, decision: &BufferedPacketsDecision) -> bool {
         let remaining_queue_capacity = self.container.remaining_queue_capacity();
 
-        const MAX_PACKET_RECEIVE_TIME: Duration = Duration::from_millis(100);
+        const MAX_PACKET_RECEIVE_TIME: Duration = Duration::from_millis(10);
         let (recv_timeout, should_buffer) = match decision {
             BufferedPacketsDecision::Consume(_) => (
                 if self.container.is_empty() {
