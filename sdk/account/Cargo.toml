@@ -1,0 +1,38 @@
+[package]
+name = "solana-account"
+description = "Solana Account type"
+documentation = "https://docs.rs/solana-account"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+bincode = { workspace = true, optional = true }
+qualifier_attr = { workspace = true, optional = true }
+serde = { workspace = true, optional = true }
+serde_bytes = { workspace = true, optional = true }
+serde_derive = { workspace = true, optional = true }
+solana-frozen-abi = { workspace = true, optional = true }
+solana-frozen-abi-macro = { workspace = true, optional = true }
+solana-logger = { workspace = true, optional = true }
+solana-program = { workspace = true }
+
+[dev-dependencies]
+solana-account = { path = ".", features = ["dev-context-only-utils"] }
+
+[features]
+bincode = ["dep:bincode", "serde"]
+dev-context-only-utils = ["bincode", "dep:qualifier_attr"]
+frozen-abi = [
+    "dep:solana-frozen-abi",
+    "dep:solana-frozen-abi-macro",
+    "dep:solana-logger",
+    "solana-program/frozen-abi",
+]
+serde = ["dep:serde", "dep:serde_bytes", "dep:serde_derive"]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

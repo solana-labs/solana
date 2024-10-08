@@ -1,14 +1,16 @@
 #![cfg(feature = "full")]
 
 //! calculate and collect rent from Accounts
-use solana_sdk::{
-    account::{AccountSharedData, ReadableAccount, WritableAccount},
-    clock::Epoch,
-    epoch_schedule::EpochSchedule,
-    genesis_config::GenesisConfig,
-    incinerator,
-    pubkey::Pubkey,
-    rent::{Rent, RentDue},
+use {
+    solana_account::{AccountSharedData, ReadableAccount, WritableAccount},
+    solana_sdk::{
+        clock::Epoch,
+        epoch_schedule::EpochSchedule,
+        genesis_config::GenesisConfig,
+        incinerator,
+        pubkey::Pubkey,
+        rent::{Rent, RentDue},
+    },
 };
 
 #[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
@@ -213,11 +215,7 @@ impl std::ops::AddAssign for CollectedInfo {
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::*,
-        assert_matches::assert_matches,
-        solana_sdk::{account::Account, sysvar},
-    };
+    use {super::*, assert_matches::assert_matches, solana_account::Account, solana_sdk::sysvar};
 
     fn default_rent_collector_clone_with_epoch(epoch: Epoch) -> RentCollector {
         RentCollector::default().clone_with_epoch(epoch)

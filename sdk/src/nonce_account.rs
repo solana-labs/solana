@@ -2,7 +2,6 @@
 
 use {
     crate::{
-        account::{AccountSharedData, ReadableAccount},
         account_utils::StateMut,
         hash::Hash,
         nonce::{
@@ -10,6 +9,7 @@ use {
             State,
         },
     },
+    solana_account::{AccountSharedData, ReadableAccount},
     std::cell::RefCell,
 };
 

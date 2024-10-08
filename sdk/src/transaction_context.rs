@@ -3,30 +3,27 @@
 
 #[cfg(all(not(target_os = "solana"), feature = "full", debug_assertions))]
 use crate::signature::Signature;
-#[cfg(not(target_os = "solana"))]
 use {
-    crate::{
-        account::WritableAccount,
-        rent::Rent,
-        system_instruction::{
-            MAX_PERMITTED_ACCOUNTS_DATA_ALLOCATIONS_PER_TRANSACTION, MAX_PERMITTED_DATA_LENGTH,
-        },
-    },
-    solana_program::entrypoint::MAX_PERMITTED_DATA_INCREASE,
-    std::mem::MaybeUninit,
-};
-use {
-    crate::{
-        account::{AccountSharedData, ReadableAccount},
-        instruction::InstructionError,
-        pubkey::Pubkey,
-    },
+    crate::{instruction::InstructionError, pubkey::Pubkey},
+    solana_account::{AccountSharedData, ReadableAccount},
     std::{
         cell::{Ref, RefCell, RefMut},
         collections::HashSet,
         pin::Pin,
         rc::Rc,
     },
+};
+#[cfg(not(target_os = "solana"))]
+use {
+    crate::{
+        rent::Rent,
+        system_instruction::{
+            MAX_PERMITTED_ACCOUNTS_DATA_ALLOCATIONS_PER_TRANSACTION, MAX_PERMITTED_DATA_LENGTH,
+        },
+    },
+    solana_account::WritableAccount,
+    solana_program::entrypoint::MAX_PERMITTED_DATA_INCREASE,
+    std::mem::MaybeUninit,
 };
 
 /// Index of an account inside of the TransactionContext or an InstructionContext.

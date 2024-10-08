@@ -101,6 +101,7 @@ members = [
     "runtime-transaction",
     "sanitize",
     "sdk",
+    "sdk/account",
     "sdk/account-info",
     "sdk/atomic-u64",
     "sdk/cargo-build-sbf",
@@ -364,6 +365,7 @@ smallvec = "1.13.2"
 smpl_jwt = "0.7.1"
 socket2 = "0.5.7"
 soketto = "0.7"
+solana-account = { path = "sdk/account", version = "=2.1.0" }
 solana-account-decoder = { path = "account-decoder", version = "=2.1.0" }
 solana-account-info = { path = "sdk/account-info", version = "=2.1.0" }
 solana-accounts-db = { path = "accounts-db", version = "=2.1.0" }

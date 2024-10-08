@@ -4689,6 +4689,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-account"
+version = "2.1.0"
+dependencies = [
+ "bincode",
+ "qualifier_attr",
+ "serde",
+ "serde_bytes",
+ "serde_derive",
+ "solana-program",
+]
+
+[[package]]
 name = "solana-account-decoder"
 version = "2.1.0"
 dependencies = [
@@ -6596,6 +6608,7 @@ dependencies = [
  "sha2 0.10.8",
  "sha3",
  "siphasher",
+ "solana-account",
  "solana-bn254",
  "solana-decode-error",
  "solana-derivation-path",

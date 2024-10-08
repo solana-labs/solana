@@ -35,11 +35,12 @@ full = [
     "digest",
 ]
 borsh = ["dep:borsh", "solana-program/borsh", "solana-secp256k1-recover/borsh"]
-dev-context-only-utils = ["qualifier_attr"]
+dev-context-only-utils = ["qualifier_attr", "solana-account/dev-context-only-utils"]
 frozen-abi = [
     "dep:solana-frozen-abi",
     "dep:solana-frozen-abi-macro",
     "solana-feature-set/frozen-abi",
+    "solana-account/frozen-abi",
     "solana-program/frozen-abi",
     "solana-short-vec/frozen-abi",
     "solana-signature/frozen-abi"
@@ -83,6 +84,7 @@ serde_with = { workspace = true, features = ["macros"] }
 sha2 = { workspace = true }
 sha3 = { workspace = true, optional = true }
 siphasher = { workspace = true }
+solana-account = { workspace = true, features = ["bincode"] }
 solana-bn254 = { workspace = true }
 solana-decode-error = { workspace = true }
 solana-derivation-path = { workspace = true }
