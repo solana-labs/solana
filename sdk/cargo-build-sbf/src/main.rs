@@ -21,13 +21,15 @@ use {
     tar::Archive,
 };
 
+const DEFAULT_PLATFORM_TOOLS_VERSION: &str = "v1.43";
+
 #[derive(Debug)]
 struct Config<'a> {
     cargo_args: Vec<&'a str>,
     target_directory: Option<Utf8PathBuf>,
     sbf_out_dir: Option<PathBuf>,
     sbf_sdk: PathBuf,
-    platform_tools_version: &'a str,
+    platform_tools_version: Option<&'a str>,
     dump: bool,
     features: Vec<String>,
     force_tools_install: bool,
@@ -55,7 +57,7 @@ impl Default for Config<'_> {
                 .join("sdk")
                 .join("sbf"),
             sbf_out_dir: None,
-            platform_tools_version: "(unknown)",
+            platform_tools_version: None,
             dump: false,
             features: vec![],
             force_tools_install: false,
@@ -126,11 +128,11 @@ where
 }
 
 pub fn is_version_string(arg: &str) -> Result<(), String> {
-    let semver_re = Regex::new(r"^v[0-9]+\.[0-9]+(\.[0-9]+)?").unwrap();
+    let semver_re = Regex::new(r"^v?[0-9]+\.[0-9]+(\.[0-9]+)?").unwrap();
     if semver_re.is_match(arg) {
         return Ok(());
     }
-    Err("a version string starts with 'v' and contains major and minor version numbers separated by a dot, e.g. v1.32".to_string())
+    Err("a version string may start with 'v' and contains major and minor version numbers separated by a dot, e.g. v1.32 or 1.32".to_string())
 }
 
 fn find_installed_platform_tools() -> Vec<String> {
@@ -181,44 +183,61 @@ fn get_base_rust_version(platform_tools_version: &str) -> String {
     }
 }
 
-fn normalize_version(version: String) -> String {
+fn downloadable_version(version: &str) -> String {
+    if version.starts_with('v') {
+        version.to_string()
+    } else {
+        format!("v{version}")
+    }
+}
+
+fn semver_version(version: &str) -> String {
+    let starts_with_v = version.starts_with('v');
     let dots = version.as_bytes().iter().fold(
         0,
         |n: u32, c| if *c == b'.' { n.saturating_add(1) } else { n },
     );
-    if dots == 1 {
-        format!("{version}.0")
-    } else {
-        version
+    match (dots, starts_with_v) {
+        (0, false) => format!("{version}.0.0"),
+        (0, true) => format!("{}.0.0", &version[1..]),
+        (1, false) => format!("{version}.0"),
+        (1, true) => format!("{}.0", &version[1..]),
+        (_, false) => version.to_string(),
+        (_, true) => version[1..].to_string(),
     }
 }
 
-fn validate_platform_tools_version(requested_version: &str, builtin_version: String) -> String {
-    let normalized_requested = normalize_version(requested_version.to_string());
-    let requested_semver = semver::Version::parse(&normalized_requested[1..]).unwrap();
+fn validate_platform_tools_version(requested_version: &str, builtin_version: &str) -> String {
+    // Early return here in case it's the first time we're running `cargo build-sbf`
+    // and we need to create the cache folders
+    if requested_version == builtin_version {
+        return builtin_version.to_string();
+    }
+    let normalized_requested = semver_version(requested_version);
+    let requested_semver = semver::Version::parse(&normalized_requested).unwrap();
     let installed_versions = find_installed_platform_tools();
     for v in installed_versions {
-        if requested_semver <= semver::Version::parse(&normalize_version(v)[1..]).unwrap() {
-            return requested_version.to_string();
+        if requested_semver <= semver::Version::parse(&semver_version(&v)).unwrap() {
+            return downloadable_version(requested_version);
         }
     }
     let latest_version = get_latest_platform_tools_version().unwrap_or_else(|err| {
         debug!(
             "Can't get the latest version of platform-tools: {}. Using built-in version {}.",
-            err, &builtin_version,
+            err, builtin_version,
         );
-        builtin_version.clone()
+        builtin_version.to_string()
     });
-    let normalized_latest = normalize_version(latest_version.clone());
-    let latest_semver = semver::Version::parse(&normalized_latest[1..]).unwrap();
+    let normalized_latest = semver_version(&latest_version);
+    let latest_semver = semver::Version::parse(&normalized_latest).unwrap();
     if requested_semver <= latest_semver {
-        requested_version.to_string()
+        downloadable_version(requested_version)
     } else {
         warn!(
             "Version {} is not valid, latest version is {}. Using the built-in version {}",
-            requested_version, latest_version, &builtin_version,
+            requested_version, latest_version, builtin_version,
         );
-        builtin_version
+        builtin_version.to_string()
     }
 }
 
@@ -240,6 +259,7 @@ fn install_if_missing(
     package: &str,
     url: &str,
     download_file_name: &str,
+    platform_tools_version: &str,
     target_path: &Path,
 ) -> Result<(), String> {
     if config.force_tools_install {
@@ -286,7 +306,7 @@ fn install_if_missing(
         fs::create_dir_all(target_path).map_err(|err| err.to_string())?;
         let mut url = String::from(url);
         url.push('/');
-        url.push_str(config.platform_tools_version);
+        url.push_str(platform_tools_version);
         url.push('/');
         url.push_str(download_file_name);
         let download_file_path = target_path.join(download_file_name);
@@ -536,6 +556,7 @@ fn build_solana_package(
     config: &Config,
     target_directory: &Path,
     package: &cargo_metadata::Package,
+    metadata: &cargo_metadata::Metadata,
 ) {
     let program_name = {
         let cdylib_targets = package
@@ -591,6 +612,25 @@ fn build_solana_package(
         exit(1);
     });
 
+    let platform_tools_version = config.platform_tools_version.unwrap_or_else(|| {
+        let workspace_tools_version = metadata.workspace_metadata.get("solana").and_then(|v| v.get("tools-version")).and_then(|v| v.as_str());
+        let package_tools_version = package.metadata.get("solana").and_then(|v| v.get("tools-version")).and_then(|v| v.as_str());
+        match (workspace_tools_version, package_tools_version) {
+            (Some(workspace_version), Some(package_version)) => {
+                if workspace_version != package_version {
+                    warn!("Workspace and package specify conflicting tools versions, {workspace_version} and {package_version}, using package version {package_version}");
+                }
+                package_version
+            },
+            (Some(workspace_version), None) => workspace_version,
+            (None, Some(package_version)) => package_version,
+            (None, None) => DEFAULT_PLATFORM_TOOLS_VERSION,
+        }
+    });
+
+    let platform_tools_version =
+        validate_platform_tools_version(platform_tools_version, DEFAULT_PLATFORM_TOOLS_VERSION);
+
     info!("Solana SDK: {}", config.sbf_sdk.display());
     if config.no_default_features {
         info!("No default features");
@@ -614,12 +654,13 @@ fn build_solana_package(
         format!("platform-tools-linux-{arch}.tar.bz2")
     };
     let package = "platform-tools";
-    let target_path = make_platform_tools_path_for_version(package, config.platform_tools_version);
+    let target_path = make_platform_tools_path_for_version(package, &platform_tools_version);
     install_if_missing(
         config,
         package,
         "https://github.com/anza-xyz/platform-tools/releases/download",
         platform_tools_download_file_name.as_str(),
+        &platform_tools_version,
         &target_path,
     )
     .unwrap_or_else(|err| {
@@ -872,7 +913,7 @@ fn build_solana(config: Config, manifest_path: Option<PathBuf>) {
 
     if let Some(root_package) = metadata.root_package() {
         if !config.workspace {
-            build_solana_package(&config, target_dir.as_ref(), root_package);
+            build_solana_package(&config, target_dir.as_ref(), root_package, &metadata);
             return;
         }
     }
@@ -893,7 +934,7 @@ fn build_solana(config: Config, manifest_path: Option<PathBuf>) {
         .collect::<Vec<_>>();
 
     for package in all_sbf_packages {
-        build_solana_package(&config, target_dir.as_ref(), package);
+        build_solana_package(&config, target_dir.as_ref(), package, &metadata);
     }
 }
 
@@ -913,12 +954,11 @@ fn main() {
 
     // The following line is scanned by CI configuration script to
     // separate cargo caches according to the version of platform-tools.
-    let platform_tools_version = String::from("v1.43");
-    let rust_base_version = get_base_rust_version(platform_tools_version.as_str());
+    let rust_base_version = get_base_rust_version(DEFAULT_PLATFORM_TOOLS_VERSION);
     let version = format!(
         "{}\nplatform-tools {}\n{}",
         crate_version!(),
-        platform_tools_version,
+        DEFAULT_PLATFORM_TOOLS_VERSION,
         rust_base_version,
     );
     let matches = clap::Command::new(crate_name!())
@@ -1051,12 +1091,6 @@ fn main() {
     let sbf_sdk: PathBuf = matches.value_of_t_or_exit("sbf_sdk");
     let sbf_out_dir: Option<PathBuf> = matches.value_of_t("sbf_out_dir").ok();
 
-    let platform_tools_version = if let Some(tools_version) = matches.value_of("tools_version") {
-        validate_platform_tools_version(tools_version, platform_tools_version)
-    } else {
-        platform_tools_version
-    };
-
     let mut cargo_args = matches
         .values_of("cargo_args")
         .map(|vals| vals.collect::<Vec<_>>())
@@ -1106,7 +1140,7 @@ fn main() {
                     .join(sbf_out_dir)
             }
         }),
-        platform_tools_version: platform_tools_version.as_str(),
+        platform_tools_version: matches.value_of("tools_version"),
         dump: matches.is_present("dump"),
         features: matches.values_of_t("features").ok().unwrap_or_default(),
         force_tools_install: matches.is_present("force_tools_install"),

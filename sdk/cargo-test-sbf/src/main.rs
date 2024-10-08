@@ -104,11 +104,11 @@ where
 }
 
 pub fn is_version_string(arg: &str) -> Result<(), String> {
-    let semver_re = Regex::new(r"^v[0-9]+\.[0-9]+(\.[0-9]+)?").unwrap();
+    let semver_re = Regex::new(r"^v?[0-9]+\.[0-9]+(\.[0-9]+)?").unwrap();
     if semver_re.is_match(arg) {
         return Ok(());
     }
-    Err("a version string starts with 'v' and contains major and minor version numbers separated by a dot, e.g. v1.32".to_string())
+    Err("a version string may start with 'v' and contains major and minor version numbers separated by a dot, e.g. v1.32 or 1.32".to_string())
 }
 
 fn test_solana_package(
