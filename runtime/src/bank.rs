@@ -553,6 +553,7 @@ impl PartialEq for Bank {
             is_delta,
             #[cfg(feature = "dev-context-only-utils")]
             hash_overrides,
+            accounts_lt_hash,
             // TODO: Confirm if all these fields are intentionally ignored!
             rewards: _,
             cluster_type: _,
@@ -577,7 +578,6 @@ impl PartialEq for Bank {
             compute_budget: _,
             transaction_account_lock_limit: _,
             fee_structure: _,
-            accounts_lt_hash: _,
             cache_for_accounts_lt_hash: _,
             // Ignore new fields explicitly if they do not impact PartialEq.
             // Adding ".." will remove compile-time checks that if a new field
@@ -616,6 +616,8 @@ impl PartialEq for Bank {
             // different Mutexes.
             && (Arc::ptr_eq(hash_overrides, &other.hash_overrides) ||
                 *hash_overrides.lock().unwrap() == *other.hash_overrides.lock().unwrap())
+            && !(self.is_accounts_lt_hash_enabled() && other.is_accounts_lt_hash_enabled()
+                && *accounts_lt_hash.lock().unwrap() != *other.accounts_lt_hash.lock().unwrap())
     }
 }
 
