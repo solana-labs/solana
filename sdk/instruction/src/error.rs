@@ -432,3 +432,32 @@ where
         }
     }
 }
+
+#[derive(Debug)]
+pub enum LamportsError {
+    /// arithmetic underflowed
+    ArithmeticUnderflow,
+    /// arithmetic overflowed
+    ArithmeticOverflow,
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for LamportsError {}
+
+impl fmt::Display for LamportsError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::ArithmeticUnderflow => f.write_str("Arithmetic underflowed"),
+            Self::ArithmeticOverflow => f.write_str("Arithmetic overflowed"),
+        }
+    }
+}
+
+impl From<LamportsError> for InstructionError {
+    fn from(error: LamportsError) -> Self {
+        match error {
+            LamportsError::ArithmeticOverflow => InstructionError::ArithmeticOverflow,
+            LamportsError::ArithmeticUnderflow => InstructionError::ArithmeticOverflow,
+        }
+    }
+}
