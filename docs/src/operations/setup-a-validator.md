@@ -435,6 +435,8 @@ Refer to `agave-validator --help` for more information on what each flag is
 doing in this script. Also refer to the section on
 [best practices for operating a validator](./best-practices/general.md).
 
+This startup script is specifically intended for testnet. For more startup script examples intended for other clusters, refer to the
+[clusters section.](./../clusters/available.md).
 ## Verifying Your Validator Is Working
 
 Test that your `validator.sh` file is running properly by executing the
