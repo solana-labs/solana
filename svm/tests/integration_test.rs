@@ -2,8 +2,9 @@
 
 use {
     crate::mock_bank::{
-        create_executable_environment, deploy_program, program_address, register_builtins,
-        MockBankCallback, MockForkGraph, WALLCLOCK_TIME,
+        create_executable_environment, deploy_program, deploy_program_with_upgrade_authority,
+        program_address, register_builtins, MockBankCallback, MockForkGraph, EXECUTION_EPOCH,
+        EXECUTION_SLOT, WALLCLOCK_TIME,
     },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
@@ -42,8 +43,6 @@ use {
 mod mock_bank;
 
 const DEPLOYMENT_SLOT: u64 = 0;
-const EXECUTION_SLOT: u64 = 5; // The execution slot must be greater than the deployment slot
-const EXECUTION_EPOCH: u64 = 2; // The execution epoch must be greater than the deployment epoch
 const LAMPORTS_PER_SIGNATURE: u64 = 5000;
 const LAST_BLOCKHASH: Hash = Hash::new_from_array([7; 32]); // Arbitrary constant hash for advancing nonces
 
@@ -55,8 +54,8 @@ pub struct SvmTestEntry {
     // features are disabled by default; these will be enabled
     pub enabled_features: Vec<Pubkey>,
 
-    // programs to deploy to the new svm before transaction execution
-    pub initial_programs: Vec<(String, Slot)>,
+    // programs to deploy to the new svm
+    pub initial_programs: Vec<(String, Slot, Option<Pubkey>)>,
 
     // accounts to deploy to the new svm before transaction execution
     pub initial_accounts: AccountsMap,
@@ -79,6 +78,12 @@ impl SvmTestEntry {
             .is_none());
 
         self.create_expected_account(pubkey, account);
+    }
+
+    // add an immutable program that will have been deployed before the slot we execute transactions in
+    pub fn add_initial_program(&mut self, program_name: &str) {
+        self.initial_programs
+            .push((program_name.to_string(), DEPLOYMENT_SLOT, None));
     }
 
     // add a new rent-exempt account that is created by the transaction
@@ -338,11 +343,9 @@ fn program_medley() -> Vec<SvmTestEntry> {
 
     // 0: A transaction that works without any account
     {
-        let program_name = "hello-solana".to_string();
-        let program_id = program_address(&program_name);
-        test_entry
-            .initial_programs
-            .push((program_name, DEPLOYMENT_SLOT));
+        let program_name = "hello-solana";
+        let program_id = program_address(program_name);
+        test_entry.add_initial_program(program_name);
 
         let fee_payer_keypair = Keypair::new();
         let fee_payer = fee_payer_keypair.pubkey();
@@ -369,11 +372,9 @@ fn program_medley() -> Vec<SvmTestEntry> {
 
     // 1: A simple funds transfer between accounts
     {
-        let program_name = "simple-transfer".to_string();
-        let program_id = program_address(&program_name);
-        test_entry
-            .initial_programs
-            .push((program_name, DEPLOYMENT_SLOT));
+        let program_name = "simple-transfer";
+        let program_id = program_address(program_name);
+        test_entry.add_initial_program(program_name);
 
         let fee_payer_keypair = Keypair::new();
         let sender_keypair = Keypair::new();
@@ -420,11 +421,9 @@ fn program_medley() -> Vec<SvmTestEntry> {
 
     // 2: A program that utilizes a Sysvar
     {
-        let program_name = "clock-sysvar".to_string();
-        let program_id = program_address(&program_name);
-        test_entry
-            .initial_programs
-            .push((program_name, DEPLOYMENT_SLOT));
+        let program_name = "clock-sysvar";
+        let program_id = program_address(program_name);
+        test_entry.add_initial_program(program_name);
 
         let fee_payer_keypair = Keypair::new();
         let fee_payer = fee_payer_keypair.pubkey();
@@ -656,11 +655,9 @@ fn simple_nonce(enable_fee_only_transactions: bool, fee_paying_nonce: bool) -> V
             .push(feature_set::enable_transaction_loading_failure_fees::id());
     }
 
-    let program_name = "hello-solana".to_string();
-    let real_program_id = program_address(&program_name);
-    test_entry
-        .initial_programs
-        .push((program_name, DEPLOYMENT_SLOT));
+    let program_name = "hello-solana";
+    let real_program_id = program_address(program_name);
+    test_entry.add_initial_program(program_name);
 
     // create and return a transaction, fee payer, and nonce info
     // sets up initial account states but not final ones
@@ -863,8 +860,8 @@ fn svm_integration(test_entries: Vec<SvmTestEntry>) {
 fn execute_test_entry(test_entry: SvmTestEntry) {
     let mock_bank = MockBankCallback::default();
 
-    for (name, slot) in &test_entry.initial_programs {
-        deploy_program(name.to_string(), *slot, &mock_bank);
+    for (name, slot, authority) in &test_entry.initial_programs {
+        deploy_program_with_upgrade_authority(name.to_string(), *slot, &mock_bank, *authority);
     }
 
     for (pubkey, account) in &test_entry.initial_accounts {
