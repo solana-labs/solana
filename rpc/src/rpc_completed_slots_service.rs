@@ -1,5 +1,5 @@
 use {
-    crate::rpc_subscriptions::RpcSubscriptions,
+    crate::{rpc_subscriptions::RpcSubscriptions, slot_status_notifier::SlotStatusNotifier},
     crossbeam_channel::RecvTimeoutError,
     solana_ledger::blockstore::CompletedSlotsReceiver,
     solana_rpc_client_api::response::SlotUpdate,
@@ -21,6 +21,7 @@ impl RpcCompletedSlotsService {
     pub fn spawn(
         completed_slots_receiver: CompletedSlotsReceiver,
         rpc_subscriptions: Arc<RpcSubscriptions>,
+        slot_status_notifier: Option<SlotStatusNotifier>,
         exit: Arc<AtomicBool>,
     ) -> JoinHandle<()> {
         Builder::new()
@@ -45,6 +46,9 @@ impl RpcCompletedSlotsService {
                                 slot,
                                 timestamp: timestamp(),
                             });
+                            if let Some(slot_status_notifier) = &slot_status_notifier {
+                                slot_status_notifier.read().unwrap().notify_completed(slot);
+                            }
                         }
                     }
                 }

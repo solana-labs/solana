@@ -9,7 +9,6 @@ use {
     lru::LruCache,
     rand::Rng,
     rayon::{prelude::*, ThreadPool, ThreadPoolBuilder},
-    solana_geyser_plugin_manager::slot_status_notifier::SlotStatusNotifier,
     solana_gossip::{cluster_info::ClusterInfo, contact_info::Protocol},
     solana_ledger::{
         leader_schedule_cache::LeaderScheduleCache,
@@ -18,7 +17,10 @@ use {
     solana_measure::measure::Measure,
     solana_perf::deduper::Deduper,
     solana_rayon_threadlimit::get_thread_count,
-    solana_rpc::{max_slots::MaxSlots, rpc_subscriptions::RpcSubscriptions},
+    solana_rpc::{
+        max_slots::MaxSlots, rpc_subscriptions::RpcSubscriptions,
+        slot_status_notifier::SlotStatusNotifier,
+    },
     solana_rpc_client_api::response::SlotUpdate,
     solana_runtime::{
         bank::{Bank, MAX_LEADER_SCHEDULE_STAKES},

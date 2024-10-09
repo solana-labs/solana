@@ -1091,19 +1091,21 @@ impl Validator {
                     )
                 };
 
-            let rpc_completed_slots_service = if !config.rpc_config.full_api {
-                None
-            } else {
-                let (completed_slots_sender, completed_slots_receiver) =
-                    bounded(MAX_COMPLETED_SLOTS_IN_CHANNEL);
-                blockstore.add_completed_slots_signal(completed_slots_sender);
+            let rpc_completed_slots_service =
+                if config.rpc_config.full_api || geyser_plugin_service.is_some() {
+                    let (completed_slots_sender, completed_slots_receiver) =
+                        bounded(MAX_COMPLETED_SLOTS_IN_CHANNEL);
+                    blockstore.add_completed_slots_signal(completed_slots_sender);
 
-                Some(RpcCompletedSlotsService::spawn(
-                    completed_slots_receiver,
-                    rpc_subscriptions.clone(),
-                    exit.clone(),
-                ))
-            };
+                    Some(RpcCompletedSlotsService::spawn(
+                        completed_slots_receiver,
+                        rpc_subscriptions.clone(),
+                        slot_status_notifier.clone(),
+                        exit.clone(),
+                    ))
+                } else {
+                    None
+                };
 
             let optimistically_confirmed_bank_tracker =
                 Some(OptimisticallyConfirmedBankTracker::new(

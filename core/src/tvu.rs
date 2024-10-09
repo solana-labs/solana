@@ -25,10 +25,7 @@ use {
     bytes::Bytes,
     crossbeam_channel::{unbounded, Receiver, Sender},
     solana_client::connection_cache::ConnectionCache,
-    solana_geyser_plugin_manager::{
-        block_metadata_notifier_interface::BlockMetadataNotifierArc,
-        slot_status_notifier::SlotStatusNotifier,
-    },
+    solana_geyser_plugin_manager::block_metadata_notifier_interface::BlockMetadataNotifierArc,
     solana_gossip::{
         cluster_info::ClusterInfo, duplicate_shred_handler::DuplicateShredHandler,
         duplicate_shred_listener::DuplicateShredListener,
@@ -41,7 +38,7 @@ use {
     solana_poh::poh_recorder::PohRecorder,
     solana_rpc::{
         max_slots::MaxSlots, optimistically_confirmed_bank_tracker::BankNotificationSenderConfig,
-        rpc_subscriptions::RpcSubscriptions,
+        rpc_subscriptions::RpcSubscriptions, slot_status_notifier::SlotStatusNotifier,
     },
     solana_runtime::{
         accounts_background_service::AbsRequestSender, bank_forks::BankForks,

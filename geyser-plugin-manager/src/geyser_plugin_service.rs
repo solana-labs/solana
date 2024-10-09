@@ -5,7 +5,7 @@ use {
         block_metadata_notifier_interface::BlockMetadataNotifierArc,
         entry_notifier::EntryNotifierImpl,
         geyser_plugin_manager::{GeyserPluginManager, GeyserPluginManagerRequest},
-        slot_status_notifier::{SlotStatusNotifier, SlotStatusNotifierImpl},
+        slot_status_notifier::SlotStatusNotifierImpl,
         slot_status_observer::SlotStatusObserver,
         transaction_notifier::TransactionNotifierImpl,
     },
@@ -15,6 +15,7 @@ use {
     solana_ledger::entry_notifier_interface::EntryNotifierArc,
     solana_rpc::{
         optimistically_confirmed_bank_tracker::SlotNotification,
+        slot_status_notifier::SlotStatusNotifier,
         transaction_notifier_interface::TransactionNotifierArc,
     },
     std::{
