@@ -5949,6 +5949,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-bincode"
+version = "2.1.0"
+dependencies = [
+ "bincode",
+ "serde",
+ "solana-instruction",
+ "solana-program",
+]
+
+[[package]]
 name = "solana-bloom"
 version = "2.1.0"
 dependencies = [
@@ -7252,6 +7262,7 @@ dependencies = [
  "sha3",
  "solana-account-info",
  "solana-atomic-u64",
+ "solana-bincode",
  "solana-clock",
  "solana-decode-error",
  "solana-define-syscall",

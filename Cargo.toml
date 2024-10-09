@@ -104,6 +104,7 @@ members = [
     "sdk/account",
     "sdk/account-info",
     "sdk/atomic-u64",
+    "sdk/bincode",
     "sdk/cargo-build-sbf",
     "sdk/cargo-test-sbf",
     "sdk/clock",
@@ -375,6 +376,7 @@ solana-banks-client = { path = "banks-client", version = "=2.1.0" }
 solana-banks-interface = { path = "banks-interface", version = "=2.1.0" }
 solana-banks-server = { path = "banks-server", version = "=2.1.0" }
 solana-bench-tps = { path = "bench-tps", version = "=2.1.0" }
+solana-bincode = { path = "sdk/bincode", version = "=2.1.0" }
 solana-bloom = { path = "bloom", version = "=2.1.0" }
 solana-bn254 = { path = "curves/bn254", version = "=2.1.0" }
 solana-bpf-loader-program = { path = "programs/bpf_loader", version = "=2.1.0" }
