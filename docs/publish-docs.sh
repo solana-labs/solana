@@ -142,7 +142,7 @@ cat > "$CONFIG_FILE" <<EOF
     { "destination": "https://solana.com/docs/intro/history", "source": "/history" },
     { "destination": "https://solana.com/docs/intro/wallets", "source": "/wallet-guide/support" },
     { "destination": "https://solana.com/docs/intro/wallets", "source": "/wallet-guide" },
-    { "destination": "https://solana.com/docs/intro", "source": "/introduction" }
+    { "destination": "https://solana.com/docs/intro", "source": "/introduction" },
     { "destination": "https://docs.anza.xyz/implemented-proposals/ed_overview", "source": "/implemented-proposals/ed_overview"}
   ]
 }
