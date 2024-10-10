@@ -130,6 +130,7 @@ mod tests {
         let a = LtHash::new_random();
         let b = LtHash::new_random();
         assert_eq!(a, a + b - b);
+        assert_eq!(a, a - b + b);
     }
 
     // Ensure that mixing is commutative
@@ -147,6 +148,16 @@ mod tests {
         let b = LtHash::new_random();
         let c = LtHash::new_random();
         assert_eq!((a + b) + c, a + (b + c));
+    }
+
+    // Ensure that mixing out respects distribution
+    #[test]
+    fn test_distribute() {
+        let a = LtHash::new_random();
+        let b = LtHash::new_random();
+        let c = LtHash::new_random();
+        let d = LtHash::new_random();
+        assert_eq!(a - b - c - d, a - (b + c + d));
     }
 
     // Ensure the correct lattice hash and checksum values are produced
