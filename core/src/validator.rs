@@ -846,6 +846,16 @@ impl Validator {
             "Using: block-verification-method: {}, block-production-method: {}",
             config.block_verification_method, config.block_production_method
         );
+        if matches!(
+            config.block_production_method,
+            BlockProductionMethod::ThreadLocalMultiIterator
+        ) {
+            warn!(
+                "--block-production-method thread-local-multi-iterator is deprecated \
+                   and will be removed in a future release. Please use \
+                   --block-production-method=central-scheduler instead."
+            );
+        }
 
         let (replay_vote_sender, replay_vote_receiver) = unbounded();
 

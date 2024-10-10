@@ -41,6 +41,7 @@ The order of precedence for the chosen tools version goes: `--tools-version` arg
   * `solana-test-validator`: Add `--clone-feature-set` flag to mimic features from a target cluster (#2480)
   * `solana-genesis`: the `--cluster-type` parameter now clones the feature set from the target cluster (#2587)
   * `unified-scheduler` as default option for `--block-verification-method` (#2653)
+  * warn that `thread-local-multi-iterator` option for `--block-production-method` is deprecated (#3113)
 
 ## [2.0.0]
 * Breaking
