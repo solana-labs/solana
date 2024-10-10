@@ -415,7 +415,6 @@ fn load_transaction_account<CB: TransactionProcessingCallback>(
     loaded_programs: &ProgramCacheForTxBatch,
 ) -> Result<(LoadedTransactionAccount, bool)> {
     let mut account_found = true;
-    let mut was_inspected = false;
     let is_instruction_account = u8::try_from(account_index)
         .map(|i| instruction_accounts.contains(&&i))
         .unwrap_or(false);
@@ -454,17 +453,11 @@ fn load_transaction_account<CB: TransactionProcessingCallback>(
         callbacks
             .get_account_shared_data(account_key)
             .map(|mut account| {
-                let rent_collected = if is_writable {
-                    // Inspect the account prior to collecting rent, since
-                    // rent collection can modify the account.
-                    debug_assert!(!was_inspected);
-                    callbacks.inspect_account(
-                        account_key,
-                        AccountState::Alive(&account),
-                        is_writable,
-                    );
-                    was_inspected = true;
+                // Inspect the account prior to collecting rent, since
+                // rent collection can modify the account.
+                callbacks.inspect_account(account_key, AccountState::Alive(&account), is_writable);
 
+                let rent_collected = if is_writable {
                     collect_rent_from_account(
                         feature_set,
                         rent_collector,
@@ -483,8 +476,11 @@ fn load_transaction_account<CB: TransactionProcessingCallback>(
                 }
             })
             .unwrap_or_else(|| {
+                callbacks.inspect_account(account_key, AccountState::Dead, is_writable);
+
                 account_found = false;
                 let mut default_account = AccountSharedData::default();
+
                 // All new accounts must be rent-exempt (enforced in Bank::execute_loaded_transaction).
                 // Currently, rent collection sets rent_epoch to u64::MAX, but initializing the account
                 // with this field already set would allow us to skip rent collection for these accounts.
@@ -496,15 +492,6 @@ fn load_transaction_account<CB: TransactionProcessingCallback>(
                 }
             })
     };
-
-    if !was_inspected {
-        let account_state = if account_found {
-            AccountState::Alive(&loaded_account.account)
-        } else {
-            AccountState::Dead
-        };
-        callbacks.inspect_account(account_key, account_state, is_writable);
-    }
 
     Ok((loaded_account, account_found))
 }

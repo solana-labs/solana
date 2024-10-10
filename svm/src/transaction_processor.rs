@@ -426,21 +426,23 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         })?;
 
         let fee_payer_address = message.fee_payer();
+        let mut fee_payer_account = if let Some(fee_payer_account) =
+            account_overrides.and_then(|overrides| overrides.get(fee_payer_address).cloned())
+        {
+            fee_payer_account
+        } else if let Some(fee_payer_account) = callbacks.get_account_shared_data(fee_payer_address)
+        {
+            callbacks.inspect_account(
+                fee_payer_address,
+                AccountState::Alive(&fee_payer_account),
+                true, // <-- is_writable
+            );
 
-        let fee_payer_account = account_overrides
-            .and_then(|overrides| overrides.get(fee_payer_address).cloned())
-            .or_else(|| callbacks.get_account_shared_data(fee_payer_address));
-
-        let Some(mut fee_payer_account) = fee_payer_account else {
+            fee_payer_account
+        } else {
             error_counters.account_not_found += 1;
             return Err(TransactionError::AccountNotFound);
         };
-
-        callbacks.inspect_account(
-            fee_payer_address,
-            AccountState::Alive(&fee_payer_account),
-            true, // <-- is_writable
-        );
 
         let fee_payer_loaded_rent_epoch = fee_payer_account.rent_epoch();
         let fee_payer_rent_debit = collect_rent_from_account(

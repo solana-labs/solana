@@ -1192,26 +1192,18 @@ fn svm_inspect_account() {
         );
     }
 
-    // The transfer program account is also loaded during transaction processing, however the
-    // account state passed to `inspect_account()` is *not* the same as what is held by
-    // MockBankCallback::account_shared_data.  So we check the transfer program differently.
-    //
-    // First ensure we have the correct number of inspected accounts, correctly counting the
-    // transfer program.
+    // The transfer program account is retreived from the program cache, which does not
+    // inspect accounts, because they are necessarily read-only. Verify it has not made
+    // its way into the inspected accounts list.
     let num_expected_inspected_accounts: usize =
         expected_inspected_accounts.values().map(Vec::len).sum();
     let num_actual_inspected_accounts: usize =
         actual_inspected_accounts.values().map(Vec::len).sum();
+
     assert_eq!(
-        num_expected_inspected_accounts + 2,
+        num_expected_inspected_accounts,
         num_actual_inspected_accounts,
     );
 
-    // And second, ensure the inspected transfer program accounts are alive and not writable.
-    let actual_transfer_program_accounts =
-        actual_inspected_accounts.get(&transfer_program).unwrap();
-    for actual_transfer_program_account in actual_transfer_program_accounts {
-        assert!(actual_transfer_program_account.0.is_some());
-        assert!(!actual_transfer_program_account.1);
-    }
+    assert!(!actual_inspected_accounts.contains_key(&transfer_program));
 }
