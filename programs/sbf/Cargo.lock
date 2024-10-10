@@ -5250,6 +5250,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-epoch-schedule"
+version = "2.1.0"
+dependencies = [
+ "serde",
+ "serde_derive",
+ "solana-sdk-macro",
+]
+
+[[package]]
 name = "solana-faucet"
 version = "2.1.0"
 dependencies = [
@@ -5666,6 +5675,7 @@ dependencies = [
  "solana-clock",
  "solana-decode-error",
  "solana-define-syscall",
+ "solana-epoch-schedule",
  "solana-hash",
  "solana-instruction",
  "solana-msg",
