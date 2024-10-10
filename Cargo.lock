@@ -7285,6 +7285,7 @@ dependencies = [
  "solana-serialize-utils",
  "solana-sha256-hasher",
  "solana-short-vec",
+ "solana-slot-hashes",
  "static_assertions",
  "test-case",
  "thiserror",
@@ -7969,6 +7970,16 @@ dependencies = [
  "solana-frozen-abi-macro",
  "solana-program",
  "solana-sanitize",
+]
+
+[[package]]
+name = "solana-slot-hashes"
+version = "2.1.0"
+dependencies = [
+ "serde",
+ "serde_derive",
+ "solana-hash",
+ "solana-sha256-hasher",
 ]
 
 [[package]]

@@ -5682,6 +5682,7 @@ dependencies = [
  "solana-serialize-utils",
  "solana-sha256-hasher",
  "solana-short-vec",
+ "solana-slot-hashes",
  "thiserror",
  "wasm-bindgen",
 ]
@@ -6719,6 +6720,15 @@ dependencies = [
  "serde",
  "serde_derive",
  "solana-sanitize",
+]
+
+[[package]]
+name = "solana-slot-hashes"
+version = "2.1.0"
+dependencies = [
+ "serde",
+ "serde_derive",
+ "solana-hash",
 ]
 
 [[package]]
