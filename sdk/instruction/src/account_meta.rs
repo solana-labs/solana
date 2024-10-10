@@ -14,6 +14,8 @@ use solana_pubkey::Pubkey;
 /// default [`AccountMeta::new`] constructor creates writable accounts, this is
 /// a minor hazard: use [`AccountMeta::new_readonly`] to specify that an account
 /// is not writable.
+///
+/// [`Instruction`]: crate::Instruction
 #[repr(C)]
 #[cfg_attr(
     feature = "serde",
