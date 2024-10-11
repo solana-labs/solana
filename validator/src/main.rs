@@ -1901,6 +1901,13 @@ pub fn main() {
         return;
     }
 
+    // Bootstrap code above pushes a contact-info with more recent timestamp to
+    // gossip. If the node is staked the contact-info lingers in gossip causing
+    // false duplicate nodes error.
+    // Below line refreshes the timestamp on contact-info so that it overrides
+    // the one pushed by bootstrap.
+    node.info.hot_swap_pubkey(identity_keypair.pubkey());
+
     let validator = Validator::new(
         node,
         identity_keypair,
