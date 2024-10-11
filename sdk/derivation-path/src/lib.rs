@@ -17,7 +17,6 @@ use {
         fmt,
         str::FromStr,
     },
-    thiserror::Error,
     uriparse::URIReference,
 };
 
@@ -25,12 +24,23 @@ const ACCOUNT_INDEX: usize = 2;
 const CHANGE_INDEX: usize = 3;
 
 /// Derivation path error.
-#[derive(Error, Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DerivationPathError {
-    #[error("invalid derivation path: {0}")]
     InvalidDerivationPath(String),
-    #[error("infallible")]
     Infallible,
+}
+
+impl std::error::Error for DerivationPathError {}
+
+impl fmt::Display for DerivationPathError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            DerivationPathError::InvalidDerivationPath(p) => {
+                write!(f, "invalid derivation path: {p}",)
+            }
+            DerivationPathError::Infallible => f.write_str("infallible"),
+        }
+    }
 }
 
 impl From<Infallible> for DerivationPathError {
@@ -211,9 +221,16 @@ impl<'a> IntoIterator for &'a DerivationPath {
 const QUERY_KEY_FULL_PATH: &str = "full-path";
 const QUERY_KEY_KEY: &str = "key";
 
-#[derive(Clone, Debug, Error, PartialEq, Eq)]
-#[error("invalid query key `{0}`")]
+#[derive(Clone, Debug, PartialEq, Eq)]
 struct QueryKeyError(String);
+
+impl std::error::Error for QueryKeyError {}
+
+impl fmt::Display for QueryKeyError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "invalid query key `{}`", self.0)
+    }
+}
 
 enum QueryKey {
     FullPath,

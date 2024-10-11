@@ -6522,7 +6522,6 @@ dependencies = [
  "assert_matches",
  "derivation-path",
  "qstring",
- "thiserror",
  "uriparse",
 ]
 

@@ -12,7 +12,6 @@ edition = { workspace = true }
 [dependencies]
 derivation-path = { workspace = true }
 qstring = { workspace = true }
-thiserror = { workspace = true }
 uriparse = { workspace = true }
 
 [dev-dependencies]
