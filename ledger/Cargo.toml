@@ -14,6 +14,7 @@ assert_matches = { workspace = true }
 bincode = { workspace = true }
 bitflags = { workspace = true, features = ["serde"] }
 byteorder = { workspace = true }
+bzip2 = { workspace = true }
 chrono = { workspace = true, features = ["default", "serde"] }
 chrono-humanize = { workspace = true }
 crossbeam-channel = { workspace = true }
@@ -73,6 +74,7 @@ spl-token-2022 = { workspace = true, features = ["no-entrypoint"] }
 static_assertions = { workspace = true }
 strum = { workspace = true, features = ["derive"] }
 strum_macros = { workspace = true }
+tar = { workspace = true }
 tempfile = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
