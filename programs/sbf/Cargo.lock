@@ -5427,6 +5427,7 @@ version = "2.1.0"
 dependencies = [
  "base64 0.22.1",
  "blake3",
+ "bs58",
  "bytemuck",
 ]
 

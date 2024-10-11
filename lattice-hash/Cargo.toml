@@ -10,6 +10,7 @@ edition = { workspace = true }
 [dependencies]
 base64 = { workspace = true }
 blake3 = { workspace = true }
+bs58 = { workspace = true }
 bytemuck = { workspace = true, features = ["must_cast"] }
 
 [dev-dependencies]
