@@ -18,8 +18,8 @@ use num_traits::FromPrimitive;
 /// `FromPrimitive`, it is only used correctly when the caller is certain of the
 /// original error type.
 ///
-/// [`ProgramError`]: crate::program_error::ProgramError
-/// [`ProgramError::Custom`]: crate::program_error::ProgramError::Custom
+/// [`ProgramError`]: https://docs.rs/solana-program-error/latest/solana_program_error/enum.ProgramError.html
+/// [`ProgramError::Custom`]: https://docs.rs/solana-program-error/latest/solana_program_error/enum.ProgramError.html#variant.Custom
 /// [`ToPrimitive`]: num_traits::ToPrimitive
 pub trait DecodeError<E> {
     fn decode_custom_error_to_enum(custom: u32) -> Option<E>
