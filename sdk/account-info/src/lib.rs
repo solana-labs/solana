@@ -1,5 +1,5 @@
 //! Account information.
-
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 use {
     solana_program_error::ProgramError,
     solana_program_memory::sol_memset,

@@ -1,4 +1,5 @@
 #![cfg_attr(feature = "frozen-abi", feature(min_specialization))]
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 //! The Solana [`Account`] type.
 
 #[cfg(feature = "dev-context-only-utils")]

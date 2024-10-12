@@ -1,6 +1,7 @@
 //! The [`ProgramError`] type and related definitions.
 
 #![allow(clippy::arithmetic_side_effects)]
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 #[cfg(feature = "borsh")]
 use borsh::io::Error as BorshIoError;
 #[cfg(feature = "serde")]
