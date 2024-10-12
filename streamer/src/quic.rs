@@ -153,7 +153,7 @@ pub(crate) fn configure_server(
     Ok((server_config, cert_chain_pem))
 }
 
-fn rt(name: String) -> Runtime {
+pub fn rt(name: String) -> Runtime {
     tokio::runtime::Builder::new_multi_thread()
         .thread_name(name)
         .enable_all()

@@ -136,13 +136,7 @@ pub struct SpawnTestServerResult {
 
 pub fn setup_quic_server(
     option_staked_nodes: Option<StakedNodes>,
-    TestServerConfig {
-        max_connections_per_peer,
-        max_staked_connections,
-        max_unstaked_connections,
-        max_streams_per_ms,
-        max_connections_per_ipaddr_per_minute,
-    }: TestServerConfig,
+    config: TestServerConfig,
 ) -> SpawnTestServerResult {
     let sockets = {
         #[cfg(not(target_os = "windows"))]
@@ -171,7 +165,20 @@ pub fn setup_quic_server(
             vec![UdpSocket::bind("127.0.0.1:0").unwrap()]
         }
     };
+    setup_quic_server_with_sockets(sockets, option_staked_nodes, config)
+}
 
+pub fn setup_quic_server_with_sockets(
+    sockets: Vec<UdpSocket>,
+    option_staked_nodes: Option<StakedNodes>,
+    TestServerConfig {
+        max_connections_per_peer,
+        max_staked_connections,
+        max_unstaked_connections,
+        max_streams_per_ms,
+        max_connections_per_ipaddr_per_minute,
+    }: TestServerConfig,
+) -> SpawnTestServerResult {
     let exit = Arc::new(AtomicBool::new(false));
     let (sender, receiver) = unbounded();
     let keypair = Keypair::new();
