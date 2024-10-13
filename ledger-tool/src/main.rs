@@ -1923,11 +1923,11 @@ fn main() {
                     let is_minimized = arg_matches.is_present("minimized");
                     let output_directory = value_t!(arg_matches, "output_directory", PathBuf)
                         .unwrap_or_else(|_| {
-                            let snapshot_archive_path = value_t!(matches, "snapshots", String)
+                            let snapshot_archive_path = value_t!(arg_matches, "snapshots", String)
                                 .ok()
                                 .map(PathBuf::from);
                             let incremental_snapshot_archive_path =
-                                value_t!(matches, "incremental_snapshot_archive_path", String)
+                                value_t!(arg_matches, "incremental_snapshot_archive_path", String)
                                     .ok()
                                     .map(PathBuf::from);
                             match (
