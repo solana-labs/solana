@@ -305,6 +305,12 @@ impl Pubkey {
         Self(pubkey_array)
     }
 
+    /// Decode a string into a Pubkey, usable in a const context
+    pub const fn from_str_const(s: &str) -> Self {
+        let id_array = five8_const::decode_32_const(s);
+        Pubkey::new_from_array(id_array)
+    }
+
     /// unique Pubkey for tests and benchmarks.
     pub fn new_unique() -> Self {
         use solana_atomic_u64::AtomicU64;
@@ -1009,6 +1015,105 @@ impl Pubkey {
     }
 }
 
+/// Convenience macro to declare a static public key and functions to interact with it.
+///
+/// Input: a single literal base58 string representation of a program's ID.
+///
+/// # Example
+///
+/// ```
+/// # // wrapper is used so that the macro invocation occurs in the item position
+/// # // rather than in the statement position which isn't allowed.
+/// use std::str::FromStr;
+/// use solana_pubkey::{declare_id, Pubkey};
+///
+/// # mod item_wrapper {
+/// #   use solana_pubkey::declare_id;
+/// declare_id!("My11111111111111111111111111111111111111111");
+/// # }
+/// # use item_wrapper::id;
+///
+/// let my_id = Pubkey::from_str("My11111111111111111111111111111111111111111").unwrap();
+/// assert_eq!(id(), my_id);
+/// ```
+#[macro_export]
+macro_rules! declare_id {
+    ($address:expr) => {
+        /// The const program ID.
+        pub const ID: $crate::Pubkey = $crate::Pubkey::from_str_const($address);
+
+        /// Returns `true` if given pubkey is the program ID.
+        // TODO make this const once `derive_const` makes it out of nightly
+        // and we can `derive_const(PartialEq)` on `Pubkey`.
+        pub fn check_id(id: &$crate::Pubkey) -> bool {
+            id == &ID
+        }
+
+        /// Returns the program ID.
+        pub const fn id() -> $crate::Pubkey {
+            ID
+        }
+
+        #[cfg(test)]
+        #[test]
+        fn test_id() {
+            assert!(check_id(&id()));
+        }
+    };
+}
+
+/// Same as [`declare_id`] except that it reports that this ID has been deprecated.
+#[macro_export]
+macro_rules! declare_deprecated_id {
+    ($address:expr) => {
+        /// The const program ID.
+        pub const ID: $crate::Pubkey = $crate::Pubkey::from_str_const($address);
+
+        /// Returns `true` if given pubkey is the program ID.
+        // TODO make this const once `derive_const` makes it out of nightly
+        // and we can `derive_const(PartialEq)` on `Pubkey`.
+        #[deprecated()]
+        pub fn check_id(id: &$crate::Pubkey) -> bool {
+            id == &ID
+        }
+
+        /// Returns the program ID.
+        #[deprecated()]
+        pub const fn id() -> $crate::Pubkey {
+            ID
+        }
+
+        #[cfg(test)]
+        #[test]
+        #[allow(deprecated)]
+        fn test_id() {
+            assert!(check_id(&id()));
+        }
+    };
+}
+
+/// Convenience macro to define a static public key.
+///
+/// Input: a single literal base58 string representation of a Pubkey.
+///
+/// # Example
+///
+/// ```
+/// use std::str::FromStr;
+/// use solana_pubkey::{pubkey, Pubkey};
+///
+/// static ID: Pubkey = pubkey!("My11111111111111111111111111111111111111111");
+///
+/// let my_id = Pubkey::from_str("My11111111111111111111111111111111111111111").unwrap();
+/// assert_eq!(ID, my_id);
+/// ```
+#[macro_export]
+macro_rules! pubkey {
+    ($input:literal) => {
+        $crate::Pubkey::from_str_const($input)
+    };
+}
+
 #[cfg(test)]
 mod tests {
     use {super::*, strum::IntoEnumIterator};
@@ -1278,5 +1383,15 @@ mod tests {
                 ParsePubkeyError::from_i64(variant_i64)
             );
         }
+    }
+
+    #[test]
+    fn test_pubkey_macro() {
+        const PK: Pubkey = Pubkey::from_str_const("9h1HyLCW5dZnBVap8C5egQ9Z6pHyjsh5MNy83iPqqRuq");
+        assert_eq!(pubkey!("9h1HyLCW5dZnBVap8C5egQ9Z6pHyjsh5MNy83iPqqRuq"), PK);
+        assert_eq!(
+            Pubkey::from_str("9h1HyLCW5dZnBVap8C5egQ9Z6pHyjsh5MNy83iPqqRuq").unwrap(),
+            PK
+        );
     }
 }

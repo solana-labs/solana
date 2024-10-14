@@ -16,6 +16,7 @@ borsh0-10 = { package = "borsh", version = "0.10.3", optional = true }
 bs58 = { workspace = true }
 bytemuck = { workspace = true, optional = true }
 bytemuck_derive = { workspace = true, optional = true }
+five8_const = { workspace = true }
 num-traits = { workspace = true }
 serde = { workspace = true, optional = true }
 serde_derive = { workspace = true, optional = true }

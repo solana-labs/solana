@@ -180,12 +180,14 @@ impl ToTokens for ProgramSdkIdDeprecated {
     }
 }
 
+#[deprecated(since = "2.1.0", note = "Use `solana_pubkey::pubkey` instead")]
 #[proc_macro]
 pub fn pubkey(input: TokenStream) -> TokenStream {
     let id = parse_macro_input!(input as SdkPubkey);
     TokenStream::from(quote! {#id})
 }
 
+#[deprecated(since = "2.1.0", note = "Use `solana_pubkey::pubkey!` instead")]
 #[proc_macro]
 pub fn program_pubkey(input: TokenStream) -> TokenStream {
     let id = parse_macro_input!(input as ProgramSdkPubkey);
@@ -204,12 +206,17 @@ pub fn declare_deprecated_id(input: TokenStream) -> TokenStream {
     TokenStream::from(quote! {#id})
 }
 
+#[deprecated(since = "2.1.0", note = "Use `solana_pubkey::declare_id` instead")]
 #[proc_macro]
 pub fn program_declare_id(input: TokenStream) -> TokenStream {
     let id = parse_macro_input!(input as ProgramSdkId);
     TokenStream::from(quote! {#id})
 }
 
+#[deprecated(
+    since = "2.1.0",
+    note = "Use `solana_pubkey::declare_deprecated_id` instead"
+)]
 #[proc_macro]
 pub fn program_declare_deprecated_id(input: TokenStream) -> TokenStream {
     let id = parse_macro_input!(input as ProgramSdkIdDeprecated);

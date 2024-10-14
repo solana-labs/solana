@@ -2285,6 +2285,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "five8_const"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72b4f62f0f8ca357f93ae90c8c2dd1041a1f665fde2f889ea9b1787903829015"
+dependencies = [
+ "five8_core",
+]
+
+[[package]]
+name = "five8_core"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9b2a72055cd9cffc40c9f75f1e5810c80559e158796cf2202292ce4745889588"
+
+[[package]]
 name = "fixedbitset"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7255,6 +7270,7 @@ dependencies = [
  "console_error_panic_hook",
  "console_log",
  "curve25519-dalek 4.1.3",
+ "five8_const",
  "getrandom 0.2.10",
  "itertools 0.12.1",
  "js-sys",
@@ -7422,6 +7438,7 @@ dependencies = [
  "bytemuck",
  "bytemuck_derive",
  "curve25519-dalek 4.1.3",
+ "five8_const",
  "getrandom 0.2.10",
  "js-sys",
  "num-traits",
@@ -7868,6 +7885,7 @@ dependencies = [
  "solana-logger",
  "solana-program",
  "solana-program-memory",
+ "solana-pubkey",
  "solana-sanitize",
  "solana-sdk",
  "solana-sdk-macro",

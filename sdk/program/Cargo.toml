@@ -20,6 +20,7 @@ bs58 = { workspace = true, features = ["alloc"] }
 bv = { workspace = true, features = ["serde"] }
 bytemuck = { workspace = true }
 bytemuck_derive = { workspace = true }
+five8_const = { workspace = true }
 lazy_static = { workspace = true }
 log = { workspace = true }
 memoffset = { workspace = true }
