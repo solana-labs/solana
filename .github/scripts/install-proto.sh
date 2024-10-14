@@ -6,8 +6,6 @@ os_name="$1"
 
 case "$os_name" in
 "Windows")
-  vcpkg install openssl:x64-windows-static-md
-  vcpkg integrate install
   choco install protoc
   export PROTOC='C:\ProgramData\chocolatey\lib\protoc\tools\bin\protoc.exe'
   ;;

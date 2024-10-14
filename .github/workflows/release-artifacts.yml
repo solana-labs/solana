@@ -39,14 +39,19 @@ jobs:
         run: |
           git checkout ${{ inputs.commit }}
 
+      # took the workaround from https://github.com/sfackler/rust-openssl/issues/2149
+      - name: Set Perl environment variables
+        run: |
+          echo "PERL=$((where.exe perl)[0])" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          echo "OPENSSL_SRC_PERL=$((where.exe perl)[0])" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
       - name: Build
         id: build
         shell: bash
         run: |
-          vcpkg install openssl:x64-windows-static-md
-          vcpkg integrate install
-          choco install protoc
-          export PROTOC="C:\ProgramData\chocolatey\lib\protoc\tools\bin\protoc.exe"
+          # install all deps
+          source .github/scripts/install-all-deps.sh ${{ runner.os }}
+
           source /tmp/env.sh
           echo "tag=$CI_TAG" >> $GITHUB_OUTPUT
           eval "$(ci/channel-info.sh)"

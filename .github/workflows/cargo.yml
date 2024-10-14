@@ -41,11 +41,16 @@ jobs:
         with:
           version: "v0.8.1"
 
-      - shell: bash
-        run: .github/scripts/cargo-clippy-before-script.sh ${{ runner.os }}
+      # took the workaround from https://github.com/sfackler/rust-openssl/issues/2149
+      - name: Set Perl environment variables
+        if: runner.os == 'Windows'
+        run: |
+          echo "PERL=$((where.exe perl)[0])" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          echo "OPENSSL_SRC_PERL=$((where.exe perl)[0])" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - shell: bash
         run: |
+          source .github/scripts/install-all-deps.sh ${{ runner.os }}
           source ci/rust-version.sh nightly
           rustup component add clippy --toolchain "$rust_nightly"
           scripts/cargo-clippy-nightly.sh
