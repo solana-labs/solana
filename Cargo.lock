@@ -8408,6 +8408,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-tpu-client-next"
+version = "2.1.0"
+dependencies = [
+ "async-trait",
+ "crossbeam-channel",
+ "futures 0.3.31",
+ "log",
+ "lru",
+ "quinn",
+ "rustls 0.23.14",
+ "solana-cli-config",
+ "solana-connection-cache",
+ "solana-logger",
+ "solana-measure",
+ "solana-rpc-client",
+ "solana-sdk",
+ "solana-streamer",
+ "solana-tpu-client",
+ "thiserror",
+ "tokio",
+ "tokio-util 0.7.12",
+]
+
+[[package]]
 name = "solana-transaction-dos"
 version = "2.1.0"
 dependencies = [

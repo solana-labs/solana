@@ -1,0 +1,34 @@
+[package]
+name = "solana-tpu-client-next"
+description = "Client code to send transaction to TPU."
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+async-trait = { workspace = true }
+log = { workspace = true }
+lru = { workspace = true }
+quinn = { workspace = true }
+rustls = { workspace = true }
+solana-connection-cache = { workspace = true }
+solana-logger = { workspace = true }
+solana-measure = { workspace = true }
+solana-rpc-client = { workspace = true }
+solana-sdk = { workspace = true }
+solana-streamer = { workspace = true }
+solana-tpu-client = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+
+[dev-dependencies]
+crossbeam-channel = { workspace = true }
+futures = { workspace = true }
+solana-cli-config = { workspace = true }
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

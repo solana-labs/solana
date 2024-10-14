@@ -148,6 +148,7 @@ members = [
     "tokens",
     "tps-client",
     "tpu-client",
+    "tpu-client-next",
     "transaction-dos",
     "transaction-metrics-tracker",
     "transaction-status",
