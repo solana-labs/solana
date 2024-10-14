@@ -80,7 +80,7 @@ use {
     seqlock::SeqLock,
     smallvec::SmallVec,
     solana_lattice_hash::lt_hash::LtHash,
-    solana_measure::{measure::Measure, measure_us},
+    solana_measure::{meas_dur, measure::Measure, measure_us},
     solana_nohash_hasher::{IntMap, IntSet},
     solana_rayon_threadlimit::get_thread_count,
     solana_sdk::{
@@ -654,6 +654,9 @@ pub enum ScanStorageResult<R, B> {
 pub struct IndexGenerationInfo {
     pub accounts_data_len: u64,
     pub rent_paying_accounts_by_partition: RentPayingAccountsByPartition,
+    /// The lt hash of the old/duplicate accounts identified during index generation.
+    /// Will be used when verifying the accounts lt hash, after rebuilding a Bank.
+    pub duplicates_lt_hash: Box<DuplicatesLtHash>,
 }
 
 #[derive(Debug, Default)]
@@ -664,6 +667,21 @@ struct SlotIndexGenerationInfo {
     accounts_data_len: u64,
     amount_to_top_off_rent: u64,
     rent_paying_accounts_by_partition: Vec<Pubkey>,
+}
+
+/// The lt hash of old/duplicate accounts
+///
+/// Accumulation of all the duplicate accounts found during index generation.
+/// These accounts need to have their lt hashes mixed *out*.
+/// This is the final value, that when applied to all the storages at startup,
+/// will produce the correct accounts lt hash.
+#[derive(Debug, Clone)]
+pub struct DuplicatesLtHash(pub LtHash);
+
+impl Default for DuplicatesLtHash {
+    fn default() -> Self {
+        Self(LtHash::identity())
+    }
 }
 
 #[derive(Default, Debug)]
@@ -687,6 +705,7 @@ struct GenerateIndexTimings {
     pub populate_duplicate_keys_us: u64,
     pub total_slots: u64,
     pub slots_to_clean: u64,
+    pub par_duplicates_lt_hash_us: AtomicU64,
 }
 
 #[derive(Default, Debug, PartialEq, Eq)]
@@ -761,6 +780,11 @@ impl GenerateIndexTimings {
             (
                 "copy_data_us",
                 startup_stats.copy_data_us.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "par_duplicates_lt_hash_us",
+                self.par_duplicates_lt_hash_us.load(Ordering::Relaxed),
                 i64
             ),
         );
@@ -6467,7 +6491,7 @@ impl AccountsDb {
     ///
     /// Only intended to be called at startup (or by tests).
     /// Only intended to be used while testing the experimental accumulator hash.
-    pub fn calculate_accounts_lt_hash_at_startup(
+    pub fn calculate_accounts_lt_hash_at_startup_from_index(
         &self,
         ancestors: &Ancestors,
         startup_slot: Slot,
@@ -6524,6 +6548,39 @@ impl AccountsDb {
                 accum.mix_in(&elem);
                 accum
             });
+
+        AccountsLtHash(lt_hash)
+    }
+
+    /// Calculates the accounts lt hash
+    ///
+    /// Intended to be used to verify the accounts lt hash at startup.
+    ///
+    /// The `duplicates_lt_hash` is the old/duplicate accounts to mix *out* of the storages.
+    /// This value comes from index generation.
+    pub fn calculate_accounts_lt_hash_at_startup_from_storages(
+        &self,
+        storages: &[Arc<AccountStorageEntry>],
+        duplicates_lt_hash: &DuplicatesLtHash,
+    ) -> AccountsLtHash {
+        debug_assert!(self.is_experimental_accumulator_hash_enabled());
+
+        let mut lt_hash = storages
+            .par_iter()
+            .fold(LtHash::identity, |mut accum, storage| {
+                storage.accounts.scan_accounts(|stored_account_meta| {
+                    let account_lt_hash =
+                        Self::lt_hash_account(&stored_account_meta, stored_account_meta.pubkey());
+                    accum.mix_in(&account_lt_hash.0);
+                });
+                accum
+            })
+            .reduce(LtHash::identity, |mut accum, elem| {
+                accum.mix_in(&elem);
+                accum
+            });
+
+        lt_hash.mix_out(&duplicates_lt_hash.0);
 
         AccountsLtHash(lt_hash)
     }
@@ -8351,6 +8408,7 @@ impl AccountsDb {
 
         let rent_paying_accounts_by_partition =
             Mutex::new(RentPayingAccountsByPartition::new(schedule));
+        let mut outer_duplicates_lt_hash = None;
 
         // pass == 0 always runs and generates the index
         // pass == 1 only runs if verify == true.
@@ -8554,6 +8612,7 @@ impl AccountsDb {
                     accounts_data_len_from_duplicates: u64,
                     num_duplicate_accounts: u64,
                     uncleaned_roots: IntSet<Slot>,
+                    duplicates_lt_hash: Box<DuplicatesLtHash>,
                 }
                 impl DuplicatePubkeysVisitedInfo {
                     fn reduce(mut a: Self, mut b: Self) -> Self {
@@ -8570,6 +8629,9 @@ impl AccountsDb {
                             other.accounts_data_len_from_duplicates;
                         self.num_duplicate_accounts += other.num_duplicate_accounts;
                         self.uncleaned_roots.extend(other.uncleaned_roots);
+                        self.duplicates_lt_hash
+                            .0
+                            .mix_in(&other.duplicates_lt_hash.0);
                     }
                 }
 
@@ -8580,6 +8642,7 @@ impl AccountsDb {
                     accounts_data_len_from_duplicates,
                     num_duplicate_accounts,
                     uncleaned_roots,
+                    duplicates_lt_hash,
                 } = unique_pubkeys_by_bin
                     .par_iter()
                     .fold(
@@ -8592,6 +8655,7 @@ impl AccountsDb {
                                         accounts_data_len_from_duplicates,
                                         accounts_duplicates_num,
                                         uncleaned_roots,
+                                        duplicates_lt_hash,
                                     ) = self.visit_duplicate_pubkeys_during_startup(
                                         pubkeys,
                                         &rent_collector,
@@ -8601,6 +8665,7 @@ impl AccountsDb {
                                         accounts_data_len_from_duplicates,
                                         num_duplicate_accounts: accounts_duplicates_num,
                                         uncleaned_roots,
+                                        duplicates_lt_hash,
                                     };
                                     DuplicatePubkeysVisitedInfo::reduce(accum, intermediate)
                                 })
@@ -8623,6 +8688,8 @@ impl AccountsDb {
                 self.accounts_index
                     .add_uncleaned_roots(uncleaned_roots.into_iter());
                 accounts_data_len.fetch_sub(accounts_data_len_from_duplicates, Ordering::Relaxed);
+                let old_val = outer_duplicates_lt_hash.replace(duplicates_lt_hash);
+                assert!(old_val.is_none());
                 info!(
                     "accounts data len: {}",
                     accounts_data_len.load(Ordering::Relaxed)
@@ -8649,6 +8716,7 @@ impl AccountsDb {
             rent_paying_accounts_by_partition: rent_paying_accounts_by_partition
                 .into_inner()
                 .unwrap(),
+            duplicates_lt_hash: outer_duplicates_lt_hash.unwrap(),
         }
     }
 
@@ -8678,20 +8746,28 @@ impl AccountsDb {
     /// 1. get the _duplicate_ accounts data len from the given pubkeys
     /// 2. get the slots that contained duplicate pubkeys
     /// 3. update rent stats
+    /// 4. build up the duplicates lt hash
     ///
     /// Note this should only be used when ALL entries in the accounts index are roots.
-    /// returns (data len sum of all older duplicates, number of duplicate accounts, slots that contained duplicate pubkeys)
+    ///
+    /// returns tuple of:
+    /// - data len sum of all older duplicates
+    /// - number of duplicate accounts
+    /// - slots that contained duplicate pubkeys
+    /// - lt hash of duplicates
     fn visit_duplicate_pubkeys_during_startup(
         &self,
         pubkeys: &[Pubkey],
         rent_collector: &RentCollector,
         timings: &GenerateIndexTimings,
-    ) -> (u64, u64, IntSet<Slot>) {
+    ) -> (u64, u64, IntSet<Slot>, Box<DuplicatesLtHash>) {
         let mut accounts_data_len_from_duplicates = 0;
         let mut num_duplicate_accounts = 0_u64;
         let mut uncleaned_slots = IntSet::default();
+        let mut duplicates_lt_hash = Box::new(DuplicatesLtHash::default());
         let mut removed_rent_paying = 0;
         let mut removed_top_off = 0;
+        let mut lt_hash_time = Duration::default();
         self.accounts_index.scan(
             pubkeys.iter(),
             |pubkey, slots_refs, _entry| {
@@ -8730,6 +8806,14 @@ impl AccountsDb {
                                     removed_rent_paying += 1;
                                     removed_top_off += lamports_to_top_off;
                                 }
+                                if self.is_experimental_accumulator_hash_enabled() {
+                                    let (_, duration) = meas_dur!({
+                                        let account_lt_hash =
+                                            Self::lt_hash_account(&loaded_account, pubkey);
+                                        duplicates_lt_hash.0.mix_in(&account_lt_hash.0);
+                                    });
+                                    lt_hash_time += duration;
+                                }
                             });
                         });
                     }
@@ -8746,10 +8830,14 @@ impl AccountsDb {
         timings
             .amount_to_top_off_rent
             .fetch_sub(removed_top_off, Ordering::Relaxed);
+        timings
+            .par_duplicates_lt_hash_us
+            .fetch_add(lt_hash_time.as_micros() as u64, Ordering::Relaxed);
         (
             accounts_data_len_from_duplicates as u64,
             num_duplicate_accounts,
             uncleaned_slots,
+            duplicates_lt_hash,
         )
     }
 

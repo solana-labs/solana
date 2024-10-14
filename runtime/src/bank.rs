@@ -75,7 +75,8 @@ use {
         accounts::{AccountAddressFilter, Accounts, PubkeyAccountSlot},
         accounts_db::{
             AccountShrinkThreshold, AccountStorageEntry, AccountsDb, AccountsDbConfig,
-            CalcAccountsHashDataSource, PubkeyHashAccount, VerifyAccountsHashAndLamportsConfig,
+            CalcAccountsHashDataSource, DuplicatesLtHash, PubkeyHashAccount,
+            VerifyAccountsHashAndLamportsConfig,
         },
         accounts_hash::{
             AccountHash, AccountsHash, AccountsLtHash, CalcAccountsHashConfig, HashStats,
@@ -1724,7 +1725,7 @@ impl Bank {
                     .rc
                     .accounts
                     .accounts_db
-                    .calculate_accounts_lt_hash_at_startup(&bank.ancestors, bank.slot());
+                    .calculate_accounts_lt_hash_at_startup_from_index(&bank.ancestors, bank.slot());
             });
             duration
         });
@@ -5548,6 +5549,7 @@ impl Bank {
                 run_in_background: false,
                 store_hash_raw_data_for_debug: on_halt_store_hash_raw_data_for_debug,
             },
+            None,
         );
     }
 
@@ -5558,7 +5560,8 @@ impl Bank {
     fn verify_accounts_hash(
         &self,
         base: Option<(Slot, /*capitalization*/ u64)>,
-        config: VerifyAccountsHashConfig,
+        mut config: VerifyAccountsHashConfig,
+        duplicates_lt_hash: Option<&DuplicatesLtHash>,
     ) -> bool {
         let accounts = &self.rc.accounts;
         // Wait until initial hash calc is complete before starting a new hash calc.
@@ -5569,19 +5572,36 @@ impl Bank {
             .wait_for_complete();
 
         let slot = self.slot();
+        let is_accounts_lt_hash_enabled = self.is_accounts_lt_hash_enabled();
         if config.require_rooted_bank && !accounts.accounts_db.accounts_index.is_alive_root(slot) {
             if let Some(parent) = self.parent() {
                 info!(
                     "slot {slot} is not a root, so verify accounts hash on parent bank at slot {}",
                     parent.slot(),
                 );
-                return parent.verify_accounts_hash(base, config);
+                if is_accounts_lt_hash_enabled {
+                    // The duplicates_lt_hash is only valid for the current slot, so we must fall
+                    // back to verifying the accounts lt hash with the index (which also means we
+                    // cannot run in the background).
+                    config.run_in_background = false;
+                }
+                return parent.verify_accounts_hash(base, config, None);
             } else {
                 // this will result in mismatch errors
                 // accounts hash calc doesn't include unrooted slots
                 panic!("cannot verify accounts hash because slot {slot} is not a root");
             }
         }
+
+        if is_accounts_lt_hash_enabled {
+            // Calculating the accounts lt hash from storages *requires* a duplicates_lt_hash.
+            // If it is None here, then we must use the index instead, which also means we
+            // cannot run in the background.
+            if duplicates_lt_hash.is_none() {
+                config.run_in_background = false;
+            }
+        }
+
         // The snapshot storages must be captured *before* starting the background verification.
         // Otherwise, it is possible that a delayed call to `get_snapshot_storages()` will *not*
         // get the correct storages required to calculate and verify the accounts hashes.
@@ -5600,17 +5620,43 @@ impl Bank {
             store_detailed_debug_info: config.store_hash_raw_data_for_debug,
             use_bg_thread_pool: config.run_in_background,
         };
+
         if config.run_in_background {
             let accounts = Arc::clone(accounts);
             let accounts_ = Arc::clone(&accounts);
             let ancestors = self.ancestors.clone();
             let epoch_schedule = self.epoch_schedule().clone();
             let rent_collector = self.rent_collector().clone();
+            let expected_accounts_lt_hash = self.accounts_lt_hash.lock().unwrap().clone();
+            let duplicates_lt_hash = duplicates_lt_hash.cloned();
             accounts.accounts_db.verify_accounts_hash_in_bg.start(|| {
                 Builder::new()
                     .name("solBgHashVerify".into())
                     .spawn(move || {
                         info!("Initial background accounts hash verification has started");
+                        if is_accounts_lt_hash_enabled {
+                            let accounts_db = &accounts_.accounts_db;
+                            let (calculated_accounts_lt_hash, duration) = meas_dur!(accounts_db.thread_pool_hash.install(|| {
+                                    accounts_db
+                                    .calculate_accounts_lt_hash_at_startup_from_storages(
+                                        snapshot_storages.0.as_slice(),
+                                        &duplicates_lt_hash.unwrap(),
+                                    )
+                            }));
+                            if calculated_accounts_lt_hash != expected_accounts_lt_hash {
+                                error!(
+                                    "Verifying accounts lt hash failed: hashes do not match, expected: {}, calculated: {}",
+                                    expected_accounts_lt_hash.0.checksum(),
+                                    calculated_accounts_lt_hash.0.checksum(),
+                                );
+                                return false;
+                            }
+                            datapoint_info!(
+                                "startup_verify_accounts",
+                                ("verify_accounts_lt_hash_us", duration.as_micros(), i64)
+                            );
+                        }
+
                         let snapshot_storages_and_slots = (
                             snapshot_storages.0.as_slice(),
                             snapshot_storages.1.as_slice(),
@@ -5638,6 +5684,32 @@ impl Bank {
             });
             true // initial result is true. We haven't failed yet. If verification fails, we'll panic from bg thread.
         } else {
+            if is_accounts_lt_hash_enabled {
+                let expected_accounts_lt_hash = self.accounts_lt_hash.lock().unwrap().clone();
+                let calculated_accounts_lt_hash =
+                    if let Some(duplicates_lt_hash) = duplicates_lt_hash {
+                        accounts
+                            .accounts_db
+                            .calculate_accounts_lt_hash_at_startup_from_storages(
+                                snapshot_storages.0.as_slice(),
+                                duplicates_lt_hash,
+                            )
+                    } else {
+                        accounts
+                            .accounts_db
+                            .calculate_accounts_lt_hash_at_startup_from_index(&self.ancestors, slot)
+                    };
+                if calculated_accounts_lt_hash != expected_accounts_lt_hash {
+                    error!(
+                        "Verifying accounts lt hash failed: hashes do not match, expected: {}, calculated: {}",
+                        expected_accounts_lt_hash.0.checksum(),
+                        calculated_accounts_lt_hash.0.checksum(),
+                    );
+                    return false;
+                }
+                // if we get here then the accounts lt hash is correct
+            }
+
             let snapshot_storages_and_slots = (
                 snapshot_storages.0.as_slice(),
                 snapshot_storages.1.as_slice(),
@@ -5953,6 +6025,7 @@ impl Bank {
         force_clean: bool,
         latest_full_snapshot_slot: Slot,
         base: Option<(Slot, /*capitalization*/ u64)>,
+        duplicates_lt_hash: Option<&DuplicatesLtHash>,
     ) -> bool {
         let (_, clean_time_us) = measure_us!({
             let should_clean = force_clean || (!skip_shrink && self.slot() > 0);
@@ -6002,6 +6075,7 @@ impl Bank {
                         run_in_background: true,
                         store_hash_raw_data_for_debug: false,
                     },
+                    duplicates_lt_hash,
                 );
                 info!("Verifying accounts... In background.");
                 verified

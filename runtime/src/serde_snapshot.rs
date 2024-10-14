@@ -20,7 +20,8 @@ use {
         accounts::Accounts,
         accounts_db::{
             stats::BankHashStats, AccountShrinkThreshold, AccountStorageEntry, AccountsDb,
-            AccountsDbConfig, AccountsFileId, AtomicAccountsFileId, IndexGenerationInfo,
+            AccountsDbConfig, AccountsFileId, AtomicAccountsFileId, DuplicatesLtHash,
+            IndexGenerationInfo,
         },
         accounts_file::{AccountsFile, StorageAccess},
         accounts_hash::{AccountsDeltaHash, AccountsHash},
@@ -545,6 +546,12 @@ pub(crate) fn fields_from_streams(
     Ok((snapshot_bank_fields, snapshot_accounts_db_fields))
 }
 
+/// This struct contains side-info while reconstructing the bank from streams
+#[derive(Debug)]
+pub struct BankFromStreamsInfo {
+    pub duplicates_lt_hash: Box<DuplicatesLtHash>,
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn bank_from_streams<R>(
     snapshot_streams: &mut SnapshotStreams<R>,
@@ -561,12 +568,12 @@ pub(crate) fn bank_from_streams<R>(
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     exit: Arc<AtomicBool>,
-) -> std::result::Result<Bank, Error>
+) -> std::result::Result<(Bank, BankFromStreamsInfo), Error>
 where
     R: Read,
 {
     let (bank_fields, accounts_db_fields) = fields_from_streams(snapshot_streams)?;
-    reconstruct_bank_from_fields(
+    let (bank, info) = reconstruct_bank_from_fields(
         bank_fields,
         accounts_db_fields,
         genesis_config,
@@ -582,7 +589,13 @@ where
         accounts_db_config,
         accounts_update_notifier,
         exit,
-    )
+    )?;
+    Ok((
+        bank,
+        BankFromStreamsInfo {
+            duplicates_lt_hash: info.duplicates_lt_hash,
+        },
+    ))
 }
 
 #[cfg(test)]
@@ -826,6 +839,12 @@ impl<'a> Serialize for SerializableAccountsDb<'a> {
 #[cfg(feature = "frozen-abi")]
 impl<'a> solana_frozen_abi::abi_example::TransparentAsHelper for SerializableAccountsDb<'a> {}
 
+/// This struct contains side-info while reconstructing the bank from fields
+#[derive(Debug)]
+struct ReconstructedBankInfo {
+    duplicates_lt_hash: Box<DuplicatesLtHash>,
+}
+
 #[allow(clippy::too_many_arguments)]
 fn reconstruct_bank_from_fields<E>(
     bank_fields: SnapshotBankFields,
@@ -843,7 +862,7 @@ fn reconstruct_bank_from_fields<E>(
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     exit: Arc<AtomicBool>,
-) -> Result<Bank, Error>
+) -> Result<(Bank, ReconstructedBankInfo), Error>
 where
     E: SerializableStorage + std::marker::Sync,
 {
@@ -890,7 +909,12 @@ where
 
     info!("rent_collector: {:?}", bank.rent_collector());
 
-    Ok(bank)
+    Ok((
+        bank,
+        ReconstructedBankInfo {
+            duplicates_lt_hash: reconstructed_accounts_db_info.duplicates_lt_hash,
+        },
+    ))
 }
 
 pub(crate) fn reconstruct_single_storage(
@@ -1010,9 +1034,10 @@ pub(crate) fn remap_and_reconstruct_single_storage(
 }
 
 /// This struct contains side-info while reconstructing the accounts DB from fields.
-#[derive(Debug, Default, Copy, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct ReconstructedAccountsDbInfo {
     pub accounts_data_len: u64,
+    pub duplicates_lt_hash: Box<DuplicatesLtHash>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1220,6 +1245,7 @@ where
     let IndexGenerationInfo {
         accounts_data_len,
         rent_paying_accounts_by_partition,
+        duplicates_lt_hash,
     } = accounts_db.generate_index(
         limit_load_slot_count_from_snapshot,
         verify_index,
@@ -1241,7 +1267,10 @@ where
 
     Ok((
         Arc::try_unwrap(accounts_db).unwrap(),
-        ReconstructedAccountsDbInfo { accounts_data_len },
+        ReconstructedAccountsDbInfo {
+            accounts_data_len,
+            duplicates_lt_hash,
+        },
     ))
 }
 

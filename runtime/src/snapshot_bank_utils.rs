@@ -28,7 +28,7 @@ use {
     solana_accounts_db::{
         accounts_db::{
             AccountShrinkThreshold, AccountStorageEntry, AccountsDbConfig, AtomicAccountsFileId,
-            CalcAccountsHashDataSource,
+            CalcAccountsHashDataSource, DuplicatesLtHash,
         },
         accounts_file::StorageAccess,
         accounts_index::AccountSecondaryIndexes,
@@ -180,7 +180,7 @@ pub fn bank_from_snapshot_archives(
     };
 
     let mut measure_rebuild = Measure::start("rebuild bank from snapshots");
-    let bank = rebuild_bank_from_unarchived_snapshots(
+    let (bank, info) = rebuild_bank_from_unarchived_snapshots(
         &unarchived_full_snapshot.unpacked_snapshots_dir_and_version,
         unarchived_incremental_snapshot
             .as_ref()
@@ -235,6 +235,7 @@ pub fn bank_from_snapshot_archives(
         accounts_db_force_initial_clean,
         full_snapshot_archive_info.slot(),
         base,
+        Some(&info.duplicates_lt_hash),
     ) && limit_load_slot_count_from_snapshot.is_none()
     {
         panic!("Snapshot bank for slot {} failed to verify", bank.slot());
@@ -386,7 +387,7 @@ pub fn bank_from_snapshot_dir(
         storage,
         next_append_vec_id,
     };
-    let (bank, measure_rebuild_bank) = measure_time!(
+    let ((bank, _info), measure_rebuild_bank) = measure_time!(
         rebuild_bank_from_snapshot(
             bank_snapshot,
             account_paths,
@@ -544,6 +545,12 @@ fn deserialize_status_cache(
     })
 }
 
+/// This struct contains side-info from rebuilding the bank
+#[derive(Debug)]
+struct RebuiltBankInfo {
+    duplicates_lt_hash: Box<DuplicatesLtHash>,
+}
+
 #[allow(clippy::too_many_arguments)]
 fn rebuild_bank_from_unarchived_snapshots(
     full_snapshot_unpacked_snapshots_dir_and_version: &UnpackedSnapshotsDirAndVersion,
@@ -563,7 +570,7 @@ fn rebuild_bank_from_unarchived_snapshots(
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     exit: Arc<AtomicBool>,
-) -> snapshot_utils::Result<Bank> {
+) -> snapshot_utils::Result<(Bank, RebuiltBankInfo)> {
     let (full_snapshot_version, full_snapshot_root_paths) =
         verify_unpacked_snapshots_dir_and_version(
             full_snapshot_unpacked_snapshots_dir_and_version,
@@ -593,7 +600,7 @@ fn rebuild_bank_from_unarchived_snapshots(
             .map(|root_paths| root_paths.snapshot_path()),
     };
 
-    let bank = deserialize_snapshot_data_files(&snapshot_root_paths, |snapshot_streams| {
+    let (bank, info) = deserialize_snapshot_data_files(&snapshot_root_paths, |snapshot_streams| {
         Ok(
             match incremental_snapshot_version.unwrap_or(full_snapshot_version) {
                 SnapshotVersion::V1_2_0 => bank_from_streams(
@@ -641,7 +648,12 @@ fn rebuild_bank_from_unarchived_snapshots(
     bank.status_cache.write().unwrap().append(&slot_deltas);
 
     info!("Rebuilt bank for slot: {}", bank.slot());
-    Ok(bank)
+    Ok((
+        bank,
+        RebuiltBankInfo {
+            duplicates_lt_hash: info.duplicates_lt_hash,
+        },
+    ))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -660,7 +672,7 @@ fn rebuild_bank_from_snapshot(
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     exit: Arc<AtomicBool>,
-) -> snapshot_utils::Result<Bank> {
+) -> snapshot_utils::Result<(Bank, RebuiltBankInfo)> {
     info!(
         "Rebuilding bank from snapshot {}",
         bank_snapshot.snapshot_dir.display(),
@@ -671,7 +683,7 @@ fn rebuild_bank_from_snapshot(
         incremental_snapshot_root_file_path: None,
     };
 
-    let bank = deserialize_snapshot_data_files(&snapshot_root_paths, |snapshot_streams| {
+    let (bank, info) = deserialize_snapshot_data_files(&snapshot_root_paths, |snapshot_streams| {
         Ok(bank_from_streams(
             snapshot_streams,
             account_paths,
@@ -702,7 +714,12 @@ fn rebuild_bank_from_snapshot(
     bank.status_cache.write().unwrap().append(&slot_deltas);
 
     info!("Rebuilt bank for slot: {}", bank.slot());
-    Ok(bank)
+    Ok((
+        bank,
+        RebuiltBankInfo {
+            duplicates_lt_hash: info.duplicates_lt_hash,
+        },
+    ))
 }
 
 /// Verify that the snapshot's slot deltas are not corrupt/invalid

@@ -238,7 +238,7 @@ mod tests {
                 full_snapshot_stream: &mut reader,
                 incremental_snapshot_stream: None,
             };
-            let dbank = serde_snapshot::bank_from_streams(
+            let (dbank, _) = serde_snapshot::bank_from_streams(
                 &mut snapshot_streams,
                 &dbank_paths,
                 storage_and_next_append_vec_id,
@@ -352,7 +352,7 @@ mod tests {
             storage_access,
         )
         .unwrap();
-        let dbank = crate::serde_snapshot::bank_from_streams(
+        let (dbank, _) = crate::serde_snapshot::bank_from_streams(
             &mut snapshot_streams,
             &dbank_paths,
             storage_and_next_append_vec_id,
@@ -487,7 +487,7 @@ mod tests {
             storage_access,
         )
         .unwrap();
-        let dbank = crate::serde_snapshot::bank_from_streams(
+        let (dbank, _) = crate::serde_snapshot::bank_from_streams(
             &mut snapshot_streams,
             &dbank_paths,
             storage_and_next_append_vec_id,
