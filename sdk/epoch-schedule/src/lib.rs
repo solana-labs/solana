@@ -10,6 +10,8 @@
 //! though the length of an epoch does &mdash; during the initial launch of
 //! the chain there is a "warmup" period, where epochs are short, with subsequent
 //! epochs increasing in slots until they last for [`DEFAULT_SLOTS_PER_EPOCH`].
+//!
+//! [`DEFAULT_SLOTS_PER_EPOCH`]: https://docs.rs/solana-clock/latest/solana_clock/constant.DEFAULT_SLOTS_PER_EPOCH.html
 #![cfg_attr(feature = "frozen-abi", feature(min_specialization))]
 #![no_std]
 #[cfg(feature = "frozen-abi")]
