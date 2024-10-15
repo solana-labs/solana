@@ -153,6 +153,7 @@ impl TransactionStateContainer {
 mod tests {
     use {
         super::*,
+        crate::banking_stage::scheduler_messages::MaxAge,
         solana_sdk::{
             compute_budget::ComputeBudgetInstruction,
             hash::Hash,
@@ -198,7 +199,10 @@ mod tests {
         );
         let transaction_ttl = SanitizedTransactionTTL {
             transaction: tx,
-            max_age_slot: Slot::MAX,
+            max_age: MaxAge {
+                epoch_invalidation_slot: Slot::MAX,
+                alt_invalidation_slot: Slot::MAX,
+            },
         };
         const TEST_TRANSACTION_COST: u64 = 5000;
         (transaction_ttl, packet, priority, TEST_TRANSACTION_COST)

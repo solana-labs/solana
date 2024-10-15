@@ -420,7 +420,7 @@ impl LatestUnprocessedVotes {
             }
 
             let deserialized_vote_packet = vote.vote.as_ref().unwrap().clone();
-            let Some(sanitized_vote_transaction) = deserialized_vote_packet
+            let Some((sanitized_vote_transaction, _deactivation_slot)) = deserialized_vote_packet
                 .build_sanitized_transaction(
                     bank.vote_only_bank(),
                     bank.as_ref(),

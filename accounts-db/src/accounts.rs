@@ -81,12 +81,14 @@ impl Accounts {
         }
     }
 
+    /// Return loaded addresses and the deactivation slot.
+    /// If the table hasn't been deactivated, the deactivation slot is `u64::MAX`.
     pub fn load_lookup_table_addresses(
         &self,
         ancestors: &Ancestors,
         address_table_lookup: SVMMessageAddressTableLookup,
         slot_hashes: &SlotHashes,
-    ) -> std::result::Result<LoadedAddresses, AddressLookupError> {
+    ) -> std::result::Result<(LoadedAddresses, Slot), AddressLookupError> {
         let table_account = self
             .accounts_db
             .load_with_fixed_root(ancestors, address_table_lookup.account_key)
@@ -98,18 +100,21 @@ impl Accounts {
             let lookup_table = AddressLookupTable::deserialize(table_account.data())
                 .map_err(|_ix_err| AddressLookupError::InvalidAccountData)?;
 
-            Ok(LoadedAddresses {
-                writable: lookup_table.lookup(
-                    current_slot,
-                    address_table_lookup.writable_indexes,
-                    slot_hashes,
-                )?,
-                readonly: lookup_table.lookup(
-                    current_slot,
-                    address_table_lookup.readonly_indexes,
-                    slot_hashes,
-                )?,
-            })
+            Ok((
+                LoadedAddresses {
+                    writable: lookup_table.lookup(
+                        current_slot,
+                        address_table_lookup.writable_indexes,
+                        slot_hashes,
+                    )?,
+                    readonly: lookup_table.lookup(
+                        current_slot,
+                        address_table_lookup.readonly_indexes,
+                        slot_hashes,
+                    )?,
+                },
+                lookup_table.meta.deactivation_slot,
+            ))
         } else {
             Err(AddressLookupError::InvalidAccountOwner)
         }
@@ -806,10 +811,13 @@ mod tests {
                 SVMMessageAddressTableLookup::from(&address_table_lookup),
                 &SlotHashes::default(),
             ),
-            Ok(LoadedAddresses {
-                writable: vec![table_addresses[0]],
-                readonly: vec![table_addresses[1]],
-            }),
+            Ok((
+                LoadedAddresses {
+                    writable: vec![table_addresses[0]],
+                    readonly: vec![table_addresses[1]],
+                },
+                u64::MAX
+            )),
         );
     }
 

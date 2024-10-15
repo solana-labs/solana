@@ -154,13 +154,15 @@ fn consume_scan_should_process_packet(
         return ProcessingDecision::Now;
     }
 
-    // Try to sanitize the packet
+    // Try to sanitize the packet. Ignore deactivation slot since we are
+    // immediately attempting to process the transaction.
     let (maybe_sanitized_transaction, sanitization_time_us) = measure_us!(packet
         .build_sanitized_transaction(
             bank.vote_only_bank(),
             bank,
             bank.get_reserved_account_keys(),
-        ));
+        )
+        .map(|(tx, _deactivation_slot)| tx));
 
     payload
         .slot_metrics_tracker
@@ -799,7 +801,7 @@ impl ThreadLocalUnprocessedPackets {
                             bank,
                             bank.get_reserved_account_keys(),
                         )
-                        .map(|transaction| (transaction, packet_index))
+                        .map(|(transaction, _deactivation_slot)| (transaction, packet_index))
                 })
                 .unzip();
 

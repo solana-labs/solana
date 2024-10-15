@@ -107,7 +107,7 @@ impl ConsumeWorker {
         let output = self.consumer.process_and_record_aged_transactions(
             bank,
             &work.transactions,
-            &work.max_age_slots,
+            &work.max_ages,
         );
 
         self.metrics.update_for_consume(&output);
@@ -694,7 +694,7 @@ mod tests {
         crate::banking_stage::{
             committer::Committer,
             qos_service::QosService,
-            scheduler_messages::{TransactionBatchId, TransactionId},
+            scheduler_messages::{MaxAge, TransactionBatchId, TransactionId},
             tests::{create_slow_genesis_config, sanitize_transactions, simulate_poh},
         },
         crossbeam_channel::unbounded,
@@ -708,10 +708,25 @@ mod tests {
             vote_sender_types::ReplayVoteReceiver,
         },
         solana_sdk::{
-            genesis_config::GenesisConfig, poh_config::PohConfig, pubkey::Pubkey,
-            signature::Keypair, system_transaction,
+            address_lookup_table::AddressLookupTableAccount,
+            clock::{Slot, MAX_PROCESSING_AGE},
+            genesis_config::GenesisConfig,
+            message::{
+                v0::{self, LoadedAddresses},
+                SimpleAddressLoader, VersionedMessage,
+            },
+            poh_config::PohConfig,
+            pubkey::Pubkey,
+            signature::Keypair,
+            signer::Signer,
+            system_instruction, system_transaction,
+            transaction::{
+                MessageHash, SanitizedTransaction, TransactionError, VersionedTransaction,
+            },
         },
+        solana_svm_transaction::svm_message::SVMMessage,
         std::{
+            collections::HashSet,
             sync::{atomic::AtomicBool, RwLock},
             thread::JoinHandle,
         },
@@ -742,6 +757,7 @@ mod tests {
             ..
         } = create_slow_genesis_config(10_000);
         let (bank, bank_forks) = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
+        let bank = Arc::new(Bank::new_from_parent(bank, &Pubkey::new_unique(), 1));
 
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path())
@@ -820,17 +836,21 @@ mod tests {
         )]);
         let bid = TransactionBatchId::new(0);
         let id = TransactionId::new(0);
+        let max_age = MaxAge {
+            epoch_invalidation_slot: bank.slot(),
+            alt_invalidation_slot: bank.slot(),
+        };
         let work = ConsumeWork {
             batch_id: bid,
             ids: vec![id],
             transactions,
-            max_age_slots: vec![bank.slot()],
+            max_ages: vec![max_age],
         };
         consume_sender.send(work).unwrap();
         let consumed = consumed_receiver.recv().unwrap();
         assert_eq!(consumed.work.batch_id, bid);
         assert_eq!(consumed.work.ids, vec![id]);
-        assert_eq!(consumed.work.max_age_slots, vec![bank.slot()]);
+        assert_eq!(consumed.work.max_ages, vec![max_age]);
         assert_eq!(consumed.retryable_indexes, vec![0]);
 
         drop(test_frame);
@@ -865,17 +885,21 @@ mod tests {
         )]);
         let bid = TransactionBatchId::new(0);
         let id = TransactionId::new(0);
+        let max_age = MaxAge {
+            epoch_invalidation_slot: bank.slot(),
+            alt_invalidation_slot: bank.slot(),
+        };
         let work = ConsumeWork {
             batch_id: bid,
             ids: vec![id],
             transactions,
-            max_age_slots: vec![bank.slot()],
+            max_ages: vec![max_age],
         };
         consume_sender.send(work).unwrap();
         let consumed = consumed_receiver.recv().unwrap();
         assert_eq!(consumed.work.batch_id, bid);
         assert_eq!(consumed.work.ids, vec![id]);
-        assert_eq!(consumed.work.max_age_slots, vec![bank.slot()]);
+        assert_eq!(consumed.work.max_ages, vec![max_age]);
         assert_eq!(consumed.retryable_indexes, Vec::<usize>::new());
 
         drop(test_frame);
@@ -911,19 +935,23 @@ mod tests {
         let bid = TransactionBatchId::new(0);
         let id1 = TransactionId::new(1);
         let id2 = TransactionId::new(0);
+        let max_age = MaxAge {
+            epoch_invalidation_slot: bank.slot(),
+            alt_invalidation_slot: bank.slot(),
+        };
         consume_sender
             .send(ConsumeWork {
                 batch_id: bid,
                 ids: vec![id1, id2],
                 transactions: txs,
-                max_age_slots: vec![bank.slot(), bank.slot()],
+                max_ages: vec![max_age, max_age],
             })
             .unwrap();
 
         let consumed = consumed_receiver.recv().unwrap();
         assert_eq!(consumed.work.batch_id, bid);
         assert_eq!(consumed.work.ids, vec![id1, id2]);
-        assert_eq!(consumed.work.max_age_slots, vec![bank.slot(), bank.slot()]);
+        assert_eq!(consumed.work.max_ages, vec![max_age, max_age]);
         assert_eq!(consumed.retryable_indexes, vec![1]); // id2 is retryable since lock conflict
 
         drop(test_frame);
@@ -968,12 +996,16 @@ mod tests {
         let bid2 = TransactionBatchId::new(1);
         let id1 = TransactionId::new(1);
         let id2 = TransactionId::new(0);
+        let max_age = MaxAge {
+            epoch_invalidation_slot: bank.slot(),
+            alt_invalidation_slot: bank.slot(),
+        };
         consume_sender
             .send(ConsumeWork {
                 batch_id: bid1,
                 ids: vec![id1],
                 transactions: txs1,
-                max_age_slots: vec![bank.slot()],
+                max_ages: vec![max_age],
             })
             .unwrap();
 
@@ -982,20 +1014,183 @@ mod tests {
                 batch_id: bid2,
                 ids: vec![id2],
                 transactions: txs2,
-                max_age_slots: vec![bank.slot()],
+                max_ages: vec![max_age],
             })
             .unwrap();
         let consumed = consumed_receiver.recv().unwrap();
         assert_eq!(consumed.work.batch_id, bid1);
         assert_eq!(consumed.work.ids, vec![id1]);
-        assert_eq!(consumed.work.max_age_slots, vec![bank.slot()]);
+        assert_eq!(consumed.work.max_ages, vec![max_age]);
         assert_eq!(consumed.retryable_indexes, Vec::<usize>::new());
 
         let consumed = consumed_receiver.recv().unwrap();
         assert_eq!(consumed.work.batch_id, bid2);
         assert_eq!(consumed.work.ids, vec![id2]);
-        assert_eq!(consumed.work.max_age_slots, vec![bank.slot()]);
+        assert_eq!(consumed.work.max_ages, vec![max_age]);
         assert_eq!(consumed.retryable_indexes, Vec::<usize>::new());
+
+        drop(test_frame);
+        let _ = worker_thread.join().unwrap();
+    }
+
+    #[test]
+    fn test_worker_ttl() {
+        let (test_frame, worker) = setup_test_frame();
+        let TestFrame {
+            mint_keypair,
+            genesis_config,
+            bank,
+            poh_recorder,
+            consume_sender,
+            consumed_receiver,
+            ..
+        } = &test_frame;
+        let worker_thread = std::thread::spawn(move || worker.run());
+        poh_recorder
+            .write()
+            .unwrap()
+            .set_bank_for_test(bank.clone());
+        assert!(bank.slot() > 0);
+
+        // No conflicts between transactions. Test 6 cases.
+        // 1. Epoch expiration, before slot => still succeeds due to resanitizing
+        // 2. Epoch expiration, on slot => succeeds normally
+        // 3. Epoch expiration, after slot => succeeds normally
+        // 4. ALT expiration, before slot => fails
+        // 5. ALT expiration, on slot => succeeds normally
+        // 6. ALT expiration, after slot => succeeds normally
+        let simple_transfer = || {
+            system_transaction::transfer(
+                &Keypair::new(),
+                &Pubkey::new_unique(),
+                1,
+                genesis_config.hash(),
+            )
+        };
+        let simple_v0_transfer = || {
+            let payer = Keypair::new();
+            let to_pubkey = Pubkey::new_unique();
+            let loaded_addresses = LoadedAddresses {
+                writable: vec![to_pubkey],
+                readonly: vec![],
+            };
+            let loader = SimpleAddressLoader::Enabled(loaded_addresses);
+            SanitizedTransaction::try_create(
+                VersionedTransaction::try_new(
+                    VersionedMessage::V0(
+                        v0::Message::try_compile(
+                            &payer.pubkey(),
+                            &[system_instruction::transfer(&payer.pubkey(), &to_pubkey, 1)],
+                            &[AddressLookupTableAccount {
+                                key: Pubkey::new_unique(), // will fail if using **bank** to lookup
+                                addresses: vec![to_pubkey],
+                            }],
+                            genesis_config.hash(),
+                        )
+                        .unwrap(),
+                    ),
+                    &[&payer],
+                )
+                .unwrap(),
+                MessageHash::Compute,
+                None,
+                loader,
+                &HashSet::default(),
+            )
+            .unwrap()
+        };
+
+        let mut txs = sanitize_transactions(vec![
+            simple_transfer(),
+            simple_transfer(),
+            simple_transfer(),
+        ]);
+        txs.push(simple_v0_transfer());
+        txs.push(simple_v0_transfer());
+        txs.push(simple_v0_transfer());
+        let sanitized_txs = txs.clone();
+
+        // Fund the keypairs.
+        for tx in &txs {
+            bank.process_transaction(&system_transaction::transfer(
+                mint_keypair,
+                &tx.account_keys()[0],
+                2,
+                genesis_config.hash(),
+            ))
+            .unwrap();
+        }
+
+        consume_sender
+            .send(ConsumeWork {
+                batch_id: TransactionBatchId::new(1),
+                ids: vec![
+                    TransactionId::new(0),
+                    TransactionId::new(1),
+                    TransactionId::new(2),
+                    TransactionId::new(3),
+                    TransactionId::new(4),
+                    TransactionId::new(5),
+                ],
+                transactions: txs,
+                max_ages: vec![
+                    MaxAge {
+                        epoch_invalidation_slot: bank.slot() - 1,
+                        alt_invalidation_slot: Slot::MAX,
+                    },
+                    MaxAge {
+                        epoch_invalidation_slot: bank.slot(),
+                        alt_invalidation_slot: Slot::MAX,
+                    },
+                    MaxAge {
+                        epoch_invalidation_slot: bank.slot() + 1,
+                        alt_invalidation_slot: Slot::MAX,
+                    },
+                    MaxAge {
+                        epoch_invalidation_slot: u64::MAX,
+                        alt_invalidation_slot: bank.slot() - 1,
+                    },
+                    MaxAge {
+                        epoch_invalidation_slot: u64::MAX,
+                        alt_invalidation_slot: bank.slot(),
+                    },
+                    MaxAge {
+                        epoch_invalidation_slot: u64::MAX,
+                        alt_invalidation_slot: bank.slot() + 1,
+                    },
+                ],
+            })
+            .unwrap();
+
+        let consumed = consumed_receiver.recv().unwrap();
+        assert_eq!(consumed.retryable_indexes, Vec::<usize>::new());
+        // all but one succeed. 6 for initial funding
+        assert_eq!(bank.transaction_count(), 6 + 5);
+
+        let already_processed_results = bank
+            .check_transactions(
+                &sanitized_txs,
+                &vec![Ok(()); sanitized_txs.len()],
+                MAX_PROCESSING_AGE,
+                &mut TransactionErrorMetrics::default(),
+            )
+            .into_iter()
+            .map(|r| match r {
+                Ok(_) => Ok(()),
+                Err(err) => Err(err),
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            already_processed_results,
+            vec![
+                Err(TransactionError::AlreadyProcessed),
+                Err(TransactionError::AlreadyProcessed),
+                Err(TransactionError::AlreadyProcessed),
+                Ok(()), // <--- this transaction was not processed
+                Err(TransactionError::AlreadyProcessed),
+                Err(TransactionError::AlreadyProcessed)
+            ]
+        );
 
         drop(test_frame);
         let _ = worker_thread.join().unwrap();

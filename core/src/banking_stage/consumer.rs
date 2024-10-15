@@ -7,6 +7,7 @@ use {
         },
         leader_slot_timing_metrics::LeaderExecuteAndCommitTimings,
         qos_service::QosService,
+        scheduler_messages::MaxAge,
         unprocessed_transaction_storage::{ConsumeScannerPayload, UnprocessedTransactionStorage},
         BankingStageStats,
     },
@@ -25,12 +26,12 @@ use {
     },
     solana_runtime_transaction::instructions_processor::process_compute_budget_instructions,
     solana_sdk::{
-        clock::{Slot, FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET, MAX_PROCESSING_AGE},
+        clock::{FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET, MAX_PROCESSING_AGE},
         fee::FeeBudgetLimits,
         message::SanitizedMessage,
         saturating_add_assign,
         timing::timestamp,
-        transaction::{self, AddressLoader, SanitizedTransaction, TransactionError},
+        transaction::{self, SanitizedTransaction, TransactionError},
     },
     solana_svm::{
         account_loader::{validate_fee_payer, TransactionCheckResult},
@@ -429,7 +430,7 @@ impl Consumer {
         &self,
         bank: &Arc<Bank>,
         txs: &[SanitizedTransaction],
-        max_slot_ages: &[Slot],
+        max_ages: &[MaxAge],
     ) -> ProcessTransactionBatchOutput {
         let move_precompile_verification_to_svm = bank
             .feature_set
@@ -438,8 +439,9 @@ impl Consumer {
         // Need to filter out transactions since they were sanitized earlier.
         // This means that the transaction may cross and epoch boundary (not allowed),
         //  or account lookup tables may have been closed.
-        let pre_results = txs.iter().zip(max_slot_ages).map(|(tx, max_slot_age)| {
-            if *max_slot_age < bank.slot() {
+        let pre_results = txs.iter().zip(max_ages).map(|(tx, max_age)| {
+            if bank.slot() > max_age.epoch_invalidation_slot {
+                // Epoch has rolled over. Need to fully re-verify the transaction.
                 // Pre-compiles are verified here.
                 // Attempt re-sanitization after epoch-cross.
                 // Re-sanitized transaction should be equal to the original transaction,
@@ -451,18 +453,24 @@ impl Consumer {
                     return Err(TransactionError::ResanitizationNeeded);
                 }
             } else {
+                if bank.slot() > max_age.alt_invalidation_slot {
+                    // The address table lookup **may** have expired, but the
+                    // expiration is not guaranteed since there may have been
+                    // skipped slot.
+                    // If the addresses still resolve here, then the transaction is still
+                    // valid, and we can continue with processing.
+                    // If they do not, then the ATL has expired and the transaction
+                    // can be dropped.
+                    let (_addresses, _deactivation_slot) =
+                        bank.load_addresses_from_ref(tx.message_address_table_lookups())?;
+                }
+
                 // Verify pre-compiles.
                 if !move_precompile_verification_to_svm {
                     verify_precompiles(tx, &bank.feature_set)?;
                 }
-
-                // Any transaction executed between sanitization time and now may have closed the lookup table(s).
-                // Above re-sanitization already loads addresses, so don't need to re-check in that case.
-                let lookup_tables = tx.message().message_address_table_lookups();
-                if !lookup_tables.is_empty() {
-                    bank.load_addresses(lookup_tables)?;
-                }
             }
+
             Ok(())
         });
         self.process_and_record_transactions_with_pre_results(bank, txs, 0, pre_results)
