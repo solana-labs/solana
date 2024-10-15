@@ -211,7 +211,7 @@ impl Tvu {
             retransmit_receiver,
             max_slots.clone(),
             Some(rpc_subscriptions.clone()),
-            slot_status_notifier,
+            slot_status_notifier.clone(),
         );
 
         let (ancestor_duplicate_slots_sender, ancestor_duplicate_slots_receiver) = unbounded();
@@ -274,6 +274,7 @@ impl Tvu {
             authorized_voter_keypairs,
             exit: exit.clone(),
             rpc_subscriptions: rpc_subscriptions.clone(),
+            slot_status_notifier,
             leader_schedule_cache: leader_schedule_cache.clone(),
             accounts_background_request_sender,
             block_commitment_cache,

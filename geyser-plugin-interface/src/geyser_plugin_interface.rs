@@ -325,6 +325,9 @@ pub enum SlotStatus {
 
     /// All shreds for the slot have been received.
     Completed,
+
+    /// A new bank fork is created with the slot
+    CreatedBank,
 }
 
 impl SlotStatus {
@@ -335,6 +338,7 @@ impl SlotStatus {
             SlotStatus::Rooted => "rooted",
             SlotStatus::FirstShredReceived => "first_shread_received",
             SlotStatus::Completed => "completed",
+            SlotStatus::CreatedBank => "created_bank",
         }
     }
 }
