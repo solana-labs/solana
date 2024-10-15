@@ -29,6 +29,8 @@ use {
         sync::Arc,
     },
 };
+#[cfg(feature = "bincode")]
+pub mod state_traits;
 
 /// An Account with data that is stored on chain
 #[repr(C)]

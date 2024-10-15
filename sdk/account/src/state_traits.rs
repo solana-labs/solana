@@ -1,9 +1,9 @@
 //! Useful extras for `Account` state.
 
 use {
-    crate::instruction::InstructionError,
+    crate::{Account, AccountSharedData},
     bincode::ErrorKind,
-    solana_account::{Account, AccountSharedData},
+    solana_instruction::error::InstructionError,
     std::cell::Ref,
 };
 
@@ -64,7 +64,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use {super::*, crate::pubkey::Pubkey, solana_account::AccountSharedData};
+    use {super::*, solana_pubkey::Pubkey};
 
     #[test]
     fn test_account_state() {

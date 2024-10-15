@@ -4712,6 +4712,7 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_derive",
+ "solana-instruction",
  "solana-program",
 ]
 

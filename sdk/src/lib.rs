@@ -58,7 +58,6 @@ pub use solana_program::{
 };
 #[cfg(feature = "borsh")]
 pub use solana_program::{borsh, borsh0_10, borsh1};
-pub mod account_utils;
 pub mod client;
 pub mod commitment_config;
 pub mod compute_budget;
@@ -108,6 +107,11 @@ pub mod wasm;
 
 #[deprecated(since = "2.1.0", note = "Use `solana-account` crate instead")]
 pub use solana_account as account;
+#[deprecated(
+    since = "2.1.0",
+    note = "Use `solana_account::state_traits` crate instead"
+)]
+pub use solana_account::state_traits as account_utils;
 #[deprecated(since = "2.1.0", note = "Use `solana-bn254` crate instead")]
 pub use solana_bn254 as alt_bn128;
 #[deprecated(since = "2.1.0", note = "Use `solana-decode-error` crate instead")]

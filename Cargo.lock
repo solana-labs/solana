@@ -5652,8 +5652,10 @@ dependencies = [
  "solana-account",
  "solana-frozen-abi",
  "solana-frozen-abi-macro",
+ "solana-instruction",
  "solana-logger",
  "solana-program",
+ "solana-pubkey",
 ]
 
 [[package]]
