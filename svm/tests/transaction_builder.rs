@@ -26,7 +26,7 @@ pub struct SanitizedTransactionBuilder {
     signed_readonly_accounts: Vec<(Pubkey, Signature)>,
     signed_mutable_accounts: Vec<(Pubkey, Signature)>,
     unsigned_readonly_accounts: Vec<Pubkey>,
-    unsigned_mutable_account: Vec<Pubkey>,
+    unsigned_mutable_accounts: Vec<Pubkey>,
 }
 
 #[derive(PartialEq, Eq, Hash, Clone)]
@@ -91,7 +91,7 @@ impl SanitizedTransactionBuilder {
                     AccountType::SignerReadonly
                 }
                 (false, true) => {
-                    self.unsigned_mutable_account.push(item.pubkey);
+                    self.unsigned_mutable_accounts.push(item.pubkey);
                     AccountType::Writable
                 }
                 (false, false) => {
@@ -117,7 +117,7 @@ impl SanitizedTransactionBuilder {
             self.signed_mutable_accounts
                 .len()
                 .saturating_add(self.signed_readonly_accounts.len())
-                .saturating_add(self.unsigned_mutable_account.len())
+                .saturating_add(self.unsigned_mutable_accounts.len())
                 .saturating_add(self.unsigned_readonly_accounts.len())
                 .saturating_add(1),
         );
@@ -159,7 +159,7 @@ impl SanitizedTransactionBuilder {
                 positions_lambda(key, AccountType::SignerReadonly);
                 signatures.push(*signature);
             });
-        self.unsigned_mutable_account
+        self.unsigned_mutable_accounts
             .iter()
             .for_each(|key| positions_lambda(key, AccountType::Writable));
         self.unsigned_readonly_accounts
@@ -232,8 +232,8 @@ impl SanitizedTransactionBuilder {
         self.num_readonly_unsigned_accounts = 0;
         self.signed_mutable_accounts.clear();
         self.signed_readonly_accounts.clear();
-        self.unsigned_mutable_account.clear();
-        self.unsigned_mutable_account.clear();
+        self.unsigned_mutable_accounts.clear();
+        self.unsigned_readonly_accounts.clear();
 
         instructions
     }
