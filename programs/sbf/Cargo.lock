@@ -5420,7 +5420,7 @@ name = "solana-inline-spl"
 version = "2.1.0"
 dependencies = [
  "bytemuck",
- "solana-program",
+ "solana-pubkey",
 ]
 
 [[package]]

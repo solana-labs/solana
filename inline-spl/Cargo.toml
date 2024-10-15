@@ -11,7 +11,9 @@ edition = { workspace = true }
 
 [dependencies]
 bytemuck = { workspace = true }
-solana-program = { workspace = true, default-features = false }
+solana-pubkey = { workspace = true, default-features = false, features = [
+    "bytemuck",
+] }
 
 [lib]
 crate-type = ["lib"]
