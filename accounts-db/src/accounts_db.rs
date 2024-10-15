@@ -97,7 +97,7 @@ use {
     std::{
         borrow::Cow,
         boxed::Box,
-        collections::{BTreeSet, HashMap, HashSet},
+        collections::{BTreeSet, HashMap, HashSet, VecDeque},
         fs,
         hash::{Hash as StdHash, Hasher as StdHasher},
         io::Result as IoResult,
@@ -1508,12 +1508,11 @@ pub struct AccountsDb {
     pub is_experimental_accumulator_hash_enabled: AtomicBool,
 
     /// These are the ancient storages that could be valuable to
-    /// shrink, sorted by amount of dead bytes. The elements
-    /// are popped from the end of the vector, hence the sorting is
-    /// expected to be from the smallest dead bytes to the largest.
+    /// shrink, sorted by amount of dead bytes.  The elements
+    /// are sorted from the largest dead bytes to the smallest.
     /// Members are Slot and capacity. If capacity is smaller, then
     /// that means the storage was already shrunk.
-    pub(crate) best_ancient_slots_to_shrink: RwLock<Vec<(Slot, u64)>>,
+    pub(crate) best_ancient_slots_to_shrink: RwLock<VecDeque<(Slot, u64)>>,
 }
 
 /// results from 'split_storages_ancient'
@@ -4442,11 +4441,10 @@ impl AccountsDb {
         });
 
         // If there are too few slots to shrink, add an ancient slot
-        // for shrinking.  The best ancient slots to shrink are
-        // assumed to be in reverse order.
+        // for shrinking.
         if shrink_slots.len() < SHRINK_INSERT_ANCIENT_THRESHOLD {
             let mut ancients = self.best_ancient_slots_to_shrink.write().unwrap();
-            while let Some((slot, capacity)) = ancients.pop() {
+            while let Some((slot, capacity)) = ancients.pop_front() {
                 if let Some(store) = self.storage.get_slot_storage_entry(slot) {
                     if !shrink_slots.contains(&slot)
                         && capacity == store.capacity()
