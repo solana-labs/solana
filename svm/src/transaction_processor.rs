@@ -189,7 +189,20 @@ impl<FG: ForkGraph> Default for TransactionBatchProcessor<FG> {
 }
 
 impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
-    pub fn new(slot: Slot, epoch: Epoch, builtin_program_ids: HashSet<Pubkey>) -> Self {
+    /// Create a new, uninitialized `TransactionBatchProcessor`.
+    ///
+    /// In this context, uninitialized means that the `TransactionBatchProcessor`
+    /// has been initialized with an empty program cache. The cache contains no
+    /// programs (including builtins) and has not been configured with a valid
+    /// fork graph.
+    ///
+    /// When using this method, it's advisable to call `set_fork_graph_in_program_cache`
+    /// as well as `add_builtin` to configure the cache before using the processor.
+    pub fn new_uninitialized(
+        slot: Slot,
+        epoch: Epoch,
+        builtin_program_ids: HashSet<Pubkey>,
+    ) -> Self {
         Self {
             slot,
             epoch,
@@ -199,6 +212,12 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         }
     }
 
+    /// Create a new `TransactionBatchProcessor` from the current instance, but
+    /// with the provided slot and epoch.
+    ///
+    /// * Inherits the program cache and builtin program ids from the current
+    ///   instance.
+    /// * Resets the sysvar cache.
     pub fn new_from(&self, slot: Slot, epoch: Epoch) -> Self {
         Self {
             slot,

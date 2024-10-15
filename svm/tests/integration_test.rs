@@ -872,7 +872,7 @@ fn execute_test_entry(test_entry: SvmTestEntry) {
             .insert(*pubkey, account.clone());
     }
 
-    let batch_processor = TransactionBatchProcessor::<MockForkGraph>::new(
+    let batch_processor = TransactionBatchProcessor::<MockForkGraph>::new_uninitialized(
         EXECUTION_SLOT,
         EXECUTION_EPOCH,
         HashSet::new(),
@@ -1059,7 +1059,7 @@ fn svm_inspect_account() {
 
     // Load and execute the transaction
 
-    let batch_processor = TransactionBatchProcessor::<MockForkGraph>::new(
+    let batch_processor = TransactionBatchProcessor::<MockForkGraph>::new_uninitialized(
         EXECUTION_SLOT,
         EXECUTION_EPOCH,
         HashSet::new(),

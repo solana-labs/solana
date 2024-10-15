@@ -208,7 +208,7 @@ impl JsonRpcRequestProcessor {
                 (pubkey, acc_data)
             })
             .collect();
-        let batch_processor = TransactionBatchProcessor::<MockForkGraph>::new(
+        let batch_processor = TransactionBatchProcessor::<MockForkGraph>::new_uninitialized(
             EXECUTION_SLOT,
             EXECUTION_EPOCH,
             HashSet::new(),

@@ -50,7 +50,7 @@ pub(crate) fn create_transaction_batch_processor<CB: TransactionProcessingCallba
     // marked as "depoyed" in slot 0.
     // See `solana_svm::program_loader::load_program_with_pubkey` for more
     // details.
-    let processor = TransactionBatchProcessor::<PayTubeForkGraph>::new(
+    let processor = TransactionBatchProcessor::<PayTubeForkGraph>::new_uninitialized(
         /* slot */ 1,
         /* epoch */ 1,
         /* builtin_program_ids */ HashSet::new(),

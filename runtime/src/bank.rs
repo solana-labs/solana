@@ -1048,7 +1048,7 @@ impl Bank {
         };
 
         bank.transaction_processor =
-            TransactionBatchProcessor::new(bank.slot, bank.epoch, HashSet::default());
+            TransactionBatchProcessor::new_uninitialized(bank.slot, bank.epoch, HashSet::default());
 
         let accounts_data_size_initial = bank.get_total_accounts_stats().unwrap().data_len as u64;
         bank.accounts_data_size_initial = accounts_data_size_initial;
@@ -1702,7 +1702,7 @@ impl Bank {
         };
 
         bank.transaction_processor =
-            TransactionBatchProcessor::new(bank.slot, bank.epoch, HashSet::default());
+            TransactionBatchProcessor::new_uninitialized(bank.slot, bank.epoch, HashSet::default());
 
         let thread_pool = ThreadPoolBuilder::new()
             .thread_name(|i| format!("solBnkNewFlds{i:02}"))
