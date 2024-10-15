@@ -1,0 +1,19 @@
+[package]
+name = "solana-program-entrypoint"
+description = "The Solana BPF program entrypoint supported by the latest BPF loader."
+documentation = "https://docs.rs/solana-program-entrypoint"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+solana-account-info = { workspace = true }
+solana-msg = { workspace = true }
+solana-program-error = { workspace = true }
+solana-pubkey = { workspace = true, default-features = false }
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

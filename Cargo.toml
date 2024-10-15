@@ -120,6 +120,7 @@ members = [
     "sdk/package-metadata",
     "sdk/package-metadata-macro",
     "sdk/program",
+    "sdk/program-entrypoint",
     "sdk/program-error",
     "sdk/program-memory",
     "sdk/program-option",
@@ -408,6 +409,7 @@ solana-define-syscall = { path = "define-syscall", version = "=2.1.0" }
 solana-derivation-path = { path = "sdk/derivation-path", version = "=2.1.0" }
 solana-download-utils = { path = "download-utils", version = "=2.1.0" }
 solana-entry = { path = "entry", version = "=2.1.0" }
+solana-program-entrypoint = { path = "sdk/program-entrypoint", version = "=2.1.0" }
 solana-epoch-schedule = { path = "sdk/epoch-schedule", version = "=2.1.0" }
 solana-faucet = { path = "faucet", version = "=2.1.0" }
 solana-feature-set = { path = "sdk/feature-set", version = "=2.1.0" }

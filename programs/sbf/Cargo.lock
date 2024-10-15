@@ -5706,6 +5706,7 @@ dependencies = [
  "solana-instruction",
  "solana-msg",
  "solana-native-token",
+ "solana-program-entrypoint",
  "solana-program-error",
  "solana-program-memory",
  "solana-program-option",
@@ -5722,6 +5723,16 @@ dependencies = [
  "solana-slot-hashes",
  "thiserror",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "solana-program-entrypoint"
+version = "2.1.0"
+dependencies = [
+ "solana-account-info",
+ "solana-msg",
+ "solana-program-error",
+ "solana-pubkey",
 ]
 
 [[package]]

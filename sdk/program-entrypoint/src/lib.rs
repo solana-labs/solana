@@ -6,8 +6,9 @@
 
 extern crate alloc;
 use {
-    crate::{account_info::AccountInfo, pubkey::Pubkey},
     alloc::vec::Vec,
+    solana_account_info::AccountInfo,
+    solana_pubkey::Pubkey,
     std::{
         alloc::Layout,
         cell::RefCell,
@@ -17,7 +18,11 @@ use {
         slice::{from_raw_parts, from_raw_parts_mut},
     },
 };
-pub use {solana_account_info::MAX_PERMITTED_DATA_INCREASE, solana_program_error::ProgramResult};
+// need to re-export msg for custom_heap_default macro
+pub use {
+    solana_account_info::MAX_PERMITTED_DATA_INCREASE, solana_msg::msg as __msg,
+    solana_program_error::ProgramResult,
+};
 
 /// User implemented function to process an instruction
 ///
@@ -97,13 +102,11 @@ pub const NON_DUP_MARKER: u8 = u8::MAX;
 /// #[cfg(not(feature = "no-entrypoint"))]
 /// pub mod entrypoint {
 ///
-///     use solana_program::{
-///         account_info::AccountInfo,
-///         entrypoint,
-///         entrypoint::ProgramResult,
-///         msg,
-///         pubkey::Pubkey,
-///     };
+///     use solana_account_info::AccountInfo;
+///     use solana_program_entrypoint::entrypoint;
+///     use solana_program_entrypoint::ProgramResult;
+///     use solana_msg::msg;
+///     use solana_pubkey::Pubkey;
 ///
 ///     entrypoint!(process_instruction);
 ///
@@ -125,10 +128,9 @@ macro_rules! entrypoint {
         /// # Safety
         #[no_mangle]
         pub unsafe extern "C" fn entrypoint(input: *mut u8) -> u64 {
-            let (program_id, accounts, instruction_data) =
-                unsafe { $crate::entrypoint::deserialize(input) };
+            let (program_id, accounts, instruction_data) = unsafe { $crate::deserialize(input) };
             match $process_instruction(program_id, &accounts, instruction_data) {
-                Ok(()) => $crate::entrypoint::SUCCESS,
+                Ok(()) => $crate::SUCCESS,
                 Err(error) => error.into(),
             }
         }
@@ -170,7 +172,7 @@ macro_rules! entrypoint_no_alloc {
             const MAX_ACCOUNT_INFOS: usize = 64;
             let mut accounts = [UNINIT_ACCOUNT_INFO; MAX_ACCOUNT_INFOS];
             let (program_id, num_accounts, instruction_data) =
-                unsafe { $crate::entrypoint::deserialize_into(input, &mut accounts) };
+                unsafe { $crate::deserialize_into(input, &mut accounts) };
             // Use `slice_assume_init_ref` once it's stabilized
             let accounts = &*(&accounts[..num_accounts] as *const [MaybeUninit<AccountInfo<'_>>]
                 as *const [AccountInfo<'_>]);
@@ -178,7 +180,7 @@ macro_rules! entrypoint_no_alloc {
             #[inline(never)]
             fn call_program(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8]) -> u64 {
                 match $process_instruction(program_id, accounts, data) {
-                    Ok(()) => $crate::entrypoint::SUCCESS,
+                    Ok(()) => $crate::SUCCESS,
                     Err(error) => error.into(),
                 }
             }
@@ -214,9 +216,9 @@ macro_rules! custom_heap_default {
     () => {
         #[cfg(all(not(feature = "custom-heap"), target_os = "solana"))]
         #[global_allocator]
-        static A: $crate::entrypoint::BumpAllocator = $crate::entrypoint::BumpAllocator {
-            start: $crate::entrypoint::HEAP_START_ADDRESS as usize,
-            len: $crate::entrypoint::HEAP_LENGTH,
+        static A: $crate::BumpAllocator = $crate::BumpAllocator {
+            start: $crate::HEAP_START_ADDRESS as usize,
+            len: $crate::HEAP_LENGTH,
         };
     };
 }
@@ -272,7 +274,7 @@ macro_rules! custom_panic_default {
         #[no_mangle]
         fn custom_panic(info: &core::panic::PanicInfo<'_>) {
             // Full panic reporting
-            $crate::msg!("{}", info);
+            $crate::__msg!("{}", info);
         }
     };
 }
