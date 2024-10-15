@@ -2869,11 +2869,34 @@ impl Bank {
         stake_weighted_timestamp
     }
 
+    /// Recalculates the bank hash
+    ///
+    /// This is used by ledger-tool when creating a snapshot, which
+    /// recalcuates the bank hash.
+    ///
+    /// Note that the account state is *not* allowed to change by rehashing.
+    /// If it does, this function will panic.
+    /// If modifying accounts in ledger-tool is needed, create a new bank.
     pub fn rehash(&self) {
+        let get_delta_hash = || {
+            self.rc
+                .accounts
+                .accounts_db
+                .get_accounts_delta_hash(self.slot())
+        };
+
         let mut hash = self.hash.write().unwrap();
+        let curr_accounts_delta_hash = get_delta_hash();
         let new = self.hash_internal_state();
+        if let Some(curr_accounts_delta_hash) = curr_accounts_delta_hash {
+            let new_accounts_delta_hash = get_delta_hash().unwrap();
+            assert_eq!(
+                new_accounts_delta_hash, curr_accounts_delta_hash,
+                "rehashing is not allowed to change the account state",
+            );
+        }
         if new != *hash {
-            warn!("Updating bank hash to {}", new);
+            warn!("Updating bank hash to {new}");
             *hash = new;
         }
     }

@@ -13252,3 +13252,48 @@ fn test_bank_epoch_stakes() {
         );
     }
 }
+
+#[test]
+fn test_rehash_good() {
+    let ten_sol = 10 * LAMPORTS_PER_SOL;
+    let (genesis_config, _mint) = create_genesis_config(ten_sol);
+    let bank = Bank::new_for_tests(&genesis_config);
+
+    let lamports = 123_456_789;
+    let account = AccountSharedData::new(lamports, 0, &Pubkey::default());
+    let pubkey = Pubkey::new_unique();
+    bank.store_account_and_update_capitalization(&pubkey, &account);
+
+    // freeze the bank to trigger hash calculation
+    bank.freeze();
+
+    // ensure the bank hash is the same before and after rehashing
+    let prev_bank_hash = bank.hash();
+    bank.rehash();
+    let post_bank_hash = bank.hash();
+    assert_eq!(post_bank_hash, prev_bank_hash);
+}
+
+#[test]
+#[should_panic(expected = "rehashing is not allowed to change the account state")]
+fn test_rehash_bad() {
+    let ten_sol = 10 * LAMPORTS_PER_SOL;
+    let (genesis_config, _mint) = create_genesis_config(ten_sol);
+    let bank = Bank::new_for_tests(&genesis_config);
+
+    let mut account = AccountSharedData::new(ten_sol, 0, &Pubkey::default());
+    let pubkey = Pubkey::new_unique();
+    bank.store_account_and_update_capitalization(&pubkey, &account);
+
+    // freeze the bank to trigger hash calculation
+    bank.freeze();
+
+    // change an account, which will cause rehashing to panic
+    account.checked_add_lamports(ten_sol).unwrap();
+    bank.rc
+        .accounts
+        .store_accounts_cached((bank.slot(), [(&pubkey, &account)].as_slice()));
+
+    // let the show begin
+    bank.rehash();
+}
