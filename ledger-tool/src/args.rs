@@ -345,6 +345,8 @@ pub fn get_accounts_db_config(
         create_ancient_storage,
         storage_access,
         scan_filter_for_shrinking,
+        enable_experimental_accumulator_hash: arg_matches
+            .is_present("accounts_db_experimental_accumulator_hash"),
         ..AccountsDbConfig::default()
     }
 }
