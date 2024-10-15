@@ -11,8 +11,10 @@ publish = false
 
 [package.metadata.solana]
 tools-version = "v1.43"
+program-id = "MyProgram1111111111111111111111111111111111"
 
 [dependencies]
+solana-package-metadata = { path = "../../../../package-metadata", version = "=2.1.0" }
 solana-program = { path = "../../../../program", version = "=2.1.0" }
 
 [lib]

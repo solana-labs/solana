@@ -37,6 +37,19 @@ or
 tools-version = "1.43"
 ```
 The order of precedence for the chosen tools version goes: `--tools-version` argument, package version, workspace version, and finally default version.
+  * `package-metadata`: specify a program's id in Cargo.toml for easy consumption by downstream users and tools using `solana-package-metadata` (#1806). For example:
+```toml
+[package.metadata.solana]
+program-id = "MyProgram1111111111111111111111111111111111"
+```
+Can be consumed in the program crate:
+```rust
+solana_package_metadata::declare_id_with_package_metadata!("solana.program-id");
+```
+This is equivalent to writing:
+```rust
+solana_pubkey::declare_id!("MyProgram1111111111111111111111111111111111");
+```
   * `agave-validator`: Update PoH speed check to compare against current hash rate from a Bank (#2447)
   * `solana-test-validator`: Add `--clone-feature-set` flag to mimic features from a target cluster (#2480)
   * `solana-genesis`: the `--cluster-type` parameter now clones the feature set from the target cluster (#2587)

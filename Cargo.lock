@@ -7161,6 +7161,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-package-metadata"
+version = "2.1.0"
+dependencies = [
+ "solana-package-metadata-macro",
+ "solana-pubkey",
+]
+
+[[package]]
 name = "solana-package-metadata-macro"
 version = "2.1.0"
 dependencies = [

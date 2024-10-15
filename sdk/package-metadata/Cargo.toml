@@ -1,0 +1,17 @@
+[package]
+name = "solana-package-metadata"
+description = "Solana Package Metadata"
+documentation = "https://docs.rs/solana-package-metadata"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+solana-package-metadata-macro = { workspace = true }
+solana-pubkey = { workspace = true }
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
