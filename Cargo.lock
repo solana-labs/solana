@@ -7119,6 +7119,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-native-token"
+version = "2.1.0"
+
+[[package]]
 name = "solana-net-shaper"
 version = "2.1.0"
 dependencies = [
@@ -7318,6 +7322,7 @@ dependencies = [
  "solana-instruction",
  "solana-logger",
  "solana-msg",
+ "solana-native-token",
  "solana-program-error",
  "solana-program-memory",
  "solana-program-option",
@@ -7897,6 +7902,7 @@ dependencies = [
  "solana-frozen-abi",
  "solana-frozen-abi-macro",
  "solana-logger",
+ "solana-native-token",
  "solana-program",
  "solana-program-memory",
  "solana-pubkey",

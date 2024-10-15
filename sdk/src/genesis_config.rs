@@ -9,7 +9,6 @@ use {
         fee_calculator::FeeRateGovernor,
         hash::{hash, Hash},
         inflation::Inflation,
-        native_token::lamports_to_sol,
         poh_config::PohConfig,
         pubkey::Pubkey,
         rent::Rent,
@@ -22,6 +21,7 @@ use {
     chrono::{TimeZone, Utc},
     memmap2::Mmap,
     solana_account::{Account, AccountSharedData},
+    solana_native_token::lamports_to_sol,
     std::{
         collections::BTreeMap,
         fmt,
