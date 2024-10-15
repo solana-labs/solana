@@ -33,6 +33,7 @@ full = [
     "libsecp256k1",
     "sha3",
     "digest",
+    "solana-pubkey/rand",
 ]
 borsh = ["dep:borsh", "solana-program/borsh", "solana-secp256k1-recover/borsh"]
 dev-context-only-utils = ["qualifier_attr", "solana-account/dev-context-only-utils"]
@@ -97,7 +98,7 @@ solana-frozen-abi-macro = { workspace = true, optional = true, features = [
 ] }
 solana-program = { workspace = true }
 solana-program-memory = { workspace = true }
-solana-pubkey = { workspace = true }
+solana-pubkey = { workspace = true, default-features = false, features = ["std"] }
 solana-sanitize = { workspace = true }
 solana-sdk-macro = { workspace = true }
 solana-secp256k1-recover = { workspace = true }

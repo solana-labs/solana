@@ -5828,6 +5828,7 @@ dependencies = [
  "getrandom 0.2.10",
  "js-sys",
  "num-traits",
+ "rand 0.8.5",
  "serde",
  "serde_derive",
  "solana-atomic-u64",

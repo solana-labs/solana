@@ -1,13 +1,13 @@
-//! Solana account addresses.
-
-pub use solana_program::pubkey::*;
-
-/// New random Pubkey for tests and benchmarks.
 #[cfg(feature = "full")]
-pub fn new_rand() -> Pubkey {
-    Pubkey::from(rand::random::<[u8; PUBKEY_BYTES]>())
-}
+pub use solana_pubkey::new_rand;
+#[cfg(target_os = "solana")]
+pub use solana_pubkey::syscalls;
+pub use solana_pubkey::{
+    bytes_are_curve_point, ParsePubkeyError, Pubkey, PubkeyError, MAX_SEEDS, MAX_SEED_LEN,
+    PUBKEY_BYTES,
+};
 
+#[deprecated(since = "2.1.0")]
 #[cfg(feature = "full")]
 pub fn write_pubkey_file(outfile: &str, pubkey: Pubkey) -> Result<(), Box<dyn std::error::Error>> {
     use std::io::Write;
@@ -24,6 +24,7 @@ pub fn write_pubkey_file(outfile: &str, pubkey: Pubkey) -> Result<(), Box<dyn st
     Ok(())
 }
 
+#[deprecated(since = "2.1.0")]
 #[cfg(feature = "full")]
 pub fn read_pubkey_file(infile: &str) -> Result<Pubkey, Box<dyn std::error::Error>> {
     let f = std::fs::File::open(infile)?;
@@ -31,20 +32,4 @@ pub fn read_pubkey_file(infile: &str) -> Result<Pubkey, Box<dyn std::error::Erro
 
     use std::str::FromStr;
     Ok(Pubkey::from_str(&printable)?)
-}
-
-#[cfg(test)]
-mod tests {
-    use {super::*, std::fs::remove_file};
-
-    #[test]
-    fn test_read_write_pubkey() -> Result<(), Box<dyn std::error::Error>> {
-        let filename = "test_pubkey.json";
-        let pubkey = solana_sdk::pubkey::new_rand();
-        write_pubkey_file(filename, pubkey)?;
-        let read = read_pubkey_file(filename)?;
-        assert_eq!(read, pubkey);
-        remove_file(filename)?;
-        Ok(())
-    }
 }

@@ -14,6 +14,7 @@ bs58 = { workspace = true }
 clap = { version = "3.1.5", features = ["cargo"] }
 dirs-next = { workspace = true }
 num_cpus = { workspace = true }
+serde_json = { workspace = true }
 solana-clap-v3-utils = { workspace = true }
 solana-cli-config = { workspace = true }
 solana-derivation-path = { workspace = true }

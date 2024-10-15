@@ -6876,6 +6876,7 @@ dependencies = [
  "clap 3.2.23",
  "dirs-next",
  "num_cpus",
+ "serde_json",
  "solana-clap-v3-utils",
  "solana-cli-config",
  "solana-derivation-path",
