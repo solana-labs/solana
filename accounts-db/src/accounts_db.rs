@@ -141,6 +141,11 @@ const MAX_ITEMS_PER_CHUNK: Slot = 2_500;
 // This allows us to split up accounts index accesses across multiple threads.
 const SHRINK_COLLECT_CHUNK_SIZE: usize = 50;
 
+/// The number of shrink candidate slots that is small enough so that
+/// additional storages from ancient slots can be added to the
+/// candidates for shrinking.
+const SHRINK_INSERT_ANCIENT_THRESHOLD: usize = 10;
+
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum CreateAncientStorage {
     /// ancient storages are created by appending
@@ -1501,6 +1506,14 @@ pub struct AccountsDb {
     /// Flag to indicate if the experimental accounts lattice hash is enabled.
     /// (For R&D only; a feature-gate also exists to turn this on and make it a part of consensus.)
     pub is_experimental_accumulator_hash_enabled: AtomicBool,
+
+    /// These are the ancient storages that could be valuable to
+    /// shrink, sorted by amount of dead bytes. The elements
+    /// are popped from the end of the vector, hence the sorting is
+    /// expected to be from the smallest dead bytes to the largest.
+    /// Members are Slot and capacity. If capacity is smaller, then
+    /// that means the storage was already shrunk.
+    pub(crate) best_ancient_slots_to_shrink: RwLock<Vec<(Slot, u64)>>,
 }
 
 /// results from 'split_storages_ancient'
@@ -1860,6 +1873,7 @@ impl AccountsDb {
             is_experimental_accumulator_hash_enabled: default_accounts_db_config
                 .enable_experimental_accumulator_hash
                 .into(),
+            best_ancient_slots_to_shrink: RwLock::default(),
         }
     }
 
@@ -4401,8 +4415,12 @@ impl AccountsDb {
 
         let shrink_candidates_slots =
             std::mem::take(&mut *self.shrink_candidate_slots.lock().unwrap());
+        self.shrink_stats
+            .initial_candidates_count
+            .store(shrink_candidates_slots.len() as u64, Ordering::Relaxed);
+
         let candidates_count = shrink_candidates_slots.len();
-        let ((shrink_slots, shrink_slots_next_batch), select_time_us) = measure_us!({
+        let ((mut shrink_slots, shrink_slots_next_batch), select_time_us) = measure_us!({
             if let AccountShrinkThreshold::TotalSpace { shrink_ratio } = self.shrink_ratio {
                 let (shrink_slots, shrink_slots_next_batch) =
                     self.select_candidates_by_total_usage(&shrink_candidates_slots, shrink_ratio);
@@ -4423,6 +4441,30 @@ impl AccountsDb {
             }
         });
 
+        // If there are too few slots to shrink, add an ancient slot
+        // for shrinking.  The best ancient slots to shrink are
+        // assumed to be in reverse order.
+        if shrink_slots.len() < SHRINK_INSERT_ANCIENT_THRESHOLD {
+            let mut ancients = self.best_ancient_slots_to_shrink.write().unwrap();
+            while let Some((slot, capacity)) = ancients.pop() {
+                if let Some(store) = self.storage.get_slot_storage_entry(slot) {
+                    if !shrink_slots.contains(&slot)
+                        && capacity == store.capacity()
+                        && Self::is_candidate_for_shrink(self, &store)
+                    {
+                        let ancient_bytes_added_to_shrink = store.alive_bytes() as u64;
+                        shrink_slots.insert(slot, store);
+                        self.shrink_stats
+                            .ancient_bytes_added_to_shrink
+                            .fetch_add(ancient_bytes_added_to_shrink, Ordering::Relaxed);
+                        self.shrink_stats
+                            .ancient_slots_added_to_shrink
+                            .fetch_add(1, Ordering::Relaxed);
+                        break;
+                    }
+                }
+            }
+        }
         if shrink_slots.is_empty()
             && shrink_slots_next_batch
                 .as_ref()
@@ -9252,7 +9294,9 @@ pub mod tests {
             accounts_hash::MERKLE_FANOUT,
             accounts_index::{tests::*, AccountSecondaryIndexesIncludeExclude},
             ancient_append_vecs,
-            append_vec::{test_utils::TempFile, AppendVec, AppendVecStoredAccountMeta},
+            append_vec::{
+                aligned_stored_size, test_utils::TempFile, AppendVec, AppendVecStoredAccountMeta,
+            },
             storable_accounts::AccountForStorage,
         },
         assert_matches::assert_matches,
@@ -12152,6 +12196,83 @@ pub mod tests {
             pubkey_count_after_shrink,
             accounts.all_account_count_in_accounts_file(shrink_slot)
         );
+    }
+
+    /// This test creates an ancient storage with three alive accounts
+    /// of various sizes. It then simulates killing one of the
+    /// accounts in a more recent (non-ancient) slot by overwriting
+    /// the account that has the smallest data size.  The dead account
+    /// is expected to be deleted from its ancient storage in the
+    /// process of shrinking candidate slots.  The capacity of the
+    /// storage after shrinking is expected to be the sum of alive
+    /// bytes of the two remaining alive ancient accounts.
+    #[test]
+    fn test_shrink_candidate_slots_with_dead_ancient_account() {
+        solana_logger::setup();
+        let epoch_schedule = EpochSchedule::default();
+        let num_ancient_slots = 3;
+        // Prepare 3 append vecs to combine [medium, big, small]
+        let account_data_sizes = vec![1000, 2000, 150];
+        let (db, starting_ancient_slot) =
+            create_db_with_storages_and_index_with_customized_account_size_per_slot(
+                true,
+                num_ancient_slots,
+                account_data_sizes,
+            );
+        db.add_root(starting_ancient_slot);
+        let slots_to_combine: Vec<Slot> =
+            (starting_ancient_slot..starting_ancient_slot + num_ancient_slots as Slot).collect();
+        db.combine_ancient_slots(slots_to_combine, CAN_RANDOMLY_SHRINK_FALSE);
+        let storage = db.get_storage_for_slot(starting_ancient_slot).unwrap();
+        let ancient_accounts = db.get_unique_accounts_from_storage(&storage);
+        // Check that three accounts are indeed present in the combined storage.
+        assert_eq!(ancient_accounts.stored_accounts.len(), 3);
+        // Find an ancient account with smallest data length.
+        // This will be a dead account, overwritten in the current slot.
+        let modified_account_pubkey = ancient_accounts
+            .stored_accounts
+            .iter()
+            .min_by(|a, b| a.data_len.cmp(&b.data_len))
+            .unwrap()
+            .pubkey;
+        let modified_account_owner = *AccountSharedData::default().owner();
+        let modified_account = AccountSharedData::new(223, 0, &modified_account_owner);
+        let ancient_append_vec_offset = db.ancient_append_vec_offset.unwrap().abs();
+        let current_slot = epoch_schedule.slots_per_epoch + ancient_append_vec_offset as u64 + 1;
+        // Simulate killing of the ancient account by overwriting it in the current slot.
+        db.store_for_tests(
+            current_slot,
+            &[(&modified_account_pubkey, &modified_account)],
+        );
+        db.calculate_accounts_delta_hash(current_slot);
+        db.add_root_and_flush_write_cache(current_slot);
+        // This should remove the dead ancient account from the index.
+        db.clean_accounts_for_tests();
+        db.shrink_ancient_slots(&epoch_schedule);
+        let storage = db.get_storage_for_slot(starting_ancient_slot).unwrap();
+        let created_accounts = db.get_unique_accounts_from_storage(&storage);
+        // The dead account should still be in the ancient storage,
+        // because the storage wouldn't be shrunk with normal alive to
+        // capacity ratio.
+        assert_eq!(created_accounts.stored_accounts.len(), 3);
+        db.shrink_candidate_slots(&epoch_schedule);
+        let storage = db.get_storage_for_slot(starting_ancient_slot).unwrap();
+        let created_accounts = db.get_unique_accounts_from_storage(&storage);
+        // At this point the dead ancient account should be removed
+        // and storage capacity shrunk to the sum of alive bytes of
+        // accounts it holds.  This is the data lengths of the
+        // accounts plus the length of their metadata.
+        assert_eq!(
+            created_accounts.capacity as usize,
+            aligned_stored_size(1000) + aligned_stored_size(2000)
+        );
+        // The above check works only when the AppendVec storage is
+        // used. More generally the pubkey of the smallest account
+        // shouldn't be present in the shrunk storage, which is
+        // validated by the following scan of the storage accounts.
+        storage.accounts.scan_pubkeys(|pubkey| {
+            assert_ne!(pubkey, &modified_account_pubkey);
+        });
     }
 
     #[test]
