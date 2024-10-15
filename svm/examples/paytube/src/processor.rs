@@ -3,17 +3,18 @@
 use {
     solana_bpf_loader_program::syscalls::create_program_runtime_environment_v1,
     solana_compute_budget::compute_budget::ComputeBudget,
-    solana_program_runtime::loaded_programs::{
-        BlockRelation, ForkGraph, LoadProgramMetrics, ProgramCacheEntry,
-    },
-    solana_sdk::{account::ReadableAccount, clock::Slot, feature_set::FeatureSet, transaction},
+    solana_program_runtime::loaded_programs::{BlockRelation, ForkGraph, ProgramCacheEntry},
+    solana_sdk::{clock::Slot, feature_set::FeatureSet, transaction},
     solana_svm::{
         account_loader::CheckedTransactionDetails,
         transaction_processing_callback::TransactionProcessingCallback,
         transaction_processor::TransactionBatchProcessor,
     },
     solana_system_program::system_processor,
-    std::sync::{Arc, RwLock},
+    std::{
+        collections::HashSet,
+        sync::{Arc, RwLock},
+    },
 };
 
 /// In order to use the `TransactionBatchProcessor`, another trait - Solana
@@ -40,13 +41,25 @@ pub(crate) fn create_transaction_batch_processor<CB: TransactionProcessingCallba
     compute_budget: &ComputeBudget,
     fork_graph: Arc<RwLock<PayTubeForkGraph>>,
 ) -> TransactionBatchProcessor<PayTubeForkGraph> {
-    let processor = TransactionBatchProcessor::<PayTubeForkGraph>::default();
+    // Create a new transaction batch processor.
+    //
+    // We're going to use slot 1 specifically because any programs we add will
+    // be deployed in slot 0, and they are delayed visibility until the next
+    // slot (1).
+    // This includes programs owned by BPF Loader v2, which are automatically
+    // marked as "depoyed" in slot 0.
+    // See `solana_svm::program_loader::load_program_with_pubkey` for more
+    // details.
+    let processor = TransactionBatchProcessor::<PayTubeForkGraph>::new(
+        /* slot */ 1,
+        /* epoch */ 1,
+        /* builtin_program_ids */ HashSet::new(),
+    );
 
     {
         let mut cache = processor.program_cache.write().unwrap();
 
         // Initialize the mocked fork graph.
-        // let fork_graph = Arc::new(RwLock::new(PayTubeForkGraph {}));
         cache.fork_graph = Some(Arc::downgrade(&fork_graph));
 
         // Initialize a proper cache environment.
@@ -55,27 +68,6 @@ pub(crate) fn create_transaction_batch_processor<CB: TransactionProcessingCallba
             create_program_runtime_environment_v1(feature_set, compute_budget, false, false)
                 .unwrap(),
         );
-
-        // Add the SPL Token program to the cache.
-        if let Some(program_account) = callbacks.get_account_shared_data(&spl_token::id()) {
-            let elf_bytes = program_account.data();
-            let program_runtime_environment = cache.environments.program_runtime_v1.clone();
-            cache.assign_program(
-                spl_token::id(),
-                Arc::new(
-                    ProgramCacheEntry::new(
-                        &solana_sdk::bpf_loader::id(),
-                        program_runtime_environment,
-                        0,
-                        0,
-                        elf_bytes,
-                        elf_bytes.len(),
-                        &mut LoadProgramMetrics::default(),
-                    )
-                    .unwrap(),
-                ),
-            );
-        }
     }
 
     // Add the system program builtin.
