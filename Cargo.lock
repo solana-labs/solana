@@ -6658,9 +6658,13 @@ name = "solana-feature-set"
 version = "2.1.0"
 dependencies = [
  "lazy_static",
+ "solana-clock",
+ "solana-epoch-schedule",
  "solana-frozen-abi",
  "solana-frozen-abi-macro",
- "solana-program",
+ "solana-hash",
+ "solana-pubkey",
+ "solana-sha256-hasher",
 ]
 
 [[package]]
@@ -7037,6 +7041,7 @@ dependencies = [
  "byte-unit",
  "clap 3.2.23",
  "serde",
+ "serde_derive",
  "serde_json",
  "solana-logger",
  "solana-version",

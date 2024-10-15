@@ -11,13 +11,17 @@ edition = { workspace = true }
 
 [dependencies]
 lazy_static = { workspace = true }
+solana-clock = { workspace = true }
+solana-epoch-schedule = { workspace = true }
 solana-frozen-abi = { workspace = true, optional = true, features = [
     "frozen-abi",
 ] }
 solana-frozen-abi-macro = { workspace = true, optional = true, features = [
     "frozen-abi",
 ] }
-solana-program = { workspace = true }
+solana-hash = { workspace = true }
+solana-pubkey = { workspace = true }
+solana-sha256-hasher = { workspace = true }
 
 [features]
 frozen-abi = [

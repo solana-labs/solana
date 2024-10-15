@@ -5299,7 +5299,11 @@ name = "solana-feature-set"
 version = "2.1.0"
 dependencies = [
  "lazy_static",
- "solana-program",
+ "solana-clock",
+ "solana-epoch-schedule",
+ "solana-hash",
+ "solana-pubkey",
+ "solana-sha256-hasher",
 ]
 
 [[package]]
