@@ -38,6 +38,10 @@ solana-sdk = { workspace = true }
 subtle = { workspace = true }
 zeroize = { workspace = true, features = ["zeroize_derive"] }
 
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys = { workspace = true }
+wasm-bindgen = { workspace = true }
+
 [lib]
 crate-type = ["cdylib", "rlib"]
 

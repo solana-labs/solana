@@ -13,7 +13,17 @@ use {
     },
     base64::{prelude::BASE64_STANDARD, Engine},
     rand::{rngs::OsRng, Rng},
-    sha3::{Digest, Sha3_512},
+    std::{convert::TryInto, fmt},
+    zeroize::Zeroize,
+};
+// Currently, `wasm_bindgen` exports types and functions included in the current crate, but all
+// types and functions exported for wasm targets in all of its dependencies
+// (https://github.com/rustwasm/wasm-bindgen/issues/3759). We specifically exclude some of the
+// dependencies that will cause unnecessary bloat to the wasm binary.
+#[cfg(not(target_arch = "wasm32"))]
+use {
+    sha3::Digest,
+    sha3::Sha3_512,
     solana_derivation_path::DerivationPath,
     solana_sdk::{
         signature::Signature,
@@ -23,12 +33,10 @@ use {
         },
     },
     std::{
-        convert::TryInto,
-        error, fmt,
+        error,
         io::{Read, Write},
     },
     subtle::ConstantTimeEq,
-    zeroize::Zeroize,
 };
 
 /// Byte length of an authenticated encryption nonce component
@@ -83,6 +91,25 @@ impl AuthenticatedEncryption {
 #[derive(Debug, Zeroize, Eq, PartialEq)]
 pub struct AeKey([u8; AE_KEY_LEN]);
 impl AeKey {
+    /// Generates a random authenticated encryption key.
+    ///
+    /// This function is randomized. It internally samples a scalar element using `OsRng`.
+    pub fn new_rand() -> Self {
+        AuthenticatedEncryption::keygen()
+    }
+
+    /// Encrypts an amount under the authenticated encryption key.
+    pub fn encrypt(&self, amount: u64) -> AeCiphertext {
+        AuthenticatedEncryption::encrypt(self, amount)
+    }
+
+    pub fn decrypt(&self, ciphertext: &AeCiphertext) -> Option<u64> {
+        AuthenticatedEncryption::decrypt(self, ciphertext)
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl AeKey {
     /// Deterministically derives an authenticated encryption key from a Solana signer and a public
     /// seed.
     ///
@@ -130,24 +157,9 @@ impl AeKey {
 
         result.to_vec()
     }
-
-    /// Generates a random authenticated encryption key.
-    ///
-    /// This function is randomized. It internally samples a scalar element using `OsRng`.
-    pub fn new_rand() -> Self {
-        AuthenticatedEncryption::keygen()
-    }
-
-    /// Encrypts an amount under the authenticated encryption key.
-    pub fn encrypt(&self, amount: u64) -> AeCiphertext {
-        AuthenticatedEncryption::encrypt(self, amount)
-    }
-
-    pub fn decrypt(&self, ciphertext: &AeCiphertext) -> Option<u64> {
-        AuthenticatedEncryption::decrypt(self, ciphertext)
-    }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl EncodableKey for AeKey {
     fn read<R: Read>(reader: &mut R) -> Result<Self, Box<dyn error::Error>> {
         let bytes: [u8; AE_KEY_LEN] = serde_json::from_reader(reader)?;
@@ -162,6 +174,7 @@ impl EncodableKey for AeKey {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl SeedDerivable for AeKey {
     fn from_seed(seed: &[u8]) -> Result<Self, Box<dyn error::Error>> {
         const MINIMUM_SEED_LEN: usize = AE_KEY_LEN;

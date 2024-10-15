@@ -12,11 +12,12 @@
 //! ElGamal ciphertext.
 //!
 
+#[cfg(not(target_arch = "wasm32"))]
+use crate::encryption::{discrete_log::DiscreteLog, elgamal::ElGamalSecretKey};
 use {
     crate::{
         encryption::{
-            discrete_log::DiscreteLog,
-            elgamal::{DecryptHandle, ElGamalCiphertext, ElGamalPubkey, ElGamalSecretKey},
+            elgamal::{DecryptHandle, ElGamalCiphertext, ElGamalPubkey},
             pedersen::{Pedersen, PedersenCommitment, PedersenOpening},
         },
         RISTRETTO_POINT_LEN,
@@ -92,7 +93,10 @@ impl<const N: usize> GroupedElGamal<N> {
             handle: *handle,
         })
     }
+}
 
+#[cfg(not(target_arch = "wasm32"))]
+impl<const N: usize> GroupedElGamal<N> {
     /// Decrypts a grouped ElGamal ciphertext using an ElGamal secret key pertaining to a
     /// decryption handle at a specified index.
     ///
@@ -142,32 +146,6 @@ impl<const N: usize> GroupedElGamalCiphertext<N> {
         GroupedElGamal::to_elgamal_ciphertext(self, index)
     }
 
-    /// Decrypts the grouped ElGamal ciphertext using an ElGamal secret key pertaining to a
-    /// specified index.
-    ///
-    /// The output of this function is of type `DiscreteLog`. To recover the originally encrypted
-    /// amount, use `DiscreteLog::decode`.
-    pub fn decrypt(
-        &self,
-        secret: &ElGamalSecretKey,
-        index: usize,
-    ) -> Result<DiscreteLog, GroupedElGamalError> {
-        GroupedElGamal::decrypt(self, secret, index)
-    }
-
-    /// Decrypts the grouped ElGamal ciphertext to a number that is interpreted as a positive 32-bit
-    /// number (but still of type `u64`).
-    ///
-    /// If the originally encrypted amount is not a positive 32-bit number, then the function
-    /// returns `None`.
-    pub fn decrypt_u32(
-        &self,
-        secret: &ElGamalSecretKey,
-        index: usize,
-    ) -> Result<Option<u64>, GroupedElGamalError> {
-        GroupedElGamal::decrypt_u32(self, secret, index)
-    }
-
     /// The expected length of a serialized grouped ElGamal ciphertext.
     ///
     /// A grouped ElGamal ciphertext consists of a Pedersen commitment and an array of decryption
@@ -206,6 +184,35 @@ impl<const N: usize> GroupedElGamalCiphertext<N> {
             commitment,
             handles: handles.try_into().unwrap(),
         })
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl<const N: usize> GroupedElGamalCiphertext<N> {
+    /// Decrypts the grouped ElGamal ciphertext using an ElGamal secret key pertaining to a
+    /// specified index.
+    ///
+    /// The output of this function is of type `DiscreteLog`. To recover the originally encrypted
+    /// amount, use `DiscreteLog::decode`.
+    pub fn decrypt(
+        &self,
+        secret: &ElGamalSecretKey,
+        index: usize,
+    ) -> Result<DiscreteLog, GroupedElGamalError> {
+        GroupedElGamal::decrypt(self, secret, index)
+    }
+
+    /// Decrypts the grouped ElGamal ciphertext to a number that is interpreted as a positive 32-bit
+    /// number (but still of type `u64`).
+    ///
+    /// If the originally encrypted amount is not a positive 32-bit number, then the function
+    /// returns `None`.
+    pub fn decrypt_u32(
+        &self,
+        secret: &ElGamalSecretKey,
+        index: usize,
+    ) -> Result<Option<u64>, GroupedElGamalError> {
+        GroupedElGamal::decrypt_u32(self, secret, index)
     }
 }
 
