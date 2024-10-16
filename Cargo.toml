@@ -119,6 +119,7 @@ members = [
     "sdk/native-token",
     "sdk/package-metadata",
     "sdk/package-metadata-macro",
+    "sdk/precompile-error",
     "sdk/program",
     "sdk/program-entrypoint",
     "sdk/program-error",
@@ -444,6 +445,7 @@ solana-package-metadata-macro = { path = "sdk/package-metadata-macro", version =
 solana-perf = { path = "perf", version = "=2.1.0" }
 solana-poh = { path = "poh", version = "=2.1.0" }
 solana-poseidon = { path = "poseidon", version = "=2.1.0" }
+solana-precompile-error = { path = "sdk/precompile-error", version = "=2.1.0" }
 solana-program = { path = "sdk/program", version = "=2.1.0", default-features = false }
 solana-program-error = { path = "sdk/program-error", version = "=2.1.0" }
 solana-program-memory = { path = "sdk/program-memory", version = "=2.1.0" }

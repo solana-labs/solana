@@ -5664,6 +5664,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-precompile-error"
+version = "2.1.0"
+dependencies = [
+ "num-traits",
+ "solana-decode-error",
+]
+
+[[package]]
 name = "solana-program"
 version = "2.1.0"
 dependencies = [
@@ -6675,7 +6683,9 @@ dependencies = [
  "solana-decode-error",
  "solana-derivation-path",
  "solana-feature-set",
+ "solana-instruction",
  "solana-native-token",
+ "solana-precompile-error",
  "solana-program",
  "solana-program-memory",
  "solana-pubkey",

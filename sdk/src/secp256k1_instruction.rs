@@ -788,10 +788,11 @@
 #![cfg(feature = "full")]
 
 use {
-    crate::{instruction::Instruction, precompiles::PrecompileError},
     digest::Digest,
     serde_derive::{Deserialize, Serialize},
     solana_feature_set::FeatureSet,
+    solana_instruction::Instruction,
+    solana_precompile_error::PrecompileError,
 };
 
 pub const HASHED_PUBKEY_SERIALIZED_SIZE: usize = 20;
