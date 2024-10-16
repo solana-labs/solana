@@ -508,7 +508,7 @@ fn should_chain_merkle_shreds(_slot: Slot, cluster_type: ClusterType) -> bool {
         ClusterType::Development => true,
         ClusterType::Devnet => false,
         ClusterType::MainnetBeta => false,
-        ClusterType::Testnet => true,
+        ClusterType::Testnet => false,
     }
 }
 
