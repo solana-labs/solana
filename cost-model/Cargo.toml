@@ -35,6 +35,8 @@ name = "solana_cost_model"
 [dev-dependencies]
 itertools = { workspace = true }
 rand = "0.8.5"
+# See order-crates-for-publishing.py for using this unusual `path = "."`
+solana-cost-model = { path = ".", features = ["dev-context-only-utils"] }
 solana-logger = { workspace = true }
 solana-sdk = { workspace = true, features = ["dev-context-only-utils"] }
 solana-system-program = { workspace = true }
@@ -45,6 +47,7 @@ test-case = { workspace = true }
 targets = ["x86_64-unknown-linux-gnu"]
 
 [features]
+dev-context-only-utils = []
 frozen-abi = [
     "dep:solana-frozen-abi",
     "dep:solana-frozen-abi-macro",

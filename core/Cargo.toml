@@ -105,6 +105,7 @@ serde_json = { workspace = true }
 serial_test = { workspace = true }
 # See order-crates-for-publishing.py for using this unusual `path = "."`
 solana-core = { path = ".", features = ["dev-context-only-utils"] }
+solana-cost-model = { workspace = true, features = ["dev-context-only-utils"] }
 solana-ledger = { workspace = true, features = ["dev-context-only-utils"] }
 solana-logger = { workspace = true }
 solana-poh = { workspace = true, features = ["dev-context-only-utils"] }
@@ -123,9 +124,7 @@ test-case = { workspace = true }
 sysctl = { workspace = true }
 
 [features]
-dev-context-only-utils = [
-    "solana-runtime/dev-context-only-utils",
-]
+dev-context-only-utils = ["solana-runtime/dev-context-only-utils"]
 frozen-abi = [
     "dep:solana-frozen-abi",
     "dep:solana-frozen-abi-macro",

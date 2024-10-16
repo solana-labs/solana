@@ -16,6 +16,7 @@ use {
         saturating_add_assign,
         transaction::{self, SanitizedTransaction, TransactionError},
     },
+    solana_svm_transaction::svm_message::SVMMessage,
     std::sync::atomic::{AtomicU64, Ordering},
 };
 
@@ -39,12 +40,15 @@ impl QosService {
     /// include in the slot, and accumulate costs in the cost tracker.
     /// Returns a vector of results containing selected transaction costs, and the number of
     /// transactions that were *NOT* selected.
-    pub fn select_and_accumulate_transaction_costs(
+    pub fn select_and_accumulate_transaction_costs<'a>(
         &self,
         bank: &Bank,
-        transactions: &[SanitizedTransaction],
+        transactions: &'a [SanitizedTransaction],
         pre_results: impl Iterator<Item = transaction::Result<()>>,
-    ) -> (Vec<transaction::Result<TransactionCost>>, u64) {
+    ) -> (
+        Vec<transaction::Result<TransactionCost<'a, SanitizedTransaction>>>,
+        u64,
+    ) {
         let transaction_costs =
             self.compute_transaction_costs(&bank.feature_set, transactions.iter(), pre_results);
         let (transactions_qos_cost_results, num_included) = self.select_transactions_per_cost(
@@ -71,7 +75,7 @@ impl QosService {
         feature_set: &FeatureSet,
         transactions: impl Iterator<Item = &'a SanitizedTransaction>,
         pre_results: impl Iterator<Item = transaction::Result<()>>,
-    ) -> Vec<transaction::Result<TransactionCost>> {
+    ) -> Vec<transaction::Result<TransactionCost<'a, SanitizedTransaction>>> {
         let mut compute_cost_time = Measure::start("compute_cost_time");
         let txs_costs: Vec<_> = transactions
             .zip(pre_results)
@@ -95,9 +99,14 @@ impl QosService {
     fn select_transactions_per_cost<'a>(
         &self,
         transactions: impl Iterator<Item = &'a SanitizedTransaction>,
-        transactions_costs: impl Iterator<Item = transaction::Result<TransactionCost>>,
+        transactions_costs: impl Iterator<
+            Item = transaction::Result<TransactionCost<'a, SanitizedTransaction>>,
+        >,
         bank: &Bank,
-    ) -> (Vec<transaction::Result<TransactionCost>>, usize) {
+    ) -> (
+        Vec<transaction::Result<TransactionCost<'a, SanitizedTransaction>>>,
+        usize,
+    ) {
         let mut cost_tracking_time = Measure::start("cost_tracking_time");
         let mut cost_tracker = bank.write_cost_tracker().unwrap();
         let mut num_included = 0;
@@ -153,7 +162,9 @@ impl QosService {
     /// Removes transaction costs from the cost tracker if not committed or recorded, or
     /// updates the transaction costs for committed transactions.
     pub fn remove_or_update_costs<'a>(
-        transaction_cost_results: impl Iterator<Item = &'a transaction::Result<TransactionCost>>,
+        transaction_cost_results: impl Iterator<
+            Item = &'a transaction::Result<TransactionCost<'a, SanitizedTransaction>>,
+        >,
         transaction_committed_status: Option<&Vec<CommitTransactionDetails>>,
         bank: &Bank,
     ) {
@@ -172,7 +183,9 @@ impl QosService {
     /// For recorded transactions, remove units reserved by uncommitted transaction, or update
     /// units for committed transactions.
     fn remove_or_update_recorded_transaction_costs<'a>(
-        transaction_cost_results: impl Iterator<Item = &'a transaction::Result<TransactionCost>>,
+        transaction_cost_results: impl Iterator<
+            Item = &'a transaction::Result<TransactionCost<'a, SanitizedTransaction>>,
+        >,
         transaction_committed_status: &Vec<CommitTransactionDetails>,
         bank: &Bank,
     ) {
@@ -210,7 +223,9 @@ impl QosService {
 
     /// Remove reserved units for transaction batch that unsuccessfully recorded.
     fn remove_unrecorded_transaction_costs<'a>(
-        transaction_cost_results: impl Iterator<Item = &'a transaction::Result<TransactionCost>>,
+        transaction_cost_results: impl Iterator<
+            Item = &'a transaction::Result<TransactionCost<'a, SanitizedTransaction>>,
+        >,
         bank: &Bank,
     ) {
         let mut cost_tracker = bank.write_cost_tracker().unwrap();
@@ -326,8 +341,8 @@ impl QosService {
 
     // rollup transaction cost details, eg signature_cost, write_lock_cost, data_bytes_cost and
     // execution_cost from the batch of transactions selected for block.
-    fn accumulate_batched_transaction_costs<'a>(
-        transactions_costs: impl Iterator<Item = &'a transaction::Result<TransactionCost>>,
+    fn accumulate_batched_transaction_costs<'a, Tx: SVMMessage + 'a>(
+        transactions_costs: impl Iterator<Item = &'a transaction::Result<TransactionCost<'a, Tx>>>,
     ) -> BatchedTransactionDetails {
         let mut batched_transaction_details = BatchedTransactionDetails::default();
         transactions_costs.for_each(|cost| match cost {
@@ -609,10 +624,11 @@ mod tests {
     use {
         super::*,
         itertools::Itertools,
-        solana_cost_model::transaction_cost::UsageCostDetails,
+        solana_cost_model::transaction_cost::{UsageCostDetails, WritableKeysTransaction},
         solana_runtime::genesis_utils::{create_genesis_config, GenesisConfigInfo},
         solana_sdk::{
             hash::Hash,
+            message::TransactionSignatureDetails,
             signature::{Keypair, Signer},
             system_transaction,
         },
@@ -935,15 +951,19 @@ mod tests {
         let programs_execution_cost = 10;
         let num_txs = 4;
 
+        let dummy_transaction = WritableKeysTransaction(vec![]);
         let tx_cost_results: Vec<_> = (0..num_txs)
             .map(|n| {
                 if n % 2 == 0 {
                     Ok(TransactionCost::Transaction(UsageCostDetails {
+                        transaction: &dummy_transaction,
                         signature_cost,
                         write_lock_cost,
                         data_bytes_cost,
                         programs_execution_cost,
-                        ..UsageCostDetails::default()
+                        loaded_accounts_data_size_cost: 0,
+                        allocated_accounts_data_size: 0,
+                        signature_details: TransactionSignatureDetails::new(0, 0, 0),
                     }))
                 } else {
                     Err(TransactionError::WouldExceedMaxBlockCostLimit)

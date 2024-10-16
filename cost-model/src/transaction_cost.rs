@@ -1,4 +1,8 @@
-use {crate::block_cost_limits, solana_sdk::pubkey::Pubkey};
+use {
+    crate::block_cost_limits,
+    solana_sdk::{message::TransactionSignatureDetails, pubkey::Pubkey},
+    solana_svm_transaction::svm_message::SVMMessage,
+};
 
 /// TransactionCost is used to represent resources required to process
 /// a transaction, denominated in CU (eg. Compute Units).
@@ -11,12 +15,12 @@ use {crate::block_cost_limits, solana_sdk::pubkey::Pubkey};
 const SIMPLE_VOTE_USAGE_COST: u64 = 3428;
 
 #[derive(Debug)]
-pub enum TransactionCost {
-    SimpleVote { writable_accounts: Vec<Pubkey> },
-    Transaction(UsageCostDetails),
+pub enum TransactionCost<'a, Tx: SVMMessage> {
+    SimpleVote { transaction: &'a Tx },
+    Transaction(UsageCostDetails<'a, Tx>),
 }
 
-impl TransactionCost {
+impl<'a, Tx: SVMMessage> TransactionCost<'a, Tx> {
     pub fn sum(&self) -> u64 {
         #![allow(clippy::assertions_on_constants)]
         match self {
@@ -85,112 +89,133 @@ impl TransactionCost {
         }
     }
 
-    pub fn writable_accounts(&self) -> &[Pubkey] {
-        match self {
-            Self::SimpleVote { writable_accounts } => writable_accounts,
-            Self::Transaction(usage_cost) => &usage_cost.writable_accounts,
-        }
+    pub fn writable_accounts(&self) -> impl Iterator<Item = &Pubkey> {
+        let transaction = match self {
+            Self::SimpleVote { transaction } => transaction,
+            Self::Transaction(usage_cost) => usage_cost.transaction,
+        };
+        transaction
+            .account_keys()
+            .iter()
+            .enumerate()
+            .filter_map(|(index, key)| transaction.is_writable(index).then_some(key))
     }
 
     pub fn num_transaction_signatures(&self) -> u64 {
         match self {
             Self::SimpleVote { .. } => 1,
-            Self::Transaction(usage_cost) => usage_cost.num_transaction_signatures,
+            Self::Transaction(usage_cost) => {
+                usage_cost.signature_details.num_transaction_signatures()
+            }
         }
     }
 
     pub fn num_secp256k1_instruction_signatures(&self) -> u64 {
         match self {
             Self::SimpleVote { .. } => 0,
-            Self::Transaction(usage_cost) => usage_cost.num_secp256k1_instruction_signatures,
+            Self::Transaction(usage_cost) => usage_cost
+                .signature_details
+                .num_secp256k1_instruction_signatures(),
         }
     }
 
     pub fn num_ed25519_instruction_signatures(&self) -> u64 {
         match self {
             Self::SimpleVote { .. } => 0,
-            Self::Transaction(usage_cost) => usage_cost.num_ed25519_instruction_signatures,
+            Self::Transaction(usage_cost) => usage_cost
+                .signature_details
+                .num_ed25519_instruction_signatures(),
         }
     }
 }
 
-const MAX_WRITABLE_ACCOUNTS: usize = 256;
-
 // costs are stored in number of 'compute unit's
 #[derive(Debug)]
-pub struct UsageCostDetails {
-    pub writable_accounts: Vec<Pubkey>,
+pub struct UsageCostDetails<'a, Tx: SVMMessage> {
+    pub transaction: &'a Tx,
     pub signature_cost: u64,
     pub write_lock_cost: u64,
     pub data_bytes_cost: u64,
     pub programs_execution_cost: u64,
     pub loaded_accounts_data_size_cost: u64,
     pub allocated_accounts_data_size: u64,
-    pub num_transaction_signatures: u64,
-    pub num_secp256k1_instruction_signatures: u64,
-    pub num_ed25519_instruction_signatures: u64,
+    pub signature_details: TransactionSignatureDetails,
 }
 
-impl Default for UsageCostDetails {
-    fn default() -> Self {
-        Self {
-            writable_accounts: Vec::with_capacity(MAX_WRITABLE_ACCOUNTS),
-            signature_cost: 0u64,
-            write_lock_cost: 0u64,
-            data_bytes_cost: 0u64,
-            programs_execution_cost: 0u64,
-            loaded_accounts_data_size_cost: 0u64,
-            allocated_accounts_data_size: 0u64,
-            num_transaction_signatures: 0u64,
-            num_secp256k1_instruction_signatures: 0u64,
-            num_ed25519_instruction_signatures: 0u64,
-        }
-    }
-}
-
-#[cfg(test)]
-impl PartialEq for UsageCostDetails {
-    fn eq(&self, other: &Self) -> bool {
-        fn to_hash_set(v: &[Pubkey]) -> std::collections::HashSet<&Pubkey> {
-            v.iter().collect()
-        }
-
-        self.signature_cost == other.signature_cost
-            && self.write_lock_cost == other.write_lock_cost
-            && self.data_bytes_cost == other.data_bytes_cost
-            && self.programs_execution_cost == other.programs_execution_cost
-            && self.loaded_accounts_data_size_cost == other.loaded_accounts_data_size_cost
-            && self.allocated_accounts_data_size == other.allocated_accounts_data_size
-            && self.num_transaction_signatures == other.num_transaction_signatures
-            && self.num_secp256k1_instruction_signatures
-                == other.num_secp256k1_instruction_signatures
-            && self.num_ed25519_instruction_signatures == other.num_ed25519_instruction_signatures
-            && to_hash_set(&self.writable_accounts) == to_hash_set(&other.writable_accounts)
-    }
-}
-
-#[cfg(test)]
-impl Eq for UsageCostDetails {}
-
-impl UsageCostDetails {
-    #[cfg(test)]
-    pub fn new_with_capacity(capacity: usize) -> Self {
-        Self {
-            writable_accounts: Vec::with_capacity(capacity),
-            ..Self::default()
-        }
-    }
-
-    pub fn new_with_default_capacity() -> Self {
-        Self::default()
-    }
-
+impl<'a, Tx: SVMMessage> UsageCostDetails<'a, Tx> {
     pub fn sum(&self) -> u64 {
         self.signature_cost
             .saturating_add(self.write_lock_cost)
             .saturating_add(self.data_bytes_cost)
             .saturating_add(self.programs_execution_cost)
             .saturating_add(self.loaded_accounts_data_size_cost)
+    }
+}
+
+#[cfg(feature = "dev-context-only-utils")]
+#[derive(Debug)]
+pub struct WritableKeysTransaction(pub Vec<Pubkey>);
+
+#[cfg(feature = "dev-context-only-utils")]
+impl SVMMessage for WritableKeysTransaction {
+    fn num_total_signatures(&self) -> u64 {
+        unimplemented!("WritableKeysTransaction::num_total_signatures")
+    }
+
+    fn num_write_locks(&self) -> u64 {
+        unimplemented!("WritableKeysTransaction::num_write_locks")
+    }
+
+    fn recent_blockhash(&self) -> &solana_sdk::hash::Hash {
+        unimplemented!("WritableKeysTransaction::recent_blockhash")
+    }
+
+    fn num_instructions(&self) -> usize {
+        unimplemented!("WritableKeysTransaction::num_instructions")
+    }
+
+    fn instructions_iter(
+        &self,
+    ) -> impl Iterator<Item = solana_svm_transaction::instruction::SVMInstruction> {
+        core::iter::empty()
+    }
+
+    fn program_instructions_iter(
+        &self,
+    ) -> impl Iterator<Item = (&Pubkey, solana_svm_transaction::instruction::SVMInstruction)> {
+        core::iter::empty()
+    }
+
+    fn account_keys(&self) -> solana_sdk::message::AccountKeys {
+        solana_sdk::message::AccountKeys::new(&self.0, None)
+    }
+
+    fn fee_payer(&self) -> &Pubkey {
+        unimplemented!("WritableKeysTransaction::fee_payer")
+    }
+
+    fn is_writable(&self, _index: usize) -> bool {
+        true
+    }
+
+    fn is_signer(&self, _index: usize) -> bool {
+        unimplemented!("WritableKeysTransaction::is_signer")
+    }
+
+    fn is_invoked(&self, _key_index: usize) -> bool {
+        unimplemented!("WritableKeysTransaction::is_invoked")
+    }
+
+    fn num_lookup_tables(&self) -> usize {
+        unimplemented!("WritableKeysTransaction::num_lookup_tables")
+    }
+
+    fn message_address_table_lookups(
+        &self,
+    ) -> impl Iterator<
+        Item = solana_svm_transaction::message_address_table_lookup::SVMMessageAddressTableLookup,
+    > {
+        core::iter::empty()
     }
 }
 
