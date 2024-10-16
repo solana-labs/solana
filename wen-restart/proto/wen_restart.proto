@@ -70,6 +70,7 @@ message WenRestartProgress {
     optional LastVotedForkSlotsAggregateRecord last_voted_fork_slots_aggregate = 3;
     optional HeaviestForkRecord my_heaviest_fork = 4;
     optional HeaviestForkAggregateRecord heaviest_fork_aggregate = 5;
-    optional GenerateSnapshotRecord my_snapshot = 6;
-    map<string, ConflictMessage> conflict_message = 7;
+    optional HeaviestForkRecord coordinator_heaviest_fork = 6;
+    optional GenerateSnapshotRecord my_snapshot = 7;
+    map<string, ConflictMessage> conflict_message = 8;
 }
