@@ -2,7 +2,7 @@ use {
     super::Bank,
     rayon::prelude::*,
     solana_accounts_db::accounts_db::AccountsDb,
-    solana_lattice_hash::lt_hash::{Checksum as LtChecksum, LtHash},
+    solana_lattice_hash::lt_hash::LtHash,
     solana_measure::{meas_dur, measure::Measure},
     solana_sdk::{
         account::{accounts_equal, AccountSharedData},
@@ -29,12 +29,11 @@ impl Bank {
     /// - mix in its current state
     ///
     /// Since this function is non-idempotent, it should only be called once per bank.
-    pub fn update_accounts_lt_hash(&self) -> LtChecksum {
+    pub fn update_accounts_lt_hash(&self) {
         debug_assert!(self.is_accounts_lt_hash_enabled());
         let delta_lt_hash = self.calculate_delta_lt_hash();
         let mut accounts_lt_hash = self.accounts_lt_hash.lock().unwrap();
         accounts_lt_hash.0.mix_in(&delta_lt_hash);
-        accounts_lt_hash.0.checksum()
     }
 
     /// Calculates the lt hash *of only this slot*

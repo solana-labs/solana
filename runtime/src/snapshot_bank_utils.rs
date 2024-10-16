@@ -930,19 +930,7 @@ fn bank_to_full_snapshot_archive_with(
         .accounts_db
         .set_latest_full_snapshot_slot(bank.slot());
     bank.squash(); // Bank may not be a root
-
-    // Rehashing is not currently supported when the accounts lt hash is enabled.
-    // This is because rehashing will *re-mix-in* all the accounts stored in this bank into the
-    // accounts lt hash!  This is incorrect, as the accounts lt hash would change, even if the bank
-    // was *not* manually modified by the caller.
-    // We can re-allow rehasing if we change the Bank to hold its parent's accounts lt hash plus a
-    // *delta* accounts lt hash, and then Bank::hash_internal_state() will only recalculate the
-    // delta accounts lt hash.
-    // Another option is to consider if manual modification should even be allowed in the first
-    // place. Disallowing it would solve these issues.
-    if !bank.is_accounts_lt_hash_enabled() {
-        bank.rehash(); // Bank accounts may have been manually modified by the caller
-    }
+    bank.rehash(); // Bank may have been manually modified by the caller
     bank.force_flush_accounts_cache();
     bank.clean_accounts();
     let calculated_accounts_hash =
@@ -1005,11 +993,7 @@ pub fn bank_to_incremental_snapshot_archive(
         .accounts_db
         .set_latest_full_snapshot_slot(full_snapshot_slot);
     bank.squash(); // Bank may not be a root
-
-    // See the comment in bank_to_full_snapshot_archive() when calling rehash()
-    if !bank.is_accounts_lt_hash_enabled() {
-        bank.rehash(); // Bank accounts may have been manually modified by the caller
-    }
+    bank.rehash(); // Bank may have been manually modified by the caller
     bank.force_flush_accounts_cache();
     bank.clean_accounts();
     let calculated_incremental_accounts_hash =

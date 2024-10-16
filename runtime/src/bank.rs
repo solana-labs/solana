@@ -2928,6 +2928,11 @@ impl Bank {
 
             // freeze is a one-way trip, idempotent
             self.freeze_started.store(true, Relaxed);
+            if self.is_accounts_lt_hash_enabled() {
+                // updating the accounts lt hash must happen *outside* of hash_internal_state() so
+                // that rehash() can be called and *not* modify self.accounts_lt_hash.
+                self.update_accounts_lt_hash();
+            }
             *hash = self.hash_internal_state();
             self.rc.accounts.accounts_db.mark_slot_frozen(self.slot());
         }
@@ -5454,10 +5459,6 @@ impl Bank {
             hash = hashv(&[hash.as_ref(), epoch_accounts_hash.as_ref().as_ref()]);
         };
 
-        let accounts_lt_hash_checksum = self
-            .is_accounts_lt_hash_enabled()
-            .then(|| self.update_accounts_lt_hash());
-
         let buf = self
             .hard_forks
             .read()
@@ -5517,8 +5518,9 @@ impl Bank {
             } else {
                 "".to_string()
             },
-            if let Some(accounts_lt_hash_checksum) = accounts_lt_hash_checksum {
-                format!(", accounts_lt_hash checksum: {accounts_lt_hash_checksum}")
+            if self.is_accounts_lt_hash_enabled() {
+                let checksum = self.accounts_lt_hash.lock().unwrap().0.checksum();
+                format!(", accounts_lt_hash checksum: {checksum}")
             } else {
                 String::new()
             },
