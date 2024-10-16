@@ -349,7 +349,7 @@ pub fn process_set_validator_info(
         vec![config.signers[0]]
     };
 
-    let compute_unit_limit = ComputeUnitLimit::Default;
+    let compute_unit_limit = ComputeUnitLimit::Simulated;
     let build_message = |lamports| {
         let keys = keys.clone();
         if balance == 0 {
