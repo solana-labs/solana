@@ -10047,6 +10047,31 @@ fn test_verify_transactions_packet_data_size() {
 }
 
 #[test]
+fn test_check_reserved_keys() {
+    let (genesis_config, _mint_keypair) = create_genesis_config(1);
+    let bank = Bank::new_for_tests(&genesis_config);
+    let mut bank = Bank::new_from_parent(Arc::new(bank), &Pubkey::new_unique(), 1);
+
+    let transaction =
+        SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+            &Keypair::new(),
+            &Pubkey::new_unique(),
+            1,
+            genesis_config.hash(),
+        ));
+
+    assert_eq!(bank.check_reserved_keys(&transaction), Ok(()));
+
+    Arc::make_mut(&mut bank.reserved_account_keys)
+        .active
+        .insert(transaction.account_keys()[1]);
+    assert_eq!(
+        bank.check_reserved_keys(&transaction),
+        Err(TransactionError::ResanitizationNeeded)
+    );
+}
+
+#[test]
 fn test_call_precomiled_program() {
     let GenesisConfigInfo {
         mut genesis_config,
