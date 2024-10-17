@@ -79,7 +79,7 @@ mod transaction_scheduler;
 // Fixed thread size seems to be fastest on GCP setup
 pub const NUM_THREADS: u32 = 6;
 
-const TOTAL_BUFFERED_PACKETS: usize = 700_000;
+const TOTAL_BUFFERED_PACKETS: usize = 100_000;
 
 const NUM_VOTE_PROCESSING_THREADS: u32 = 2;
 const MIN_THREADS_BANKING: u32 = 1;
