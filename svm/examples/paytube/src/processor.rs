@@ -11,10 +11,7 @@ use {
         transaction_processor::TransactionBatchProcessor,
     },
     solana_system_program::system_processor,
-    std::{
-        collections::HashSet,
-        sync::{Arc, RwLock},
-    },
+    std::sync::{Arc, RwLock},
 };
 
 /// In order to use the `TransactionBatchProcessor`, another trait - Solana
@@ -51,9 +48,7 @@ pub(crate) fn create_transaction_batch_processor<CB: TransactionProcessingCallba
     // See `solana_svm::program_loader::load_program_with_pubkey` for more
     // details.
     let processor = TransactionBatchProcessor::<PayTubeForkGraph>::new_uninitialized(
-        /* slot */ 1,
-        /* epoch */ 1,
-        /* builtin_program_ids */ HashSet::new(),
+        /* slot */ 1, /* epoch */ 1,
     );
 
     {

@@ -35,7 +35,7 @@ use {
     },
     solana_svm_transaction::svm_message::SVMMessage,
     solana_type_overrides::sync::{Arc, RwLock},
-    std::collections::{HashMap, HashSet},
+    std::collections::HashMap,
     test_case::test_case,
 };
 
@@ -875,7 +875,6 @@ fn execute_test_entry(test_entry: SvmTestEntry) {
     let batch_processor = TransactionBatchProcessor::<MockForkGraph>::new_uninitialized(
         EXECUTION_SLOT,
         EXECUTION_EPOCH,
-        HashSet::new(),
     );
 
     let fork_graph = Arc::new(RwLock::new(MockForkGraph {}));
@@ -1062,7 +1061,6 @@ fn svm_inspect_account() {
     let batch_processor = TransactionBatchProcessor::<MockForkGraph>::new_uninitialized(
         EXECUTION_SLOT,
         EXECUTION_EPOCH,
-        HashSet::new(),
     );
 
     let fork_graph = Arc::new(RwLock::new(MockForkGraph {}));

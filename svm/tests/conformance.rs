@@ -244,8 +244,7 @@ fn run_fixture(fixture: InstrFixture, filename: OsString, execute_as_instr: bool
         create_program_runtime_environment_v1(&feature_set, &compute_budget, false, false).unwrap();
 
     mock_bank.override_feature_set(feature_set);
-    let batch_processor =
-        TransactionBatchProcessor::<MockForkGraph>::new_uninitialized(42, 2, HashSet::new());
+    let batch_processor = TransactionBatchProcessor::<MockForkGraph>::new_uninitialized(42, 2);
 
     let fork_graph = Arc::new(RwLock::new(MockForkGraph {}));
     {

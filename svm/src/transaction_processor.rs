@@ -198,17 +198,12 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
     ///
     /// When using this method, it's advisable to call `set_fork_graph_in_program_cache`
     /// as well as `add_builtin` to configure the cache before using the processor.
-    pub fn new_uninitialized(
-        slot: Slot,
-        epoch: Epoch,
-        builtin_program_ids: HashSet<Pubkey>,
-    ) -> Self {
+    pub fn new_uninitialized(slot: Slot, epoch: Epoch) -> Self {
         Self {
             slot,
             epoch,
-            sysvar_cache: RwLock::<SysvarCache>::default(),
             program_cache: Arc::new(RwLock::new(ProgramCache::new(slot, epoch))),
-            builtin_program_ids: RwLock::new(builtin_program_ids),
+            ..Self::default()
         }
     }
 

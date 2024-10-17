@@ -211,7 +211,6 @@ impl JsonRpcRequestProcessor {
         let batch_processor = TransactionBatchProcessor::<MockForkGraph>::new_uninitialized(
             EXECUTION_SLOT,
             EXECUTION_EPOCH,
-            HashSet::new(),
         );
 
         Self {

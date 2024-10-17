@@ -31,7 +31,7 @@ use {
             TransactionProcessingEnvironment,
         },
     },
-    std::collections::{HashMap, HashSet},
+    std::collections::HashMap,
 };
 
 mod mock_bank;
@@ -40,8 +40,7 @@ mod transaction_builder;
 
 fn program_cache_execution(threads: usize) {
     let mut mock_bank = MockBankCallback::default();
-    let batch_processor =
-        TransactionBatchProcessor::<MockForkGraph>::new_uninitialized(5, 5, HashSet::new());
+    let batch_processor = TransactionBatchProcessor::<MockForkGraph>::new_uninitialized(5, 5);
     let fork_graph = Arc::new(RwLock::new(MockForkGraph {}));
     batch_processor.program_cache.write().unwrap().fork_graph = Some(Arc::downgrade(&fork_graph));
 
@@ -127,9 +126,8 @@ fn test_program_cache_with_exhaustive_scheduler() {
 // correctly.
 fn svm_concurrent() {
     let mock_bank = Arc::new(MockBankCallback::default());
-    let batch_processor = Arc::new(
-        TransactionBatchProcessor::<MockForkGraph>::new_uninitialized(5, 2, HashSet::new()),
-    );
+    let batch_processor =
+        Arc::new(TransactionBatchProcessor::<MockForkGraph>::new_uninitialized(5, 2));
     let fork_graph = Arc::new(RwLock::new(MockForkGraph {}));
 
     create_executable_environment(
