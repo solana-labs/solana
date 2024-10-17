@@ -34,9 +34,11 @@ const HIGH_SLOT_OFFSET: u64 = 100;
 /// ancient packing algorithm tuning per pass
 #[derive(Debug)]
 struct PackedAncientStorageTuning {
-    /// shrink enough of these ancient append vecs to realize this% of the total dead data that needs to be shrunk
-    /// Doing too much burns too much time and disk i/o.
-    /// Doing too little could cause us to never catch up and have old data accumulate.
+    /// Shrink enough of these ancient append vecs to realize this
+    /// percentage of the total dead data that needs to be shrunk
+    /// - shrinking too much, burns too much time and disk i/o,
+    /// - shrinking too little could cause us to never catch up,
+    ///   and have old data accumulate.
     percent_of_alive_shrunk_data: u64,
     /// number of ancient slots we should aim to have. If we have more than this, combine further.
     max_ancient_slots: usize,
@@ -340,8 +342,9 @@ impl AccountsDb {
         let tuning = PackedAncientStorageTuning {
             // only allow 10k slots old enough to be ancient
             max_ancient_slots: 10_000,
-            // re-combine/shrink 55% of the data savings this pass
-            percent_of_alive_shrunk_data: 55,
+            // Don't re-pack anything just to shrink.
+            // shrink_candidate_slots will handle these old storages.
+            percent_of_alive_shrunk_data: 0,
             ideal_storage_size: NonZeroU64::new(get_ancient_append_vec_capacity()).unwrap(),
             can_randomly_shrink,
             max_resulting_storages: NonZeroU64::new(10).unwrap(),
@@ -3595,8 +3598,7 @@ pub mod tests {
         // combine normal append vec(s) into packed ancient append vec
         let tuning = PackedAncientStorageTuning {
             max_ancient_slots: 0,
-            // re-combine/shrink 55% of the data savings this pass
-            percent_of_alive_shrunk_data: 55,
+            percent_of_alive_shrunk_data: 0,
             ideal_storage_size: NonZeroU64::new(get_ancient_append_vec_capacity()).unwrap(),
             can_randomly_shrink: CAN_RANDOMLY_SHRINK_FALSE,
             ..default_tuning()
@@ -3785,8 +3787,7 @@ pub mod tests {
         let tuning = PackedAncientStorageTuning {
             // only allow 10k slots old enough to be ancient
             max_ancient_slots: 10_000,
-            // re-combine/shrink 55% of the data savings this pass
-            percent_of_alive_shrunk_data: 55,
+            percent_of_alive_shrunk_data: 0,
             ideal_storage_size: NonZeroU64::new(1000).unwrap(),
             can_randomly_shrink: false,
             ..default_tuning()
