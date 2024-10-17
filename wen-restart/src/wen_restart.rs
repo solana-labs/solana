@@ -8,8 +8,8 @@ use {
             LastVotedForkSlotsEpochInfo, LastVotedForkSlotsFinalResult,
         },
         solana::wen_restart_proto::{
-            self, ConflictMessage, GenerateSnapshotRecord, HeaviestForkAggregateFinal,
-            HeaviestForkAggregateRecord, HeaviestForkRecord, LastVotedForkSlotsAggregateFinal,
+            self, ConflictMessage, GenerateSnapshotRecord, HeaviestForkAggregateRecord,
+            HeaviestForkRecord, LastVotedForkSlotsAggregateFinal,
             LastVotedForkSlotsAggregateRecord, LastVotedForkSlotsEpochInfoRecord,
             LastVotedForkSlotsRecord, State as RestartState, WenRestartProgress,
         },
@@ -58,7 +58,7 @@ use {
             Arc, RwLock,
         },
         thread::sleep,
-        time::{Duration, Instant},
+        time::Duration,
     },
 };
 
@@ -70,10 +70,6 @@ const REPAIR_THRESHOLD: f64 = 0.42;
 // made regarding how much non-conforming/offline validators the
 // algorithm can tolerate.
 const HEAVIEST_FORK_THRESHOLD_DELTA: f64 = 0.38;
-// We allow at most 5% of the stake to disagree with us.
-const HEAVIEST_FORK_DISAGREE_THRESHOLD_PERCENT: f64 = 5.0;
-// We update HeaviestFork every 5 minutes at least.
-const HEAVIEST_REFRESH_INTERVAL_IN_SECONDS: u64 = 300;
 
 #[derive(Debug, PartialEq)]
 pub enum WenRestartError {
@@ -641,7 +637,6 @@ pub(crate) fn find_bankhash_of_heaviest_fork(
 // Aggregate the heaviest fork and send updates to the cluster.
 pub(crate) fn aggregate_restart_heaviest_fork(
     wen_restart_path: &PathBuf,
-    wait_for_supermajority_threshold_percent: u64,
     cluster_info: Arc<ClusterInfo>,
     bank_forks: Arc<RwLock<BankForks>>,
     exit: Arc<AtomicBool>,
@@ -658,22 +653,12 @@ pub(crate) fn aggregate_restart_heaviest_fork(
     let my_heaviest_fork = progress.my_heaviest_fork.clone().unwrap();
     let heaviest_fork_slot = my_heaviest_fork.slot;
     let heaviest_fork_hash = Hash::from_str(&my_heaviest_fork.bankhash)?;
-    // When checking whether to exit aggregate_restart_heaviest_fork, use the epoch_stakes
-    // associated with the heaviest fork slot we picked. This ensures that everyone agreeing
-    // with me use the same EpochStakes to calculate the supermajority threshold.
+    // Use the epoch_stakes associated with the heaviest fork slot we picked.
     let epoch_stakes = root_bank
         .epoch_stakes(root_bank.epoch_schedule().get_epoch(heaviest_fork_slot))
         .unwrap();
     let total_stake = epoch_stakes.total_stake();
-    let adjusted_threshold_percent = wait_for_supermajority_threshold_percent
-        .saturating_sub(HEAVIEST_FORK_DISAGREE_THRESHOLD_PERCENT.round() as u64);
-    // The threshold for supermajority should definitely be higher than 67%.
-    assert!(
-        adjusted_threshold_percent > 67,
-        "Majority threshold too low"
-    );
     let mut heaviest_fork_aggregate = HeaviestForkAggregate::new(
-        adjusted_threshold_percent,
         cluster_info.my_shred_version(),
         epoch_stakes,
         heaviest_fork_slot,
@@ -681,38 +666,27 @@ pub(crate) fn aggregate_restart_heaviest_fork(
         &cluster_info.id(),
     );
     if let Some(aggregate_record) = &progress.heaviest_fork_aggregate {
-        for (key_string, message) in &aggregate_record.received {
-            if let Err(e) = heaviest_fork_aggregate.aggregate_from_record(key_string, message) {
+        for message in &aggregate_record.received {
+            if let Err(e) = heaviest_fork_aggregate.aggregate_from_record(message) {
                 // Do not abort wen_restart if we got one malformed message.
                 error!("Failed to aggregate from record: {:?}", e);
             }
         }
     } else {
         progress.heaviest_fork_aggregate = Some(HeaviestForkAggregateRecord {
-            received: HashMap::new(),
-            final_result: None,
+            received: Vec::new(),
+            total_active_stake: 0,
         });
     }
 
-    let mut total_active_stake = heaviest_fork_aggregate.total_active_stake();
-    progress
-        .my_heaviest_fork
-        .as_mut()
-        .unwrap()
-        .total_active_stake = total_active_stake;
-
     let mut cursor = solana_gossip::crds::Cursor::default();
-    // Init progress_changed to true and progress_last_sent to old time so we can send out the first Gossip message.
-    let mut progress_changed = true;
-    let mut progress_last_sent = Instant::now()
-        .checked_sub(Duration::from_secs(HEAVIEST_REFRESH_INTERVAL_IN_SECONDS))
-        .unwrap();
-    let majority_stake_required =
-        (total_stake as f64 / 100.0 * adjusted_threshold_percent as f64).round() as u64;
-    let mut total_active_stake_higher_than_supermajority = false;
+    let mut total_active_stake = 0;
     loop {
         if exit.load(Ordering::Relaxed) {
-            return Err(WenRestartError::Exiting.into());
+            for ((slot, hash), stake) in heaviest_fork_aggregate.block_stake_map().iter() {
+                info!("Slot: {}, Hash: {}, Stake: {}", slot, hash, stake,);
+            }
+            return Ok(());
         }
         let start = timestamp();
         for new_heaviest_fork in cluster_info.get_restart_heaviest_fork(&mut cursor) {
@@ -726,8 +700,7 @@ pub(crate) fn aggregate_restart_heaviest_fork(
                         .as_mut()
                         .unwrap()
                         .received
-                        .insert(from, record);
-                    progress_changed = true;
+                        .push(record);
                 }
                 HeaviestForkAggregateResult::DifferentVersionExists(old_record, new_record) => {
                     warn!("Different version from {from} exists old {old_record:#?} vs new {new_record:#?}");
@@ -748,127 +721,22 @@ pub(crate) fn aggregate_restart_heaviest_fork(
         if current_total_active_stake > total_active_stake {
             total_active_stake = current_total_active_stake;
             progress
-                .my_heaviest_fork
+                .heaviest_fork_aggregate
                 .as_mut()
                 .unwrap()
                 .total_active_stake = current_total_active_stake;
-            progress_changed = true;
         }
-        if progress_changed {
-            progress_changed = false;
-            let total_active_stake_seen_supermajority =
-                heaviest_fork_aggregate.total_active_stake_seen_supermajority();
-            info!(
-                "Total active stake seeing supermajority: {} Total active stake: {} Required to exit {} Total stake {}",
-                total_active_stake_seen_supermajority,
-                heaviest_fork_aggregate.total_active_stake(),
-                majority_stake_required,
-                total_stake
-            );
-            let can_exit = total_active_stake_seen_supermajority >= majority_stake_required;
-            let saw_supermajority_first_time = current_total_active_stake
-                >= majority_stake_required
-                && !total_active_stake_higher_than_supermajority
-                && {
-                    total_active_stake_higher_than_supermajority = true;
-                    true
-                };
-            // Only send out updates every 5 minutes or when we can exit or active stake passes supermajority
-            // the first time.
-            if progress_last_sent.elapsed().as_secs() >= HEAVIEST_REFRESH_INTERVAL_IN_SECONDS
-                || can_exit
-                || saw_supermajority_first_time
-            {
-                cluster_info.push_restart_heaviest_fork(
-                    heaviest_fork_slot,
-                    heaviest_fork_hash,
-                    current_total_active_stake,
-                );
-                write_wen_restart_records(wen_restart_path, progress)?;
-                progress_last_sent = Instant::now();
-            }
-            if can_exit {
-                break;
-            }
-        }
+        info!(
+            "Total active stake: {} Total stake {}",
+            heaviest_fork_aggregate.total_active_stake(),
+            total_stake
+        );
+        write_wen_restart_records(wen_restart_path, progress)?;
         let elapsed = timestamp().saturating_sub(start);
         let time_left = GOSSIP_SLEEP_MILLIS.saturating_sub(elapsed);
         if time_left > 0 {
             sleep(Duration::from_millis(time_left));
         }
-    }
-
-    // Final check to see if supermajority agrees with us.
-    let total_active_stake = heaviest_fork_aggregate.total_active_stake();
-    let total_active_stake_seen_supermajority =
-        heaviest_fork_aggregate.total_active_stake_seen_supermajority();
-    let block_stake_map = heaviest_fork_aggregate.block_stake_map();
-    let total_active_stake_agreed_with_me = *block_stake_map
-        .get(&(heaviest_fork_slot, heaviest_fork_hash))
-        .unwrap_or(&0);
-    // It doesn't matter if 5% disagrees with us.
-    let success_threshold =
-        wait_for_supermajority_threshold_percent as f64 - HEAVIEST_FORK_DISAGREE_THRESHOLD_PERCENT;
-    if total_active_stake_agreed_with_me as f64 * 100.0 / total_stake as f64 >= success_threshold {
-        info!(
-            "Heaviest fork agreed upon by supermajority: slot: {}, bankhash: {}",
-            heaviest_fork_slot, heaviest_fork_hash
-        );
-        progress
-            .heaviest_fork_aggregate
-            .as_mut()
-            .unwrap()
-            .final_result = Some(HeaviestForkAggregateFinal {
-            total_active_stake,
-            total_active_stake_seen_supermajority,
-            total_active_stake_agreed_with_me,
-        });
-        Ok(())
-    } else {
-        info!(
-            "Not enough stake agreeing with our heaviest fork: slot: {},
-            bankhash: {}, stake aggreeing with us {} out of {}",
-            heaviest_fork_slot,
-            heaviest_fork_hash,
-            total_active_stake_agreed_with_me,
-            total_active_stake
-        );
-        let mut max_slot_hash = (0, Hash::default());
-        let mut max_stake = 0;
-        for (slot, hash) in block_stake_map.keys() {
-            let stake = block_stake_map[&(*slot, *hash)];
-            if stake > max_stake {
-                max_stake = stake;
-                max_slot_hash = (*slot, *hash);
-            }
-            info!(
-                "Slot: {}, Hash: {}, Stake: {}",
-                slot,
-                hash,
-                block_stake_map[&(*slot, *hash)]
-            );
-        }
-        let max_stake_percent = max_stake as f64 * 100.0 / total_stake as f64;
-        if max_stake_percent >= success_threshold {
-            warn!(
-                "Max stake slot: {}, hash: {}, stake: {:.2}% does not agree with my
-                choice, please go to discord to download the snapshot and restart
-                the validator with --wait-for-supermajority.",
-                max_slot_hash.0, max_slot_hash.1, max_stake_percent
-            );
-        } else {
-            warn!(
-                "Cluster consensus slot: {}, hash: {}, stake: {:.2}% does not agree,
-                please go to discord for next steps.",
-                max_slot_hash.0, max_slot_hash.1, max_stake_percent
-            );
-        }
-        Err(WenRestartError::NotEnoughStakeAgreeingWithUs(
-            heaviest_fork_slot,
-            heaviest_fork_hash,
-            block_stake_map,
-        )
-        .into())
     }
 }
 
@@ -897,6 +765,7 @@ pub(crate) fn receive_restart_heaviest_fork(
                     total_active_stake: 0,
                     wallclock: new_heaviest_fork.wallclock,
                     shred_version: new_heaviest_fork.shred_version as u32,
+                    from: new_heaviest_fork.from.to_string(),
                 });
                 return Ok((coordinator_heaviest_slot, coordinator_heaviest_hash));
             }
@@ -989,6 +858,7 @@ pub fn wait_for_wen_restart(config: WenRestartConfig) -> Result<()> {
                             total_active_stake: 0,
                             wallclock: 0,
                             shred_version: config.cluster_info.my_shred_version() as u32,
+                            from: config.cluster_info.id().to_string(),
                         }
                     }
                 };
@@ -1008,7 +878,6 @@ pub fn wait_for_wen_restart(config: WenRestartConfig) -> Result<()> {
                     // TODO(wen): remove this aggregate.
                     aggregate_restart_heaviest_fork(
                         &config.wen_restart_path,
-                        config.wait_for_supermajority_threshold_percent,
                         config.cluster_info.clone(),
                         config.bank_forks.clone(),
                         config.exit.clone(),
@@ -1063,6 +932,15 @@ pub fn wait_for_wen_restart(config: WenRestartConfig) -> Result<()> {
                     --no-snapshot-fetch",
                     slot, hash, shred_version,
                 );
+                if config.cluster_info.id() == config.wen_restart_coordinator {
+                    aggregate_restart_heaviest_fork(
+                        &config.wen_restart_path,
+                        config.cluster_info.clone(),
+                        config.bank_forks.clone(),
+                        config.exit.clone(),
+                        &mut progress,
+                    )?;
+                }
                 return Ok(());
             }
         };
@@ -1658,6 +1536,9 @@ mod tests {
         let last_vote_bankhash = Hash::new_unique();
         let expected_slots_to_repair: Vec<Slot> =
             (last_vote_slot + 1..last_vote_slot + 3).collect();
+        let my_pubkey = &test_state.validator_voting_keypairs[MY_INDEX]
+            .node_keypair
+            .pubkey();
 
         let bank_snapshots_dir = tempfile::TempDir::new().unwrap();
         let full_snapshot_archives_dir = tempfile::TempDir::new().unwrap();
@@ -1768,45 +1649,20 @@ mod tests {
             }
             sleep(Duration::from_millis(100));
         }
-        // Now simulate receiving HeaviestFork messages.
-        let mut expected_received_heaviest_fork = HashMap::new();
-        let validators_to_take: usize = ((WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT
-            - NON_CONFORMING_VALIDATOR_PERCENT)
-            * TOTAL_VALIDATOR_COUNT as u64
-            / 100
-            - 1)
-        .try_into()
-        .unwrap();
-        // HeaviestFork only requires 75% vs 80% required for LastVotedForkSlots. We have 5% stake, so we need 70%.
-        let total_active_stake_during_heaviest_fork = (validators_to_take + 1) as u64 * 100;
-        for keypairs in test_state
-            .validator_voting_keypairs
-            .iter()
-            .take(validators_to_take)
-        {
-            let node_pubkey = keypairs.node_keypair.pubkey();
-            let node = ContactInfo::new_rand(&mut rng, Some(node_pubkey));
-            let now = timestamp();
-            push_restart_heaviest_fork(
-                test_state.cluster_info.clone(),
-                &node,
-                expected_heaviest_fork_slot,
-                &expected_heaviest_fork_bankhash,
-                total_active_stake_during_heaviest_fork,
-                &keypairs.node_keypair,
-                now,
-            );
-            expected_received_heaviest_fork.insert(
-                node_pubkey.to_string(),
-                HeaviestForkRecord {
-                    slot: expected_heaviest_fork_slot,
-                    bankhash: expected_heaviest_fork_bankhash.to_string(),
-                    total_active_stake: total_active_stake_during_heaviest_fork,
-                    shred_version: SHRED_VERSION as u32,
-                    wallclock: now,
-                },
-            );
-        }
+        // Now simulate receiving HeaviestFork messages from coordinator.
+        let coordinator_keypair =
+            &test_state.validator_voting_keypairs[COORDINATOR_INDEX].node_keypair;
+        let node = ContactInfo::new_rand(&mut rng, Some(coordinator_keypair.pubkey()));
+        let now = timestamp();
+        push_restart_heaviest_fork(
+            test_state.cluster_info.clone(),
+            &node,
+            expected_heaviest_fork_slot,
+            &expected_heaviest_fork_bankhash,
+            0,
+            coordinator_keypair,
+            now,
+        );
 
         assert!(wen_restart_thread_handle.join().is_ok());
         exit.store(true, Ordering::Relaxed);
@@ -1826,13 +1682,13 @@ mod tests {
                 )
             })
             .collect();
+        let stake_for_new_slots = validators_to_take as u64 * 100;
         expected_slots_stake_map.extend(
             expected_slots_to_repair
                 .iter()
-                .map(|slot| (*slot, total_active_stake_during_heaviest_fork)),
+                .map(|slot| (*slot, stake_for_new_slots)),
         );
-        // We are simulating 5% joined LastVotedForkSlots but not HeaviestFork.
-        let voted_stake = total_active_stake_during_heaviest_fork + 100;
+        let voted_stake = (validators_to_take + 1) as u64 * 100;
         assert_eq!(
             progress,
             WenRestartProgress {
@@ -1874,6 +1730,7 @@ mod tests {
                     total_active_stake: 0,
                     shred_version: SHRED_VERSION as u32,
                     wallclock: 0,
+                    from: my_pubkey.to_string(),
                 }),
                 heaviest_fork_aggregate: None,
                 my_snapshot: Some(GenerateSnapshotRecord {
@@ -1892,6 +1749,7 @@ mod tests {
                         .as_ref()
                         .unwrap()
                         .wallclock,
+                    from: coordinator_keypair.pubkey().to_string(),
                 }),
                 ..Default::default()
             }
@@ -2143,6 +2001,7 @@ mod tests {
                 total_active_stake: 0,
                 shred_version: SHRED_VERSION as u32,
                 wallclock: 0,
+                from: Pubkey::new_unique().to_string(),
             }),
             ..Default::default()
         };
@@ -2272,6 +2131,7 @@ mod tests {
                 total_active_stake: 0,
                 shred_version: SHRED_VERSION as u32,
                 wallclock: 0,
+                from: Pubkey::new_unique().to_string(),
             }),
             last_voted_fork_slots_aggregate: Some(LastVotedForkSlotsAggregateRecord {
                 received: HashMap::new(),
@@ -2335,6 +2195,7 @@ mod tests {
                 total_active_stake: 0,
                 shred_version: SHRED_VERSION as u32,
                 wallclock: 0,
+                from: Pubkey::new_unique().to_string(),
             }),
             my_snapshot: Some(GenerateSnapshotRecord {
                 slot: 0,
@@ -2376,6 +2237,7 @@ mod tests {
                 total_active_stake: 0,
                 shred_version: SHRED_VERSION as u32,
                 wallclock: 0,
+                from: Pubkey::new_unique().to_string(),
             }),
             my_snapshot: Some(GenerateSnapshotRecord {
                 slot: last_vote_slot,
@@ -2662,12 +2524,14 @@ mod tests {
                 }],
             }),
         });
+        let my_pubkey = Pubkey::new_unique();
         let my_heaviest_fork = Some(HeaviestForkRecord {
             slot: 1,
             bankhash: Hash::default().to_string(),
             total_active_stake: 900,
             shred_version: SHRED_VERSION as u32,
             wallclock: 0,
+            from: my_pubkey.to_string(),
         });
         let my_bankhash = Hash::new_unique();
         let new_shred_version = SHRED_VERSION + 57;
@@ -2678,12 +2542,8 @@ mod tests {
             shred_version: new_shred_version as u32,
         });
         let heaviest_fork_aggregate = Some(HeaviestForkAggregateRecord {
-            received: HashMap::new(),
-            final_result: Some(HeaviestForkAggregateFinal {
-                total_active_stake: 900,
-                total_active_stake_seen_supermajority: 900,
-                total_active_stake_agreed_with_me: 900,
-            }),
+            received: Vec::new(),
+            total_active_stake: 0,
         });
         let expected_slots_stake_map: HashMap<Slot, u64> =
             vec![(0, 900), (1, 800)].into_iter().collect();
@@ -2763,6 +2623,7 @@ mod tests {
                         total_active_stake: 900,
                         shred_version: SHRED_VERSION as u32,
                         wallclock: 0,
+                        from: my_pubkey.to_string(),
                     }),
                 },
                 WenRestartProgressInternalState::HeaviestFork {
@@ -3073,6 +2934,7 @@ mod tests {
                     .saturating_mul(TOTAL_VALIDATOR_COUNT as u64),
                 shred_version: SHRED_VERSION as u32,
                 wallclock: 0,
+                from: test_state.cluster_info.id().to_string(),
             }),
             ..Default::default()
         };
@@ -3084,7 +2946,6 @@ mod tests {
             .spawn(move || {
                 let result = aggregate_restart_heaviest_fork(
                     &wen_restart_path,
-                    WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT,
                     cluster_info,
                     bank_forks,
                     exit,
@@ -3103,94 +2964,6 @@ mod tests {
     }
 
     #[test]
-    fn test_aggregate_heaviest_fork_send_gossip_early() {
-        let ledger_path = get_tmp_ledger_path_auto_delete!();
-        let test_state = wen_restart_test_init(&ledger_path);
-        let heaviest_fork_slot = test_state.last_voted_fork_slots[0] + 3;
-        let heaviest_fork_bankhash = Hash::new_unique();
-
-        let mut cursor = solana_gossip::crds::Cursor::default();
-        // clear the heaviest fork queue so we make sure a new HeaviestFork is sent out later.
-        let _ = test_state
-            .cluster_info
-            .get_restart_heaviest_fork(&mut cursor);
-
-        let exit = Arc::new(AtomicBool::new(false));
-        let thread = start_aggregate_heaviest_fork_thread(
-            &test_state,
-            heaviest_fork_slot,
-            heaviest_fork_bankhash,
-            exit.clone(),
-            Some(WenRestartError::Exiting),
-        );
-        // Find the first HeaviestFork message sent out entering the loop.
-        let my_pubkey = test_state.cluster_info.id();
-        let mut found_myself = false;
-        while !found_myself {
-            sleep(Duration::from_millis(100));
-            test_state.cluster_info.flush_push_queue();
-            for gossip_record in test_state
-                .cluster_info
-                .get_restart_heaviest_fork(&mut cursor)
-            {
-                if gossip_record.from == my_pubkey && gossip_record.observed_stake > 0 {
-                    found_myself = true;
-                    break;
-                }
-            }
-        }
-        // Simulating everyone sending out the first RestartHeaviestFork message, Gossip propagation takes
-        // time, so the observed_stake is probably smaller than actual active stake. We should send out
-        // heaviest fork indicating we have active stake exceeding supermajority.
-        let validators_to_take: usize = ((WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT
-            - NON_CONFORMING_VALIDATOR_PERCENT)
-            * TOTAL_VALIDATOR_COUNT as u64
-            / 100
-            - 1)
-        .try_into()
-        .unwrap();
-        for keypair in test_state
-            .validator_voting_keypairs
-            .iter()
-            .take(validators_to_take)
-        {
-            let node_pubkey = keypair.node_keypair.pubkey();
-            let node = ContactInfo::new_rand(&mut rand::thread_rng(), Some(node_pubkey));
-            let now = timestamp();
-            push_restart_heaviest_fork(
-                test_state.cluster_info.clone(),
-                &node,
-                heaviest_fork_slot,
-                &heaviest_fork_bankhash,
-                100,
-                &keypair.node_keypair,
-                now,
-            );
-        }
-        let mut found_myself = false;
-        let expected_active_stake = (WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT
-            - NON_CONFORMING_VALIDATOR_PERCENT)
-            * TOTAL_VALIDATOR_COUNT as u64;
-        while !found_myself {
-            sleep(Duration::from_millis(100));
-            test_state.cluster_info.flush_push_queue();
-            for gossip_record in test_state
-                .cluster_info
-                .get_restart_heaviest_fork(&mut cursor)
-            {
-                if gossip_record.from == my_pubkey
-                    && gossip_record.observed_stake == expected_active_stake
-                {
-                    found_myself = true;
-                    break;
-                }
-            }
-        }
-        exit.store(true, Ordering::Relaxed);
-        assert!(thread.join().is_ok());
-    }
-
-    #[test]
     fn test_aggregate_heaviest_fork() {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let test_state = wen_restart_test_init(&ledger_path);
@@ -3199,66 +2972,14 @@ mod tests {
         let expected_active_stake = (WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT
             - NON_CONFORMING_VALIDATOR_PERCENT)
             * TOTAL_VALIDATOR_COUNT as u64;
-        let progress = wen_restart_proto::WenRestartProgress {
-            state: RestartState::HeaviestFork.into(),
-            my_heaviest_fork: Some(HeaviestForkRecord {
-                slot: heaviest_fork_slot,
-                bankhash: heaviest_fork_bankhash.to_string(),
-                total_active_stake: expected_active_stake,
-                shred_version: SHRED_VERSION as u32,
-                wallclock: 0,
-            }),
-            ..Default::default()
-        };
-
-        let different_bankhash = Hash::new_unique();
-        let validators_to_take: usize = ((WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT
-            - NON_CONFORMING_VALIDATOR_PERCENT)
-            * TOTAL_VALIDATOR_COUNT as u64
-            / 100
-            - 1)
-        .try_into()
-        .unwrap();
-        for keypair in test_state
-            .validator_voting_keypairs
-            .iter()
-            .take(validators_to_take)
-        {
-            let node_pubkey = keypair.node_keypair.pubkey();
-            let node = ContactInfo::new_rand(&mut rand::thread_rng(), Some(node_pubkey));
-            let now = timestamp();
-            push_restart_heaviest_fork(
-                test_state.cluster_info.clone(),
-                &node,
-                heaviest_fork_slot,
-                &different_bankhash,
-                expected_active_stake,
-                &keypair.node_keypair,
-                now,
-            );
-        }
-        let mut expected_block_stake_map = HashMap::new();
-        expected_block_stake_map.insert((heaviest_fork_slot, heaviest_fork_bankhash), 100);
-        expected_block_stake_map.insert((heaviest_fork_slot, different_bankhash), 1400);
-        assert_eq!(
-            aggregate_restart_heaviest_fork(
-                &test_state.wen_restart_proto_path,
-                WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT,
-                test_state.cluster_info.clone(),
-                test_state.bank_forks.clone(),
-                Arc::new(AtomicBool::new(false)),
-                &mut progress.clone(),
-            )
-            .unwrap_err()
-            .downcast::<WenRestartError>()
-            .unwrap(),
-            WenRestartError::NotEnoughStakeAgreeingWithUs(
-                heaviest_fork_slot,
-                heaviest_fork_bankhash,
-                expected_block_stake_map
-            ),
+        let exit = Arc::new(AtomicBool::new(false));
+        let thread = start_aggregate_heaviest_fork_thread(
+            &test_state,
+            heaviest_fork_slot,
+            heaviest_fork_bankhash,
+            exit.clone(),
+            None,
         );
-        // If we have enough stake agreeing with us, we should be able to aggregate the heaviest fork.
         let validators_to_take: usize =
             (WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT * TOTAL_VALIDATOR_COUNT as u64 / 100 - 1)
                 .try_into()
@@ -3281,15 +3002,8 @@ mod tests {
                 now,
             );
         }
-        assert!(aggregate_restart_heaviest_fork(
-            &test_state.wen_restart_proto_path,
-            WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT,
-            test_state.cluster_info.clone(),
-            test_state.bank_forks.clone(),
-            Arc::new(AtomicBool::new(false)),
-            &mut progress.clone(),
-        )
-        .is_ok());
+        exit.store(true, Ordering::Relaxed);
+        assert!(thread.join().is_ok());
     }
 
     #[test]
