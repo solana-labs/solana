@@ -42,6 +42,7 @@ pub const TEST_CPI_CHANGE_ACCOUNT_DATA_MEMORY_ALLOCATION: u8 = 39;
 pub const TEST_WRITE_ACCOUNT: u8 = 40;
 pub const TEST_CALLEE_ACCOUNT_UPDATES: u8 = 41;
 pub const TEST_STACK_HEAP_ZEROED: u8 = 42;
+pub const TEST_ACCOUNT_INFO_IN_ACCOUNT: u8 = 43;
 
 pub const MINT_INDEX: usize = 0;
 pub const ARGUMENT_INDEX: usize = 1;
