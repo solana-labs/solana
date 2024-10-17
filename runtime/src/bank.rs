@@ -5663,8 +5663,10 @@ impl Bank {
                     .spawn(move || {
                         info!("Initial background accounts hash verification has started");
                         let start = Instant::now();
-                        let mut accounts_lt_hash_time = None;
+                        let mut lattice_verify_time = None;
+                        let mut merkle_verify_time = None;
                         if is_accounts_lt_hash_enabled {
+                            // accounts lt hash is *enabled* so use lattice-based verification
                             let accounts_db = &accounts_.accounts_db;
                             let (calculated_accounts_lt_hash, duration) =
                                 meas_dur!(accounts_db.thread_pool_hash.install(|| {
@@ -5682,26 +5684,31 @@ impl Bank {
                                 );
                                 return false;
                             }
-                            accounts_lt_hash_time = Some(duration);
+                            lattice_verify_time = Some(duration);
+                        } else {
+                            // accounts lt hash is *disabled* so use merkle-based verification
+                            let snapshot_storages_and_slots = (
+                                snapshot_storages.0.as_slice(),
+                                snapshot_storages.1.as_slice(),
+                            );
+                            let (result, duration) = meas_dur!(accounts_
+                                .verify_accounts_hash_and_lamports(
+                                    snapshot_storages_and_slots,
+                                    slot,
+                                    capitalization,
+                                    base,
+                                    VerifyAccountsHashAndLamportsConfig {
+                                        ancestors: &ancestors,
+                                        epoch_schedule: &epoch_schedule,
+                                        rent_collector: &rent_collector,
+                                        ..verify_config
+                                    },
+                                ));
+                            if !result {
+                                return false;
+                            }
+                            merkle_verify_time = Some(duration);
                         }
-
-                        let snapshot_storages_and_slots = (
-                            snapshot_storages.0.as_slice(),
-                            snapshot_storages.1.as_slice(),
-                        );
-                        let (result, accounts_hash_time) = meas_dur!(accounts_
-                            .verify_accounts_hash_and_lamports(
-                                snapshot_storages_and_slots,
-                                slot,
-                                capitalization,
-                                base,
-                                VerifyAccountsHashAndLamportsConfig {
-                                    ancestors: &ancestors,
-                                    epoch_schedule: &epoch_schedule,
-                                    rent_collector: &rent_collector,
-                                    ..verify_config
-                                },
-                            ));
                         accounts_
                             .accounts_db
                             .verify_accounts_hash_in_bg
@@ -5712,13 +5719,16 @@ impl Bank {
                             ("total_us", total_time.as_micros(), i64),
                             (
                                 "verify_accounts_lt_hash_us",
-                                accounts_lt_hash_time.as_ref().map(Duration::as_micros),
+                                lattice_verify_time.as_ref().map(Duration::as_micros),
                                 Option<i64>
                             ),
-                            ("verify_accounts_hash_us", accounts_hash_time.as_micros(), i64),
+                            ("verify_accounts_hash_us",
+                                merkle_verify_time.as_ref().map(Duration::as_micros),
+                                Option<i64>
+                            ),
                         );
                         info!("Initial background accounts hash verification has stopped");
-                        result
+                        true
                     })
                     .unwrap()
             });
