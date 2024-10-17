@@ -73,6 +73,8 @@ impl TransactionStatusService {
                 token_balances,
                 transaction_indexes,
             }) => {
+                let mut status_and_memos_batch = blockstore.get_write_batch().unwrap();
+
                 for (
                     transaction,
                     commit_result,
@@ -159,8 +161,15 @@ impl TransactionStatusService {
                     if enable_rpc_transaction_history {
                         if let Some(memos) = extract_and_fmt_memos(transaction.message()) {
                             blockstore
-                                .write_transaction_memos(transaction.signature(), slot, memos)
-                                .expect("Expect database write to succeed: TransactionMemos");
+                                .add_transaction_memos_to_batch(
+                                    transaction.signature(),
+                                    slot,
+                                    memos,
+                                    &mut status_and_memos_batch,
+                                )
+                                .expect(
+                                    "Expect database batch accumulation to succeed: TransactionMemos",
+                                );
                         }
 
                         let message = transaction.message();
@@ -171,15 +180,23 @@ impl TransactionStatusService {
                             .map(|(index, key)| (key, message.is_writable(index)));
 
                         blockstore
-                            .write_transaction_status(
+                            .add_transaction_status_to_batch(
                                 slot,
                                 *transaction.signature(),
                                 keys_with_writable,
                                 transaction_status_meta,
                                 transaction_index,
+                                &mut status_and_memos_batch,
                             )
-                            .expect("Expect database write to succeed: TransactionStatus");
+                            .expect(
+                                "Expect database batch accumulation to succeed: TransactionStatus",
+                            );
                     }
+                }
+
+                if enable_rpc_transaction_history {
+                    blockstore.write_batch(status_and_memos_batch)
+                        .expect("Expect database batched writes to succeed: TransactionStatus + TransactionMemos");
                 }
             }
             TransactionStatusMessage::Freeze(slot) => {
@@ -418,6 +435,134 @@ pub(crate) mod tests {
         assert_eq!(
             expected_transaction.signature(),
             result.transaction.signature()
+        );
+    }
+
+    #[test]
+    fn test_batch_transaction_status_and_memos() {
+        let genesis_config = create_genesis_config(2).genesis_config;
+        let (bank, _bank_forks) = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
+
+        let (transaction_status_sender, transaction_status_receiver) = unbounded();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path())
+            .expect("Expected to be able to open database ledger");
+        let blockstore = Arc::new(blockstore);
+
+        let transaction1 = build_test_transaction_legacy();
+        let transaction1 = VersionedTransaction::from(transaction1);
+        let transaction1 = SanitizedTransaction::try_create(
+            transaction1,
+            MessageHash::Compute,
+            None,
+            SimpleAddressLoader::Disabled,
+            &ReservedAccountKeys::empty_key_set(),
+        )
+        .unwrap();
+
+        let transaction2 = build_test_transaction_legacy();
+        let transaction2 = VersionedTransaction::from(transaction2);
+        let transaction2 = SanitizedTransaction::try_create(
+            transaction2,
+            MessageHash::Compute,
+            None,
+            SimpleAddressLoader::Disabled,
+            &ReservedAccountKeys::empty_key_set(),
+        )
+        .unwrap();
+
+        let expected_transaction1 = transaction1.clone();
+        let expected_transaction2 = transaction2.clone();
+
+        let commit_result = Ok(CommittedTransaction {
+            status: Ok(()),
+            log_messages: None,
+            inner_instructions: None,
+            return_data: None,
+            executed_units: 0,
+            fee_details: FeeDetails::default(),
+            rent_debits: RentDebits::default(),
+            loaded_account_stats: TransactionLoadedAccountsStats::default(),
+        });
+
+        let balances = TransactionBalancesSet {
+            pre_balances: vec![vec![123456], vec![234567]],
+            post_balances: vec![vec![234567], vec![345678]],
+        };
+
+        let token_balances = TransactionTokenBalancesSet {
+            pre_token_balances: vec![vec![], vec![]],
+            post_token_balances: vec![vec![], vec![]],
+        };
+
+        let slot = bank.slot();
+        let transaction_index1: usize = bank.transaction_count().try_into().unwrap();
+        let transaction_index2: usize = transaction_index1 + 1;
+
+        let transaction_status_batch = TransactionStatusBatch {
+            slot,
+            transactions: vec![transaction1, transaction2],
+            commit_results: vec![commit_result.clone(), commit_result],
+            balances: balances.clone(),
+            token_balances,
+            transaction_indexes: vec![transaction_index1, transaction_index2],
+        };
+
+        let test_notifier = Arc::new(TestTransactionNotifier::new());
+
+        let exit = Arc::new(AtomicBool::new(false));
+        let transaction_status_service = TransactionStatusService::new(
+            transaction_status_receiver,
+            Arc::new(AtomicU64::default()),
+            true,
+            Some(test_notifier.clone()),
+            blockstore,
+            false,
+            exit.clone(),
+        );
+
+        transaction_status_sender
+            .send(TransactionStatusMessage::Batch(transaction_status_batch))
+            .unwrap();
+        sleep(Duration::from_millis(5000));
+
+        exit.store(true, Ordering::Relaxed);
+        transaction_status_service.join().unwrap();
+        assert_eq!(test_notifier.notifications.len(), 2);
+
+        let key1 = TestNotifierKey {
+            slot,
+            transaction_index: transaction_index1,
+            signature: *expected_transaction1.signature(),
+        };
+        let key2 = TestNotifierKey {
+            slot,
+            transaction_index: transaction_index2,
+            signature: *expected_transaction2.signature(),
+        };
+
+        assert!(test_notifier.notifications.contains_key(&key1));
+        assert!(test_notifier.notifications.contains_key(&key2));
+
+        let result1 = test_notifier.notifications.get(&key1).unwrap();
+        let result2 = test_notifier.notifications.get(&key2).unwrap();
+
+        assert_eq!(
+            expected_transaction1.signature(),
+            result1.transaction.signature()
+        );
+        assert_eq!(
+            expected_transaction1.message_hash(),
+            result1.transaction.message_hash()
+        );
+
+        assert_eq!(
+            expected_transaction2.signature(),
+            result2.transaction.signature()
+        );
+        assert_eq!(
+            expected_transaction2.message_hash(),
+            result2.transaction.message_hash()
         );
     }
 }
