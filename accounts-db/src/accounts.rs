@@ -89,6 +89,25 @@ impl Accounts {
         address_table_lookup: SVMMessageAddressTableLookup,
         slot_hashes: &SlotHashes,
     ) -> std::result::Result<(LoadedAddresses, Slot), AddressLookupError> {
+        let mut loaded_addresses = LoadedAddresses::default();
+        self.load_lookup_table_addresses_into(
+            ancestors,
+            address_table_lookup,
+            slot_hashes,
+            &mut loaded_addresses,
+        )
+        .map(|deactivation_slot| (loaded_addresses, deactivation_slot))
+    }
+
+    /// Fill `loaded_addresses` and return the deactivation slot.
+    /// If no tables are de-activating, the deactivation slot is `u64::MAX`.
+    pub fn load_lookup_table_addresses_into(
+        &self,
+        ancestors: &Ancestors,
+        address_table_lookup: SVMMessageAddressTableLookup,
+        slot_hashes: &SlotHashes,
+        loaded_addresses: &mut LoadedAddresses,
+    ) -> std::result::Result<Slot, AddressLookupError> {
         let table_account = self
             .accounts_db
             .load_with_fixed_root(ancestors, address_table_lookup.account_key)
@@ -100,26 +119,46 @@ impl Accounts {
             let lookup_table = AddressLookupTable::deserialize(table_account.data())
                 .map_err(|_ix_err| AddressLookupError::InvalidAccountData)?;
 
-            Ok((
-                LoadedAddresses {
-                    writable: lookup_table.lookup(
-                        current_slot,
-                        address_table_lookup.writable_indexes,
-                        slot_hashes,
-                    )?,
-                    readonly: lookup_table.lookup(
-                        current_slot,
-                        address_table_lookup.readonly_indexes,
-                        slot_hashes,
-                    )?,
-                },
-                lookup_table.meta.deactivation_slot,
-            ))
+            // Load iterators for addresses.
+            let writable_addresses = lookup_table.lookup_iter(
+                current_slot,
+                address_table_lookup.writable_indexes,
+                slot_hashes,
+            )?;
+            let readonly_addresses = lookup_table.lookup_iter(
+                current_slot,
+                address_table_lookup.readonly_indexes,
+                slot_hashes,
+            )?;
+
+            // Reserve space in vectors to avoid reallocations.
+            // If `loaded_addresses` is pre-allocated, this only does a simple
+            // bounds check.
+            loaded_addresses
+                .writable
+                .reserve(address_table_lookup.writable_indexes.len());
+            loaded_addresses
+                .readonly
+                .reserve(address_table_lookup.readonly_indexes.len());
+
+            // Append to the loaded addresses.
+            // Check if **any** of the addresses are not available.
+            for address in writable_addresses {
+                loaded_addresses
+                    .writable
+                    .push(address.ok_or(AddressLookupError::InvalidLookupIndex)?);
+            }
+            for address in readonly_addresses {
+                loaded_addresses
+                    .readonly
+                    .push(address.ok_or(AddressLookupError::InvalidLookupIndex)?);
+            }
+
+            Ok(lookup_table.meta.deactivation_slot)
         } else {
             Err(AddressLookupError::InvalidAccountOwner)
         }
     }
-
     /// Slow because lock is held for 1 operation instead of many
     /// This always returns None for zero-lamport accounts.
     fn load_slow(

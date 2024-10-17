@@ -186,13 +186,27 @@ impl<'a> AddressLookupTable<'a> {
         indexes: &[u8],
         slot_hashes: &SlotHashes,
     ) -> Result<Vec<Pubkey>, AddressLookupError> {
-        let active_addresses_len = self.get_active_addresses_len(current_slot, slot_hashes)?;
-        let active_addresses = &self.addresses[0..active_addresses_len];
-        indexes
-            .iter()
-            .map(|idx| active_addresses.get(*idx as usize).cloned())
+        self.lookup_iter(current_slot, indexes, slot_hashes)?
             .collect::<Option<_>>()
             .ok_or(AddressLookupError::InvalidLookupIndex)
+    }
+
+    /// Lookup addresses for provided table indexes. Since lookups are performed on
+    /// tables which are not read-locked, this implementation needs to be careful
+    /// about resolving addresses consistently.
+    /// If ANY of the indexes return `None`, the entire lookup should be considered
+    /// invalid.
+    pub fn lookup_iter(
+        &'a self,
+        current_slot: Slot,
+        indexes: &'a [u8],
+        slot_hashes: &SlotHashes,
+    ) -> Result<impl Iterator<Item = Option<Pubkey>> + 'a, AddressLookupError> {
+        let active_addresses_len = self.get_active_addresses_len(current_slot, slot_hashes)?;
+        let active_addresses = &self.addresses[0..active_addresses_len];
+        Ok(indexes
+            .iter()
+            .map(|idx| active_addresses.get(*idx as usize).cloned()))
     }
 
     /// Serialize an address table including its addresses
