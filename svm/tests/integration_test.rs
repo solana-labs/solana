@@ -1,4 +1,5 @@
 #![cfg(test)]
+#![allow(clippy::arithmetic_side_effects)]
 
 use {
     crate::mock_bank::{
@@ -9,6 +10,7 @@ use {
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         clock::Slot,
+        compute_budget::ComputeBudgetInstruction,
         feature_set::{self, FeatureSet},
         hash::Hash,
         instruction::{AccountMeta, Instruction},
@@ -27,7 +29,7 @@ use {
         nonce_info::NonceInfo,
         rollback_accounts::RollbackAccounts,
         transaction_execution_result::TransactionExecutionDetails,
-        transaction_processing_result::ProcessedTransaction,
+        transaction_processing_result::{ProcessedTransaction, TransactionProcessingResult},
         transaction_processor::{
             ExecutionRecordingConfig, TransactionBatchProcessor, TransactionProcessingConfig,
             TransactionProcessingEnvironment,
@@ -49,7 +51,7 @@ const LAST_BLOCKHASH: Hash = Hash::new_from_array([7; 32]); // Arbitrary constan
 pub type AccountsMap = HashMap<Pubkey, AccountSharedData>;
 
 // container for a transaction batch and all data needed to run and verify it against svm
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct SvmTestEntry {
     // features are disabled by default; these will be enabled
     pub enabled_features: Vec<Pubkey>,
@@ -156,12 +158,14 @@ impl SvmTestEntry {
         mut nonce_info: NonceInfo,
         status: ExecutionStatus,
     ) {
-        nonce_info
-            .try_advance_nonce(
-                DurableNonce::from_blockhash(&LAST_BLOCKHASH),
-                LAMPORTS_PER_SIGNATURE,
-            )
-            .unwrap();
+        if status != ExecutionStatus::Discarded {
+            nonce_info
+                .try_advance_nonce(
+                    DurableNonce::from_blockhash(&LAST_BLOCKHASH),
+                    LAMPORTS_PER_SIGNATURE,
+                )
+                .unwrap();
+        }
 
         self.transaction_batch.push(TransactionBatchItem {
             transaction,
@@ -318,6 +322,22 @@ impl ExecutionStatus {
 
     pub fn discarded(self) -> bool {
         self == Self::Discarded
+    }
+}
+
+impl From<&TransactionProcessingResult> for ExecutionStatus {
+    fn from(processing_result: &TransactionProcessingResult) -> Self {
+        match processing_result {
+            Ok(ProcessedTransaction::Executed(executed_transaction)) => {
+                if executed_transaction.execution_details.status.is_ok() {
+                    ExecutionStatus::Succeeded
+                } else {
+                    ExecutionStatus::ExecutedFailed
+                }
+            }
+            Ok(ProcessedTransaction::FeesOnly(_)) => ExecutionStatus::ProcessedFailed,
+            Err(_) => ExecutionStatus::Discarded,
+        }
     }
 }
 
@@ -666,7 +686,11 @@ fn simple_nonce(enable_fee_only_transactions: bool, fee_paying_nonce: bool) -> V
     // * true/false: normal nonce account used to pay fees with rent minimum plus 1sol
     // * false/true: normal nonce account with rent minimum, fee payer doesnt exist
     // * true/true: same account for both which does not exist
-    let mk_nonce_transaction = |test_entry: &mut SvmTestEntry, program_id, fake_fee_payer: bool| {
+    // we also provide a side door to bring a fee-paying nonce account below rent-exemption
+    let mk_nonce_transaction = |test_entry: &mut SvmTestEntry,
+                                program_id,
+                                fake_fee_payer: bool,
+                                rent_paying_nonce: bool| {
         let fee_payer_keypair = Keypair::new();
         let fee_payer = fee_payer_keypair.pubkey();
         let nonce_pubkey = if fee_paying_nonce {
@@ -682,8 +706,12 @@ fn simple_nonce(enable_fee_only_transactions: bool, fee_paying_nonce: bool) -> V
             let mut fee_payer_data = AccountSharedData::default();
             fee_payer_data.set_lamports(LAMPORTS_PER_SOL);
             test_entry.add_initial_account(fee_payer, &fee_payer_data);
+        } else if rent_paying_nonce {
+            assert!(fee_paying_nonce);
+            nonce_balance += LAMPORTS_PER_SIGNATURE;
+            nonce_balance -= 1;
         } else if fee_paying_nonce {
-            nonce_balance = nonce_balance.saturating_add(LAMPORTS_PER_SOL);
+            nonce_balance += LAMPORTS_PER_SOL;
         }
 
         let nonce_initial_hash = DurableNonce::from_blockhash(&Hash::new_unique());
@@ -716,10 +744,11 @@ fn simple_nonce(enable_fee_only_transactions: bool, fee_paying_nonce: bool) -> V
         (transaction, fee_payer, nonce_info)
     };
 
-    // successful nonce transaction, regardless of features
+    // 0: successful nonce transaction, regardless of features
     {
         let (transaction, fee_payer, mut nonce_info) =
-            mk_nonce_transaction(&mut test_entry, real_program_id, false);
+            mk_nonce_transaction(&mut test_entry, real_program_id, false, false);
+
         test_entry.push_nonce_transaction(transaction, nonce_info.clone());
 
         test_entry.decrease_expected_lamports(&fee_payer, LAMPORTS_PER_SIGNATURE);
@@ -739,10 +768,10 @@ fn simple_nonce(enable_fee_only_transactions: bool, fee_paying_nonce: bool) -> V
             .copy_from_slice(nonce_info.account().data());
     }
 
-    // non-executing nonce transaction (fee payer doesnt exist) regardless of features
+    // 1: non-executing nonce transaction (fee payer doesnt exist) regardless of features
     {
         let (transaction, _fee_payer, nonce_info) =
-            mk_nonce_transaction(&mut test_entry, real_program_id, true);
+            mk_nonce_transaction(&mut test_entry, real_program_id, true, false);
 
         test_entry
             .final_accounts
@@ -756,10 +785,11 @@ fn simple_nonce(enable_fee_only_transactions: bool, fee_paying_nonce: bool) -> V
         );
     }
 
-    // failing nonce transaction (bad system instruction) regardless of features
+    // 2: failing nonce transaction (bad system instruction) regardless of features
     {
         let (transaction, fee_payer, mut nonce_info) =
-            mk_nonce_transaction(&mut test_entry, system_program::id(), false);
+            mk_nonce_transaction(&mut test_entry, system_program::id(), false, false);
+
         test_entry.push_nonce_transaction_with_status(
             transaction,
             nonce_info.clone(),
@@ -783,11 +813,10 @@ fn simple_nonce(enable_fee_only_transactions: bool, fee_paying_nonce: bool) -> V
             .copy_from_slice(nonce_info.account().data());
     }
 
-    // and this (program doesnt exist) will be a non-executing transaction without the feature
-    // or a fee-only transaction with it. which is identical to failed *except* rent is not updated
+    // 3: processable non-executable nonce transaction with fee-only enabled, otherwise discarded
     {
         let (transaction, fee_payer, mut nonce_info) =
-            mk_nonce_transaction(&mut test_entry, Pubkey::new_unique(), false);
+            mk_nonce_transaction(&mut test_entry, Pubkey::new_unique(), false, false);
 
         if enable_fee_only_transactions {
             test_entry.push_nonce_transaction_with_status(
@@ -841,7 +870,100 @@ fn simple_nonce(enable_fee_only_transactions: bool, fee_paying_nonce: bool) -> V
         }
     }
 
+    // 4: safety check that nonce fee-payers are required to be rent-exempt (blockhash fee-payers may be below rent-exemption)
+    // if this situation is ever allowed in the future, the nonce account MUST be hidden for fee-only transactions
+    // as an aside, nonce accounts closed by WithdrawNonceAccount are safe because they are ordinary executed transactions
+    // we also dont care whether a non-fee nonce (or any account) pays rent because rent is charged on executed transactions
+    if fee_paying_nonce {
+        let (transaction, _, nonce_info) =
+            mk_nonce_transaction(&mut test_entry, real_program_id, false, true);
+
+        test_entry
+            .final_accounts
+            .get_mut(nonce_info.address())
+            .unwrap()
+            .set_rent_epoch(0);
+
+        test_entry.push_nonce_transaction_with_status(
+            transaction,
+            nonce_info.clone(),
+            ExecutionStatus::Discarded,
+        );
+    }
+
+    // 5: rent-paying nonce fee-payers are also not charged for fee-only transactions
+    if enable_fee_only_transactions && fee_paying_nonce {
+        let (transaction, _, nonce_info) =
+            mk_nonce_transaction(&mut test_entry, Pubkey::new_unique(), false, true);
+
+        test_entry
+            .final_accounts
+            .get_mut(nonce_info.address())
+            .unwrap()
+            .set_rent_epoch(0);
+
+        test_entry.push_nonce_transaction_with_status(
+            transaction,
+            nonce_info.clone(),
+            ExecutionStatus::Discarded,
+        );
+    }
+
     vec![test_entry]
+}
+
+#[allow(unused)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WriteProgramInstruction {
+    Print,
+    Set,
+    Dealloc,
+    Realloc(usize),
+}
+impl WriteProgramInstruction {
+    fn _create_transaction(
+        self,
+        program_id: Pubkey,
+        fee_payer: &Keypair,
+        target: Pubkey,
+        clamp_data_size: Option<u32>,
+    ) -> Transaction {
+        let (instruction_data, account_metas) = match self {
+            Self::Print => (vec![0], vec![AccountMeta::new_readonly(target, false)]),
+            Self::Set => (vec![1], vec![AccountMeta::new(target, false)]),
+            Self::Dealloc => (
+                vec![2],
+                vec![
+                    AccountMeta::new(target, false),
+                    AccountMeta::new(solana_sdk::incinerator::id(), false),
+                ],
+            ),
+            Self::Realloc(new_size) => {
+                let mut instruction_data = vec![3];
+                instruction_data.extend_from_slice(&new_size.to_le_bytes());
+                (instruction_data, vec![AccountMeta::new(target, false)])
+            }
+        };
+
+        let mut instructions = vec![];
+
+        if let Some(size) = clamp_data_size {
+            instructions.push(ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(size));
+        }
+
+        instructions.push(Instruction::new_with_bytes(
+            program_id,
+            &instruction_data,
+            account_metas,
+        ));
+
+        Transaction::new_signed_with_payer(
+            &instructions,
+            Some(&fee_payer.pubkey()),
+            &[fee_payer],
+            Hash::default(),
+        )
+    }
 }
 
 #[test_case(program_medley())]
@@ -921,7 +1043,7 @@ fn execute_test_entry(test_entry: SvmTestEntry) {
     );
 
     // build a hashmap of final account states incrementally, starting with all initial states, updating to all final states
-    // NOTE with SIMD-83 an account may appear multiple times in the same batch
+    // with SIMD83, an account might change multiple times in the same batch, but it might not exist on all transactions
     let mut final_accounts_actual = test_entry.initial_accounts.clone();
 
     for (index, processed_transaction) in batch_output.processing_results.iter().enumerate() {
@@ -955,6 +1077,20 @@ fn execute_test_entry(test_entry: SvmTestEntry) {
             Err(_) => {}
         }
     }
+
+    // first assert all transaction states together, it makes test-driven development much less of a headache
+    let (expected_statuses, actual_statuses): (Vec<_>, Vec<_>) = batch_output
+        .processing_results
+        .iter()
+        .zip(test_entry.asserts())
+        .map(|(processing_result, test_item_assert)| {
+            (
+                ExecutionStatus::from(processing_result),
+                test_item_assert.status,
+            )
+        })
+        .unzip();
+    assert_eq!(expected_statuses, actual_statuses);
 
     // check that all the account states we care about are present and correct
     for (pubkey, expected_account_data) in test_entry.final_accounts.iter() {

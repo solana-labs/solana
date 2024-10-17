@@ -21,7 +21,7 @@ use {
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{Clock, UnixTimestamp},
-        native_loader,
+        compute_budget, native_loader,
         pubkey::Pubkey,
         rent::Rent,
         slot_hashes::Slot,
@@ -136,6 +136,11 @@ fn load_program(name: String) -> Vec<u8> {
 #[allow(unused)]
 pub fn program_address(program_name: &str) -> Pubkey {
     Pubkey::create_with_seed(&Pubkey::default(), program_name, &Pubkey::default()).unwrap()
+}
+
+#[allow(unused)]
+pub fn program_data_size(program_name: &str) -> usize {
+    load_program(program_name.to_string()).len()
 }
 
 #[allow(unused)]
@@ -292,6 +297,19 @@ pub fn register_builtins(
             DEPLOYMENT_SLOT,
             system_program_name.len(),
             solana_system_program::system_processor::Entrypoint::vm,
+        ),
+    );
+
+    // For testing realloc, we need the compute budget program
+    let compute_budget_program_name = "compute_budget_program";
+    batch_processor.add_builtin(
+        mock_bank,
+        compute_budget::id(),
+        compute_budget_program_name,
+        ProgramCacheEntry::new_builtin(
+            DEPLOYMENT_SLOT,
+            compute_budget_program_name.len(),
+            solana_compute_budget_program::Entrypoint::vm,
         ),
     );
 }
