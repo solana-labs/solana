@@ -347,6 +347,7 @@ pub struct ShrinkAncientStats {
     pub slots_eligible_to_shrink: AtomicU64,
     pub total_dead_bytes: AtomicU64,
     pub total_alive_bytes: AtomicU64,
+    pub ideal_storage_size: AtomicU64,
 }
 
 #[derive(Debug, Default)]
@@ -770,6 +771,11 @@ impl ShrinkAncientStats {
                 self.shrink_stats
                     .accounts_not_found_in_index
                     .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "ideal_storage_size",
+                self.ideal_storage_size.swap(0, Ordering::Relaxed),
                 i64
             ),
         );
