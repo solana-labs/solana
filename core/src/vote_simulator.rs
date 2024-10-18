@@ -150,6 +150,7 @@ impl VoteSimulator {
                 new_bank.register_unique_tick();
             }
             if !visit.node().has_no_child() || is_frozen {
+                new_bank.set_block_id(Some(Hash::new_unique()));
                 new_bank.freeze();
                 self.progress
                     .get_fork_stats_mut(new_bank.slot())
@@ -396,6 +397,7 @@ pub fn initialize_state(
 
     genesis_config.poh_config.hashes_per_tick = Some(2);
     let (bank0, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
+    bank0.set_block_id(Some(Hash::new_unique()));
 
     for pubkey in validator_keypairs_map.keys() {
         bank0.transfer(10_000, &mint_keypair, pubkey).unwrap();
