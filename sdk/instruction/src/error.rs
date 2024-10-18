@@ -1,8 +1,8 @@
+use core::fmt;
 #[cfg(feature = "frozen-abi")]
 use solana_frozen_abi_macro::{AbiEnumVisitor, AbiExample};
 #[cfg(feature = "std")]
 use {
-    core::fmt,
     num_traits::ToPrimitive,
     std::string::{String, ToString},
 };
@@ -453,6 +453,7 @@ impl fmt::Display for LamportsError {
     }
 }
 
+#[cfg(feature = "std")]
 impl From<LamportsError> for InstructionError {
     fn from(error: LamportsError) -> Self {
         match error {
