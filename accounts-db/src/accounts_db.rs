@@ -6321,11 +6321,8 @@ impl AccountsDb {
             .unzip();
 
         // hash this accounts in bg
-        match &self.sender_bg_hasher {
-            Some(ref sender) => {
-                let _ = sender.send(cached_accounts);
-            }
-            None => (),
+        if let Some(ref sender) = &self.sender_bg_hasher {
+            let _ = sender.send(cached_accounts);
         };
 
         account_infos

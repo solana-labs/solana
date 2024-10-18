@@ -3916,14 +3916,11 @@ impl Bank {
     ) {
         let mut fees = 0;
 
-        processing_results
-            .iter()
-            .for_each(|processing_result| match processing_result {
-                Ok(processed_tx) => {
-                    fees += processed_tx.fee_details().total_fee();
-                }
-                Err(_) => {}
-            });
+        processing_results.iter().for_each(|processing_result| {
+            if let Ok(processed_tx) = processing_result {
+                fees += processed_tx.fee_details().total_fee();
+            }
+        });
 
         self.collector_fees.fetch_add(fees, Relaxed);
     }
@@ -3935,14 +3932,11 @@ impl Bank {
     ) {
         let mut accumulated_fee_details = FeeDetails::default();
 
-        processing_results
-            .iter()
-            .for_each(|processing_result| match processing_result {
-                Ok(processed_tx) => {
-                    accumulated_fee_details.accumulate(&processed_tx.fee_details());
-                }
-                Err(_) => {}
-            });
+        processing_results.iter().for_each(|processing_result| {
+            if let Ok(processed_tx) = processing_result {
+                accumulated_fee_details.accumulate(&processed_tx.fee_details());
+            }
+        });
 
         self.collector_fee_details
             .write()

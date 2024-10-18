@@ -375,13 +375,10 @@ where
         |parts, kind| {
             if is_valid_snapshot_archive_entry(parts, kind) {
                 i += 1;
-                match &parallel_selector {
-                    Some(parallel_selector) => {
-                        if !parallel_selector.select_index(i - 1) {
-                            return UnpackPath::Ignore;
-                        }
+                if let Some(parallel_selector) = &parallel_selector {
+                    if !parallel_selector.select_index(i - 1) {
+                        return UnpackPath::Ignore;
                     }
-                    None => {}
                 };
                 if let ["accounts", file] = parts {
                     // Randomly distribute the accounts files about the available `account_paths`,
