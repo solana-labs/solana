@@ -377,31 +377,6 @@ impl ClusterInfoVoteListener {
         }
     }
 
-    #[cfg(test)]
-    pub fn get_and_process_votes_for_tests(
-        gossip_vote_txs_receiver: &VerifiedVoteTransactionsReceiver,
-        vote_tracker: &VoteTracker,
-        root_bank: &Bank,
-        subscriptions: &RpcSubscriptions,
-        gossip_verified_vote_hash_sender: &GossipVerifiedVoteHashSender,
-        verified_vote_sender: &VerifiedVoteSender,
-        replay_votes_receiver: &ReplayVoteReceiver,
-    ) -> Result<ThresholdConfirmedSlots> {
-        Self::listen_and_confirm_votes(
-            gossip_vote_txs_receiver,
-            vote_tracker,
-            root_bank,
-            subscriptions,
-            gossip_verified_vote_hash_sender,
-            verified_vote_sender,
-            replay_votes_receiver,
-            &None,
-            &None,
-            &mut None,
-            &mut HashMap::new(),
-        )
-    }
-
     #[allow(clippy::too_many_arguments)]
     fn listen_and_confirm_votes(
         gossip_vote_txs_receiver: &VerifiedVoteTransactionsReceiver,
