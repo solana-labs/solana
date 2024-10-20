@@ -7963,6 +7963,7 @@ dependencies = [
  "solana-define-syscall",
  "solana-frozen-abi",
  "solana-frozen-abi-macro",
+ "solana-program",
  "thiserror",
 ]
 
