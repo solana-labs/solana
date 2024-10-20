@@ -157,7 +157,7 @@ impl SchedulerCountMetricsInner {
         solana_metrics::submit(datapoint, log::Level::Info);
     }
 
-    pub fn has_data(&self) -> bool {
+    fn has_data(&self) -> bool {
         self.num_received != 0
             || self.num_buffered != 0
             || self.num_scheduled != 0
@@ -212,7 +212,7 @@ impl SchedulerCountMetricsInner {
         }
     }
 
-    pub fn get_min_priority(&self) -> u64 {
+    fn get_min_priority(&self) -> u64 {
         // to avoid getting u64::max recorded by metrics / in case of edge cases
         if self.min_prioritization_fees != u64::MAX {
             self.min_prioritization_fees
@@ -221,7 +221,7 @@ impl SchedulerCountMetricsInner {
         }
     }
 
-    pub fn get_max_priority(&self) -> u64 {
+    fn get_max_priority(&self) -> u64 {
         self.max_prioritization_fees
     }
 }
