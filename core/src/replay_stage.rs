@@ -3599,8 +3599,8 @@ impl ReplayStage {
             // Here we don't have to check if this is our leader bank, as since we are adopting this bank,
             // that means that it was created from a different instance (hot spare setup or a previous restart),
             // and thus we must have replayed and set the block_id from the shreds.
-            bank.block_id()
-                .expect("block_id for an adopted bank cannot be None")
+            // Note: since the new shred format is not rolled out everywhere, we have to provide a default
+            bank.block_id().unwrap_or_default()
         };
         tower.update_last_vote_from_vote_state(
             progress

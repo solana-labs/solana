@@ -592,10 +592,9 @@ impl Tower {
         // `self.vote_state`
         let block_id = bank.block_id().unwrap_or_else(|| {
             // This can only happen for our leader bank
-            assert!(
-                *bank.collector_id() == self.node_pubkey,
-                "block_id must not be None for a frozen non-leader bank"
-            );
+            // Note: since the new shred format is yet to be rolled out to all clusters,
+            // this can also happen for non-leader banks. Once rolled out we can assert
+            // here that this is our leader bank.
             Hash::default()
         });
         self.record_bank_vote_and_update_lockouts(
