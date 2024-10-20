@@ -7,7 +7,7 @@ use {
     crate::{cluster::QuicTpuClient, local_cluster::LocalCluster},
     rand::{thread_rng, Rng},
     rayon::{prelude::*, ThreadPool},
-    solana_client::connection_cache::{ConnectionCache, Protocol},
+    solana_client::connection_cache::ConnectionCache,
     solana_core::consensus::VOTE_THRESHOLD_DEPTH,
     solana_entry::entry::{self, Entry, EntrySlice},
     solana_gossip::{
@@ -40,7 +40,7 @@ use {
     solana_vote_program::{vote_state::TowerSync, vote_transaction},
     std::{
         collections::{HashMap, HashSet, VecDeque},
-        net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener},
+        net::{SocketAddr, TcpListener},
         path::Path,
         sync::{
             atomic::{AtomicBool, Ordering},
@@ -57,18 +57,6 @@ use {
     },
     std::path::PathBuf,
 };
-
-pub fn get_client_facing_addr(
-    protocol: Protocol,
-    contact_info: &ContactInfo,
-) -> (SocketAddr, SocketAddr) {
-    let rpc = contact_info.rpc().unwrap();
-    let mut tpu = contact_info.tpu(protocol).unwrap();
-    // QUIC certificate authentication requires the IP Address to match. ContactInfo might have
-    // 0.0.0.0 as the IP instead of 127.0.0.1.
-    tpu.set_ip(IpAddr::V4(Ipv4Addr::LOCALHOST));
-    (rpc, tpu)
-}
 
 /// Spend and verify from every node in the network
 pub fn spend_and_verify_all_nodes<S: ::std::hash::BuildHasher + Sync + Send>(
