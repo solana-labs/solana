@@ -61,10 +61,6 @@ impl SlotCacheInner {
         );
     }
 
-    pub fn get_all_pubkeys(&self) -> Vec<Pubkey> {
-        self.cache.iter().map(|item| *item.key()).collect()
-    }
-
     pub fn insert(&self, pubkey: &Pubkey, account: AccountSharedData) -> CachedAccount {
         let data_len = account.data().len() as u64;
         let item = Arc::new(CachedAccountInner {

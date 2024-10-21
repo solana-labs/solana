@@ -2072,11 +2072,6 @@ impl AccountsDb {
         )
     }
 
-    pub fn expected_cluster_type(&self) -> ClusterType {
-        self.cluster_type
-            .expect("Cluster type must be set at initialization")
-    }
-
     /// Returns if the experimental accounts lattice hash is enabled
     pub fn is_experimental_accumulator_hash_enabled(&self) -> bool {
         self.is_experimental_accumulator_hash_enabled
@@ -6418,11 +6413,6 @@ impl AccountsDb {
                 i64
             ),
         );
-    }
-
-    pub fn checked_iterative_sum_for_capitalization(total_cap: u64, new_cap: u64) -> u64 {
-        let new_total = total_cap as u128 + new_cap as u128;
-        AccountsHasher::checked_cast_for_capitalization(new_total)
     }
 
     pub fn checked_sum_for_capitalization<T: Iterator<Item = u64>>(balances: T) -> u64 {
