@@ -680,7 +680,7 @@ impl Tower {
         self.record_bank_vote_and_update_lockouts(slot, hash, true, Hash::default())
     }
 
-    /// Used for tests
+    #[cfg(feature = "dev-context-only-utils")]
     pub fn increase_lockout(&mut self, confirmation_count_increase: u32) {
         for vote in self.vote_state.votes.iter_mut() {
             vote.lockout
