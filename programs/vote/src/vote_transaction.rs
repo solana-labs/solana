@@ -103,6 +103,7 @@ pub fn new_compact_vote_state_update_transaction(
     vote_tx
 }
 
+#[must_use]
 pub fn new_tower_sync_transaction(
     tower_sync: TowerSync,
     blockhash: Hash,

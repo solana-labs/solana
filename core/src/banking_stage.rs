@@ -1435,7 +1435,7 @@ mod tests {
                         &vote_keypairs[i],
                         &vote_keypairs[i],
                         None,
-                    );
+                    )
                 })
                 .collect_vec();
             let gossip_votes = (0..100_usize)
@@ -1452,7 +1452,7 @@ mod tests {
                         &vote_keypairs[i],
                         &vote_keypairs[i],
                         None,
-                    );
+                    )
                 })
                 .collect_vec();
             let txs = (0..100_usize)
