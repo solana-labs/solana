@@ -1,4 +1,3 @@
-#![doc(hidden)]
 //! Types with stable memory layouts
 //!
 //! Internal use only; here be dragons!

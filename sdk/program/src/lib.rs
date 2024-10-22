@@ -509,7 +509,6 @@ pub mod program_utils;
 pub mod secp256k1_program;
 pub mod slot_hashes;
 pub mod slot_history;
-pub mod stable_layout;
 pub mod stake;
 pub mod stake_history;
 pub mod syscalls;
@@ -533,6 +532,8 @@ pub use solana_serde_varint as serde_varint;
 pub use solana_serialize_utils as serialize_utils;
 #[deprecated(since = "2.1.0", note = "Use `solana-short-vec` crate instead")]
 pub use solana_short_vec as short_vec;
+#[deprecated(since = "2.1.0", note = "Use `solana-stable-layout` crate instead")]
+pub use solana_stable_layout as stable_layout;
 #[cfg(target_arch = "wasm32")]
 pub use wasm_bindgen::prelude::wasm_bindgen;
 pub use {

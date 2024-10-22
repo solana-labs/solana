@@ -18,7 +18,7 @@ use std::{marker::PhantomData, mem::ManuallyDrop, ptr::NonNull};
 /// Creating a `StableVec` from a `Vec`
 ///
 /// ```
-/// # use solana_program::stable_layout::stable_vec::StableVec;
+/// # use solana_stable_layout::stable_vec::StableVec;
 /// let vec = vec!["meow", "woof", "moo"];
 /// let vec = StableVec::from(vec);
 /// ```

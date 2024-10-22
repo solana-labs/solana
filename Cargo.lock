@@ -7349,6 +7349,7 @@ dependencies = [
  "solana-sha256-hasher",
  "solana-short-vec",
  "solana-slot-hashes",
+ "solana-stable-layout",
  "static_assertions",
  "test-case",
  "thiserror",
@@ -8059,6 +8060,15 @@ dependencies = [
  "serde_derive",
  "solana-hash",
  "solana-sha256-hasher",
+]
+
+[[package]]
+name = "solana-stable-layout"
+version = "2.1.0"
+dependencies = [
+ "memoffset 0.9.1",
+ "solana-instruction",
+ "solana-pubkey",
 ]
 
 [[package]]

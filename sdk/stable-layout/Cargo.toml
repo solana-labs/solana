@@ -1,0 +1,19 @@
+[package]
+name = "solana-stable-layout"
+description = "Solana types with stable memory layouts. Internal use only."
+documentation = "https://docs.rs/solana-stable-layout"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+solana-instruction = { workspace = true, default-features = false, features = [
+    "std",
+] }
+solana-pubkey = { workspace = true, default-features = false }
+
+[dev-dependencies]
+memoffset = { workspace = true }

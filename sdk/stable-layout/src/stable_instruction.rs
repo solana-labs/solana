@@ -1,11 +1,9 @@
 //! `Instruction`, with a stable memory layout
 
 use {
-    crate::{
-        instruction::{AccountMeta, Instruction},
-        pubkey::Pubkey,
-        stable_layout::stable_vec::StableVec,
-    },
+    crate::stable_vec::StableVec,
+    solana_instruction::{AccountMeta, Instruction},
+    solana_pubkey::Pubkey,
     std::fmt::Debug,
 };
 
@@ -21,7 +19,9 @@ use {
 /// Creating a `StableInstruction` from an `Instruction`
 ///
 /// ```
-/// # use solana_program::{instruction::Instruction, pubkey::Pubkey, stable_layout::stable_instruction::StableInstruction};
+/// # use solana_instruction::Instruction;
+/// # use solana_pubkey::Pubkey;
+/// # use solana_stable_layout::stable_instruction::StableInstruction;
 /// # let program_id = Pubkey::default();
 /// # let accounts = Vec::default();
 /// # let data = Vec::default();
