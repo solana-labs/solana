@@ -282,11 +282,11 @@ mod tests {
     use {
         super::*,
         crate::{
-            bank::tests::new_bank_from_parent_with_bank_forks, runtime_config::RuntimeConfig,
-            snapshot_bank_utils, snapshot_config::SnapshotConfig, snapshot_utils,
+            bank::tests::new_bank_from_parent_with_bank_forks, genesis_utils,
+            runtime_config::RuntimeConfig, snapshot_bank_utils, snapshot_config::SnapshotConfig,
+            snapshot_utils,
         },
         solana_accounts_db::{
-            accounts::Accounts,
             accounts_db::{
                 AccountShrinkThreshold, AccountsDbConfig, DuplicatesLtHash,
                 ACCOUNTS_DB_CONFIG_FOR_TESTING,
@@ -296,7 +296,7 @@ mod tests {
         solana_sdk::{
             account::{ReadableAccount as _, WritableAccount as _},
             fee_calculator::FeeRateGovernor,
-            genesis_config::create_genesis_config,
+            genesis_config::{self, GenesisConfig},
             native_token::LAMPORTS_PER_SOL,
             pubkey::{self, Pubkey},
             signature::Signer as _,
@@ -304,7 +304,29 @@ mod tests {
         },
         std::{cmp, collections::HashMap, ops::RangeFull, str::FromStr as _, sync::Arc},
         tempfile::TempDir,
+        test_case::test_case,
     };
+
+    /// What features should be enabled?
+    #[derive(Debug, Copy, Clone, Eq, PartialEq)]
+    enum Features {
+        /// Do not enable any features
+        None,
+        /// Enable all features
+        All,
+    }
+
+    /// Creates a genesis config with `features` enabled
+    fn genesis_config_with(features: Features) -> (GenesisConfig, Keypair) {
+        let mint_lamports = 123_456_789 * LAMPORTS_PER_SOL;
+        match features {
+            Features::None => genesis_config::create_genesis_config(mint_lamports),
+            Features::All => {
+                let info = genesis_utils::create_genesis_config(mint_lamports);
+                (info.genesis_config, info.mint_keypair)
+            }
+        }
+    }
 
     #[test]
     fn test_update_accounts_lt_hash() {
@@ -325,7 +347,7 @@ mod tests {
         let keypair5 = Keypair::new();
 
         let (mut genesis_config, mint_keypair) =
-            create_genesis_config(123_456_789 * LAMPORTS_PER_SOL);
+            genesis_config::create_genesis_config(123_456_789 * LAMPORTS_PER_SOL);
         genesis_config.fee_rate_governor = FeeRateGovernor::new(0, 0);
         let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
         bank.rc
@@ -484,12 +506,15 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_inspect_account_for_accounts_lt_hash() {
-        let accounts_db = AccountsDb::default_for_tests();
-        accounts_db.set_is_experimental_accumulator_hash_enabled(true);
-        let accounts = Accounts::new(Arc::new(accounts_db));
-        let bank = Bank::default_with_accounts(accounts);
+    #[test_case(Features::None; "no features")]
+    #[test_case(Features::All; "all features")]
+    fn test_inspect_account_for_accounts_lt_hash(features: Features) {
+        let (genesis_config, _mint_keypair) = genesis_config_with(features);
+        let (bank, _bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
+        bank.rc
+            .accounts
+            .accounts_db
+            .set_is_experimental_accumulator_hash_enabled(true);
 
         // ensure the accounts lt hash is enabled, otherwise this test doesn't actually do anything...
         assert!(bank.is_accounts_lt_hash_enabled());
@@ -590,9 +615,10 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_calculate_accounts_lt_hash_at_startup_from_index() {
-        let (genesis_config, mint_keypair) = create_genesis_config(123_456_789 * LAMPORTS_PER_SOL);
+    #[test_case(Features::None; "no features")]
+    #[test_case(Features::All; "all features")]
+    fn test_calculate_accounts_lt_hash_at_startup_from_index(features: Features) {
+        let (genesis_config, mint_keypair) = genesis_config_with(features);
         let (mut bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
         bank.rc
             .accounts
@@ -638,9 +664,10 @@ mod tests {
         assert_eq!(expected_accounts_lt_hash, calculated_accounts_lt_hash);
     }
 
-    #[test]
-    fn test_calculate_accounts_lt_hash_at_startup_from_storages() {
-        let (genesis_config, mint_keypair) = create_genesis_config(123_456_789 * LAMPORTS_PER_SOL);
+    #[test_case(Features::None; "no features")]
+    #[test_case(Features::All; "all features")]
+    fn test_calculate_accounts_lt_hash_at_startup_from_storages(features: Features) {
+        let (genesis_config, mint_keypair) = genesis_config_with(features);
         let (mut bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
         bank.rc
             .accounts
@@ -735,9 +762,10 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_verify_accounts_lt_hash_at_startup() {
-        let (genesis_config, mint_keypair) = create_genesis_config(123_456_789 * LAMPORTS_PER_SOL);
+    #[test_case(Features::None; "no features")]
+    #[test_case(Features::All; "all features")]
+    fn test_verify_accounts_lt_hash_at_startup(features: Features) {
+        let (genesis_config, mint_keypair) = genesis_config_with(features);
         let (mut bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
         bank.rc
             .accounts
