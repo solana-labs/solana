@@ -6434,10 +6434,21 @@ impl Bank {
     }
 
     pub(crate) fn shrink_ancient_slots(&self) {
-        self.rc
+        let can_skip_rewrites = self.bank_hash_skips_rent_rewrites();
+        let test_skip_rewrites_but_include_in_bank_hash = self
+            .rc
             .accounts
             .accounts_db
-            .shrink_ancient_slots(self.epoch_schedule())
+            .test_skip_rewrites_but_include_in_bank_hash;
+        // Invoke ancient slot shrinking only when the validator is
+        // explicitly configured to do so. This condition may be
+        // removed when the skip rewrites feature is enabled.
+        if can_skip_rewrites || test_skip_rewrites_but_include_in_bank_hash {
+            self.rc
+                .accounts
+                .accounts_db
+                .shrink_ancient_slots(self.epoch_schedule())
+        }
     }
 
     pub fn read_cost_tracker(&self) -> LockResult<RwLockReadGuard<CostTracker>> {
