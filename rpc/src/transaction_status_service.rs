@@ -3,7 +3,7 @@ use {
     crossbeam_channel::{Receiver, RecvTimeoutError},
     itertools::izip,
     solana_ledger::{
-        blockstore::Blockstore,
+        blockstore::{Blockstore, BlockstoreError},
         blockstore_processor::{TransactionStatusBatch, TransactionStatusMessage},
     },
     solana_svm::transaction_commit_result::CommittedTransaction,
@@ -36,35 +36,56 @@ impl TransactionStatusService {
     ) -> Self {
         let thread_hdl = Builder::new()
             .name("solTxStatusWrtr".to_string())
-            .spawn(move || loop {
-                if exit.load(Ordering::Relaxed) {
-                    break;
-                }
+            .spawn(move || {
+                info!("TransactionStatusService has started");
+                loop {
+                    if exit.load(Ordering::Relaxed) {
+                        break;
+                    }
 
-                if let Err(RecvTimeoutError::Disconnected) = Self::write_transaction_status_batch(
-                    &write_transaction_status_receiver,
-                    &max_complete_transaction_status_slot,
-                    enable_rpc_transaction_history,
-                    transaction_notifier.clone(),
-                    &blockstore,
-                    enable_extended_tx_metadata_storage,
-                ) {
-                    break;
+                    let message = match write_transaction_status_receiver
+                        .recv_timeout(Duration::from_secs(1))
+                    {
+                        Ok(message) => message,
+                        Err(RecvTimeoutError::Disconnected) => {
+                            break;
+                        }
+                        Err(RecvTimeoutError::Timeout) => {
+                            continue;
+                        }
+                    };
+
+                    match Self::write_transaction_status_batch(
+                        message,
+                        &max_complete_transaction_status_slot,
+                        enable_rpc_transaction_history,
+                        transaction_notifier.clone(),
+                        &blockstore,
+                        enable_extended_tx_metadata_storage,
+                    ) {
+                        Ok(_) => {}
+                        Err(err) => {
+                            error!("TransactionStatusService stopping due to error: {err}");
+                            exit.store(true, Ordering::Relaxed);
+                            break;
+                        }
+                    }
                 }
+                info!("TransactionStatusService has stopped");
             })
             .unwrap();
         Self { thread_hdl }
     }
 
     fn write_transaction_status_batch(
-        write_transaction_status_receiver: &Receiver<TransactionStatusMessage>,
+        transaction_status_message: TransactionStatusMessage,
         max_complete_transaction_status_slot: &Arc<AtomicU64>,
         enable_rpc_transaction_history: bool,
         transaction_notifier: Option<TransactionNotifierArc>,
         blockstore: &Blockstore,
         enable_extended_tx_metadata_storage: bool,
-    ) -> Result<(), RecvTimeoutError> {
-        match write_transaction_status_receiver.recv_timeout(Duration::from_secs(1))? {
+    ) -> Result<(), BlockstoreError> {
+        match transaction_status_message {
             TransactionStatusMessage::Batch(TransactionStatusBatch {
                 slot,
                 transactions,
@@ -73,7 +94,7 @@ impl TransactionStatusService {
                 token_balances,
                 transaction_indexes,
             }) => {
-                let mut status_and_memos_batch = blockstore.get_write_batch().unwrap();
+                let mut status_and_memos_batch = blockstore.get_write_batch()?;
 
                 for (
                     transaction,
@@ -160,16 +181,12 @@ impl TransactionStatusService {
 
                     if enable_rpc_transaction_history {
                         if let Some(memos) = extract_and_fmt_memos(transaction.message()) {
-                            blockstore
-                                .add_transaction_memos_to_batch(
-                                    transaction.signature(),
-                                    slot,
-                                    memos,
-                                    &mut status_and_memos_batch,
-                                )
-                                .expect(
-                                    "Expect database batch accumulation to succeed: TransactionMemos",
-                                );
+                            blockstore.add_transaction_memos_to_batch(
+                                transaction.signature(),
+                                slot,
+                                memos,
+                                &mut status_and_memos_batch,
+                            )?;
                         }
 
                         let message = transaction.message();
@@ -179,24 +196,19 @@ impl TransactionStatusService {
                             .enumerate()
                             .map(|(index, key)| (key, message.is_writable(index)));
 
-                        blockstore
-                            .add_transaction_status_to_batch(
-                                slot,
-                                *transaction.signature(),
-                                keys_with_writable,
-                                transaction_status_meta,
-                                transaction_index,
-                                &mut status_and_memos_batch,
-                            )
-                            .expect(
-                                "Expect database batch accumulation to succeed: TransactionStatus",
-                            );
+                        blockstore.add_transaction_status_to_batch(
+                            slot,
+                            *transaction.signature(),
+                            keys_with_writable,
+                            transaction_status_meta,
+                            transaction_index,
+                            &mut status_and_memos_batch,
+                        )?;
                     }
                 }
 
                 if enable_rpc_transaction_history {
-                    blockstore.write_batch(status_and_memos_batch)
-                        .expect("Expect database batched writes to succeed: TransactionStatus + TransactionMemos");
+                    blockstore.write_batch(status_and_memos_batch)?;
                 }
             }
             TransactionStatusMessage::Freeze(slot) => {
