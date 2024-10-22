@@ -3,6 +3,7 @@ use {
     super::quic::{
         spawn_server_multi, SpawnNonBlockingServerResult, ALPN_TPU_PROTOCOL_ID,
         DEFAULT_MAX_CONNECTIONS_PER_IPADDR_PER_MINUTE, DEFAULT_MAX_STREAMS_PER_MS,
+        DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
     },
     crate::{
         quic::{StreamerStats, MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS},
@@ -23,7 +24,6 @@ use {
     std::{
         net::{SocketAddr, UdpSocket},
         sync::{atomic::AtomicBool, Arc, RwLock},
-        time::Duration,
     },
     tokio::task::JoinHandle,
 };
@@ -201,7 +201,7 @@ pub fn setup_quic_server_with_sockets(
         max_unstaked_connections,
         max_streams_per_ms,
         max_connections_per_ipaddr_per_minute,
-        Duration::from_secs(2),
+        DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
         DEFAULT_TPU_COALESCE,
     )
     .unwrap();

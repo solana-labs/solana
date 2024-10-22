@@ -65,10 +65,10 @@ use {
         task::JoinHandle,
         time::{sleep, timeout},
     },
+    tokio_util::sync::CancellationToken,
 };
 
-const WAIT_FOR_STREAM_TIMEOUT: Duration = Duration::from_millis(100);
-pub const DEFAULT_WAIT_FOR_CHUNK_TIMEOUT: Duration = Duration::from_secs(10);
+pub const DEFAULT_WAIT_FOR_CHUNK_TIMEOUT: Duration = Duration::from_secs(2);
 
 pub const ALPN_TPU_PROTOCOL_ID: &[u8] = b"solana-tpu";
 
@@ -583,7 +583,7 @@ fn handle_and_cache_new_connection(
             remote_addr,
         );
 
-        if let Some((last_update, stream_exit, stream_counter)) = connection_table_l
+        if let Some((last_update, cancel_connection, stream_counter)) = connection_table_l
             .try_add_connection(
                 ConnectionTableKey::new(remote_addr.ip(), params.remote_pubkey),
                 remote_addr.port(),
@@ -606,7 +606,7 @@ fn handle_and_cache_new_connection(
                 remote_addr,
                 last_update,
                 connection_table,
-                stream_exit,
+                cancel_connection,
                 params.clone(),
                 wait_for_chunk_timeout,
                 stream_load_ema,
@@ -1031,7 +1031,7 @@ async fn handle_connection(
     remote_addr: SocketAddr,
     last_update: Arc<AtomicU64>,
     connection_table: Arc<Mutex<ConnectionTable>>,
-    stream_exit: Arc<AtomicBool>,
+    cancel: CancellationToken,
     params: NewConnectionHandlerParams,
     wait_for_chunk_timeout: Duration,
     stream_load_ema: Arc<StakedStreamLoadEMA>,
@@ -1046,107 +1046,114 @@ async fn handle_connection(
     );
     let stable_id = connection.stable_id();
     stats.total_connections.fetch_add(1, Ordering::Relaxed);
-    while !stream_exit.load(Ordering::Relaxed) {
-        if let Ok(stream) =
-            tokio::time::timeout(WAIT_FOR_STREAM_TIMEOUT, connection.accept_uni()).await
-        {
-            match stream {
-                Ok(mut stream) => {
-                    let max_streams_per_throttling_interval = stream_load_ema
-                        .available_load_capacity_in_throttling_duration(
-                            params.peer_type,
-                            params.total_stake,
-                        );
-
-                    let throttle_interval_start =
-                        stream_counter.reset_throttling_params_if_needed();
-                    let streams_read_in_throttle_interval =
-                        stream_counter.stream_count.load(Ordering::Relaxed);
-                    if streams_read_in_throttle_interval >= max_streams_per_throttling_interval {
-                        // The peer is sending faster than we're willing to read. Sleep for what's
-                        // left of this read interval so the peer backs off.
-                        let throttle_duration = STREAM_THROTTLING_INTERVAL
-                            .saturating_sub(throttle_interval_start.elapsed());
-
-                        if !throttle_duration.is_zero() {
-                            debug!("Throttling stream from {remote_addr:?}, peer type: {:?}, total stake: {}, \
-                                    max_streams_per_interval: {max_streams_per_throttling_interval}, read_interval_streams: {streams_read_in_throttle_interval} \
-                                    throttle_duration: {throttle_duration:?}",
-                                    params.peer_type, params.total_stake);
-                            stats.throttled_streams.fetch_add(1, Ordering::Relaxed);
-                            match params.peer_type {
-                                ConnectionPeerType::Unstaked => {
-                                    stats
-                                        .throttled_unstaked_streams
-                                        .fetch_add(1, Ordering::Relaxed);
-                                }
-                                ConnectionPeerType::Staked(_) => {
-                                    stats
-                                        .throttled_staked_streams
-                                        .fetch_add(1, Ordering::Relaxed);
-                                }
-                            }
-                            sleep(throttle_duration).await;
-                        }
-                    }
-                    stream_load_ema.increment_load(params.peer_type);
-                    stream_counter.stream_count.fetch_add(1, Ordering::Relaxed);
-                    stats.total_streams.fetch_add(1, Ordering::Relaxed);
-                    stats.total_new_streams.fetch_add(1, Ordering::Relaxed);
-                    let stream_exit = stream_exit.clone();
-                    let stats = stats.clone();
-                    let packet_sender = params.packet_sender.clone();
-                    let last_update = last_update.clone();
-                    let stream_load_ema = stream_load_ema.clone();
-                    tokio::spawn(async move {
-                        let mut maybe_batch = None;
-                        // The min is to guard against a value too small which can wake up unnecessarily
-                        // frequently and wasting CPU cycles. The max guard against waiting for too long
-                        // which delay exit and cause some test failures when the timeout value is large.
-                        // Within this value, the heuristic is to wake up 10 times to check for exit
-                        // for the set timeout if there are no data.
-                        let exit_check_interval = (wait_for_chunk_timeout / 10)
-                            .clamp(Duration::from_millis(10), Duration::from_secs(1));
-                        let mut start = Instant::now();
-                        while !stream_exit.load(Ordering::Relaxed) {
-                            if let Ok(chunk) = tokio::time::timeout(
-                                exit_check_interval,
-                                stream.read_chunk(PACKET_DATA_SIZE, true),
-                            )
-                            .await
-                            {
-                                if handle_chunk(
-                                    chunk,
-                                    &mut maybe_batch,
-                                    &remote_addr,
-                                    &packet_sender,
-                                    stats.clone(),
-                                    params.peer_type,
-                                )
-                                .await
-                                {
-                                    last_update.store(timing::timestamp(), Ordering::Relaxed);
-                                    break;
-                                }
-                                start = Instant::now();
-                            } else if start.elapsed() > wait_for_chunk_timeout {
-                                debug!("Timeout in receiving on stream");
-                                stats
-                                    .total_stream_read_timeouts
-                                    .fetch_add(1, Ordering::Relaxed);
-                                break;
-                            }
-                        }
-                        stats.total_streams.fetch_sub(1, Ordering::Relaxed);
-                        stream_load_ema.update_ema_if_needed();
-                    });
-                }
+    loop {
+        // Wait for new streams. If the peer is disconnected we get a cancellation signal and stop
+        // the connection task.
+        let mut stream = select! {
+            stream = connection.accept_uni() => match stream {
+                Ok(stream) => stream,
                 Err(e) => {
                     debug!("stream error: {:?}", e);
                     break;
                 }
+            },
+            _ = cancel.cancelled() => break,
+        };
+
+        let max_streams_per_throttling_interval = stream_load_ema
+            .available_load_capacity_in_throttling_duration(params.peer_type, params.total_stake);
+
+        let throttle_interval_start = stream_counter.reset_throttling_params_if_needed();
+        let streams_read_in_throttle_interval = stream_counter.stream_count.load(Ordering::Relaxed);
+        if streams_read_in_throttle_interval >= max_streams_per_throttling_interval {
+            // The peer is sending faster than we're willing to read. Sleep for what's
+            // left of this read interval so the peer backs off.
+            let throttle_duration =
+                STREAM_THROTTLING_INTERVAL.saturating_sub(throttle_interval_start.elapsed());
+
+            if !throttle_duration.is_zero() {
+                debug!("Throttling stream from {remote_addr:?}, peer type: {:?}, total stake: {}, \
+                                    max_streams_per_interval: {max_streams_per_throttling_interval}, read_interval_streams: {streams_read_in_throttle_interval} \
+                                    throttle_duration: {throttle_duration:?}",
+                                    params.peer_type, params.total_stake);
+                stats.throttled_streams.fetch_add(1, Ordering::Relaxed);
+                match params.peer_type {
+                    ConnectionPeerType::Unstaked => {
+                        stats
+                            .throttled_unstaked_streams
+                            .fetch_add(1, Ordering::Relaxed);
+                    }
+                    ConnectionPeerType::Staked(_) => {
+                        stats
+                            .throttled_staked_streams
+                            .fetch_add(1, Ordering::Relaxed);
+                    }
+                }
+                sleep(throttle_duration).await;
             }
         }
+        stream_load_ema.increment_load(params.peer_type);
+        stream_counter.stream_count.fetch_add(1, Ordering::Relaxed);
+        stats.total_streams.fetch_add(1, Ordering::Relaxed);
+        stats.total_new_streams.fetch_add(1, Ordering::Relaxed);
+        let cancel = cancel.clone();
+        let stats = stats.clone();
+        let packet_sender = params.packet_sender.clone();
+        let last_update = last_update.clone();
+        let stream_load_ema = stream_load_ema.clone();
+        tokio::spawn(async move {
+            let mut maybe_batch = None;
+            loop {
+                // Read the next chunk, waiting up to `wait_for_chunk_timeout`. If we don't get a
+                // chunk before then, we assume the stream is dead and stop the stream task. This
+                // can only happen if there's severe packet loss or the peer stop sending for
+                // whatever reason.
+                let chunk = match tokio::select! {
+                    chunk = tokio::time::timeout(
+                        wait_for_chunk_timeout,
+                        stream.read_chunk(PACKET_DATA_SIZE, true)) => chunk,
+
+                    // If the peer gets disconnected stop the task right away.
+                    _ = cancel.cancelled() => break,
+                } {
+                    // read_chunk returned success
+                    Ok(Ok(chunk)) => chunk,
+                    // read_chunk returned error
+                    Ok(Err(e)) => {
+                        debug!("Received stream error: {:?}", e);
+                        stats
+                            .total_stream_read_errors
+                            .fetch_add(1, Ordering::Relaxed);
+                        break;
+                    }
+                    // timeout elapsed
+                    Err(_) => {
+                        debug!("Timeout in receiving on stream");
+                        stats
+                            .total_stream_read_timeouts
+                            .fetch_add(1, Ordering::Relaxed);
+                        break;
+                    }
+                };
+
+                if handle_chunk(
+                    chunk,
+                    &mut maybe_batch,
+                    &remote_addr,
+                    &packet_sender,
+                    stats.clone(),
+                    params.peer_type,
+                )
+                .await
+                {
+                    last_update.store(timing::timestamp(), Ordering::Relaxed);
+                    break;
+                }
+            }
+
+            stats.total_streams.fetch_sub(1, Ordering::Relaxed);
+            stream_load_ema.update_ema_if_needed();
+        });
     }
 
     let removed_connection_count = connection_table.lock().await.remove_connection(
@@ -1168,130 +1175,119 @@ async fn handle_connection(
 
 // Return true if the server should drop the stream
 async fn handle_chunk(
-    chunk: Result<Option<quinn::Chunk>, quinn::ReadError>,
+    maybe_chunk: Option<quinn::Chunk>,
     packet_accum: &mut Option<PacketAccumulator>,
     remote_addr: &SocketAddr,
     packet_sender: &AsyncSender<PacketAccumulator>,
     stats: Arc<StreamerStats>,
     peer_type: ConnectionPeerType,
 ) -> bool {
-    match chunk {
-        Ok(maybe_chunk) => {
-            if let Some(chunk) = maybe_chunk {
-                trace!("got chunk: {:?}", chunk);
-                let chunk_len = chunk.bytes.len() as u64;
+    if let Some(chunk) = maybe_chunk {
+        trace!("got chunk: {:?}", chunk);
+        let chunk_len = chunk.bytes.len() as u64;
 
-                // shouldn't happen, but sanity check the size and offsets
-                if chunk.offset > PACKET_DATA_SIZE as u64 || chunk_len > PACKET_DATA_SIZE as u64 {
-                    stats.total_invalid_chunks.fetch_add(1, Ordering::Relaxed);
-                    return true;
-                }
-                let Some(end_of_chunk) = chunk.offset.checked_add(chunk_len) else {
-                    return true;
-                };
-                if end_of_chunk > PACKET_DATA_SIZE as u64 {
-                    stats
-                        .total_invalid_chunk_size
-                        .fetch_add(1, Ordering::Relaxed);
-                    return true;
-                }
-
-                // chunk looks valid
-                if packet_accum.is_none() {
-                    let mut meta = Meta::default();
-                    meta.set_socket_addr(remote_addr);
-                    meta.set_from_staked_node(matches!(peer_type, ConnectionPeerType::Staked(_)));
-                    *packet_accum = Some(PacketAccumulator {
-                        meta,
-                        chunks: SmallVec::new(),
-                        start_time: Instant::now(),
-                    });
-                }
-
-                if let Some(accum) = packet_accum.as_mut() {
-                    let offset = chunk.offset;
-                    let Some(end_of_chunk) = (chunk.offset as usize).checked_add(chunk.bytes.len())
-                    else {
-                        return true;
-                    };
-                    accum.chunks.push(PacketChunk {
-                        bytes: chunk.bytes,
-                        offset: offset as usize,
-                        end_of_chunk,
-                    });
-
-                    accum.meta.size = std::cmp::max(accum.meta.size, end_of_chunk);
-                }
-
-                if peer_type.is_staked() {
-                    stats
-                        .total_staked_chunks_received
-                        .fetch_add(1, Ordering::Relaxed);
-                } else {
-                    stats
-                        .total_unstaked_chunks_received
-                        .fetch_add(1, Ordering::Relaxed);
-                }
-            } else {
-                // done receiving chunks
-                trace!("chunk is none");
-                if let Some(accum) = packet_accum.take() {
-                    let bytes_sent = accum.meta.size;
-                    let chunks_sent = accum.chunks.len();
-
-                    if let Err(err) = packet_sender.send(accum).await {
-                        stats
-                            .total_handle_chunk_to_packet_batcher_send_err
-                            .fetch_add(1, Ordering::Relaxed);
-                        trace!("packet batch send error {:?}", err);
-                    } else {
-                        stats
-                            .total_packets_sent_for_batching
-                            .fetch_add(1, Ordering::Relaxed);
-                        stats
-                            .total_bytes_sent_for_batching
-                            .fetch_add(bytes_sent, Ordering::Relaxed);
-                        stats
-                            .total_chunks_sent_for_batching
-                            .fetch_add(chunks_sent, Ordering::Relaxed);
-
-                        match peer_type {
-                            ConnectionPeerType::Unstaked => {
-                                stats
-                                    .total_unstaked_packets_sent_for_batching
-                                    .fetch_add(1, Ordering::Relaxed);
-                            }
-                            ConnectionPeerType::Staked(_) => {
-                                stats
-                                    .total_staked_packets_sent_for_batching
-                                    .fetch_add(1, Ordering::Relaxed);
-                            }
-                        }
-
-                        trace!("sent {} byte packet for batching", bytes_sent);
-                    }
-                } else {
-                    stats
-                        .total_packet_batches_none
-                        .fetch_add(1, Ordering::Relaxed);
-                }
-                return true;
-            }
+        // shouldn't happen, but sanity check the size and offsets
+        if chunk.offset > PACKET_DATA_SIZE as u64 || chunk_len > PACKET_DATA_SIZE as u64 {
+            stats.total_invalid_chunks.fetch_add(1, Ordering::Relaxed);
+            return true;
         }
-        Err(e) => {
-            debug!("Received stream error: {:?}", e);
+        let Some(end_of_chunk) = chunk.offset.checked_add(chunk_len) else {
+            return true;
+        };
+        if end_of_chunk > PACKET_DATA_SIZE as u64 {
             stats
-                .total_stream_read_errors
+                .total_invalid_chunk_size
                 .fetch_add(1, Ordering::Relaxed);
             return true;
         }
+
+        // chunk looks valid
+        if packet_accum.is_none() {
+            let mut meta = Meta::default();
+            meta.set_socket_addr(remote_addr);
+            meta.set_from_staked_node(matches!(peer_type, ConnectionPeerType::Staked(_)));
+            *packet_accum = Some(PacketAccumulator {
+                meta,
+                chunks: SmallVec::new(),
+                start_time: Instant::now(),
+            });
+        }
+
+        if let Some(accum) = packet_accum.as_mut() {
+            let offset = chunk.offset;
+            let Some(end_of_chunk) = (chunk.offset as usize).checked_add(chunk.bytes.len()) else {
+                return true;
+            };
+            accum.chunks.push(PacketChunk {
+                bytes: chunk.bytes,
+                offset: offset as usize,
+                end_of_chunk,
+            });
+
+            accum.meta.size = std::cmp::max(accum.meta.size, end_of_chunk);
+        }
+
+        if peer_type.is_staked() {
+            stats
+                .total_staked_chunks_received
+                .fetch_add(1, Ordering::Relaxed);
+        } else {
+            stats
+                .total_unstaked_chunks_received
+                .fetch_add(1, Ordering::Relaxed);
+        }
+    } else {
+        // done receiving chunks
+        trace!("chunk is none");
+        if let Some(accum) = packet_accum.take() {
+            let bytes_sent = accum.meta.size;
+            let chunks_sent = accum.chunks.len();
+
+            if let Err(err) = packet_sender.send(accum).await {
+                stats
+                    .total_handle_chunk_to_packet_batcher_send_err
+                    .fetch_add(1, Ordering::Relaxed);
+                trace!("packet batch send error {:?}", err);
+            } else {
+                stats
+                    .total_packets_sent_for_batching
+                    .fetch_add(1, Ordering::Relaxed);
+                stats
+                    .total_bytes_sent_for_batching
+                    .fetch_add(bytes_sent, Ordering::Relaxed);
+                stats
+                    .total_chunks_sent_for_batching
+                    .fetch_add(chunks_sent, Ordering::Relaxed);
+
+                match peer_type {
+                    ConnectionPeerType::Unstaked => {
+                        stats
+                            .total_unstaked_packets_sent_for_batching
+                            .fetch_add(1, Ordering::Relaxed);
+                    }
+                    ConnectionPeerType::Staked(_) => {
+                        stats
+                            .total_staked_packets_sent_for_batching
+                            .fetch_add(1, Ordering::Relaxed);
+                    }
+                }
+
+                trace!("sent {} byte packet for batching", bytes_sent);
+            }
+        } else {
+            stats
+                .total_packet_batches_none
+                .fetch_add(1, Ordering::Relaxed);
+        }
+        return true;
     }
+
     false
 }
 
 #[derive(Debug)]
 struct ConnectionEntry {
-    exit: Arc<AtomicBool>,
+    cancel: CancellationToken,
     peer_type: ConnectionPeerType,
     last_update: Arc<AtomicU64>,
     port: u16,
@@ -1303,7 +1299,7 @@ struct ConnectionEntry {
 
 impl ConnectionEntry {
     fn new(
-        exit: Arc<AtomicBool>,
+        cancel: CancellationToken,
         peer_type: ConnectionPeerType,
         last_update: Arc<AtomicU64>,
         port: u16,
@@ -1312,7 +1308,7 @@ impl ConnectionEntry {
         stream_counter: Arc<ConnectionStreamCounter>,
     ) -> Self {
         Self {
-            exit,
+            cancel,
             peer_type,
             last_update,
             port,
@@ -1342,7 +1338,7 @@ impl Drop for ConnectionEntry {
                 CONNECTION_CLOSE_REASON_DROPPED_ENTRY,
             );
         }
-        self.exit.store(true, Ordering::Relaxed);
+        self.cancel.cancel();
     }
 }
 
@@ -1431,7 +1427,7 @@ impl ConnectionTable {
         max_connections_per_peer: usize,
     ) -> Option<(
         Arc<AtomicU64>,
-        Arc<AtomicBool>,
+        CancellationToken,
         Arc<ConnectionStreamCounter>,
     )> {
         let connection_entry = self.table.entry(key).or_default();
@@ -1441,14 +1437,14 @@ impl ConnectionTable {
             .map(|c| c <= max_connections_per_peer)
             .unwrap_or(false);
         if has_connection_capacity {
-            let exit = Arc::new(AtomicBool::new(false));
+            let cancel = CancellationToken::new();
             let last_update = Arc::new(AtomicU64::new(last_update));
             let stream_counter = connection_entry
                 .first()
                 .map(|entry| entry.stream_counter.clone())
                 .unwrap_or(Arc::new(ConnectionStreamCounter::new()));
             connection_entry.push(ConnectionEntry::new(
-                exit.clone(),
+                cancel.clone(),
                 peer_type,
                 last_update.clone(),
                 port,
@@ -1457,7 +1453,7 @@ impl ConnectionTable {
                 stream_counter.clone(),
             ));
             self.total_size += 1;
-            Some((last_update, exit, stream_counter))
+            Some((last_update, cancel, stream_counter))
         } else {
             if let Some(connection) = connection {
                 connection.close(
@@ -1785,7 +1781,7 @@ pub mod test {
         s1.write_all(&[0u8]).await.unwrap_or_default();
 
         // Wait long enough for the stream to timeout in receiving chunks
-        let sleep_time = Duration::from_secs(3).min(WAIT_FOR_STREAM_TIMEOUT * 1000);
+        let sleep_time = DEFAULT_WAIT_FOR_CHUNK_TIMEOUT * 2;
         sleep(sleep_time).await;
 
         // Test that the stream was created, but timed out in read
@@ -1815,7 +1811,7 @@ pub mod test {
         join_handle.await.unwrap();
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_quic_server_multiple_connections_on_single_client_endpoint() {
         solana_logger::setup();
 
@@ -1864,11 +1860,13 @@ pub mod test {
             CONNECTION_CLOSE_CODE_DROPPED_ENTRY.into(),
             CONNECTION_CLOSE_REASON_DROPPED_ENTRY,
         );
-        // Wait long enough for the stream to timeout in receiving chunks
-        let sleep_time = Duration::from_secs(1).min(WAIT_FOR_STREAM_TIMEOUT * 1000);
-        sleep(sleep_time).await;
 
-        assert_eq!(stats.connection_removed.load(Ordering::Relaxed), 1);
+        let start = Instant::now();
+        while stats.connection_removed.load(Ordering::Relaxed) != 1 {
+            debug!("First connection not removed yet");
+            sleep(Duration::from_millis(10)).await;
+        }
+        assert!(start.elapsed().as_secs() < 1);
 
         s2.write_all(&[0u8]).await.unwrap();
         s2.finish().unwrap();
@@ -1877,11 +1875,13 @@ pub mod test {
             CONNECTION_CLOSE_CODE_DROPPED_ENTRY.into(),
             CONNECTION_CLOSE_REASON_DROPPED_ENTRY,
         );
-        // Wait long enough for the stream to timeout in receiving chunks
-        let sleep_time = Duration::from_secs(1).min(WAIT_FOR_STREAM_TIMEOUT * 1000);
-        sleep(sleep_time).await;
 
-        assert_eq!(stats.connection_removed.load(Ordering::Relaxed), 2);
+        let start = Instant::now();
+        while stats.connection_removed.load(Ordering::Relaxed) != 2 {
+            debug!("Second connection not removed yet");
+            sleep(Duration::from_millis(10)).await;
+        }
+        assert!(start.elapsed().as_secs() < 1);
 
         exit.store(true, Ordering::Relaxed);
         join_handle.await.unwrap();

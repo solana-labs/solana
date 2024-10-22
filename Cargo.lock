@@ -8192,6 +8192,7 @@ dependencies = [
  "solana-transaction-metrics-tracker",
  "thiserror",
  "tokio",
+ "tokio-util 0.7.12",
  "x509-parser",
 ]
 
