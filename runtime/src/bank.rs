@@ -1052,7 +1052,7 @@ impl Bank {
             fee_structure: FeeStructure::default(),
             #[cfg(feature = "dev-context-only-utils")]
             hash_overrides: Arc::new(Mutex::new(HashOverrides::default())),
-            accounts_lt_hash: Mutex::new(AccountsLtHash(LtHash([0xBAD1; LtHash::NUM_ELEMENTS]))),
+            accounts_lt_hash: Mutex::new(AccountsLtHash(LtHash::identity())),
             cache_for_accounts_lt_hash: RwLock::new(AHashMap::new()),
             block_id: RwLock::new(None),
         };
@@ -1062,17 +1062,6 @@ impl Bank {
 
         let accounts_data_size_initial = bank.get_total_accounts_stats().unwrap().data_len as u64;
         bank.accounts_data_size_initial = accounts_data_size_initial;
-
-        let accounts_lt_hash = {
-            let mut accounts_lt_hash = AccountsLtHash(LtHash::identity());
-            let accounts = bank.get_all_accounts(false).unwrap();
-            for account in accounts {
-                let account_lt_hash = AccountsDb::lt_hash_account(&account.1, &account.0);
-                accounts_lt_hash.0.mix_in(&account_lt_hash.0);
-            }
-            accounts_lt_hash
-        };
-        *bank.accounts_lt_hash.get_mut().unwrap() = accounts_lt_hash;
 
         bank
     }
@@ -1708,7 +1697,7 @@ impl Bank {
             fee_structure: FeeStructure::default(),
             #[cfg(feature = "dev-context-only-utils")]
             hash_overrides: Arc::new(Mutex::new(HashOverrides::default())),
-            accounts_lt_hash: Mutex::new(AccountsLtHash(LtHash([0xBAD2; LtHash::NUM_ELEMENTS]))),
+            accounts_lt_hash: Mutex::new(AccountsLtHash(LtHash([0xBAD1; LtHash::NUM_ELEMENTS]))),
             cache_for_accounts_lt_hash: RwLock::new(AHashMap::new()),
             block_id: RwLock::new(None),
         };

@@ -59,6 +59,22 @@ impl Bank {
             ancestors
         };
 
+        if slot == 0 {
+            // Slot 0 is special when calculating the accounts lt hash.
+            // Primordial accounts (those in genesis) that are modified by transaction processing
+            // in slot 0 will have Alive entries in the accounts lt hash cache.
+            // When calculating the accounts lt hash, if an account was initially alive, we mix
+            // *out* its previous lt hash value.  In slot 0, we haven't stored any previous lt hash
+            // values (since it is in the first slot), yet we'd still mix out these accounts!
+            // This produces the incorrect accounts lt hash.
+            // From the perspective of the accounts lt hash, in slot 0 we cannot have any accounts
+            // as previously alive.  So to work around this issue, we clear the cache.
+            // And since `strictly_ancestors` is empty, loading the previous version of the account
+            // from accounts db will return `None` (aka Dead), which is the correct behavior.
+            assert!(strictly_ancestors.is_empty());
+            self.cache_for_accounts_lt_hash.write().unwrap().clear();
+        }
+
         // Get all the accounts stored in this slot.
         // Since this bank is in the middle of being frozen, it hasn't been rooted.
         // That means the accounts should all be in the write cache, and loading will be fast.
@@ -504,6 +520,44 @@ mod tests {
             expected, actual,
             "accounts_lt_hash, expected: {expected}, actual: {actual}",
         );
+    }
+
+    /// Ensure that the accounts lt hash is correct for slot 0
+    ///
+    /// This test does a simple transfer in slot 0 so that a primordial account is modified.
+    ///
+    /// See the comments in calculate_delta_lt_hash() for more information.
+    #[test_case(Features::None; "no features")]
+    #[test_case(Features::All; "all features")]
+    fn test_slot0_accounts_lt_hash(features: Features) {
+        let (genesis_config, mint_keypair) = genesis_config_with(features);
+        let (bank, _bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
+        bank.rc
+            .accounts
+            .accounts_db
+            .set_is_experimental_accumulator_hash_enabled(true);
+
+        // ensure the accounts lt hash is enabled, otherwise this test doesn't actually do anything...
+        assert!(bank.is_accounts_lt_hash_enabled());
+
+        // ensure this bank is for slot 0, otherwise this test doesn't actually do anything...
+        assert_eq!(bank.slot(), 0);
+
+        // process a transaction that modifies a primordial account
+        bank.transfer(LAMPORTS_PER_SOL, &mint_keypair, &Pubkey::new_unique())
+            .unwrap();
+
+        // manually freeze the bank to trigger update_accounts_lt_hash() to run
+        bank.freeze();
+        let actual_accounts_lt_hash = bank.accounts_lt_hash.lock().unwrap().clone();
+
+        // ensure the actual accounts lt hash matches the value calculated from the index
+        let calculated_accounts_lt_hash = bank
+            .rc
+            .accounts
+            .accounts_db
+            .calculate_accounts_lt_hash_at_startup_from_index(&bank.ancestors, bank.slot());
+        assert_eq!(actual_accounts_lt_hash, calculated_accounts_lt_hash);
     }
 
     #[test_case(Features::None; "no features")]
