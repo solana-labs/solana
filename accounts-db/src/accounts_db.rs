@@ -8470,6 +8470,9 @@ impl AccountsDb {
                         outer_slots_len as u64,
                     );
                     let mut scan_time_sum = 0;
+                    let mut insert_time_sum = 0;
+                    let mut total_including_duplicates_sum = 0;
+                    let mut accounts_data_len_sum = 0;
                     for (index, slot) in slots.iter().enumerate() {
                         let mut scan_time = Measure::start("scan");
                         log_status.report(index as u64);
@@ -8501,21 +8504,21 @@ impl AccountsDb {
                                 &storage_info,
                             );
 
-                            rent_paying.fetch_add(rent_paying_this_slot, Ordering::Relaxed);
-                            amount_to_top_off_rent
-                                .fetch_add(amount_to_top_off_rent_this_slot, Ordering::Relaxed);
-                            total_including_duplicates
-                                .fetch_add(total_this_slot, Ordering::Relaxed);
-                            accounts_data_len
-                                .fetch_add(accounts_data_len_this_slot, Ordering::Relaxed);
-                            let mut rent_paying_accounts_by_partition =
-                                rent_paying_accounts_by_partition.lock().unwrap();
-                            rent_paying_accounts_by_partition_this_slot
-                                .iter()
-                                .for_each(|k| {
-                                    rent_paying_accounts_by_partition.add_account(k);
-                                });
-
+                            if rent_paying_this_slot > 0 {
+                                // We don't have any rent paying accounts on mainnet, so this code should never be hit.
+                                rent_paying.fetch_add(rent_paying_this_slot, Ordering::Relaxed);
+                                amount_to_top_off_rent
+                                    .fetch_add(amount_to_top_off_rent_this_slot, Ordering::Relaxed);
+                                let mut rent_paying_accounts_by_partition =
+                                    rent_paying_accounts_by_partition.lock().unwrap();
+                                rent_paying_accounts_by_partition_this_slot
+                                    .iter()
+                                    .for_each(|k| {
+                                        rent_paying_accounts_by_partition.add_account(k);
+                                    });
+                            }
+                            total_including_duplicates_sum += total_this_slot;
+                            accounts_data_len_sum += accounts_data_len_this_slot;
                             insert_us
                         } else {
                             // verify index matches expected and measure the time to get all items
@@ -8544,8 +8547,12 @@ impl AccountsDb {
                             lookup_time.stop();
                             lookup_time.as_us()
                         };
-                        insertion_time_us.fetch_add(insert_us, Ordering::Relaxed);
+                        insert_time_sum += insert_us;
                     }
+                    insertion_time_us.fetch_add(insert_time_sum, Ordering::Relaxed);
+                    total_including_duplicates
+                        .fetch_add(total_including_duplicates_sum, Ordering::Relaxed);
+                    accounts_data_len.fetch_add(accounts_data_len_sum, Ordering::Relaxed);
                     scan_time_sum
                 })
                 .sum();
