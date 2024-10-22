@@ -249,6 +249,16 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         environment: &TransactionProcessingEnvironment,
         config: &TransactionProcessingConfig,
     ) -> LoadAndExecuteSanitizedTransactionsOutput {
+        // If `check_results` does not have the same length as `sanitized_txs`,
+        // transactions could be truncated as a result of `.iter().zip()` in
+        // many of the below methods.
+        // See <https://doc.rust-lang.org/std/iter/trait.Iterator.html#method.zip>.
+        debug_assert_eq!(
+            sanitized_txs.len(),
+            check_results.len(),
+            "Length of check_results does not match length of sanitized_txs"
+        );
+
         // Initialize metrics.
         let mut error_metrics = TransactionErrorMetrics::default();
         let mut execute_timings = ExecuteTimings::default();
@@ -1038,6 +1048,7 @@ mod tests {
             transaction::{SanitizedTransaction, Transaction, TransactionError},
             transaction_context::TransactionContext,
         },
+        test_case::test_case,
     };
 
     fn new_unchecked_sanitized_message(message: Message) -> SanitizedMessage {
@@ -1110,6 +1121,51 @@ mod tests {
                 .or_default()
                 .push((account, is_writable));
         }
+    }
+
+    #[test_case(1; "Check results too small")]
+    #[test_case(3; "Check results too large")]
+    #[should_panic(expected = "Length of check_results does not match length of sanitized_txs")]
+    fn test_check_results_txs_length_mismatch(check_results_len: usize) {
+        let sanitized_message = new_unchecked_sanitized_message(Message {
+            account_keys: vec![Pubkey::new_from_array([0; 32])],
+            header: MessageHeader::default(),
+            instructions: vec![CompiledInstruction {
+                program_id_index: 0,
+                accounts: vec![],
+                data: vec![],
+            }],
+            recent_blockhash: Hash::default(),
+        });
+
+        // Transactions, length 2.
+        let sanitized_txs = vec![
+            SanitizedTransaction::new_for_tests(
+                sanitized_message,
+                vec![Signature::new_unique()],
+                false,
+            );
+            2
+        ];
+
+        let check_results = vec![
+            TransactionCheckResult::Ok(CheckedTransactionDetails {
+                nonce: None,
+                lamports_per_signature: 0
+            });
+            check_results_len
+        ];
+
+        let batch_processor = TransactionBatchProcessor::<TestForkGraph>::default();
+        let callback = MockBankCallback::default();
+
+        batch_processor.load_and_execute_sanitized_transactions(
+            &callback,
+            &sanitized_txs,
+            check_results,
+            &TransactionProcessingEnvironment::default(),
+            &TransactionProcessingConfig::default(),
+        );
     }
 
     #[test]
