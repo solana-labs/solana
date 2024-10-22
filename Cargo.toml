@@ -111,6 +111,7 @@ members = [
     "sdk/derivation-path",
     "sdk/epoch-schedule",
     "sdk/feature-set",
+    "sdk/fee-calculator",
     "sdk/gen-headers",
     "sdk/hash",
     "sdk/instruction",
@@ -415,6 +416,7 @@ solana-program-entrypoint = { path = "sdk/program-entrypoint", version = "=2.1.0
 solana-epoch-schedule = { path = "sdk/epoch-schedule", version = "=2.1.0" }
 solana-faucet = { path = "faucet", version = "=2.1.0" }
 solana-feature-set = { path = "sdk/feature-set", version = "=2.1.0" }
+solana-fee-calculator = { path = "sdk/fee-calculator", version = "=2.1.0" }
 solana-fee = { path = "fee", version = "=2.1.0" }
 solana-frozen-abi = { path = "frozen-abi", version = "=2.1.0" }
 solana-frozen-abi-macro = { path = "frozen-abi/macro", version = "=2.1.0" }

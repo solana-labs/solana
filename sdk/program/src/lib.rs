@@ -488,7 +488,6 @@ pub mod epoch_rewards;
 pub mod epoch_schedule;
 pub mod epoch_stake;
 pub mod feature;
-pub mod fee_calculator;
 pub mod hash;
 pub mod incinerator;
 pub mod instruction;
@@ -518,6 +517,8 @@ pub mod sysvar;
 pub mod vote;
 pub mod wasm;
 
+#[deprecated(since = "2.1.0", note = "Use `solana-fee-calculator` crate instead")]
+pub use solana_fee_calculator as fee_calculator;
 #[deprecated(since = "2.1.0", note = "Use `solana-program-memory` crate instead")]
 pub use solana_program_memory as program_memory;
 #[deprecated(since = "2.1.0", note = "Use `solana-program-pack` crate instead")]

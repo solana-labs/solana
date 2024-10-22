@@ -6679,6 +6679,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-fee-calculator"
+version = "2.1.0"
+dependencies = [
+ "log",
+ "serde",
+ "serde_derive",
+ "solana-clock",
+ "solana-frozen-abi",
+ "solana-frozen-abi-macro",
+ "solana-logger",
+ "static_assertions",
+]
+
+[[package]]
 name = "solana-frozen-abi"
 version = "2.1.0"
 dependencies = [
@@ -7327,6 +7341,7 @@ dependencies = [
  "solana-decode-error",
  "solana-define-syscall",
  "solana-epoch-schedule",
+ "solana-fee-calculator",
  "solana-frozen-abi",
  "solana-frozen-abi-macro",
  "solana-hash",

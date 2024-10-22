@@ -1,12 +1,20 @@
 //! Calculation of transaction fees.
-
+#![cfg_attr(feature = "frozen-abi", feature(min_specialization))]
 #![allow(clippy::arithmetic_side_effects)]
-use {log::*, solana_clock::DEFAULT_MS_PER_SLOT};
+#![no_std]
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+use log::*;
+#[cfg(feature = "frozen-abi")]
+extern crate std;
 
 #[repr(C)]
-#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
-#[derive(Serialize, Deserialize, Default, PartialEq, Eq, Clone, Copy, Debug)]
-#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "frozen-abi", derive(solana_frozen_abi_macro::AbiExample))]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
+#[derive(Default, PartialEq, Eq, Clone, Copy, Debug)]
+#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct FeeCalculator {
     /// The current cost of a signature.
     ///
@@ -23,13 +31,17 @@ impl FeeCalculator {
     }
 }
 
-#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
-#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug)]
-#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "frozen-abi", derive(solana_frozen_abi_macro::AbiExample))]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
+#[derive(PartialEq, Eq, Clone, Debug)]
+#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct FeeRateGovernor {
     // The current cost of a signature  This amount may increase/decrease over time based on
     // cluster processing load.
-    #[serde(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub lamports_per_signature: u64,
 
     // The target cost of a signature when the cluster is operating around target_signatures_per_slot
@@ -49,6 +61,9 @@ pub struct FeeRateGovernor {
 }
 
 pub const DEFAULT_TARGET_LAMPORTS_PER_SIGNATURE: u64 = 10_000;
+const DEFAULT_MS_PER_SLOT: u64 = 400;
+#[cfg(test)]
+static_assertions::const_assert_eq!(DEFAULT_MS_PER_SLOT, solana_clock::DEFAULT_MS_PER_SLOT);
 pub const DEFAULT_TARGET_SIGNATURES_PER_SLOT: u64 = 50 * DEFAULT_MS_PER_SLOT;
 
 // Percentage of tx fees to burn
@@ -88,7 +103,7 @@ impl FeeRateGovernor {
         if me.target_signatures_per_slot > 0 {
             // lamports_per_signature can range from 50% to 1000% of
             // target_lamports_per_signature
-            me.min_lamports_per_signature = std::cmp::max(1, me.target_lamports_per_signature / 2);
+            me.min_lamports_per_signature = core::cmp::max(1, me.target_lamports_per_signature / 2);
             me.max_lamports_per_signature = me.target_lamports_per_signature * 10;
 
             // What the cluster should charge at `latest_signatures_per_slot`
@@ -96,7 +111,7 @@ impl FeeRateGovernor {
                 me.max_lamports_per_signature
                     .min(me.min_lamports_per_signature.max(
                         me.target_lamports_per_signature
-                            * std::cmp::min(latest_signatures_per_slot, u32::MAX as u64)
+                            * core::cmp::min(latest_signatures_per_slot, u32::MAX as u64)
                             / me.target_signatures_per_slot,
                     ));
 
@@ -114,7 +129,7 @@ impl FeeRateGovernor {
                 // Adjust fee by 5% of target_lamports_per_signature to produce a smooth
                 // increase/decrease in fees over time.
                 let gap_adjust =
-                    std::cmp::max(1, me.target_lamports_per_signature / 20) as i64 * gap.signum();
+                    core::cmp::max(1, me.target_lamports_per_signature / 20) as i64 * gap.signum();
 
                 trace!(
                     "lamports_per_signature gap is {}, adjusting by {}",
