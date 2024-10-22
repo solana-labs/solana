@@ -1,7 +1,7 @@
 [package]
-name = "solana-transaction-status-client-types"
-description = "Core RPC client types for solana-transaction-status"
-documentation = "https://docs.rs/solana-transaction-status-client-types"
+name = "solana-account-decoder-client-types"
+description = "Core RPC client types for solana-account-decoder"
+documentation = "https://docs.rs/solana-account-decoder-client-types"
 version = { workspace = true }
 authors = { workspace = true }
 repository = { workspace = true }
@@ -11,15 +11,18 @@ edition = { workspace = true }
 
 [dependencies]
 base64 = { workspace = true }
-bincode = { workspace = true }
 bs58 = { workspace = true }
 serde = { workspace = true }
 serde_derive = { workspace = true }
 serde_json = { workspace = true }
-solana-account-decoder-client-types = { workspace = true }
-solana-sdk = { workspace = true }
-solana-signature = { workspace = true, default-features = false }
-thiserror = { workspace = true }
+solana-account = { workspace = true }
+solana-pubkey = { workspace = true }
+zstd = { workspace = true, optional = true }
+
+[features]
+zstd = ["dep:zstd"]
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
+all-features = true
+rustdoc-args = ["--cfg=docsrs"]

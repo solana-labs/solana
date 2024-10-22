@@ -6,6 +6,7 @@ split-debuginfo = "packed"
 [workspace]
 members = [
     "account-decoder",
+    "account-decoder-client-types",
     "accounts-bench",
     "accounts-cluster-bench",
     "accounts-db",
@@ -378,6 +379,7 @@ socket2 = "0.5.7"
 soketto = "0.7"
 solana-account = { path = "sdk/account", version = "=2.1.0" }
 solana-account-decoder = { path = "account-decoder", version = "=2.1.0" }
+solana-account-decoder-client-types = { path = "account-decoder-client-types", version = "=2.1.0" }
 solana-account-info = { path = "sdk/account-info", version = "=2.1.0" }
 solana-accounts-db = { path = "accounts-db", version = "=2.1.0" }
 solana-address-lookup-table-program = { path = "programs/address-lookup-table", version = "=2.1.0" }

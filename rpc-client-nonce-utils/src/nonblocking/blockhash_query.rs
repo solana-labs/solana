@@ -122,7 +122,7 @@ mod tests {
         super::*,
         crate::nonblocking::blockhash_query,
         serde_json::{self, json},
-        solana_account_decoder::{UiAccount, UiAccountEncoding},
+        solana_account_decoder::{encode_ui_account, UiAccountEncoding},
         solana_rpc_client_api::{
             request::RpcRequest,
             response::{Response, RpcBlockhash, RpcResponseContext},
@@ -381,7 +381,7 @@ mod tests {
         )
         .unwrap();
         let nonce_pubkey = Pubkey::from([4u8; 32]);
-        let rpc_nonce_account = UiAccount::encode(
+        let rpc_nonce_account = encode_ui_account(
             &nonce_pubkey,
             &nonce_account,
             UiAccountEncoding::Base64,

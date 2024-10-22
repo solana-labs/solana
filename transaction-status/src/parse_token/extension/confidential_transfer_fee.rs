@@ -1,6 +1,6 @@
 use {
     super::*,
-    solana_account_decoder::parse_token_extension::UiConfidentialTransferFeeConfig,
+    solana_account_decoder::parse_token_extension::convert_confidential_transfer_fee_config,
     spl_token_2022::{
         extension::confidential_transfer_fee::{instruction::*, ConfidentialTransferFeeConfig},
         instruction::{decode_instruction_data, decode_instruction_type},
@@ -21,8 +21,8 @@ pub(in crate::parse_token) fn parse_confidential_transfer_fee_instruction(
                 *decode_instruction_data(instruction_data).map_err(|_| {
                     ParseInstructionError::InstructionNotParsable(ParsableProgram::SplToken)
                 })?;
-            let confidential_transfer_mint: UiConfidentialTransferFeeConfig =
-                confidential_transfer_mint.into();
+            let confidential_transfer_mint =
+                convert_confidential_transfer_fee_config(confidential_transfer_mint);
             let mut value = json!({
                 "mint": account_keys[account_indexes[0] as usize].to_string(),
             });

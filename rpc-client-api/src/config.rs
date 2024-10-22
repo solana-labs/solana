@@ -1,6 +1,6 @@
 use {
     crate::filter::RpcFilterType,
-    solana_account_decoder::{UiAccountEncoding, UiDataSliceConfig},
+    solana_account_decoder_client_types::{UiAccountEncoding, UiDataSliceConfig},
     solana_sdk::{
         clock::{Epoch, Slot},
         commitment_config::{CommitmentConfig, CommitmentLevel},

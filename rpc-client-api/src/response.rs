@@ -1,7 +1,7 @@
 use {
     crate::client_error,
     serde::{Deserialize, Deserializer, Serialize, Serializer},
-    solana_account_decoder::{parse_token::UiTokenAmount, UiAccount},
+    solana_account_decoder_client_types::{token::UiTokenAmount, UiAccount},
     solana_sdk::{
         clock::{Epoch, Slot, UnixTimestamp},
         fee_calculator::{FeeCalculator, FeeRateGovernor},

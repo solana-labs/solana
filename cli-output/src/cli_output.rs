@@ -17,8 +17,8 @@ use {
     serde::{Deserialize, Serialize},
     serde_json::{Map, Value},
     solana_account_decoder::{
-        parse_account_data::AccountAdditionalDataV2, parse_token::UiTokenAccount, UiAccount,
-        UiAccountEncoding, UiDataSliceConfig,
+        encode_ui_account, parse_account_data::AccountAdditionalDataV2,
+        parse_token::UiTokenAccount, UiAccountEncoding, UiDataSliceConfig,
     },
     solana_clap_utils::keypair::SignOnly,
     solana_rpc_client_api::response::{
@@ -201,7 +201,7 @@ impl CliAccount {
         Self {
             keyed_account: RpcKeyedAccount {
                 pubkey: address.to_string(),
-                account: UiAccount::encode(
+                account: encode_ui_account(
                     address,
                     account,
                     data_encoding,

@@ -2,6 +2,7 @@ use {
     crate::rpc::account_resolver,
     jsonrpc_core::{Error, Result},
     solana_account_decoder::{
+        encode_ui_account,
         parse_account_data::{AccountAdditionalDataV2, SplTokenAdditionalData},
         parse_token::get_token_account_mint,
         UiAccount, UiAccountData, UiAccountEncoding,
@@ -42,7 +43,7 @@ pub fn get_parsed_token_account(
             spl_token_additional_data: Some(data),
         });
 
-    UiAccount::encode(
+    encode_ui_account(
         pubkey,
         &account,
         UiAccountEncoding::JsonParsed,
@@ -71,7 +72,7 @@ where
             })
         });
 
-        let maybe_encoded_account = UiAccount::encode(
+        let maybe_encoded_account = encode_ui_account(
             &pubkey,
             &account,
             UiAccountEncoding::JsonParsed,

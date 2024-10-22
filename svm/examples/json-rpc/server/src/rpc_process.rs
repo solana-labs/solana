@@ -10,6 +10,7 @@ use {
     log::*,
     serde_json,
     solana_account_decoder::{
+        encode_ui_account,
         parse_account_data::{AccountAdditionalDataV2, SplTokenAdditionalData},
         parse_token::{get_token_account_mint, is_known_spl_token_id},
         UiAccount, UiAccountEncoding, UiDataSliceConfig, MAX_BASE58_BYTES,
@@ -513,7 +514,7 @@ impl JsonRpcRequestProcessor {
                 spl_token_additional_data: Some(data),
             });
 
-        UiAccount::encode(
+        encode_ui_account(
             pubkey,
             &account,
             UiAccountEncoding::JsonParsed,
@@ -899,7 +900,7 @@ fn encode_account<T: ReadableAccount>(
             data: None,
         })
     } else {
-        Ok(UiAccount::encode(
+        Ok(encode_ui_account(
             pubkey, account, encoding, None, data_slice,
         ))
     }

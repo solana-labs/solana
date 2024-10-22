@@ -6,7 +6,7 @@ use {
     chrono::{Local, TimeZone},
     serde::ser::{Impossible, SerializeSeq, SerializeStruct, Serializer},
     serde_derive::{Deserialize, Serialize},
-    solana_account_decoder::{UiAccount, UiAccountData, UiAccountEncoding},
+    solana_account_decoder::{encode_ui_account, UiAccountData, UiAccountEncoding},
     solana_accounts_db::accounts_index::ScanConfig,
     solana_cli_output::{
         display::writeln_transaction, CliAccount, CliAccountNewConfig, OutputFormat, QuietDisplay,
@@ -950,7 +950,7 @@ pub fn output_account(
     println!("  rent_epoch: {}", account.rent_epoch());
     println!("  data_len: {}", account.data().len());
     if print_account_data {
-        let account_data = UiAccount::encode(pubkey, account, encoding, None, None).data;
+        let account_data = encode_ui_account(pubkey, account, encoding, None, None).data;
         match account_data {
             UiAccountData::Binary(data, data_encoding) => {
                 println!("  data: '{data}'");

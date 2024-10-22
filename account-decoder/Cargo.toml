@@ -19,6 +19,7 @@ lazy_static = { workspace = true }
 serde = { workspace = true }
 serde_derive = { workspace = true }
 serde_json = { workspace = true }
+solana-account-decoder-client-types = { workspace = true, features = ["zstd"] }
 solana-config-program = { workspace = true }
 solana-sdk = { workspace = true }
 spl-token = { workspace = true, features = ["no-entrypoint"] }

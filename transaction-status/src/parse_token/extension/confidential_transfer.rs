@@ -1,6 +1,6 @@
 use {
     super::*,
-    solana_account_decoder::parse_token_extension::UiConfidentialTransferMint,
+    solana_account_decoder::parse_token_extension::convert_confidential_transfer_mint,
     spl_token_2022::{
         extension::confidential_transfer::{instruction::*, ConfidentialTransferMint},
         instruction::{decode_instruction_data, decode_instruction_type},
@@ -21,8 +21,8 @@ pub(in crate::parse_token) fn parse_confidential_transfer_instruction(
                 *decode_instruction_data(instruction_data).map_err(|_| {
                     ParseInstructionError::InstructionNotParsable(ParsableProgram::SplToken)
                 })?;
-            let confidential_transfer_mint: UiConfidentialTransferMint =
-                confidential_transfer_mint.into();
+            let confidential_transfer_mint =
+                convert_confidential_transfer_mint(confidential_transfer_mint);
             let mut value = json!({
                 "mint": account_keys[account_indexes[0] as usize].to_string(),
             });
@@ -39,8 +39,8 @@ pub(in crate::parse_token) fn parse_confidential_transfer_instruction(
                 *decode_instruction_data(instruction_data).map_err(|_| {
                     ParseInstructionError::InstructionNotParsable(ParsableProgram::SplToken)
                 })?;
-            let confidential_transfer_mint: UiConfidentialTransferMint =
-                confidential_transfer_mint.into();
+            let confidential_transfer_mint =
+                convert_confidential_transfer_mint(confidential_transfer_mint);
             let mut value = json!({
                 "mint": account_keys[account_indexes[0] as usize].to_string(),
                 "confidentialTransferMintAuthority": account_keys[account_indexes[1] as usize].to_string(),

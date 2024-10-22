@@ -11,8 +11,7 @@ use {
     },
     serde_json::{json, Map, Value},
     solana_account_decoder::{
-        parse_account_data::SplTokenAdditionalData,
-        parse_token::{token_amount_to_ui_amount_v2, UiAccountState},
+        parse_account_data::SplTokenAdditionalData, parse_token::token_amount_to_ui_amount_v2,
     },
     solana_sdk::{instruction::CompiledInstruction, message::AccountKeys},
     spl_token_2022::{

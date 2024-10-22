@@ -5,7 +5,7 @@ use {
     core::fmt,
     serde_derive::{Deserialize, Serialize},
     serde_json::Value,
-    solana_account_decoder::parse_token::UiTokenAmount,
+    solana_account_decoder_client_types::token::UiTokenAmount,
     solana_sdk::{
         commitment_config::CommitmentConfig,
         instruction::CompiledInstruction,
