@@ -253,7 +253,7 @@ struct RentMetrics {
 pub type BankStatusCache = StatusCache<Result<()>>;
 #[cfg_attr(
     feature = "frozen-abi",
-    frozen_abi(digest = "BswQL6n7kKwgHFKcwMCQcrWjt8h59Vh6KkNb75iaqG2B")
+    frozen_abi(digest = "BHg4qpwegtaJypLUqAdjQYzYeLfEGf6tA4U5cREbHMHi")
 )]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 

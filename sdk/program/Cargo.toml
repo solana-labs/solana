@@ -87,6 +87,7 @@ bitflags = { workspace = true }
 curve25519-dalek = { workspace = true }
 num-bigint = { workspace = true }
 rand = { workspace = true }
+solana-transaction-error = { workspace = true }
 
 [target.'cfg(not(target_os = "solana"))'.dev-dependencies]
 arbitrary = { workspace = true, features = ["derive"] }

@@ -1,3 +1,8 @@
+#[deprecated(
+    since = "2.1.0",
+    note = "Use solana_transaction_error::SanitizeMessageError instead"
+)]
+pub use solana_transaction_error::SanitizeMessageError;
 use {
     crate::{
         ed25519_program,
@@ -6,8 +11,7 @@ use {
         message::{
             legacy,
             v0::{self, LoadedAddresses},
-            AccountKeys, AddressLoader, AddressLoaderError, MessageHeader,
-            SanitizedVersionedMessage, VersionedMessage,
+            AccountKeys, AddressLoader, MessageHeader, SanitizedVersionedMessage, VersionedMessage,
         },
         nonce::NONCED_TX_MARKER_IX_INDEX,
         program_utils::limited_deserialize,
@@ -16,9 +20,8 @@ use {
         solana_program::{system_instruction::SystemInstruction, system_program},
         sysvar::instructions::{BorrowedAccountMeta, BorrowedInstruction},
     },
-    solana_sanitize::{Sanitize, SanitizeError},
+    solana_sanitize::Sanitize,
     std::{borrow::Cow, collections::HashSet, convert::TryFrom},
-    thiserror::Error,
 };
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -78,28 +81,6 @@ pub enum SanitizedMessage {
     Legacy(LegacyMessage<'static>),
     /// Sanitized version #0 message with dynamically loaded addresses
     V0(v0::LoadedMessage<'static>),
-}
-
-#[derive(PartialEq, Debug, Error, Eq, Clone)]
-pub enum SanitizeMessageError {
-    #[error("index out of bounds")]
-    IndexOutOfBounds,
-    #[error("value out of bounds")]
-    ValueOutOfBounds,
-    #[error("invalid value")]
-    InvalidValue,
-    #[error("{0}")]
-    AddressLoaderError(#[from] AddressLoaderError),
-}
-
-impl From<SanitizeError> for SanitizeMessageError {
-    fn from(err: SanitizeError) -> Self {
-        match err {
-            SanitizeError::IndexOutOfBounds => Self::IndexOutOfBounds,
-            SanitizeError::ValueOutOfBounds => Self::ValueOutOfBounds,
-            SanitizeError::InvalidValue => Self::InvalidValue,
-        }
-    }
 }
 
 impl SanitizedMessage {

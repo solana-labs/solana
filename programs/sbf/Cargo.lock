@@ -5756,6 +5756,7 @@ dependencies = [
  "solana-short-vec",
  "solana-slot-hashes",
  "solana-stable-layout",
+ "solana-transaction-error",
  "thiserror",
  "wasm-bindgen",
 ]
@@ -6721,6 +6722,7 @@ dependencies = [
  "solana-serde-varint",
  "solana-short-vec",
  "solana-signature",
+ "solana-transaction-error",
  "thiserror",
  "wasm-bindgen",
 ]
@@ -7055,6 +7057,16 @@ dependencies = [
  "solana-sdk",
  "thiserror",
  "tokio",
+]
+
+[[package]]
+name = "solana-transaction-error"
+version = "2.1.0"
+dependencies = [
+ "serde",
+ "serde_derive",
+ "solana-instruction",
+ "solana-sanitize",
 ]
 
 [[package]]

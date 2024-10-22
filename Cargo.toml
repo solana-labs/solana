@@ -137,6 +137,7 @@ members = [
     "sdk/signature",
     "sdk/slot-hashes",
     "sdk/stable-layout",
+    "sdk/transaction-error",
     "send-transaction-service",
     "short-vec",
     "stake-accounts",
@@ -497,6 +498,7 @@ solana-svm-transaction = { path = "svm-transaction", version = "=2.1.0" }
 solana-system-program = { path = "programs/system", version = "=2.1.0" }
 solana-test-validator = { path = "test-validator", version = "=2.1.0" }
 solana-thin-client = { path = "thin-client", version = "=2.1.0" }
+solana-transaction-error = { path = "sdk/transaction-error", version = "=2.1.0" }
 solana-tpu-client = { path = "tpu-client", version = "=2.1.0", default-features = false }
 solana-transaction-status = { path = "transaction-status", version = "=2.1.0" }
 solana-transaction-status-client-types = { path = "transaction-status-client-types", version = "=2.1.0" }

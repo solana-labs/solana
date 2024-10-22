@@ -15,11 +15,12 @@ use {
         reserved_account_keys::ReservedAccountKeys,
         signature::Signature,
         simple_vote_transaction_checker::is_simple_vote_transaction,
-        transaction::{Result, Transaction, TransactionError, VersionedTransaction},
+        transaction::{Result, Transaction, VersionedTransaction},
     },
     solana_feature_set as feature_set,
     solana_program::{instruction::InstructionError, message::SanitizedVersionedMessage},
     solana_sanitize::Sanitize,
+    solana_transaction_error::TransactionError,
     std::collections::HashSet,
 };
 
