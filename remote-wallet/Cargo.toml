@@ -34,9 +34,5 @@ linux-shared-libusb = ["hidapi/linux-shared-libusb"]
 linux-static-hidraw = ["hidapi/linux-static-hidraw"]
 linux-static-libusb = ["hidapi/linux-static-libusb"]
 
-[[bin]]
-name = "solana-ledger-udev"
-path = "src/bin/ledger-udev.rs"
-
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
