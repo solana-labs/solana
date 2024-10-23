@@ -1062,7 +1062,6 @@ where
 {
     let mut accounts_db = AccountsDb::new_with_config(
         account_paths.to_vec(),
-        &genesis_config.cluster_type,
         account_secondary_indexes,
         shrink_ratio,
         accounts_db_config,

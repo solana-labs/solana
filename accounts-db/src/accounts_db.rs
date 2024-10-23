@@ -87,7 +87,7 @@ use {
         account::{Account, AccountSharedData, ReadableAccount},
         clock::{BankId, Epoch, Slot},
         epoch_schedule::EpochSchedule,
-        genesis_config::{ClusterType, GenesisConfig},
+        genesis_config::GenesisConfig,
         hash::Hash,
         pubkey::Pubkey,
         rent_collector::RentCollector,
@@ -1444,8 +1444,6 @@ pub struct AccountsDb {
 
     pub(crate) shrink_ancient_stats: ShrinkAncientStats,
 
-    pub cluster_type: Option<ClusterType>,
-
     pub account_indexes: AccountSecondaryIndexes,
 
     /// Set of unique keys per slot which is used
@@ -1860,7 +1858,6 @@ impl AccountsDb {
             shrink_stats: ShrinkStats::default(),
             shrink_ancient_stats: ShrinkAncientStats::default(),
             stats: AccountsStats::default(),
-            cluster_type: None,
             account_indexes: AccountSecondaryIndexes::default(),
             #[cfg(test)]
             load_delay: u64::default(),
@@ -1889,29 +1886,23 @@ impl AccountsDb {
     }
 
     pub fn new_single_for_tests() -> Self {
-        AccountsDb::new_for_tests(Vec::new(), &ClusterType::Development)
+        AccountsDb::new_for_tests(Vec::new())
     }
 
     pub fn new_single_for_tests_with_provider(file_provider: AccountsFileProvider) -> Self {
-        AccountsDb::new_for_tests_with_provider(
-            Vec::new(),
-            &ClusterType::Development,
-            file_provider,
-        )
+        AccountsDb::new_for_tests_with_provider(Vec::new(), file_provider)
     }
 
-    pub fn new_for_tests(paths: Vec<PathBuf>, cluster_type: &ClusterType) -> Self {
-        Self::new_for_tests_with_provider(paths, cluster_type, AccountsFileProvider::default())
+    pub fn new_for_tests(paths: Vec<PathBuf>) -> Self {
+        Self::new_for_tests_with_provider(paths, AccountsFileProvider::default())
     }
 
     fn new_for_tests_with_provider(
         paths: Vec<PathBuf>,
-        cluster_type: &ClusterType,
         accounts_file_provider: AccountsFileProvider,
     ) -> Self {
         let mut db = AccountsDb::new_with_config(
             paths,
-            cluster_type,
             AccountSecondaryIndexes::default(),
             AccountShrinkThreshold::default(),
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
@@ -1924,7 +1915,6 @@ impl AccountsDb {
 
     pub fn new_with_config(
         paths: Vec<PathBuf>,
-        cluster_type: &ClusterType,
         account_indexes: AccountSecondaryIndexes,
         shrink_ratio: AccountShrinkThreshold,
         accounts_db_config: Option<AccountsDbConfig>,
@@ -1952,7 +1942,6 @@ impl AccountsDb {
             ancient_append_vec_offset: accounts_db_config
                 .ancient_append_vec_offset
                 .or(ANCIENT_APPEND_VEC_DEFAULT_OFFSET),
-            cluster_type: Some(*cluster_type),
             account_indexes,
             shrink_ratio,
             accounts_update_notifier,
@@ -10467,7 +10456,7 @@ pub mod tests {
     #[test]
     fn test_account_one() {
         let (_accounts_dirs, paths) = get_temp_accounts_paths(1).unwrap();
-        let db = AccountsDb::new_for_tests(paths, &ClusterType::Development);
+        let db = AccountsDb::new_for_tests(paths);
         let mut pubkeys: Vec<Pubkey> = vec![];
         db.create_account(&mut pubkeys, 0, 1, 0, 0);
         let ancestors = vec![(0, 0)].into_iter().collect();
@@ -10482,7 +10471,7 @@ pub mod tests {
     #[test]
     fn test_account_many() {
         let (_accounts_dirs, paths) = get_temp_accounts_paths(2).unwrap();
-        let db = AccountsDb::new_for_tests(paths, &ClusterType::Development);
+        let db = AccountsDb::new_for_tests(paths);
         let mut pubkeys: Vec<Pubkey> = vec![];
         db.create_account(&mut pubkeys, 0, 100, 0, 0);
         db.check_accounts(&pubkeys, 0, 100, 1);
@@ -10504,7 +10493,7 @@ pub mod tests {
         let size = 4096;
         let accounts = AccountsDb {
             file_size: size,
-            ..AccountsDb::new_for_tests(paths, &ClusterType::Development)
+            ..AccountsDb::new_for_tests(paths)
         };
         let mut keys = vec![];
         for i in 0..9 {
@@ -15727,7 +15716,6 @@ pub mod tests {
         ] {
             let db = AccountsDb::new_with_config(
                 Vec::new(),
-                &ClusterType::Development,
                 AccountSecondaryIndexes::default(),
                 AccountShrinkThreshold::default(),
                 Some(AccountsDbConfig {
@@ -15761,7 +15749,6 @@ pub mod tests {
         let ancient_append_vec_offset = 50_000;
         let db = AccountsDb::new_with_config(
             Vec::new(),
-            &ClusterType::Development,
             AccountSecondaryIndexes::default(),
             AccountShrinkThreshold::default(),
             Some(AccountsDbConfig {
@@ -15816,7 +15803,6 @@ pub mod tests {
             for starting_slot_offset in [0, avoid_saturation] {
                 let db = AccountsDb::new_with_config(
                     Vec::new(),
-                    &ClusterType::Development,
                     AccountSecondaryIndexes::default(),
                     AccountShrinkThreshold::default(),
                     Some(AccountsDbConfig {

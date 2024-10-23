@@ -225,7 +225,7 @@ mod serde_snapshot_tests {
     fn test_accounts_serialize(storage_access: StorageAccess) {
         solana_logger::setup();
         let (_accounts_dir, paths) = get_temp_accounts_paths(4).unwrap();
-        let accounts_db = AccountsDb::new_for_tests(paths, &ClusterType::Development);
+        let accounts_db = AccountsDb::new_for_tests(paths);
         let accounts = Accounts::new(Arc::new(accounts_db));
 
         let slot = 0;

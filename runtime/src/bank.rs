@@ -1085,7 +1085,6 @@ impl Bank {
     ) -> Self {
         let accounts_db = AccountsDb::new_with_config(
             paths,
-            &genesis_config.cluster_type,
             account_indexes,
             shrink_ratio,
             accounts_db_config,
