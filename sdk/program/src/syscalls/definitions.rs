@@ -4,8 +4,8 @@ pub use solana_define_syscall::sys_hash;
 pub use solana_instruction::syscalls::{
     sol_get_processed_sibling_instruction, sol_get_stack_height,
 };
-#[deprecated(since = "2.1.0", note = "Use `solana_msg::sol_log` instead.")]
-pub use solana_msg::sol_log;
+#[deprecated(since = "2.1.0", note = "Use `solana_msg::syscalls` instead.")]
+pub use solana_msg::syscalls::{sol_log_, sol_log_64_, sol_log_compute_units_, sol_log_data};
 #[deprecated(
     since = "2.1.0",
     note = "Use `solana_program_memory::syscalls` instead"
@@ -23,15 +23,12 @@ pub use solana_secp256k1_recover::sol_secp256k1_recover;
 #[deprecated(since = "2.1.0", note = "Use solana_sha256_hasher::sol_sha256 instead")]
 pub use solana_sha256_hasher::sol_sha256;
 use {crate::pubkey::Pubkey, solana_define_syscall::define_syscall};
-define_syscall!(fn sol_log_64_(arg1: u64, arg2: u64, arg3: u64, arg4: u64, arg5: u64));
-define_syscall!(fn sol_log_compute_units_());
 define_syscall!(fn sol_keccak256(vals: *const u8, val_len: u64, hash_result: *mut u8) -> u64);
 define_syscall!(fn sol_blake3(vals: *const u8, val_len: u64, hash_result: *mut u8) -> u64);
 define_syscall!(fn sol_invoke_signed_c(instruction_addr: *const u8, account_infos_addr: *const u8, account_infos_len: u64, signers_seeds_addr: *const u8, signers_seeds_len: u64) -> u64);
 define_syscall!(fn sol_invoke_signed_rust(instruction_addr: *const u8, account_infos_addr: *const u8, account_infos_len: u64, signers_seeds_addr: *const u8, signers_seeds_len: u64) -> u64);
 define_syscall!(fn sol_set_return_data(data: *const u8, length: u64));
 define_syscall!(fn sol_get_return_data(data: *mut u8, length: u64, program_id: *mut Pubkey) -> u64);
-define_syscall!(fn sol_log_data(data: *const u8, data_len: u64));
 define_syscall!(fn sol_curve_validate_point(curve_id: u64, point_addr: *const u8, result: *mut u8) -> u64);
 define_syscall!(fn sol_curve_group_op(curve_id: u64, group_op: u64, left_input_addr: *const u8, right_input_addr: *const u8, result_point_addr: *mut u8) -> u64);
 define_syscall!(fn sol_curve_multiscalar_mul(curve_id: u64, scalars_addr: *const u8, points_addr: *const u8, points_len: u64, result_point_addr: *mut u8) -> u64);
