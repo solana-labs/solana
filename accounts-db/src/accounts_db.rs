@@ -8885,7 +8885,9 @@ impl AccountsDb {
                             );
                             accessor.check_and_get_loaded_account(|loaded_account| {
                                 let data_len = loaded_account.data_len();
-                                accounts_data_len_from_duplicates += data_len;
+                                if loaded_account.lamports() > 0 {
+                                    accounts_data_len_from_duplicates += data_len;
+                                }
                                 num_duplicate_accounts += 1;
                                 if let Some(lamports_to_top_off) = Self::stats_for_rent_payers(
                                     pubkey,
