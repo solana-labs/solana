@@ -756,7 +756,7 @@ impl AccountsDb {
         tuning: &PackedAncientStorageTuning,
         mut many_ref_slots: IncludeManyRefSlots,
     ) -> AccountsToCombine<'a> {
-        let alive_bytes = accounts_per_storage
+        let mut alive_bytes = accounts_per_storage
             .iter()
             .map(|a| a.0.alive_bytes)
             .sum::<u64>();
@@ -787,11 +787,6 @@ impl AccountsDb {
 
         let mut many_refs_old_alive_count = 0;
 
-        // We want ceiling, so we add 1.
-        // 0 < alive_bytes < `ideal_storage_size`, then `min_resulting_packed_slots` = 0.
-        // We obviously require 1 packed slot if we have at 1 alive byte.
-        let min_resulting_packed_slots =
-            alive_bytes.saturating_sub(1) / u64::from(tuning.ideal_storage_size) + 1;
         let mut remove = Vec::default();
         let mut last_slot = None;
         for (i, (shrink_collect, (info, _unique_accounts))) in accounts_to_combine
@@ -799,6 +794,11 @@ impl AccountsDb {
             .zip(accounts_per_storage.iter())
             .enumerate()
         {
+            // If 0 < alive_bytes < `ideal_storage_size`, then `min_resulting_packed_slots` = 0.
+            // We obviously require 1 packed slot if we have at least 1 alive byte.
+            // We want ceiling, so we add 1.
+            let min_resulting_packed_slots =
+                alive_bytes.saturating_sub(1) / u64::from(tuning.ideal_storage_size) + 1;
             // assert that iteration is in descending slot order since the code below relies on this.
             if let Some(last_slot) = last_slot {
                 assert!(last_slot > info.slot);
@@ -832,6 +832,8 @@ impl AccountsDb {
                     self.shrink_ancient_stats
                         .many_ref_slots_skipped
                         .fetch_add(1, Ordering::Relaxed);
+                    // since we're skipping this one, we don't count it as required target storages
+                    alive_bytes = alive_bytes.saturating_sub(info.alive_bytes);
                     remove.push(i);
                     continue;
                 }
@@ -1793,9 +1795,11 @@ pub mod tests {
                             // When there are two_refs and when slots < 3, all regular slots can fit into one ancient slots.
                             // Therefore, we should have all slots that can be combined for slots < 3.
                             // However, when slots >=3, we need more than one ancient slots. The pack algorithm will need to first
-                            // find at least [ceiling(num_slots/2.5) - 1] slots that's doesn't have many_refs before we can pack slots with many_refs.
-                            // Since all the slots have many_refs, we can't find any eligible slot to combine.
-                            0
+                            // find at least [ceiling(num_slots/2.5) - 1] slots that's don't have many_refs before we can pack slots with many_refs.
+                            // Since we decrease the number of alive bytes we'll be writing, when we encounter slots that can't be packed,
+                            // we now reduce the number required ideal packed storages. As a result, the last
+                            // slot can be packed, and the number of accounts to combine should be 2.
+                            2
                         } else {
                             num_slots
                         };
@@ -1898,11 +1902,27 @@ pub mod tests {
                                     &default_tuning(),
                                     many_ref_slots,
                                 );
+                                // if we are only trying to pack a single slot of multi-refs, it will succeed
+                                // if num_slots = 2 and skip multi-ref slots, accounts_to_combine should contain
+                                // one element (storage), because we don't count alive bytes of skipped accounts
+                                // when we compute required target storages, and the second slot can be combined.
+                                let expected_number_accounts_to_combine = if !two_refs
+                                    || many_ref_slots == IncludeManyRefSlots::Include
+                                    || num_slots == 1
+                                    || (num_slots == 2
+                                        && many_ref_slots != IncludeManyRefSlots::Skip)
+                                {
+                                    num_slots
+                                } else if num_slots == 2
+                                    && many_ref_slots == IncludeManyRefSlots::Skip
+                                {
+                                    1
+                                } else {
+                                    0
+                                };
                                 assert_eq!(
                                     accounts_to_combine.accounts_to_combine.len(),
-                                    // if we are only trying to pack a single slot of multi-refs, it will succeed
-                                    // if num_slots = 2 and skip multi-ref slots, accounts_to_combine should be empty.
-                                    if !two_refs || many_ref_slots == IncludeManyRefSlots::Include || num_slots == 1 || (num_slots == 2 && many_ref_slots != IncludeManyRefSlots::Skip) {num_slots} else {0},
+                                    expected_number_accounts_to_combine,
                                     "method: {method:?}, num_slots: {num_slots}, two_refs: {two_refs}, many_refs: {many_ref_slots:?}"
                                 );
 
@@ -1912,21 +1932,26 @@ pub mod tests {
                                         .iter()
                                         .any(|a| a.pubkeys_to_unref.is_empty()));
                                 }
+                                let expected_target_slots_sorted = if !two_refs
+                                    || many_ref_slots == IncludeManyRefSlots::Include
+                                    || num_slots == 1
+                                {
+                                    if unsorted_slots {
+                                        slots_vec.iter().cloned().rev().collect::<Vec<_>>()
+                                    } else {
+                                        slots_vec.clone()
+                                    }
+                                } else if num_slots == 2
+                                    && many_ref_slots == IncludeManyRefSlots::Skip
+                                {
+                                    vec![1]
+                                } else {
+                                    vec![]
+                                };
                                 // all accounts should be in one_ref and all slots are available as target slots
                                 assert_eq!(
                                     accounts_to_combine.target_slots_sorted,
-                                    if !two_refs
-                                        || many_ref_slots == IncludeManyRefSlots::Include
-                                        || num_slots == 1
-                                    {
-                                        if unsorted_slots {
-                                            slots_vec.iter().cloned().rev().collect::<Vec<_>>()
-                                        } else {
-                                            slots_vec.clone()
-                                        }
-                                    } else {
-                                        vec![]
-                                    },
+                                    expected_target_slots_sorted,
                                 );
                                 assert!(accounts_to_combine.accounts_keep_slots.is_empty());
                                 assert!(accounts_to_combine.accounts_to_combine.iter().all(
