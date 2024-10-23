@@ -67,7 +67,7 @@ dependencies = [
 name = "agave-accounts-hash-cache-tool"
 version = "2.1.0"
 dependencies = [
- "ahash 0.8.10",
+ "ahash 0.8.11",
  "bytemuck",
  "clap 2.33.3",
  "memmap2",
@@ -342,9 +342,9 @@ dependencies = [
 
 [[package]]
 name = "ahash"
-version = "0.8.10"
+version = "0.8.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b79b82693f705137f8fb9b37871d99e4f9a7df12b917eed79c3d3954830a60b"
+checksum = "e89da841a80418a9b391ebaea17f5c112ffaaa96f621d2c285b5174da76b9011"
 dependencies = [
  "cfg-if 1.0.0",
  "getrandom 0.2.10",
@@ -2703,7 +2703,7 @@ version = "0.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "43a3c133739dddd0d2990f9a4bdf8eb4b21ef50e4851ca85ab661199821d510e"
 dependencies = [
- "ahash 0.8.10",
+ "ahash 0.8.11",
 ]
 
 [[package]]
@@ -2712,7 +2712,7 @@ version = "0.14.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "290f1a1d9242c78d09ce40a5e87e7554ee637af1351968159f4952f028f75604"
 dependencies = [
- "ahash 0.8.10",
+ "ahash 0.8.11",
  "allocator-api2",
 ]
 
@@ -5759,7 +5759,7 @@ dependencies = [
 name = "solana-accounts-db"
 version = "2.1.0"
 dependencies = [
- "ahash 0.8.10",
+ "ahash 0.8.11",
  "assert_matches",
  "bincode",
  "blake3",
@@ -6089,7 +6089,7 @@ dependencies = [
 name = "solana-builtins-default-costs"
 version = "2.1.0"
 dependencies = [
- "ahash 0.8.10",
+ "ahash 0.8.11",
  "lazy_static",
  "log",
  "rand 0.8.5",
@@ -6406,7 +6406,7 @@ dependencies = [
 name = "solana-core"
 version = "2.1.0"
 dependencies = [
- "ahash 0.8.10",
+ "ahash 0.8.11",
  "anyhow",
  "arrayvec",
  "assert_matches",
@@ -6503,7 +6503,7 @@ dependencies = [
 name = "solana-cost-model"
 version = "2.1.0"
 dependencies = [
- "ahash 0.8.10",
+ "ahash 0.8.11",
  "itertools 0.12.1",
  "lazy_static",
  "log",
@@ -7224,7 +7224,7 @@ dependencies = [
 name = "solana-perf"
 version = "2.1.0"
 dependencies = [
- "ahash 0.8.10",
+ "ahash 0.8.11",
  "assert_matches",
  "bincode",
  "bv",
@@ -7790,7 +7790,7 @@ name = "solana-runtime"
 version = "2.1.0"
 dependencies = [
  "agave-transaction-view",
- "ahash 0.8.10",
+ "ahash 0.8.11",
  "aquamarine",
  "arrayref",
  "assert_matches",
