@@ -3482,28 +3482,37 @@ fn test_bank_hash_internal_state(is_accounts_lt_hash_enabled: bool) {
     assert!(bank2.verify_accounts_hash(None, VerifyAccountsHashConfig::default_for_test(), None,));
 }
 
-#[test]
-fn test_bank_hash_internal_state_verify() {
-    for pass in 0..3 {
-        solana_logger::setup();
+#[test_case(false; "accounts lt hash disabled")]
+#[test_case(true; "accounts lt hash enabled")]
+fn test_bank_hash_internal_state_verify(is_accounts_lt_hash_enabled: bool) {
+    for pass in 0..4 {
         let (genesis_config, mint_keypair) =
             create_genesis_config_no_tx_fee_no_rent(sol_to_lamports(1.));
         let (bank0, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
-        let amount = genesis_config.rent.minimum_balance(0);
+        bank0
+            .rc
+            .accounts
+            .accounts_db
+            .set_is_experimental_accumulator_hash_enabled(is_accounts_lt_hash_enabled);
+        assert_eq!(
+            bank0.is_accounts_lt_hash_enabled(),
+            is_accounts_lt_hash_enabled,
+        );
 
+        let amount = genesis_config.rent.minimum_balance(0);
         let pubkey = solana_sdk::pubkey::new_rand();
-        info!("transfer 0 {} mint: {}", pubkey, mint_keypair.pubkey());
         bank0.transfer(amount, &mint_keypair, &pubkey).unwrap();
 
         let bank0_state = bank0.hash_internal_state();
         // Checkpointing should result in a new state while freezing the parent
         let bank2 = new_bank_from_parent_with_bank_forks(
-            bank_forks.as_ref(),
+            &bank_forks,
             bank0.clone(),
             &solana_sdk::pubkey::new_rand(),
-            1,
+            2,
         );
         assert_ne!(bank0_state, bank2.hash_internal_state());
+
         // Checkpointing should modify the checkpoint's state when freezed
         assert_ne!(bank0_state, bank0.hash_internal_state());
 
@@ -3512,6 +3521,7 @@ fn test_bank_hash_internal_state_verify() {
         let bank0_state = bank0.hash_internal_state();
         if pass == 0 {
             // we later modify bank 2, so this flush is destructive to the test
+            bank2.freeze();
             add_root_and_flush_write_cache(&bank2);
             bank2.update_accounts_hash_for_tests();
             assert!(bank2.verify_accounts_hash(
@@ -3521,14 +3531,14 @@ fn test_bank_hash_internal_state_verify() {
             ));
         }
         let bank3 = new_bank_from_parent_with_bank_forks(
-            bank_forks.as_ref(),
+            &bank_forks,
             bank0.clone(),
             &solana_sdk::pubkey::new_rand(),
-            2,
+            3,
         );
         assert_eq!(bank0_state, bank0.hash_internal_state());
         if pass == 0 {
-            // this relies on us having set the bank hash in the pass==0 if above
+            // this relies on us having set bank2's accounts hash in the pass==0 if above
             assert!(bank2.verify_accounts_hash(
                 None,
                 VerifyAccountsHashConfig::default_for_test(),
@@ -3540,6 +3550,7 @@ fn test_bank_hash_internal_state_verify() {
             // flushing slot 3 here causes us to mark it as a root. Marking it as a root
             // prevents us from marking slot 2 as a root later since slot 2 is < slot 3.
             // Doing so throws an assert. So, we can't flush 3 until 2 is flushed.
+            bank3.freeze();
             add_root_and_flush_write_cache(&bank3);
             bank3.update_accounts_hash_for_tests();
             assert!(bank3.verify_accounts_hash(
@@ -3551,15 +3562,31 @@ fn test_bank_hash_internal_state_verify() {
         }
 
         let pubkey2 = solana_sdk::pubkey::new_rand();
-        info!("transfer 2 {}", pubkey2);
         bank2.transfer(amount, &mint_keypair, &pubkey2).unwrap();
-        add_root_and_flush_write_cache(&bank2);
-        bank2.update_accounts_hash_for_tests();
-        assert!(bank2.verify_accounts_hash(
-            None,
-            VerifyAccountsHashConfig::default_for_test(),
-            None,
-        ));
+        bank2.freeze(); // <-- keep freeze() *outside* `if pass == 2 {}`
+        if pass == 2 {
+            add_root_and_flush_write_cache(&bank2);
+            bank2.update_accounts_hash_for_tests();
+            assert!(bank2.verify_accounts_hash(
+                None,
+                VerifyAccountsHashConfig::default_for_test(),
+                None,
+            ));
+
+            if is_accounts_lt_hash_enabled {
+                // Verifying the accounts lt hash is only intended to be called at startup, and
+                // normally in the background.  Since here we're *not* at startup, and doing it
+                // in the foreground, the verification uses the accounts index.  The test just
+                // rooted bank2, and will root bank3 next; but they are on different forks,
+                // which is not valid.  This causes the accounts index to see accounts from
+                // bank2 and bank3, which causes verifying bank3's accounts lt hash to fail.
+                // To workaround this "issue", we cannot root bank2 when the accounts lt hash
+                // is enabled.
+                continue;
+            }
+        }
+
+        bank3.freeze();
         add_root_and_flush_write_cache(&bank3);
         bank3.update_accounts_hash_for_tests();
         assert!(bank3.verify_accounts_hash(
