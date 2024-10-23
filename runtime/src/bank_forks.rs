@@ -3,7 +3,8 @@
 use {
     crate::{
         accounts_background_service::{AbsRequestSender, SnapshotRequest, SnapshotRequestKind},
-        bank::{epoch_accounts_hash_utils, Bank, SquashTiming},
+        bank::{bank_hash_details, epoch_accounts_hash_utils, Bank, SquashTiming},
+        bank_hash_cache::DumpedSlotSubscription,
         installed_scheduler_pool::{
             BankWithScheduler, InstalledSchedulerPoolArc, SchedulingContext,
         },
@@ -13,7 +14,10 @@ use {
     log::*,
     solana_measure::measure::Measure,
     solana_program_runtime::loaded_programs::{BlockRelation, ForkGraph},
-    solana_sdk::{clock::Slot, hash::Hash},
+    solana_sdk::{
+        clock::{BankId, Slot},
+        hash::Hash,
+    },
     std::{
         collections::{hash_map::Entry, HashMap, HashSet},
         ops::Index,
@@ -78,6 +82,8 @@ pub struct BankForks {
     in_vote_only_mode: Arc<AtomicBool>,
     highest_slot_at_startup: Slot,
     scheduler_pool: Option<InstalledSchedulerPoolArc>,
+
+    dumped_slot_subscribers: Vec<DumpedSlotSubscription>,
 }
 
 impl Index<u64> for BankForks {
@@ -128,6 +134,7 @@ impl BankForks {
             in_vote_only_mode: Arc::new(AtomicBool::new(false)),
             highest_slot_at_startup: 0,
             scheduler_pool: None,
+            dumped_slot_subscribers: vec![],
         }));
 
         root_bank.set_fork_graph_in_program_cache(Arc::downgrade(&bank_forks));
@@ -279,6 +286,41 @@ impl BankForks {
 
     pub fn working_bank_with_scheduler(&self) -> &BankWithScheduler {
         &self.banks[&self.highest_slot()]
+    }
+
+    /// Register to be notified when a bank has been dumped (due to duplicate block handling)
+    /// from bank_forks.
+    pub fn register_dumped_slot_subscriber(&mut self, notifier: DumpedSlotSubscription) {
+        self.dumped_slot_subscribers.push(notifier);
+    }
+
+    /// Clears associated banks from BankForks and notifies subscribers that a dump has occured.
+    pub fn dump_slots<'a, I>(&mut self, slots: I) -> (Vec<(Slot, BankId)>, Vec<BankWithScheduler>)
+    where
+        I: Iterator<Item = &'a Slot>,
+    {
+        // Notify subscribers. It is fine that the lock is immediately released, since the bank_forks
+        // lock is held until the end of this function, so subscribers will not be able to interact
+        // with bank_forks anyway.
+        for subscriber in &self.dumped_slot_subscribers {
+            let mut lock = subscriber.lock().unwrap();
+            *lock = true;
+        }
+
+        slots
+            .map(|slot| {
+                // Clear the banks from BankForks
+                let bank = self
+                    .remove(*slot)
+                    .expect("BankForks should not have been purged yet");
+                bank_hash_details::write_bank_hash_details_file(&bank)
+                    .map_err(|err| {
+                        warn!("Unable to write bank hash details file: {err}");
+                    })
+                    .ok();
+                ((*slot, bank.bank_id()), bank)
+            })
+            .unzip()
     }
 
     /// Sends an EpochAccountsHash request if one of the `banks` crosses the EAH boundary.

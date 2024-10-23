@@ -1690,22 +1690,11 @@ impl ReplayStage {
         // from BankForks
         let (slots_to_purge, removed_banks): (Vec<(Slot, BankId)>, Vec<BankWithScheduler>) = {
             let mut w_bank_forks = bank_forks.write().unwrap();
-            slot_descendants
-                .iter()
-                .chain(std::iter::once(&duplicate_slot))
-                .map(|slot| {
-                    // Clear the banks from BankForks
-                    let bank = w_bank_forks
-                        .remove(*slot)
-                        .expect("BankForks should not have been purged yet");
-                    bank_hash_details::write_bank_hash_details_file(&bank)
-                        .map_err(|err| {
-                            warn!("Unable to write bank hash details file: {err}");
-                        })
-                        .ok();
-                    ((*slot, bank.bank_id()), bank)
-                })
-                .unzip()
+            w_bank_forks.dump_slots(
+                slot_descendants
+                    .iter()
+                    .chain(std::iter::once(&duplicate_slot)),
+            )
         };
 
         // Clear the accounts for these slots so that any ongoing RPC scans fail.

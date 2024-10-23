@@ -9,6 +9,7 @@ pub mod accounts_background_service;
 pub mod bank;
 pub mod bank_client;
 pub mod bank_forks;
+pub mod bank_hash_cache;
 pub mod bank_utils;
 pub mod commitment;
 pub mod epoch_stakes;
