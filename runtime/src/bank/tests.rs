@@ -3429,33 +3429,56 @@ fn test_bank_parent_account_spend() {
     assert_eq!(parent.get_signature_status(&tx.signatures[0]), None);
 }
 
-#[test]
-fn test_bank_hash_internal_state() {
+#[test_case(false; "accounts lt hash disabled")]
+#[test_case(true; "accounts lt hash enabled")]
+fn test_bank_hash_internal_state(is_accounts_lt_hash_enabled: bool) {
     let (genesis_config, mint_keypair) =
         create_genesis_config_no_tx_fee_no_rent(sol_to_lamports(1.));
-    let (bank0, _bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
-    let (bank1, bank_forks_1) = Bank::new_with_bank_forks_for_tests(&genesis_config);
-    let amount = genesis_config.rent.minimum_balance(0);
+    let (bank0, _bank_forks0) = Bank::new_with_bank_forks_for_tests(&genesis_config);
+    let (bank1, bank_forks1) = Bank::new_with_bank_forks_for_tests(&genesis_config);
+    bank0
+        .rc
+        .accounts
+        .accounts_db
+        .set_is_experimental_accumulator_hash_enabled(is_accounts_lt_hash_enabled);
+    bank1
+        .rc
+        .accounts
+        .accounts_db
+        .set_is_experimental_accumulator_hash_enabled(is_accounts_lt_hash_enabled);
+    assert_eq!(
+        bank0.is_accounts_lt_hash_enabled(),
+        is_accounts_lt_hash_enabled,
+    );
+    assert_eq!(
+        bank1.is_accounts_lt_hash_enabled(),
+        is_accounts_lt_hash_enabled,
+    );
+
     let initial_state = bank0.hash_internal_state();
     assert_eq!(bank1.hash_internal_state(), initial_state);
 
+    // Ensure calling hash_internal_state() again does *not* change the bank hash value
+    assert_eq!(bank1.hash_internal_state(), initial_state);
+
+    let amount = genesis_config.rent.minimum_balance(0);
     let pubkey = solana_sdk::pubkey::new_rand();
     bank0.transfer(amount, &mint_keypair, &pubkey).unwrap();
+    bank0.freeze();
     assert_ne!(bank0.hash_internal_state(), initial_state);
     bank1.transfer(amount, &mint_keypair, &pubkey).unwrap();
+    bank1.freeze();
     assert_eq!(bank0.hash_internal_state(), bank1.hash_internal_state());
 
     // Checkpointing should always result in a new state
-    let bank2 = new_from_parent_with_fork_next_slot(bank1.clone(), bank_forks_1.as_ref());
+    let bank2 = new_from_parent_with_fork_next_slot(bank1, &bank_forks1);
     assert_ne!(bank0.hash_internal_state(), bank2.hash_internal_state());
 
     let pubkey2 = solana_sdk::pubkey::new_rand();
-    info!("transfer 2 {}", pubkey2);
     bank2.transfer(amount, &mint_keypair, &pubkey2).unwrap();
-    add_root_and_flush_write_cache(&bank0);
-    add_root_and_flush_write_cache(&bank1);
-    add_root_and_flush_write_cache(&bank2);
-    bank2.update_accounts_hash_for_tests();
+    bank2.squash();
+    bank2.force_flush_accounts_cache();
+    bank2.update_accounts_hash(CalcAccountsHashDataSource::Storages, false, false);
     assert!(bank2.verify_accounts_hash(None, VerifyAccountsHashConfig::default_for_test(), None,));
 }
 
