@@ -347,6 +347,7 @@ pub struct ShrinkAncientStats {
     pub slots_eligible_to_shrink: AtomicU64,
     pub total_dead_bytes: AtomicU64,
     pub total_alive_bytes: AtomicU64,
+    pub slot: AtomicU64,
     pub ideal_storage_size: AtomicU64,
 }
 
@@ -773,6 +774,7 @@ impl ShrinkAncientStats {
                     .swap(0, Ordering::Relaxed),
                 i64
             ),
+            ("slot", self.slot.load(Ordering::Relaxed), i64),
             (
                 "ideal_storage_size",
                 self.ideal_storage_size.swap(0, Ordering::Relaxed),

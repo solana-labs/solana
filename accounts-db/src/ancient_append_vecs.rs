@@ -411,6 +411,9 @@ impl AccountsDb {
         metrics: &mut ShrinkStatsSub,
     ) {
         self.shrink_ancient_stats
+            .slot
+            .store(*sorted_slots.first().unwrap_or(&0), Ordering::Relaxed);
+        self.shrink_ancient_stats
             .slots_considered
             .fetch_add(sorted_slots.len() as u64, Ordering::Relaxed);
         let mut ancient_slot_infos = self.collect_sort_filter_ancient_slots(sorted_slots, &tuning);
