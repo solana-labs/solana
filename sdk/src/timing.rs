@@ -64,6 +64,7 @@ pub struct AtomicInterval {
 
 impl AtomicInterval {
     /// true if 'interval_time_ms' has elapsed since last time we returned true as long as it has been 'interval_time_ms' since this struct was created
+    #[inline(always)]
     pub fn should_update(&self, interval_time_ms: u64) -> bool {
         self.should_update_ext(interval_time_ms, true)
     }
@@ -71,6 +72,7 @@ impl AtomicInterval {
     /// a primary use case is periodic metric reporting, potentially from different threads
     /// true if 'interval_time_ms' has elapsed since last time we returned true
     /// except, if skip_first=false, false until 'interval_time_ms' has elapsed since this struct was created
+    #[inline(always)]
     pub fn should_update_ext(&self, interval_time_ms: u64, skip_first: bool) -> bool {
         let now = timestamp();
         let last = self.last_update.load(Ordering::Relaxed);
