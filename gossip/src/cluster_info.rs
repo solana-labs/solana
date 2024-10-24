@@ -1066,9 +1066,17 @@ impl ClusterInfo {
         }
     }
 
-    fn find_vote_index_to_evict(&self, should_evict_vote: impl Fn(&Vote) -> bool) -> u8 {
+    /// If there are less than `MAX_LOCKOUT_HISTORY` votes present, returns the next index
+    /// without a vote. If there are `MAX_LOCKOUT_HISTORY` votes:
+    /// - Finds the oldest wallclock vote and returns its index
+    /// - Otherwise returns the total amount of observed votes
+    ///
+    /// If there exists a newer vote in gossip than `new_vote_slot` return `None` as this indicates
+    /// that we might be submitting slashable votes after an improper restart
+    fn find_vote_index_to_evict(&self, new_vote_slot: Slot) -> Option<u8> {
         let self_pubkey = self.id();
         let mut num_crds_votes = 0;
+        let mut exists_newer_vote = false;
         let vote_index = {
             let gossip_crds =
                 self.time_gossip_read_lock("gossip_read_push_vote", &self.stats.push_vote_read);
@@ -1078,53 +1086,48 @@ impl ClusterInfo {
                     let vote: &CrdsData = gossip_crds.get(&vote)?;
                     num_crds_votes += 1;
                     match &vote {
-                        CrdsData::Vote(_, vote) if should_evict_vote(vote) => {
+                        CrdsData::Vote(_, vote) if vote.slot() < Some(new_vote_slot) => {
                             Some((vote.wallclock, ix))
                         }
-                        CrdsData::Vote(_, _) => None,
+                        CrdsData::Vote(_, _) => {
+                            exists_newer_vote = true;
+                            None
+                        }
                         _ => panic!("this should not happen!"),
                     }
                 })
                 .min() // Boot the oldest evicted vote by wallclock.
                 .map(|(_ /*wallclock*/, ix)| ix)
         };
-        vote_index.unwrap_or(num_crds_votes)
+        if exists_newer_vote {
+            return None;
+        }
+        if num_crds_votes < MAX_LOCKOUT_HISTORY as u8 {
+            // Do not evict if there is space in crds
+            Some(num_crds_votes)
+        } else {
+            vote_index
+        }
     }
 
     pub fn push_vote(&self, tower: &[Slot], vote: Transaction) {
         debug_assert!(tower.iter().tuple_windows().all(|(a, b)| a < b));
-        // Find a crds vote which is evicted from the tower, and recycle its
-        // vote-index. This can be either an old vote which is popped off the
-        // deque, or recent vote which has expired before getting enough
-        // confirmations.
-        // If all votes are still in the tower, add a new vote-index. If more
-        // than one vote is evicted, the oldest one by wallclock is returned in
-        // order to allow more recent votes more time to propagate through
-        // gossip.
-        // TODO: When there are more than one vote evicted from the tower, only
-        // one crds vote is overwritten here. Decide what to do with the rest.
-
-        // Returns true if the tower does not contain the vote.slot.
-        let should_evict_vote = |vote: &Vote| -> bool {
-            match vote.slot() {
-                Some(slot) => !tower.contains(&slot),
-                None => {
-                    error!("crds vote with no slots!");
-                    true
-                }
-            }
-        };
-        let vote_index = self.find_vote_index_to_evict(should_evict_vote);
-        if (vote_index as usize) >= MAX_LOCKOUT_HISTORY {
+        // Find the oldest crds vote by wallclock that has a lower slot than `tower`
+        // and recycle its vote-index. If the crds buffer is not full we instead add a new vote-index.
+        let Some(vote_index) =
+            self.find_vote_index_to_evict(tower.last().copied().expect("Cannot push empty vote"))
+        else {
+            // In this case we have restarted with a mangled/missing tower and are attempting
+            // to push an old vote. This could be a slashable offense so better to panic here.
             let (_, vote, hash, _) = vote_parser::parse_vote_transaction(&vote).unwrap();
             panic!(
-                "invalid vote index: {}, switch: {}, vote slots: {:?}, tower: {:?}",
-                vote_index,
+                "Submitting old vote, switch: {}, vote slots: {:?}, tower: {:?}",
                 hash.is_some(),
                 vote.slots(),
                 tower
             );
-        }
+        };
+        debug_assert!(vote_index < MAX_LOCKOUT_HISTORY as u8);
         self.push_vote_at_index(vote, vote_index);
     }
 
@@ -1158,19 +1161,14 @@ impl ClusterInfo {
         } else {
             // If you don't see a vote with the same slot yet, this means you probably
             // restarted, and need to repush and evict the oldest vote
-            let should_evict_vote = |vote: &Vote| -> bool {
-                vote.slot()
-                    .map(|slot| refresh_vote_slot > slot)
-                    .unwrap_or(true)
-            };
-            let vote_index = self.find_vote_index_to_evict(should_evict_vote);
-            if (vote_index as usize) >= MAX_LOCKOUT_HISTORY {
+            let Some(vote_index) = self.find_vote_index_to_evict(refresh_vote_slot) else {
                 warn!(
                     "trying to refresh slot {} but all votes in gossip table are for newer slots",
                     refresh_vote_slot,
                 );
                 return;
-            }
+            };
+            debug_assert!(vote_index < MAX_LOCKOUT_HISTORY as u8);
             self.push_vote_at_index(refresh_vote, vote_index);
         }
     }
@@ -3422,6 +3420,7 @@ mod tests {
         std::{
             iter::repeat_with,
             net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddrV4},
+            panic,
             sync::Arc,
         },
     };
@@ -4031,9 +4030,8 @@ mod tests {
         let votes = cluster_info.get_votes(&mut cursor);
         assert_eq!(votes, vec![unrefresh_tx.clone()]);
 
-        // Now construct vote for the slot to be refreshed later. Has to be less than the `unrefresh_slot`,
-        // otherwise it will evict that slot
-        let refresh_slot = unrefresh_slot - 1;
+        // Now construct vote for the slot to be refreshed later.
+        let refresh_slot = unrefresh_slot + 1;
         let refresh_tower = vec![1, 3, unrefresh_slot, refresh_slot];
         let refresh_vote = Vote::new(refresh_tower.clone(), Hash::new_unique());
         let refresh_ix = vote_instruction::vote(
@@ -4158,53 +4156,37 @@ mod tests {
                 };
                 assert!(vote_slots.insert(vote.slot().unwrap()));
             }
-            vote_slots.into_iter().collect()
+            vote_slots.into_iter().sorted().collect()
         };
         let keypair = Arc::new(Keypair::new());
         let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), 0);
         let cluster_info = ClusterInfo::new(contact_info, keypair, SocketAddrSpace::Unspecified);
         let mut tower = Vec::new();
-        for k in 0..MAX_LOCKOUT_HISTORY {
+
+        // Evict the oldest vote
+        for k in 0..2 * MAX_LOCKOUT_HISTORY {
             let slot = k as Slot;
             tower.push(slot);
             let vote = new_vote_transaction(vec![slot]);
             cluster_info.push_vote(&tower, vote);
+
+            let vote_slots = get_vote_slots(&cluster_info);
+            let min_vote = k.saturating_sub(MAX_LOCKOUT_HISTORY - 1) as u64;
+            assert!(vote_slots.into_iter().eq(min_vote..=(k as u64)));
+            sleep(Duration::from_millis(1));
         }
-        let vote_slots = get_vote_slots(&cluster_info);
-        assert_eq!(vote_slots.len(), MAX_LOCKOUT_HISTORY);
-        for vote_slot in vote_slots {
-            assert!(vote_slot < MAX_LOCKOUT_HISTORY as u64);
-        }
-        // Push a new vote evicting one.
-        let slot = MAX_LOCKOUT_HISTORY as Slot;
-        tower.push(slot);
-        tower.remove(23);
+
+        // Attempting to push an older vote will panic
+        let slot = 30;
+        tower.clear();
+        tower.extend(0..=slot);
         let vote = new_vote_transaction(vec![slot]);
-        // New versioned-crds-value should have wallclock later than existing
-        // entries, otherwise might not get inserted into the table.
-        sleep(Duration::from_millis(5));
-        cluster_info.push_vote(&tower, vote);
-        let vote_slots = get_vote_slots(&cluster_info);
-        assert_eq!(vote_slots.len(), MAX_LOCKOUT_HISTORY);
-        for vote_slot in vote_slots {
-            assert!(vote_slot <= slot);
-            assert!(vote_slot != 23);
-        }
-        // Push a new vote evicting two.
-        // Older one should be evicted from the crds table.
-        let slot = slot + 1;
-        tower.push(slot);
-        tower.remove(17);
-        tower.remove(5);
-        let vote = new_vote_transaction(vec![slot]);
-        cluster_info.push_vote(&tower, vote);
-        let vote_slots = get_vote_slots(&cluster_info);
-        assert_eq!(vote_slots.len(), MAX_LOCKOUT_HISTORY);
-        for vote_slot in vote_slots {
-            assert!(vote_slot <= slot);
-            assert!(vote_slot != 23);
-            assert!(vote_slot != 5);
-        }
+        assert!(panic::catch_unwind(|| cluster_info.push_vote(&tower, vote))
+            .err()
+            .and_then(|a| a
+                .downcast_ref::<String>()
+                .map(|s| { s.starts_with("Submitting old vote") }))
+            .unwrap_or_default());
     }
 
     #[test]
