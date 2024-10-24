@@ -2179,8 +2179,10 @@ impl RpcClient {
         &self,
         commitment: CommitmentConfig,
         max_stake_percent: f32,
+        timeout: Option<Duration>,
     ) -> ClientResult<()> {
         let mut current_percent;
+        let start = Instant::now();
         loop {
             let vote_accounts = self.get_vote_accounts_with_commitment(commitment).await?;
 
@@ -2197,12 +2199,20 @@ impl RpcClient {
             current_percent = 100f32 * max as f32 / total_active_stake as f32;
             if current_percent < max_stake_percent {
                 break;
+            } else if let Some(timeout) = timeout {
+                if start.elapsed() > timeout {
+                    return Err(ClientErrorKind::Custom(
+                        "timed out waiting for max stake to drop".to_string(),
+                    )
+                    .into());
+                }
             }
+
             info!(
                 "Waiting for stake to drop below {} current: {:.1}",
                 max_stake_percent, current_percent
             );
-            sleep(Duration::from_secs(10)).await;
+            sleep(Duration::from_secs(5)).await;
         }
         Ok(())
     }
