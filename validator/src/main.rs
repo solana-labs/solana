@@ -909,6 +909,15 @@ pub fn main() {
         _ => unreachable!(),
     };
 
+    let cli::thread_args::NumThreadConfig {
+        accounts_db_hash_threads,
+        ip_echo_server_threads,
+        replay_forks_threads,
+        replay_transactions_threads,
+        tvu_receive_threads,
+        tvu_sigverify_threads,
+    } = cli::thread_args::parse_num_threads_args(&matches);
+
     let identity_keypair = keypair_of(&matches, "identity").unwrap_or_else(|| {
         clap::Error::with_description(
             "The --identity <KEYPAIR> argument is required",
@@ -1303,6 +1312,7 @@ pub fn main() {
         scan_filter_for_shrinking,
         enable_experimental_accumulator_hash: matches
             .is_present("accounts_db_experimental_accumulator_hash"),
+        num_hash_threads: Some(accounts_db_hash_threads),
         ..AccountsDbConfig::default()
     };
 
@@ -1386,14 +1396,6 @@ pub fn main() {
         };
 
     let full_api = matches.is_present("full_rpc_api");
-
-    let cli::thread_args::NumThreadConfig {
-        ip_echo_server_threads,
-        replay_forks_threads,
-        replay_transactions_threads,
-        tvu_receive_threads,
-        tvu_sigverify_threads,
-    } = cli::thread_args::parse_num_threads_args(&matches);
 
     let mut validator_config = ValidatorConfig {
         require_tower: matches.is_present("require_tower"),

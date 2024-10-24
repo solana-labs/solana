@@ -101,7 +101,7 @@ use {
         fs,
         hash::{Hash as StdHash, Hasher as StdHasher},
         io::Result as IoResult,
-        num::Saturating,
+        num::{NonZeroUsize, Saturating},
         ops::{Range, RangeBounds},
         path::{Path, PathBuf},
         sync::{
@@ -510,6 +510,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
     storage_access: StorageAccess::Mmap,
     scan_filter_for_shrinking: ScanFilter::OnlyAbnormalWithVerify,
     enable_experimental_accumulator_hash: false,
+    num_hash_threads: None,
 };
 pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS),
@@ -527,6 +528,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig
     storage_access: StorageAccess::Mmap,
     scan_filter_for_shrinking: ScanFilter::OnlyAbnormalWithVerify,
     enable_experimental_accumulator_hash: false,
+    num_hash_threads: None,
 };
 
 pub type BinnedHashData = Vec<Vec<CalculateHashIntermediate>>;
@@ -638,6 +640,8 @@ pub struct AccountsDbConfig {
     pub storage_access: StorageAccess,
     pub scan_filter_for_shrinking: ScanFilter,
     pub enable_experimental_accumulator_hash: bool,
+    /// Number of threads for background accounts hashing (`thread_pool_hash`)
+    pub num_hash_threads: Option<NonZeroUsize>,
 }
 
 #[cfg(not(test))]
@@ -1746,9 +1750,15 @@ pub fn make_min_priority_thread_pool() -> ThreadPool {
         .unwrap()
 }
 
-pub fn make_hash_thread_pool() -> ThreadPool {
+/// Returns the default number of threads to use for background accounts hashing
+pub fn default_num_hash_threads() -> NonZeroUsize {
     // 1/8 of the number of cpus and up to 6 threads gives good balance for the system.
     let num_threads = (num_cpus::get() / 8).clamp(2, 6);
+    NonZeroUsize::new(num_threads).unwrap()
+}
+
+pub fn make_hash_thread_pool(num_threads: Option<NonZeroUsize>) -> ThreadPool {
+    let num_threads = num_threads.unwrap_or_else(default_num_hash_threads).get();
     rayon::ThreadPoolBuilder::new()
         .thread_name(|i| format!("solAcctHash{i:02}"))
         .num_threads(num_threads)
@@ -1893,7 +1903,7 @@ impl AccountsDb {
             .build()
             .expect("new rayon threadpool");
         let thread_pool_clean = make_min_priority_thread_pool();
-        let thread_pool_hash = make_hash_thread_pool();
+        let thread_pool_hash = make_hash_thread_pool(accounts_db_config.num_hash_threads);
 
         let mut new = Self {
             accounts_index,

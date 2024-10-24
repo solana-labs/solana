@@ -11,7 +11,7 @@ use {
     solana_clap_utils::{
         hidden_unless_forced,
         input_parsers::pubkeys_of,
-        input_validators::{is_parsable, is_pow2},
+        input_validators::{is_parsable, is_pow2, is_within_range},
     },
     solana_ledger::{
         blockstore_processor::ProcessOptions,
@@ -21,6 +21,7 @@ use {
     solana_sdk::clock::Slot,
     std::{
         collections::HashSet,
+        num::NonZeroUsize,
         path::{Path, PathBuf},
         sync::Arc,
     },
@@ -130,6 +131,13 @@ pub fn accounts_db_args<'a, 'b>() -> Box<[Arg<'a, 'b>]> {
         Arg::with_name("accounts_db_experimental_accumulator_hash")
             .long("accounts-db-experimental-accumulator-hash")
             .help("Enables the experimental accumulator hash")
+            .hidden(hidden_unless_forced()),
+        Arg::with_name("accounts_db_hash_threads")
+            .long("accounts-db-hash-threads")
+            .value_name("NUM_THREADS")
+            .takes_value(true)
+            .validator(|s| is_within_range(s, 1..=num_cpus::get()))
+            .help("Number of threads to use for background accounts hashing")
             .hidden(hidden_unless_forced()),
     ]
     .into_boxed_slice()
@@ -331,6 +339,10 @@ pub fn get_accounts_db_config(
         })
         .unwrap_or_default();
 
+    let num_hash_threads = arg_matches
+        .is_present("accounts_db_hash_threads")
+        .then(|| value_t_or_exit!(arg_matches, "accounts_db_hash_threads", NonZeroUsize));
+
     AccountsDbConfig {
         index: Some(accounts_index_config),
         base_working_path: Some(ledger_tool_ledger_path),
@@ -347,6 +359,7 @@ pub fn get_accounts_db_config(
         scan_filter_for_shrinking,
         enable_experimental_accumulator_hash: arg_matches
             .is_present("accounts_db_experimental_accumulator_hash"),
+        num_hash_threads,
         ..AccountsDbConfig::default()
     }
 }
