@@ -1796,112 +1796,7 @@ impl AccountsDb {
     const DEFAULT_MAX_READ_ONLY_CACHE_DATA_SIZE_HI: usize = 410 * 1024 * 1024;
 
     pub fn default_for_tests() -> Self {
-        Self::default_with_accounts_index(AccountInfoAccountsIndex::default_for_tests(), None, None)
-    }
-
-    fn default_with_accounts_index(
-        accounts_index: AccountInfoAccountsIndex,
-        base_working_path: Option<PathBuf>,
-        accounts_hash_cache_path: Option<PathBuf>,
-    ) -> Self {
-        let num_threads = get_thread_count();
-
-        let (base_working_path, base_working_temp_dir) =
-            if let Some(base_working_path) = base_working_path {
-                (base_working_path, None)
-            } else {
-                let base_working_temp_dir = TempDir::new().unwrap();
-                let base_working_path = base_working_temp_dir.path().to_path_buf();
-                (base_working_path, Some(base_working_temp_dir))
-            };
-
-        let accounts_hash_cache_path = accounts_hash_cache_path.unwrap_or_else(|| {
-            let accounts_hash_cache_path =
-                base_working_path.join(Self::DEFAULT_ACCOUNTS_HASH_CACHE_DIR);
-            if !accounts_hash_cache_path.exists() {
-                fs::create_dir(&accounts_hash_cache_path).expect("create accounts hash cache dir");
-            }
-            accounts_hash_cache_path
-        });
-
-        let mut bank_hash_stats = HashMap::new();
-        bank_hash_stats.insert(0, BankHashStats::default());
-
-        // Increase the stack for accounts threads
-        // rayon needs a lot of stack
-        const ACCOUNTS_STACK_SIZE: usize = 8 * 1024 * 1024;
-
-        let default_accounts_db_config = AccountsDbConfig::default();
-
-        AccountsDb {
-            create_ancient_storage: CreateAncientStorage::default(),
-            verify_accounts_hash_in_bg: VerifyAccountsHashInBackground::default(),
-            active_stats: ActiveStats::default(),
-            skip_initial_hash_calc: false,
-            ancient_append_vec_offset: None,
-            accounts_index,
-            storage: AccountStorage::default(),
-            accounts_cache: AccountsCache::default(),
-            sender_bg_hasher: None,
-            read_only_accounts_cache: ReadOnlyAccountsCache::new(
-                Self::DEFAULT_MAX_READ_ONLY_CACHE_DATA_SIZE_LO,
-                Self::DEFAULT_MAX_READ_ONLY_CACHE_DATA_SIZE_HI,
-                Self::READ_ONLY_CACHE_MS_TO_SKIP_LRU_UPDATE,
-            ),
-            uncleaned_pubkeys: DashMap::new(),
-            next_id: AtomicAccountsFileId::new(0),
-            shrink_candidate_slots: Mutex::new(ShrinkCandidates::default()),
-            write_cache_limit_bytes: None,
-            write_version: AtomicU64::new(0),
-            paths: vec![],
-            base_working_path,
-            base_working_temp_dir,
-            accounts_hash_cache_path,
-            shrink_paths: Vec::default(),
-            temp_paths: None,
-            file_size: DEFAULT_FILE_SIZE,
-            thread_pool: rayon::ThreadPoolBuilder::new()
-                .num_threads(num_threads)
-                .thread_name(|i| format!("solAccounts{i:02}"))
-                .stack_size(ACCOUNTS_STACK_SIZE)
-                .build()
-                .unwrap(),
-            thread_pool_clean: make_min_priority_thread_pool(),
-            thread_pool_hash: make_hash_thread_pool(),
-            bank_hash_stats: Mutex::new(bank_hash_stats),
-            accounts_delta_hashes: Mutex::new(HashMap::new()),
-            accounts_hashes: Mutex::new(HashMap::new()),
-            incremental_accounts_hashes: Mutex::new(HashMap::new()),
-            external_purge_slots_stats: PurgeStats::default(),
-            clean_accounts_stats: CleanAccountsStats::default(),
-            shrink_stats: ShrinkStats::default(),
-            shrink_ancient_stats: ShrinkAncientStats::default(),
-            stats: AccountsStats::default(),
-            account_indexes: AccountSecondaryIndexes::default(),
-            #[cfg(test)]
-            load_delay: u64::default(),
-            #[cfg(test)]
-            load_limit: AtomicU64::default(),
-            is_bank_drop_callback_enabled: AtomicBool::default(),
-            remove_unrooted_slots_synchronization: RemoveUnrootedSlotsSynchronization::default(),
-            shrink_ratio: AccountShrinkThreshold::default(),
-            dirty_stores: DashMap::default(),
-            zero_lamport_accounts_to_purge_after_full_snapshot: DashSet::default(),
-            accounts_update_notifier: None,
-            log_dead_slots: AtomicBool::new(true),
-            exhaustively_verify_refcounts: false,
-            accounts_file_provider: AccountsFileProvider::default(),
-            storage_access: StorageAccess::default(),
-            scan_filter_for_shrinking: ScanFilter::default(),
-            partitioned_epoch_rewards_config: PartitionedEpochRewardsConfig::default(),
-            epoch_accounts_hash_manager: EpochAccountsHashManager::new_invalid(),
-            test_skip_rewrites_but_include_in_bank_hash: false,
-            latest_full_snapshot_slot: SeqLock::new(None),
-            is_experimental_accumulator_hash_enabled: default_accounts_db_config
-                .enable_experimental_accumulator_hash
-                .into(),
-            best_ancient_slots_to_shrink: RwLock::default(),
-        }
+        Self::new_single_for_tests()
     }
 
     pub fn new_single_for_tests() -> Self {
@@ -1942,8 +1837,40 @@ impl AccountsDb {
     ) -> Self {
         let accounts_db_config = accounts_db_config.unwrap_or_default();
         let accounts_index = AccountsIndex::new(accounts_db_config.index.clone(), exit);
+
         let base_working_path = accounts_db_config.base_working_path.clone();
+        let (base_working_path, base_working_temp_dir) =
+            if let Some(base_working_path) = base_working_path {
+                (base_working_path, None)
+            } else {
+                let base_working_temp_dir = TempDir::new().unwrap();
+                let base_working_path = base_working_temp_dir.path().to_path_buf();
+                (base_working_path, Some(base_working_temp_dir))
+            };
+
+        let (paths, temp_paths) = if paths.is_empty() {
+            // Create a temporary set of accounts directories, used primarily
+            // for testing
+            let (temp_dirs, temp_paths) = get_temp_accounts_paths(DEFAULT_NUM_DIRS).unwrap();
+            (temp_paths, Some(temp_dirs))
+        } else {
+            (paths, None)
+        };
+
+        let shrink_paths = accounts_db_config
+            .shrink_paths
+            .clone()
+            .unwrap_or_else(|| paths.clone());
+
         let accounts_hash_cache_path = accounts_db_config.accounts_hash_cache_path.clone();
+        let accounts_hash_cache_path = accounts_hash_cache_path.unwrap_or_else(|| {
+            let accounts_hash_cache_path =
+                base_working_path.join(Self::DEFAULT_ACCOUNTS_HASH_CACHE_DIR);
+            if !accounts_hash_cache_path.exists() {
+                fs::create_dir(&accounts_hash_cache_path).expect("create accounts hash cache dir");
+            }
+            accounts_hash_cache_path
+        });
 
         let test_partitioned_epoch_rewards = accounts_db_config.test_partitioned_epoch_rewards;
         let partitioned_epoch_rewards_config: PartitionedEpochRewardsConfig =
@@ -1954,9 +1881,28 @@ impl AccountsDb {
             Self::DEFAULT_MAX_READ_ONLY_CACHE_DATA_SIZE_HI,
         ));
 
-        let paths_is_empty = paths.is_empty();
+        let bank_hash_stats = Mutex::new(HashMap::from([(0, BankHashStats::default())]));
+
+        // Increase the stack for accounts threads
+        // rayon needs a lot of stack
+        const ACCOUNTS_STACK_SIZE: usize = 8 * 1024 * 1024;
+        let thread_pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(get_thread_count())
+            .thread_name(|i| format!("solAccounts{i:02}"))
+            .stack_size(ACCOUNTS_STACK_SIZE)
+            .build()
+            .expect("new rayon threadpool");
+        let thread_pool_clean = make_min_priority_thread_pool();
+        let thread_pool_hash = make_hash_thread_pool();
+
         let mut new = Self {
+            accounts_index,
             paths,
+            base_working_path,
+            base_working_temp_dir,
+            accounts_hash_cache_path,
+            temp_paths,
+            shrink_paths,
             skip_initial_hash_calc: accounts_db_config.skip_initial_hash_calc,
             ancient_append_vec_offset: accounts_db_config
                 .ancient_append_vec_offset
@@ -1980,24 +1926,42 @@ impl AccountsDb {
             is_experimental_accumulator_hash_enabled: accounts_db_config
                 .enable_experimental_accumulator_hash
                 .into(),
-            ..Self::default_with_accounts_index(
-                accounts_index,
-                base_working_path,
-                accounts_hash_cache_path,
-            )
+            bank_hash_stats,
+            thread_pool,
+            thread_pool_clean,
+            thread_pool_hash,
+            verify_accounts_hash_in_bg: VerifyAccountsHashInBackground::default(),
+            active_stats: ActiveStats::default(),
+            storage: AccountStorage::default(),
+            accounts_cache: AccountsCache::default(),
+            sender_bg_hasher: None,
+            uncleaned_pubkeys: DashMap::new(),
+            next_id: AtomicAccountsFileId::new(0),
+            shrink_candidate_slots: Mutex::new(ShrinkCandidates::default()),
+            write_version: AtomicU64::new(0),
+            file_size: DEFAULT_FILE_SIZE,
+            accounts_delta_hashes: Mutex::new(HashMap::new()),
+            accounts_hashes: Mutex::new(HashMap::new()),
+            incremental_accounts_hashes: Mutex::new(HashMap::new()),
+            external_purge_slots_stats: PurgeStats::default(),
+            clean_accounts_stats: CleanAccountsStats::default(),
+            shrink_stats: ShrinkStats::default(),
+            shrink_ancient_stats: ShrinkAncientStats::default(),
+            stats: AccountsStats::default(),
+            #[cfg(test)]
+            load_delay: u64::default(),
+            #[cfg(test)]
+            load_limit: AtomicU64::default(),
+            is_bank_drop_callback_enabled: AtomicBool::default(),
+            remove_unrooted_slots_synchronization: RemoveUnrootedSlotsSynchronization::default(),
+            dirty_stores: DashMap::default(),
+            zero_lamport_accounts_to_purge_after_full_snapshot: DashSet::default(),
+            log_dead_slots: AtomicBool::new(true),
+            accounts_file_provider: AccountsFileProvider::default(),
+            epoch_accounts_hash_manager: EpochAccountsHashManager::new_invalid(),
+            latest_full_snapshot_slot: SeqLock::new(None),
+            best_ancient_slots_to_shrink: RwLock::default(),
         };
-        if paths_is_empty {
-            // Create a temporary set of accounts directories, used primarily
-            // for testing
-            let (temp_dirs, paths) = get_temp_accounts_paths(DEFAULT_NUM_DIRS).unwrap();
-            new.accounts_update_notifier = None;
-            new.paths = paths;
-            new.temp_paths = Some(temp_dirs);
-        };
-        new.shrink_paths = accounts_db_config
-            .shrink_paths
-            .clone()
-            .unwrap_or_else(|| new.paths.clone());
 
         new.start_background_hasher();
         {
