@@ -65,7 +65,9 @@ use {
         client::AsyncClient,
         clock::{self, Slot, DEFAULT_TICKS_PER_SLOT, MAX_PROCESSING_AGE},
         commitment_config::CommitmentConfig,
-        epoch_schedule::{DEFAULT_SLOTS_PER_EPOCH, MINIMUM_SLOTS_PER_EPOCH},
+        epoch_schedule::{
+            DEFAULT_SLOTS_PER_EPOCH, MAX_LEADER_SCHEDULE_EPOCH_OFFSET, MINIMUM_SLOTS_PER_EPOCH,
+        },
         genesis_config::ClusterType,
         hard_forks::HardForks,
         hash::Hash,
@@ -75,6 +77,7 @@ use {
         system_program, system_transaction,
         vote::state::TowerSync,
     },
+    solana_stake_program::stake_state::NEW_WARMUP_COOLDOWN_RATE,
     solana_streamer::socket::SocketAddrSpace,
     solana_turbine::broadcast_stage::{
         broadcast_duplicates_run::{BroadcastDuplicatesConfig, ClusterPartition},
@@ -1536,20 +1539,47 @@ fn test_wait_for_max_stake() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     let validator_config = ValidatorConfig::default_for_test();
     let slots_per_epoch = MINIMUM_SLOTS_PER_EPOCH;
+    // Set this large enough to allow for skipped slots but still be able to
+    // make a root and derive the new leader schedule in time.
+    let stakers_slot_offset = slots_per_epoch.saturating_mul(MAX_LEADER_SCHEDULE_EPOCH_OFFSET);
+    // Reduce this so that we can complete the test faster by advancing through
+    // slots/epochs faster. But don't make it too small because it can make us
+    // susceptible to skipped slots and the cluster getting stuck.
+    let ticks_per_slot = 16;
+    let num_validators = 4;
     let mut config = ClusterConfig {
         cluster_lamports: DEFAULT_CLUSTER_LAMPORTS,
-        node_stakes: vec![DEFAULT_NODE_STAKE; 4],
-        validator_configs: make_identical_validator_configs(&validator_config, 4),
+        node_stakes: vec![DEFAULT_NODE_STAKE; num_validators],
+        validator_configs: make_identical_validator_configs(&validator_config, num_validators),
         slots_per_epoch,
-        stakers_slot_offset: slots_per_epoch,
+        stakers_slot_offset,
+        ticks_per_slot,
         ..ClusterConfig::default()
     };
     let cluster = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
     let client = RpcClient::new_socket(cluster.entry_point_info.rpc().unwrap());
 
-    assert!(client
-        .wait_for_max_stake(CommitmentConfig::default(), 33.0f32)
-        .is_ok());
+    let num_validators_activating_stake = num_validators - 1;
+    // Number of epochs it is expected to take to completely activate the stake
+    // for all the validators.
+    let num_expected_epochs = (num_validators_activating_stake as f64)
+        .log(1. + NEW_WARMUP_COOLDOWN_RATE)
+        .ceil() as u32
+        + 1;
+    let expected_test_duration = config.poh_config.target_tick_duration
+        * ticks_per_slot as u32
+        * slots_per_epoch as u32
+        * num_expected_epochs;
+    // Make the timeout double the expected duration to provide some margin.
+    // Especially considering tests may be running in parallel.
+    let timeout = expected_test_duration * 2;
+    if let Err(err) = client.wait_for_max_stake_below_threshold_with_timeout(
+        CommitmentConfig::default(),
+        (100 / num_validators_activating_stake) as f32,
+        timeout,
+    ) {
+        panic!("wait_for_max_stake failed: {:?}", err);
+    }
     assert!(client.get_slot().unwrap() > 10);
 }
 
