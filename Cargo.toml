@@ -178,10 +178,7 @@ members = [
     "zk-token-sdk",
 ]
 
-exclude = [
-    "programs/sbf",
-    "svm/tests/example-programs",
-]
+exclude = ["programs/sbf", "svm/tests/example-programs"]
 
 resolver = "2"
 
@@ -337,7 +334,7 @@ percentage = "0.1.0"
 pickledb = { version = "0.5.1", default-features = false }
 predicates = "2.1"
 pretty-hex = "0.3.0"
-prio-graph = "0.2.1"
+prio-graph = "0.3.0"
 proc-macro2 = "1.0.89"
 proptest = "1.5"
 prost = "0.11.9"
