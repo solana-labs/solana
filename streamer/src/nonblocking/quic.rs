@@ -102,20 +102,6 @@ const TOTAL_CONNECTIONS_PER_SECOND: u64 = 2500;
 /// entries used by past requests.
 const CONNECTION_RATE_LIMITER_CLEANUP_SIZE_THRESHOLD: usize = 100_000;
 
-// A sequence of bytes that is part of a packet
-// along with where in the packet it is
-struct PacketChunk {
-    pub bytes: Bytes,
-    // The offset of these bytes in the Quic stream
-    // and thus the beginning offset in the slice of the
-    // Packet data array into which the bytes will be copied
-    pub offset: usize,
-    // The end offset of these bytes in the Quic stream
-    // and thus the end of the slice in the Packet data array
-    // into which the bytes will be copied
-    pub end_of_chunk: usize,
-}
-
 // A struct to accumulate the bytes making up
 // a packet, along with their offsets, and the
 // packet metadata. We use this accumulator to avoid
@@ -123,7 +109,7 @@ struct PacketChunk {
 // the Packet and then when copying the Packet into a PacketBatch)
 struct PacketAccumulator {
     pub meta: Meta,
-    pub chunks: SmallVec<[PacketChunk; 2]>,
+    pub chunks: SmallVec<[Bytes; 2]>,
     pub start_time: Instant,
 }
 
@@ -974,9 +960,11 @@ async fn packet_batch_sender(
                 let i = packet_batch.len() - 1;
                 *packet_batch[i].meta_mut() = packet_accumulator.meta;
                 let num_chunks = packet_accumulator.chunks.len();
+                let mut offset = 0;
                 for chunk in packet_accumulator.chunks {
-                    packet_batch[i].buffer_mut()[chunk.offset..chunk.end_of_chunk]
-                        .copy_from_slice(&chunk.bytes);
+                    packet_batch[i].buffer_mut()[offset..offset + chunk.len()]
+                        .copy_from_slice(&chunk);
+                    offset += chunk.len();
                 }
 
                 total_bytes += packet_batch[i].meta().size;
@@ -1184,22 +1172,6 @@ async fn handle_chunk(
 ) -> bool {
     if let Some(chunk) = maybe_chunk {
         trace!("got chunk: {:?}", chunk);
-        let chunk_len = chunk.bytes.len() as u64;
-
-        // shouldn't happen, but sanity check the size and offsets
-        if chunk.offset > PACKET_DATA_SIZE as u64 || chunk_len > PACKET_DATA_SIZE as u64 {
-            stats.total_invalid_chunks.fetch_add(1, Ordering::Relaxed);
-            return true;
-        }
-        let Some(end_of_chunk) = chunk.offset.checked_add(chunk_len) else {
-            return true;
-        };
-        if end_of_chunk > PACKET_DATA_SIZE as u64 {
-            stats
-                .total_invalid_chunk_size
-                .fetch_add(1, Ordering::Relaxed);
-            return true;
-        }
 
         // chunk looks valid
         if packet_accum.is_none() {
@@ -1214,17 +1186,16 @@ async fn handle_chunk(
         }
 
         if let Some(accum) = packet_accum.as_mut() {
-            let offset = chunk.offset;
-            let Some(end_of_chunk) = (chunk.offset as usize).checked_add(chunk.bytes.len()) else {
+            accum.meta.size += chunk.bytes.len();
+            if accum.meta.size > PACKET_DATA_SIZE {
+                // The stream window size is set to PACKET_DATA_SIZE, so one individual chunk can
+                // never exceed this size. A peer can send two chunks that together exceed the size
+                // tho, in which case we drop the stream.
+                stats.invalid_stream_size.fetch_add(1, Ordering::Relaxed);
+                debug!("invalid stream size {}", accum.meta.size);
                 return true;
-            };
-            accum.chunks.push(PacketChunk {
-                bytes: chunk.bytes,
-                offset: offset as usize,
-                end_of_chunk,
-            });
-
-            accum.meta.size = std::cmp::max(accum.meta.size, end_of_chunk);
+            }
+            accum.chunks.push(chunk.bytes);
         }
 
         if peer_type.is_staked() {
@@ -1731,16 +1702,11 @@ pub mod test {
         for _i in 0..num_packets {
             let mut meta = Meta::default();
             let bytes = Bytes::from("Hello world");
-            let offset = 0;
             let size = bytes.len();
             meta.size = size;
             let packet_accum = PacketAccumulator {
                 meta,
-                chunks: smallvec::smallvec![PacketChunk {
-                    bytes,
-                    offset,
-                    end_of_chunk: size,
-                }],
+                chunks: smallvec::smallvec![bytes],
                 start_time: Instant::now(),
             };
             ptk_sender.send(packet_accum).await.unwrap();
