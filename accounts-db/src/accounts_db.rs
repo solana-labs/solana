@@ -2946,6 +2946,7 @@ impl AccountsDb {
         self.clean_accounts_stats.report();
         datapoint_info!(
             "clean_accounts",
+            ("max_clean_root", max_clean_root_inclusive, Option<i64>),
             ("total_us", measure_all.as_us(), i64),
             (
                 "collect_delta_keys_us",
