@@ -140,7 +140,7 @@ impl<T: LikeClusterInfo> SchedulerController<T> {
                 .maybe_report_and_reset_interval(should_report);
             self.worker_metrics
                 .iter()
-                .for_each(|metrics| metrics.maybe_report_and_reset());
+                .for_each(|metrics| metrics.maybe_report_and_reset(new_leader_slot));
         }
 
         Ok(())
