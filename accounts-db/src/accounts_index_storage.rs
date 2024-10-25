@@ -1,7 +1,7 @@
 use {
     crate::{
         accounts_index::{
-            in_mem_accounts_index::InMemAccountsIndex, AccountsIndexConfig, DiskIndexValue,
+            self, in_mem_accounts_index::InMemAccountsIndex, AccountsIndexConfig, DiskIndexValue,
             IndexValue,
         },
         bucket_map_holder::BucketMapHolder,
@@ -9,6 +9,7 @@ use {
     },
     std::{
         fmt::Debug,
+        num::NonZeroUsize,
         sync::{
             atomic::{AtomicBool, Ordering},
             Arc, Mutex,
@@ -58,14 +59,14 @@ impl BgThreads {
     fn new<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>>(
         storage: &Arc<BucketMapHolder<T, U>>,
         in_mem: &[Arc<InMemAccountsIndex<T, U>>],
-        threads: usize,
+        threads: NonZeroUsize,
         can_advance_age: bool,
         exit: Arc<AtomicBool>,
     ) -> Self {
         // stop signal used for THIS batch of bg threads
         let local_exit = Arc::new(AtomicBool::default());
         let handles = Some(
-            (0..threads)
+            (0..threads.get())
                 .map(|idx| {
                     // the first thread we start is special
                     let can_advance_age = can_advance_age && idx == 0;
@@ -123,7 +124,7 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndexStorage<
             *self.startup_worker_threads.lock().unwrap() = Some(BgThreads::new(
                 &self.storage,
                 &self.in_mem,
-                Self::num_threads(),
+                accounts_index::default_num_flush_threads(),
                 false, // cannot advance age from any of these threads
                 self.exit.clone(),
             ));
@@ -151,25 +152,21 @@ impl<T: IndexValue, U: DiskIndexValue + From<T> + Into<T>> AccountsIndexStorage<
         self.in_mem.iter().for_each(|mem| mem.shrink_to_fit())
     }
 
-    fn num_threads() -> usize {
-        std::cmp::max(2, num_cpus::get() / 4)
-    }
-
     /// allocate BucketMapHolder and InMemAccountsIndex[]
     pub fn new(bins: usize, config: &Option<AccountsIndexConfig>, exit: Arc<AtomicBool>) -> Self {
-        let threads = config
+        let num_flush_threads = config
             .as_ref()
-            .and_then(|config| config.flush_threads)
-            .unwrap_or_else(Self::num_threads);
+            .and_then(|config| config.num_flush_threads)
+            .unwrap_or_else(accounts_index::default_num_flush_threads);
 
-        let storage = Arc::new(BucketMapHolder::new(bins, config, threads));
+        let storage = Arc::new(BucketMapHolder::new(bins, config, num_flush_threads.get()));
 
         let in_mem = (0..bins)
             .map(|bin| Arc::new(InMemAccountsIndex::new(&storage, bin)))
             .collect::<Vec<_>>();
 
         Self {
-            _bg_threads: BgThreads::new(&storage, &in_mem, threads, true, exit.clone()),
+            _bg_threads: BgThreads::new(&storage, &in_mem, num_flush_threads, true, exit.clone()),
             storage,
             in_mem,
             startup_worker_threads: Mutex::default(),

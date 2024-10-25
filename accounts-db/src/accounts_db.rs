@@ -510,6 +510,8 @@ pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
     storage_access: StorageAccess::Mmap,
     scan_filter_for_shrinking: ScanFilter::OnlyAbnormalWithVerify,
     enable_experimental_accumulator_hash: false,
+    num_clean_threads: None,
+    num_foreground_threads: None,
     num_hash_threads: None,
 };
 pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig {
@@ -528,6 +530,8 @@ pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig
     storage_access: StorageAccess::Mmap,
     scan_filter_for_shrinking: ScanFilter::OnlyAbnormalWithVerify,
     enable_experimental_accumulator_hash: false,
+    num_clean_threads: None,
+    num_foreground_threads: None,
     num_hash_threads: None,
 };
 
@@ -640,6 +644,10 @@ pub struct AccountsDbConfig {
     pub storage_access: StorageAccess,
     pub scan_filter_for_shrinking: ScanFilter,
     pub enable_experimental_accumulator_hash: bool,
+    /// Number of threads for background cleaning operations (`thread_pool_clean')
+    pub num_clean_threads: Option<NonZeroUsize>,
+    /// Number of threads for foreground operations (`thread_pool`)
+    pub num_foreground_threads: Option<NonZeroUsize>,
     /// Number of threads for background accounts hashing (`thread_pool_hash`)
     pub num_hash_threads: Option<NonZeroUsize>,
 }
@@ -1766,6 +1774,10 @@ pub fn make_hash_thread_pool(num_threads: Option<NonZeroUsize>) -> ThreadPool {
         .unwrap()
 }
 
+pub fn default_num_foreground_threads() -> usize {
+    get_thread_count()
+}
+
 #[cfg(feature = "frozen-abi")]
 impl solana_frozen_abi::abi_example::AbiExample for AccountsDb {
     fn example() -> Self {
@@ -1893,16 +1905,30 @@ impl AccountsDb {
 
         let bank_hash_stats = Mutex::new(HashMap::from([(0, BankHashStats::default())]));
 
-        // Increase the stack for accounts threads
+        // Increase the stack for foreground threads
         // rayon needs a lot of stack
         const ACCOUNTS_STACK_SIZE: usize = 8 * 1024 * 1024;
+        let num_foreground_threads = accounts_db_config
+            .num_foreground_threads
+            .map(Into::into)
+            .unwrap_or_else(default_num_foreground_threads);
         let thread_pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(get_thread_count())
+            .num_threads(num_foreground_threads)
             .thread_name(|i| format!("solAccounts{i:02}"))
             .stack_size(ACCOUNTS_STACK_SIZE)
             .build()
             .expect("new rayon threadpool");
-        let thread_pool_clean = make_min_priority_thread_pool();
+
+        let num_clean_threads = accounts_db_config
+            .num_clean_threads
+            .map(Into::into)
+            .unwrap_or_else(quarter_thread_count);
+        let thread_pool_clean = rayon::ThreadPoolBuilder::new()
+            .thread_name(|i| format!("solAccountsLo{i:02}"))
+            .num_threads(num_clean_threads)
+            .build()
+            .expect("new rayon threadpool");
+
         let thread_pool_hash = make_hash_thread_pool(accounts_db_config.num_hash_threads);
 
         let mut new = Self {

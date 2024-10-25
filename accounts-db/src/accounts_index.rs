@@ -27,6 +27,7 @@ use {
     std::{
         collections::{btree_map::BTreeMap, HashSet},
         fmt::Debug,
+        num::NonZeroUsize,
         ops::{
             Bound,
             Bound::{Excluded, Included, Unbounded},
@@ -45,10 +46,11 @@ pub const ITER_BATCH_SIZE: usize = 1000;
 pub const BINS_DEFAULT: usize = 8192;
 pub const BINS_FOR_TESTING: usize = 2; // we want > 1, but each bin is a few disk files with a disk based index, so fewer is better
 pub const BINS_FOR_BENCHMARKS: usize = 8192;
-pub const FLUSH_THREADS_TESTING: usize = 1;
+// The unsafe is safe because we're using a fixed, known non-zero value
+pub const FLUSH_THREADS_TESTING: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(1) };
 pub const ACCOUNTS_INDEX_CONFIG_FOR_TESTING: AccountsIndexConfig = AccountsIndexConfig {
     bins: Some(BINS_FOR_TESTING),
-    flush_threads: Some(FLUSH_THREADS_TESTING),
+    num_flush_threads: Some(FLUSH_THREADS_TESTING),
     drives: None,
     index_limit_mb: IndexLimitMb::Unlimited,
     ages_to_stay_in_cache: None,
@@ -57,7 +59,7 @@ pub const ACCOUNTS_INDEX_CONFIG_FOR_TESTING: AccountsIndexConfig = AccountsIndex
 };
 pub const ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS: AccountsIndexConfig = AccountsIndexConfig {
     bins: Some(BINS_FOR_BENCHMARKS),
-    flush_threads: Some(FLUSH_THREADS_TESTING),
+    num_flush_threads: Some(FLUSH_THREADS_TESTING),
     drives: None,
     index_limit_mb: IndexLimitMb::Unlimited,
     ages_to_stay_in_cache: None,
@@ -218,13 +220,17 @@ pub enum IndexLimitMb {
 #[derive(Debug, Default, Clone)]
 pub struct AccountsIndexConfig {
     pub bins: Option<usize>,
-    pub flush_threads: Option<usize>,
+    pub num_flush_threads: Option<NonZeroUsize>,
     pub drives: Option<Vec<PathBuf>>,
     pub index_limit_mb: IndexLimitMb,
     pub ages_to_stay_in_cache: Option<Age>,
     pub scan_results_limit_bytes: Option<usize>,
     /// true if the accounts index is being created as a result of being started as a validator (as opposed to test, etc.)
     pub started_from_validator: bool,
+}
+
+pub fn default_num_flush_threads() -> NonZeroUsize {
+    NonZeroUsize::new(std::cmp::max(2, num_cpus::get() / 4)).expect("non-zero system threads")
 }
 
 #[derive(Debug, Default, Clone)]
