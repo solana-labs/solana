@@ -36,6 +36,7 @@ solana-account-info = { workspace = true, features = ["bincode"] }
 solana-atomic-u64 = { workspace = true }
 solana-bincode = { workspace = true }
 solana-clock = { workspace = true, features = ["serde"] }
+solana-cpi = { workspace = true }
 solana-decode-error = { workspace = true }
 solana-epoch-schedule = { workspace = true, features = ["serde"] }
 solana-fee-calculator = { workspace = true, features = ["serde"] }

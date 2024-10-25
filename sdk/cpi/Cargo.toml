@@ -1,0 +1,31 @@
+[package]
+name = "solana-cpi"
+description = "Solana Cross-program Invocation"
+documentation = "https://docs.rs/solana-cpi"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+solana-account-info = { workspace = true }
+solana-instruction = { workspace = true }
+solana-program-error = { workspace = true }
+solana-pubkey = { workspace = true }
+
+[target.'cfg(target_os = "solana")'.dependencies]
+solana-define-syscall = { workspace = true }
+solana-stable-layout = { workspace = true }
+
+[dev-dependencies]
+solana-program = { path = "../program" }
+solana-program-entrypoint = { workspace = true }
+static_assertions = { workspace = true }
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[lints]
+workspace = true

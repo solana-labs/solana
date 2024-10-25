@@ -108,6 +108,7 @@ members = [
     "sdk/cargo-build-sbf",
     "sdk/cargo-test-sbf",
     "sdk/clock",
+    "sdk/cpi",
     "sdk/decode-error",
     "sdk/derivation-path",
     "sdk/epoch-schedule",
@@ -406,6 +407,7 @@ solana-config-program = { path = "programs/config", version = "=2.1.0" }
 solana-connection-cache = { path = "connection-cache", version = "=2.1.0", default-features = false }
 solana-core = { path = "core", version = "=2.1.0" }
 solana-cost-model = { path = "cost-model", version = "=2.1.0" }
+solana-cpi = { path = "sdk/cpi", version = "=2.1.0" }
 solana-curve25519 = { path = "curves/curve25519", version = "=2.1.0" }
 solana-decode-error = { path = "sdk/decode-error", version = "=2.1.0" }
 solana-define-syscall = { path = "define-syscall", version = "=2.1.0" }
