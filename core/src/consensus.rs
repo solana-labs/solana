@@ -1248,6 +1248,27 @@ impl Tower {
         self.last_switch_threshold_check.is_none()
     }
 
+    // Optimistically skip the stake check if casting a vote would not increase
+    // the lockout at this threshold. This is because if you bounce back to
+    // voting on the main fork after not voting for a while, your latest vote
+    // might pop off a lot of the votes in the tower. The stake from these votes
+    // would have rolled up to earlier votes in the tower, which presumably
+    // could have helped us pass the threshold check. Worst case, we'll just
+    // recheck later without having increased lockouts.
+    fn optimistically_bypass_vote_stake_threshold_check(
+        vote_state_before_applying_vote: &VoteState,
+        threshold_vote: &Lockout,
+    ) -> bool {
+        for old_vote in &vote_state_before_applying_vote.votes {
+            if old_vote.slot() == threshold_vote.slot()
+                && old_vote.confirmation_count() == threshold_vote.confirmation_count()
+            {
+                return true;
+            }
+        }
+        false
+    }
+
     /// Checks a single vote threshold for `slot`
     fn check_vote_stake_threshold(
         threshold_vote: Option<&Lockout>,
@@ -1277,19 +1298,11 @@ impl Tower {
             fork_stake,
             total_stake
         );
-        for old_vote in &vote_state_before_applying_vote.votes {
-            if old_vote.slot() == threshold_vote.slot()
-                && old_vote.confirmation_count() == threshold_vote.confirmation_count()
-            {
-                // If you bounce back to voting on the main fork after not
-                // voting for a while, your latest vote N on the main fork
-                // might pop off a lot of the stake of votes in the tower.
-                // This stake would have rolled up to earlier votes in the
-                // tower, so skip the stake check.
-                return ThresholdDecision::PassedThreshold;
-            }
-        }
-        if lockout > threshold_size {
+        if Self::optimistically_bypass_vote_stake_threshold_check(
+            vote_state_before_applying_vote,
+            threshold_vote,
+        ) || lockout > threshold_size
+        {
             return ThresholdDecision::PassedThreshold;
         }
         ThresholdDecision::FailedThreshold(threshold_depth as u64, *fork_stake)
