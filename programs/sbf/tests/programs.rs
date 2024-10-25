@@ -3854,7 +3854,7 @@ fn test_program_fees() {
     let mut bank = Bank::new_for_tests(&genesis_config);
     let fee_structure =
         FeeStructure::new(0.000005, 0.0, vec![(200, 0.0000005), (1400000, 0.000005)]);
-    bank.set_fee_structure(&fee_structure);
+    bank.set_fee_structure(fee_structure.clone());
     let (bank, bank_forks) = bank.wrap_with_bank_forks_for_tests();
     let mut bank_client = BankClient::new_shared(bank);
     let authority_keypair = Keypair::new();
@@ -3886,7 +3886,6 @@ fn test_program_fees() {
     );
     let expected_normal_fee = solana_fee::calculate_fee(
         &sanitized_message,
-        congestion_multiplier == 0,
         fee_structure.lamports_per_signature,
         fee_budget_limits.prioritization_fee,
         true,
@@ -3918,7 +3917,6 @@ fn test_program_fees() {
     );
     let expected_prioritized_fee = solana_fee::calculate_fee(
         &sanitized_message,
-        congestion_multiplier == 0,
         fee_structure.lamports_per_signature,
         fee_budget_limits.prioritization_fee,
         true,

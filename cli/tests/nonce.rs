@@ -31,8 +31,11 @@ fn test_nonce(seed: Option<String>, use_nonce_authority: bool, compute_unit_pric
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
-    let test_validator =
-        TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr), SocketAddrSpace::Unspecified);
+    let test_validator = TestValidator::with_no_base_fees(
+        mint_pubkey,
+        Some(faucet_addr),
+        SocketAddrSpace::Unspecified,
+    );
 
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
@@ -43,15 +46,16 @@ fn test_nonce(seed: Option<String>, use_nonce_authority: bool, compute_unit_pric
     let payer = Keypair::new();
     config_payer.signers = vec![&payer];
 
+    let airdrop_amount = sol_to_lamports(2000.0);
     request_and_confirm_airdrop(
         &rpc_client,
         &config_payer,
         &config_payer.signers[0].pubkey(),
-        sol_to_lamports(2000.0),
+        airdrop_amount,
     )
     .unwrap();
     check_balance!(
-        sol_to_lamports(2000.0),
+        airdrop_amount,
         &rpc_client,
         &config_payer.signers[0].pubkey(),
     );
@@ -80,23 +84,26 @@ fn test_nonce(seed: Option<String>, use_nonce_authority: bool, compute_unit_pric
     };
 
     // Create nonce account
+    let spend_amount = sol_to_lamports(1000.0);
     config_payer.signers.push(&nonce_keypair);
     config_payer.command = CliCommand::CreateNonceAccount {
         nonce_account: 1,
         seed,
         nonce_authority: optional_authority,
         memo: None,
-        amount: SpendAmount::Some(sol_to_lamports(1000.0)),
+        amount: SpendAmount::Some(spend_amount),
         compute_unit_price,
     };
 
     process_command(&config_payer).unwrap();
+    let priority_fee = compute_unit_price.map(|_| 600).unwrap_or(0);
+    let expected_payer_balance = airdrop_amount - spend_amount - priority_fee;
     check_balance!(
-        sol_to_lamports(1000.0),
+        expected_payer_balance,
         &rpc_client,
         &config_payer.signers[0].pubkey(),
     );
-    check_balance!(sol_to_lamports(1000.0), &rpc_client, &nonce_account);
+    check_balance!(spend_amount, &rpc_client, &nonce_account);
 
     // Get nonce
     config_payer.signers.pop();
@@ -129,6 +136,14 @@ fn test_nonce(seed: Option<String>, use_nonce_authority: bool, compute_unit_pric
     };
     process_command(&config_payer).unwrap();
 
+    let priority_fee = compute_unit_price.map(|_| 450).unwrap_or(0);
+    let expected_payer_balance = expected_payer_balance - priority_fee;
+    check_balance!(
+        expected_payer_balance,
+        &rpc_client,
+        &config_payer.signers[0].pubkey(),
+    );
+
     // Get nonce
     config_payer.signers = vec![&payer];
     config_payer.command = CliCommand::GetNonce(nonce_account);
@@ -149,8 +164,9 @@ fn test_nonce(seed: Option<String>, use_nonce_authority: bool, compute_unit_pric
         compute_unit_price,
     };
     process_command(&config_payer).unwrap();
+    let expected_payer_balance = expected_payer_balance - priority_fee;
     check_balance!(
-        sol_to_lamports(1000.0),
+        expected_payer_balance,
         &rpc_client,
         &config_payer.signers[0].pubkey(),
     );
@@ -175,6 +191,13 @@ fn test_nonce(seed: Option<String>, use_nonce_authority: bool, compute_unit_pric
     };
     process_command(&config_payer).unwrap();
 
+    let expected_payer_balance = expected_payer_balance - priority_fee;
+    check_balance!(
+        expected_payer_balance,
+        &rpc_client,
+        &config_payer.signers[0].pubkey(),
+    );
+
     // Old authority fails now
     config_payer.command = CliCommand::NewNonce {
         nonce_account,
@@ -194,6 +217,13 @@ fn test_nonce(seed: Option<String>, use_nonce_authority: bool, compute_unit_pric
     };
     process_command(&config_payer).unwrap();
 
+    let expected_payer_balance = expected_payer_balance - priority_fee;
+    check_balance!(
+        expected_payer_balance,
+        &rpc_client,
+        &config_payer.signers[0].pubkey(),
+    );
+
     // New authority can withdraw from nonce account
     config_payer.command = CliCommand::WithdrawFromNonceAccount {
         nonce_account,
@@ -204,8 +234,9 @@ fn test_nonce(seed: Option<String>, use_nonce_authority: bool, compute_unit_pric
         compute_unit_price,
     };
     process_command(&config_payer).unwrap();
+    let expected_payer_balance = expected_payer_balance - priority_fee;
     check_balance!(
-        sol_to_lamports(1000.0),
+        expected_payer_balance,
         &rpc_client,
         &config_payer.signers[0].pubkey(),
     );
