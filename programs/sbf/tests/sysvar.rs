@@ -13,6 +13,7 @@ use {
         message::Message,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
+        stake_history::{StakeHistory, StakeHistoryEntry},
         sysvar::{
             clock, epoch_rewards, epoch_schedule, instructions, recent_blockhashes, rent,
             slot_hashes, slot_history, stake_history,
@@ -31,7 +32,9 @@ fn test_sysvar_syscalls() {
         ..
     } = create_genesis_config(50);
     genesis_config.accounts.remove(&disable_fees_sysvar::id());
+
     let bank = Bank::new_for_tests(&genesis_config);
+
     let epoch_rewards = epoch_rewards::EpochRewards {
         distribution_starting_block_height: 42,
         total_rewards: 100,
@@ -40,6 +43,21 @@ fn test_sysvar_syscalls() {
         ..epoch_rewards::EpochRewards::default()
     };
     bank.set_sysvar_for_tests(&epoch_rewards);
+
+    let stake_history = {
+        let mut stake_history = StakeHistory::default();
+        stake_history.add(
+            0,
+            StakeHistoryEntry {
+                effective: 200,
+                activating: 300,
+                deactivating: 400,
+            },
+        );
+        stake_history
+    };
+    bank.set_sysvar_for_tests(&stake_history);
+
     let (bank, bank_forks) = bank.wrap_with_bank_forks_for_tests();
     let mut bank_client = BankClient::new_shared(bank);
     let authority_keypair = Keypair::new();
@@ -52,10 +70,10 @@ fn test_sysvar_syscalls() {
     );
     bank.freeze();
 
-    for instruction_data in &[0u8, 1u8] {
+    for ix_discriminator in 0..4 {
         let instruction = Instruction::new_with_bincode(
             program_id,
-            &[instruction_data],
+            &[ix_discriminator],
             vec![
                 AccountMeta::new(mint_keypair.pubkey(), true),
                 AccountMeta::new(Pubkey::new_unique(), false),
