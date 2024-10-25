@@ -855,7 +855,7 @@ impl ClusterInfo {
                             "-".to_string()
                         },
                         self.addr_to_string(&ip_addr, &node.gossip().ok()),
-                        self.addr_to_string(&ip_addr, &node.tpu_vote().ok()),
+                        self.addr_to_string(&ip_addr, &node.tpu_vote(contact_info::Protocol::UDP).ok()),
                         self.addr_to_string(&ip_addr, &node.tpu(contact_info::Protocol::UDP).ok()),
                         self.addr_to_string(&ip_addr, &node.tpu_forwards(contact_info::Protocol::UDP).ok()),
                         self.addr_to_string(&ip_addr, &node.tvu(contact_info::Protocol::UDP).ok()),

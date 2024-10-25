@@ -34,10 +34,11 @@ const SOCKET_TAG_TPU_FORWARDS: u8 = 6;
 const SOCKET_TAG_TPU_FORWARDS_QUIC: u8 = 7;
 const SOCKET_TAG_TPU_QUIC: u8 = 8;
 const SOCKET_TAG_TPU_VOTE: u8 = 9;
+const SOCKET_TAG_TPU_VOTE_QUIC: u8 = 12;
 const SOCKET_TAG_TVU: u8 = 10;
 const SOCKET_TAG_TVU_QUIC: u8 = 11;
-const_assert_eq!(SOCKET_CACHE_SIZE, 12);
-const SOCKET_CACHE_SIZE: usize = SOCKET_TAG_TVU_QUIC as usize + 1usize;
+const_assert_eq!(SOCKET_CACHE_SIZE, 13);
+const SOCKET_CACHE_SIZE: usize = SOCKET_TAG_TPU_VOTE_QUIC as usize + 1usize;
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -240,7 +241,7 @@ impl ContactInfo {
         SOCKET_TAG_TPU_FORWARDS,
         SOCKET_TAG_TPU_FORWARDS_QUIC
     );
-    get_socket!(tpu_vote, SOCKET_TAG_TPU_VOTE);
+    get_socket!(tpu_vote, SOCKET_TAG_TPU_VOTE, SOCKET_TAG_TPU_VOTE_QUIC);
     get_socket!(tvu, SOCKET_TAG_TVU, SOCKET_TAG_TVU_QUIC);
 
     set_socket!(set_gossip, SOCKET_TAG_GOSSIP);
@@ -255,6 +256,7 @@ impl ContactInfo {
         SOCKET_TAG_TPU_FORWARDS_QUIC
     );
     set_socket!(set_tpu_vote, SOCKET_TAG_TPU_VOTE);
+    set_socket!(set_tpu_vote_quic, SOCKET_TAG_TPU_VOTE_QUIC);
     set_socket!(set_tvu, SOCKET_TAG_TVU);
     set_socket!(set_tvu_quic, SOCKET_TAG_TVU_QUIC);
 
@@ -700,7 +702,8 @@ mod tests {
         assert_matches!(ci.tpu(Protocol::UDP), Err(Error::InvalidPort(0)));
         assert_matches!(ci.tpu_forwards(Protocol::QUIC), Err(Error::InvalidPort(0)));
         assert_matches!(ci.tpu_forwards(Protocol::UDP), Err(Error::InvalidPort(0)));
-        assert_matches!(ci.tpu_vote(), Err(Error::InvalidPort(0)));
+        assert_matches!(ci.tpu_vote(Protocol::UDP), Err(Error::InvalidPort(0)));
+        assert_matches!(ci.tpu_vote(Protocol::QUIC), Err(Error::InvalidPort(0)));
         assert_matches!(ci.tvu(Protocol::QUIC), Err(Error::InvalidPort(0)));
         assert_matches!(ci.tvu(Protocol::UDP), Err(Error::InvalidPort(0)));
     }
@@ -856,8 +859,12 @@ mod tests {
                 sockets.get(&SOCKET_TAG_TPU_FORWARDS_QUIC)
             );
             assert_eq!(
-                node.tpu_vote().ok().as_ref(),
+                node.tpu_vote(Protocol::UDP).ok().as_ref(),
                 sockets.get(&SOCKET_TAG_TPU_VOTE)
+            );
+            assert_eq!(
+                node.tpu_vote(Protocol::QUIC).ok().as_ref(),
+                sockets.get(&SOCKET_TAG_TPU_VOTE_QUIC)
             );
             assert_eq!(
                 node.tvu(Protocol::UDP).ok().as_ref(),
@@ -954,7 +961,10 @@ mod tests {
                 old.tpu(Protocol::UDP).unwrap().port() + QUIC_PORT_OFFSET
             )
         );
-        assert_eq!(old.tpu_vote().unwrap(), node.tpu_vote().unwrap());
+        assert_eq!(
+            old.tpu_vote().unwrap(),
+            node.tpu_vote(Protocol::UDP).unwrap()
+        );
         assert_eq!(
             old.tvu(Protocol::QUIC).unwrap(),
             node.tvu(Protocol::QUIC).unwrap()

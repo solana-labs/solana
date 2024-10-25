@@ -91,7 +91,7 @@ fn verify_reachable_ports(
         udp_sockets.extend(node.sockets.tpu_forwards.iter());
         udp_sockets.extend(&node.sockets.tpu_forwards_quic);
     }
-    if verify_address(&node.info.tpu_vote().ok()) {
+    if verify_address(&node.info.tpu_vote(Protocol::UDP).ok()) {
         udp_sockets.extend(node.sockets.tpu_vote.iter());
     }
     if verify_address(&node.info.tvu(Protocol::UDP).ok()) {

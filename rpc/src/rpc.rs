@@ -3528,7 +3528,7 @@ pub mod rpc_full {
                                 .ok()
                                 .filter(|addr| socket_addr_space.check(addr)),
                             tpu_vote: contact_info
-                                .tpu_vote()
+                                .tpu_vote(Protocol::UDP)
                                 .ok()
                                 .filter(|addr| socket_addr_space.check(addr)),
                             serve_repair: contact_info
