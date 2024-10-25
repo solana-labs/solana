@@ -13283,6 +13283,11 @@ fn test_bank_epoch_stakes() {
     let initial_epochs = bank0.epoch_stake_keys();
     assert_eq!(initial_epochs, vec![0, 1]);
 
+    // Bank 0:
+
+    // First query with bank's epoch. As noted by the above check, the epoch
+    // stakes cache actually contains values for the _leader schedule_ epoch
+    // (N + 1). Therefore, we should be able to query both.
     assert_eq!(bank0.epoch(), 0);
     assert_eq!(bank0.epoch_total_stake(0), Some(total_stake));
     assert_eq!(bank0.epoch_node_id_to_stake(0, &Pubkey::new_unique()), None);
@@ -13292,6 +13297,37 @@ fn test_bank_epoch_stakes() {
             Some(stakes[i])
         );
     }
+
+    // Now query for epoch 1 on bank 0.
+    assert_eq!(bank0.epoch().saturating_add(1), 1);
+    assert_eq!(bank0.epoch_total_stake(1), Some(total_stake));
+    assert_eq!(bank0.epoch_node_id_to_stake(1, &Pubkey::new_unique()), None);
+    for (i, keypair) in voting_keypairs.iter().enumerate() {
+        assert_eq!(
+            bank0.epoch_node_id_to_stake(1, &keypair.node_keypair.pubkey()),
+            Some(stakes[i])
+        );
+    }
+
+    // Note using bank's `current_epoch_stake_*` methods should return the
+    // same values.
+    assert_eq!(bank0.get_current_epoch_total_stake(), total_stake);
+    assert_eq!(
+        bank0.get_current_epoch_total_stake(),
+        bank0.epoch_total_stake(1).unwrap(),
+    );
+    assert_eq!(
+        bank0.get_current_epoch_vote_accounts().len(),
+        voting_keypairs.len()
+    );
+    assert_eq!(
+        bank0.epoch_vote_accounts(1).unwrap(),
+        bank0.get_current_epoch_vote_accounts(),
+    );
+
+    // Bank 1:
+
+    // Run the same exercise. First query the bank's epoch.
     assert_eq!(bank1.epoch(), 1);
     assert_eq!(bank1.epoch_total_stake(1), Some(total_stake));
     assert_eq!(bank1.epoch_node_id_to_stake(1, &Pubkey::new_unique()), None);
@@ -13302,32 +13338,85 @@ fn test_bank_epoch_stakes() {
         );
     }
 
-    let new_epoch_stakes = EpochStakes::new_for_tests(
-        voting_keypairs
-            .iter()
-            .map(|keypair| {
-                let node_id = keypair.node_keypair.pubkey();
-                let authorized_voter = keypair.vote_keypair.pubkey();
-                let vote_account = VoteAccount::try_from(create_account_with_authorized(
-                    &node_id,
-                    &authorized_voter,
-                    &node_id,
-                    0,
-                    100,
-                ))
-                .unwrap();
-                (authorized_voter, (100_u64, vote_account))
-            })
-            .collect::<HashMap<_, _>>(),
-        1,
+    // Now query for epoch 2 on bank 1.
+    assert_eq!(bank1.epoch().saturating_add(1), 2);
+    assert_eq!(bank1.epoch_total_stake(2), Some(total_stake));
+    assert_eq!(bank1.epoch_node_id_to_stake(2, &Pubkey::new_unique()), None);
+    for (i, keypair) in voting_keypairs.iter().enumerate() {
+        assert_eq!(
+            bank1.epoch_node_id_to_stake(2, &keypair.node_keypair.pubkey()),
+            Some(stakes[i])
+        );
+    }
+
+    // Again, using bank's `current_epoch_stake_*` methods should return the
+    // same values.
+    assert_eq!(bank1.get_current_epoch_total_stake(), total_stake);
+    assert_eq!(
+        bank1.get_current_epoch_total_stake(),
+        bank1.epoch_total_stake(2).unwrap(),
     );
-    bank1.set_epoch_stakes_for_test(1, new_epoch_stakes);
-    assert_eq!(bank1.epoch_total_stake(1), Some(100 * num_of_nodes));
+    assert_eq!(
+        bank1.get_current_epoch_vote_accounts().len(),
+        voting_keypairs.len()
+    );
+    assert_eq!(
+        bank1.epoch_vote_accounts(2).unwrap(),
+        bank1.get_current_epoch_vote_accounts(),
+    );
+
+    // Setup new epoch stakes on Bank 1 for both leader schedule epochs.
+    let make_new_epoch_stakes = |stake_coefficient: u64| {
+        EpochStakes::new_for_tests(
+            voting_keypairs
+                .iter()
+                .map(|keypair| {
+                    let node_id = keypair.node_keypair.pubkey();
+                    let authorized_voter = keypair.vote_keypair.pubkey();
+                    let vote_account = VoteAccount::try_from(create_account_with_authorized(
+                        &node_id,
+                        &authorized_voter,
+                        &node_id,
+                        0,
+                        100,
+                    ))
+                    .unwrap();
+                    (authorized_voter, (stake_coefficient, vote_account))
+                })
+                .collect::<HashMap<_, _>>(),
+            1,
+        )
+    };
+    let stake_coefficient_epoch_1 = 100;
+    let stake_coefficient_epoch_2 = 500;
+    bank1.set_epoch_stakes_for_test(1, make_new_epoch_stakes(stake_coefficient_epoch_1));
+    bank1.set_epoch_stakes_for_test(2, make_new_epoch_stakes(stake_coefficient_epoch_2));
+
+    // Run the exercise again with the new stake. Now epoch 1 should have the
+    // stake added for epoch 1 (`stake_coefficient_epoch_1`).
+    assert_eq!(
+        bank1.epoch_total_stake(1),
+        Some(stake_coefficient_epoch_1 * num_of_nodes)
+    );
     assert_eq!(bank1.epoch_node_id_to_stake(1, &Pubkey::new_unique()), None);
     for keypair in voting_keypairs.iter() {
         assert_eq!(
             bank1.epoch_node_id_to_stake(1, &keypair.node_keypair.pubkey()),
-            Some(100)
+            Some(stake_coefficient_epoch_1)
+        );
+    }
+
+    // Now query for epoch 2 on bank 1. Epoch 2 should have the stake added for
+    // epoch 2 (`stake_coefficient_epoch_2`).
+    assert_eq!(
+        bank1.epoch_total_stake(2),
+        Some(stake_coefficient_epoch_2 * num_of_nodes)
+    );
+    assert_eq!(bank1.epoch_node_id_to_stake(2, &Pubkey::new_unique()), None);
+    for keypair in voting_keypairs.iter() {
+        assert_eq!(
+            bank1.epoch_node_id_to_stake(2, &keypair.node_keypair.pubkey()),
+            Some(stake_coefficient_epoch_2)
         );
     }
 }

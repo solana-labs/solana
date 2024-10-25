@@ -6232,6 +6232,8 @@ dependencies = [
  "solana-timings",
  "solana-transaction-status",
  "solana-type-overrides",
+ "solana-vote",
+ "solana-vote-program",
  "solana_rbpf",
 ]
 
@@ -6665,6 +6667,13 @@ dependencies = [
 
 [[package]]
 name = "solana-sbf-rust-upgraded"
+version = "2.1.0"
+dependencies = [
+ "solana-program",
+]
+
+[[package]]
+name = "solana-sbf-syscall-get-epoch-stake"
 version = "2.1.0"
 dependencies = [
  "solana-program",

@@ -64,6 +64,8 @@ solana-svm-transaction = { path = "../../svm-transaction", version = "=2.1.0" }
 solana-timings = { path = "../../timings", version = "=2.1.0" }
 solana-transaction-status = { path = "../../transaction-status", version = "=2.1.0" }
 solana-type-overrides = { path = "../../type-overrides", version = "=2.1.0" }
+solana-vote = { path = "../../vote", version = "=2.1.0" }
+solana-vote-program = { path = "../../programs/vote", version = "=2.1.0" }
 agave-validator = { path = "../../validator", version = "=2.1.0" }
 solana-zk-token-sdk = { path = "../../zk-token-sdk", version = "=2.1.0" }
 solana_rbpf = "=0.8.5"
@@ -128,6 +130,8 @@ solana-svm-transaction = { workspace = true }
 solana-timings = { workspace = true }
 solana-transaction-status = { workspace = true }
 solana-type-overrides = { workspace = true }
+solana-vote = { workspace = true }
+solana-vote-program = { workspace = true }
 solana_rbpf = { workspace = true }
 
 [[bench]]
@@ -186,6 +190,7 @@ members = [
     "rust/simulation",
     "rust/spoof1",
     "rust/spoof1_system",
+    "rust/syscall-get-epoch-stake",
     "rust/sysvar",
     "rust/upgradeable",
     "rust/upgraded",

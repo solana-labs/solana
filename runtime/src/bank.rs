@@ -3672,8 +3672,8 @@ impl Bank {
             RentCollectorWithMetrics::new(self.rent_collector.clone());
         let processing_environment = TransactionProcessingEnvironment {
             blockhash,
-            epoch_total_stake: self.epoch_total_stake(self.epoch()),
-            epoch_vote_accounts: self.epoch_vote_accounts(self.epoch()),
+            epoch_total_stake: Some(self.get_current_epoch_total_stake()),
+            epoch_vote_accounts: Some(self.get_current_epoch_vote_accounts()),
             feature_set: Arc::clone(&self.feature_set),
             fee_structure: Some(&self.fee_structure),
             lamports_per_signature,
@@ -6301,11 +6301,25 @@ impl Bank {
             .map(|epoch_stakes| epoch_stakes.total_stake())
     }
 
+    /// Get the total epoch stake for the current Bank::epoch
+    pub fn get_current_epoch_total_stake(&self) -> u64 {
+        self.current_epoch_stakes().total_stake()
+    }
+
     /// vote accounts for the specific epoch along with the stake
     ///   attributed to each account
     pub fn epoch_vote_accounts(&self, epoch: Epoch) -> Option<&VoteAccountsHashMap> {
         let epoch_stakes = self.epoch_stakes.get(&epoch)?.stakes();
         Some(epoch_stakes.vote_accounts().as_ref())
+    }
+
+    /// Get the vote accounts along with the stake attributed to each account
+    /// for the current Bank::epoch
+    pub fn get_current_epoch_vote_accounts(&self) -> &VoteAccountsHashMap {
+        self.current_epoch_stakes()
+            .stakes()
+            .vote_accounts()
+            .as_ref()
     }
 
     /// Get the fixed authorized voter for the given vote account for the
