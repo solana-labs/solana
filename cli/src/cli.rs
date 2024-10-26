@@ -2727,4 +2727,25 @@ mod tests {
             }
         );
     }
+
+    #[test]
+    fn test_cli_completions() {
+        let mut clap_app = get_clap_app("test", "desc", "version");
+
+        let shells = [
+            Shell::Bash,
+            Shell::Fish,
+            Shell::Zsh,
+            Shell::PowerShell,
+            Shell::Elvish,
+        ];
+
+        for shell in shells {
+            let mut buf: Vec<u8> = vec![];
+
+            clap_app.gen_completions_to("solana", shell, &mut buf);
+
+            assert!(!buf.is_empty());
+        }
+    }
 }

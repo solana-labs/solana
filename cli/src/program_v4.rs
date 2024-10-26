@@ -278,7 +278,7 @@ impl ProgramV4SubCommands for App<'_, '_> {
                             Arg::with_name("all")
                                 .long("all")
                                 .conflicts_with("account")
-                                .conflicts_with("buffer_authority")
+                                .conflicts_with("authority")
                                 .help("Show accounts for all authorities"),
                         )
                         .arg(pubkey!(
