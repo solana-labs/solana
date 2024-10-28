@@ -7444,6 +7444,7 @@ dependencies = [
  "solana-sha256-hasher",
  "solana-short-vec",
  "solana-slot-hashes",
+ "solana-slot-history",
  "solana-stable-layout",
  "solana-transaction-error",
  "static_assertions",
@@ -8159,6 +8160,15 @@ dependencies = [
  "serde_derive",
  "solana-hash",
  "solana-sha256-hasher",
+]
+
+[[package]]
+name = "solana-slot-history"
+version = "2.1.0"
+dependencies = [
+ "bv",
+ "serde",
+ "serde_derive",
 ]
 
 [[package]]

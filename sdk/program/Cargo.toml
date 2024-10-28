@@ -71,6 +71,7 @@ solana-serialize-utils = { workspace = true }
 solana-sha256-hasher = { workspace = true, features = ["sha2"] }
 solana-short-vec = { workspace = true }
 solana-slot-hashes = { workspace = true, features = ["serde"] }
+solana-slot-history = { workspace = true, features = ["serde"] }
 solana-stable-layout = { workspace = true }
 thiserror = { workspace = true }
 
