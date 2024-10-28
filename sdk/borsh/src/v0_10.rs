@@ -3,7 +3,7 @@
 //!
 //! [borsh]: https://borsh.io/
 use {
-    crate::borsh::{
+    crate::macros::{
         impl_get_instance_packed_len, impl_get_packed_len_v0, impl_try_from_slice_unchecked,
     },
     borsh0_10::maybestd::io,
@@ -13,7 +13,7 @@ impl_get_packed_len_v0!(
     borsh0_10,
     #[deprecated(
         since = "1.18.0",
-        note = "Please upgrade to Borsh 1.X and use `borsh1::get_packed_len` instead"
+        note = "Please upgrade to Borsh 1.X and use `v1::get_packed_len` instead"
     )]
 );
 impl_try_from_slice_unchecked!(
@@ -21,7 +21,7 @@ impl_try_from_slice_unchecked!(
     io,
     #[deprecated(
         since = "1.18.0",
-        note = "Please upgrade to Borsh 1.X and use `borsh1::try_from_slice_unchecked` instead"
+        note = "Please upgrade to Borsh 1.X and use `v1::try_from_slice_unchecked` instead"
     )]
 );
 impl_get_instance_packed_len!(
@@ -29,13 +29,13 @@ impl_get_instance_packed_len!(
     io,
     #[deprecated(
         since = "1.18.0",
-        note = "Please upgrade to Borsh 1.X and use `borsh1::get_instance_packed_len` instead"
+        note = "Please upgrade to Borsh 1.X and use `v1::get_instance_packed_len` instead"
     )]
 );
 
 #[cfg(test)]
 #[allow(deprecated)]
 mod tests {
-    use {crate::borsh::impl_tests, borsh0_10::maybestd::io};
+    use {crate::macros::impl_tests, borsh0_10::maybestd::io};
     impl_tests!(borsh0_10, io);
 }
