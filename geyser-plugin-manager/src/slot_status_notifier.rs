@@ -37,6 +37,10 @@ impl SlotStatusNotifierInterface for SlotStatusNotifierImpl {
     fn notify_created_bank(&self, slot: Slot, parent: Slot) {
         self.notify_slot_status(slot, Some(parent), SlotStatus::CreatedBank);
     }
+
+    fn notify_slot_dead(&self, slot: Slot, error: String) {
+        self.notify_slot_status(slot, None, SlotStatus::Dead(error));
+    }
 }
 
 impl SlotStatusNotifierImpl {
@@ -52,7 +56,7 @@ impl SlotStatusNotifierImpl {
 
         for plugin in plugin_manager.plugins.iter() {
             let mut measure = Measure::start("geyser-plugin-update-slot");
-            match plugin.update_slot_status(slot, parent, slot_status) {
+            match plugin.update_slot_status(slot, parent, &slot_status) {
                 Err(err) => {
                     error!(
                         "Failed to update slot status at slot {}, error: {} to plugin {}",

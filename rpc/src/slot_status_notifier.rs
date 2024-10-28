@@ -21,6 +21,9 @@ pub trait SlotStatusNotifierInterface {
 
     /// Notified when the slot has bank created.
     fn notify_created_bank(&self, slot: Slot, parent: Slot);
+
+    /// Notified when the slot is marked "Dead"
+    fn notify_slot_dead(&self, slot: Slot, error: String);
 }
 
 pub type SlotStatusNotifier = Arc<RwLock<dyn SlotStatusNotifierInterface + Sync + Send>>;
