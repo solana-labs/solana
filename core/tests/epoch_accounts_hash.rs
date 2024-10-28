@@ -5,9 +5,7 @@ use {
     crate::snapshot_utils::create_tmp_accounts_dir_for_tests,
     log::*,
     solana_accounts_db::{
-        accounts_db::{AccountShrinkThreshold, CalcAccountsHashDataSource},
-        accounts_hash::CalcAccountsHashConfig,
-        accounts_index::AccountSecondaryIndexes,
+        accounts_db::CalcAccountsHashDataSource, accounts_hash::CalcAccountsHashConfig,
         epoch_accounts_hash::EpochAccountsHash,
     },
     solana_core::{
@@ -456,9 +454,7 @@ fn test_snapshots_have_expected_epoch_accounts_hash() {
                 &RuntimeConfig::default(),
                 None,
                 None,
-                AccountSecondaryIndexes::default(),
                 None,
-                AccountShrinkThreshold::default(),
                 true,
                 true,
                 false,

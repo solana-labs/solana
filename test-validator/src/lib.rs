@@ -975,6 +975,7 @@ impl TestValidator {
                 started_from_validator: true,
                 ..AccountsIndexConfig::default()
             }),
+            account_indexes: Some(config.rpc_config.account_indexes.clone()),
             ..AccountsDbConfig::default()
         });
 
@@ -1026,7 +1027,6 @@ impl TestValidator {
             staked_nodes_overrides: config.staked_nodes_overrides.clone(),
             accounts_db_config,
             runtime_config,
-            account_indexes: config.rpc_config.account_indexes.clone(),
             ..ValidatorConfig::default_for_test()
         };
         if let Some(ref tower_storage) = config.tower_storage {

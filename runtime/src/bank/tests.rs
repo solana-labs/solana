@@ -25,7 +25,7 @@ use {
     serde::{Deserialize, Serialize},
     solana_accounts_db::{
         accounts::AccountAddressFilter,
-        accounts_db::{AccountShrinkThreshold, DEFAULT_ACCOUNTS_SHRINK_RATIO},
+        accounts_db::DEFAULT_ACCOUNTS_SHRINK_RATIO,
         accounts_hash::{AccountsDeltaHash, AccountsHasher},
         accounts_index::{
             AccountIndex, AccountSecondaryIndexes, IndexKey, ScanConfig, ScanError, ITER_BATCH_SIZE,
@@ -4470,10 +4470,15 @@ fn test_get_filtered_indexed_accounts_limit_exceeded() {
     let (genesis_config, _mint_keypair) = create_genesis_config(500);
     let mut account_indexes = AccountSecondaryIndexes::default();
     account_indexes.indexes.insert(AccountIndex::ProgramId);
+    let bank_config = BankTestConfig {
+        accounts_db_config: AccountsDbConfig {
+            account_indexes: Some(account_indexes),
+            ..ACCOUNTS_DB_CONFIG_FOR_TESTING
+        },
+    };
     let bank = Arc::new(Bank::new_with_config_for_tests(
         &genesis_config,
-        account_indexes,
-        AccountShrinkThreshold::default(),
+        bank_config,
     ));
 
     let address = Pubkey::new_unique();
@@ -4497,10 +4502,15 @@ fn test_get_filtered_indexed_accounts() {
     let (genesis_config, _mint_keypair) = create_genesis_config(500);
     let mut account_indexes = AccountSecondaryIndexes::default();
     account_indexes.indexes.insert(AccountIndex::ProgramId);
+    let bank_config = BankTestConfig {
+        accounts_db_config: AccountsDbConfig {
+            account_indexes: Some(account_indexes),
+            ..ACCOUNTS_DB_CONFIG_FOR_TESTING
+        },
+    };
     let bank = Arc::new(Bank::new_with_config_for_tests(
         &genesis_config,
-        account_indexes,
-        AccountShrinkThreshold::default(),
+        bank_config,
     ));
 
     let address = Pubkey::new_unique();
@@ -6407,8 +6417,7 @@ fn get_shrink_account_size() -> usize {
     // of the storage for this slot
     let bank0 = Arc::new(Bank::new_with_config_for_tests(
         &genesis_config,
-        AccountSecondaryIndexes::default(),
-        AccountShrinkThreshold::default(),
+        BankTestConfig::default(),
     ));
     bank0.restore_old_behavior_for_fragile_tests();
     goto_end_of_slot(bank0.clone());
@@ -6446,8 +6455,7 @@ fn test_clean_nonrooted() {
     // Set root for bank 0, with caching enabled
     let bank0 = Arc::new(Bank::new_with_config_for_tests(
         &genesis_config,
-        AccountSecondaryIndexes::default(),
-        AccountShrinkThreshold::default(),
+        BankTestConfig::default(),
     ));
 
     let account_zero = AccountSharedData::new(0, 0, &Pubkey::new_unique());
@@ -6521,8 +6529,7 @@ fn test_shrink_candidate_slots_cached() {
     // Set root for bank 0, with caching enabled
     let bank0 = Arc::new(Bank::new_with_config_for_tests(
         &genesis_config,
-        AccountSecondaryIndexes::default(),
-        AccountShrinkThreshold::default(),
+        BankTestConfig::default(),
     ));
     bank0.restore_old_behavior_for_fragile_tests();
 
@@ -8188,8 +8195,7 @@ fn test_store_scan_consistency<F>(
     genesis_config.rent = Rent::free();
     let bank0 = Arc::new(Bank::new_with_config_for_tests(
         &genesis_config,
-        AccountSecondaryIndexes::default(),
-        AccountShrinkThreshold::default(),
+        BankTestConfig::default(),
     ));
     bank0.set_callback(drop_callback);
 
@@ -8987,8 +8993,6 @@ fn test_epoch_schedule_from_genesis_config() {
         Vec::new(),
         None,
         None,
-        AccountSecondaryIndexes::default(),
-        AccountShrinkThreshold::default(),
         false,
         Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
         None,
@@ -9019,8 +9023,6 @@ where
         Vec::new(),
         None,
         None,
-        AccountSecondaryIndexes::default(),
-        AccountShrinkThreshold::default(),
         false,
         Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
         None,
@@ -12604,8 +12606,6 @@ fn test_rehash_with_skipped_rewrites() {
         Vec::default(),
         None,
         None,
-        AccountSecondaryIndexes::default(),
-        AccountShrinkThreshold::default(),
         false,
         Some(accounts_db_config),
         None,
@@ -12667,8 +12667,6 @@ fn test_rebuild_skipped_rewrites() {
         Vec::default(),
         None,
         None,
-        AccountSecondaryIndexes::default(),
-        AccountShrinkThreshold::default(),
         false,
         Some(accounts_db_config.clone()),
         None,
@@ -12744,9 +12742,7 @@ fn test_rebuild_skipped_rewrites() {
         &RuntimeConfig::default(),
         None,
         None,
-        AccountSecondaryIndexes::default(),
         None,
-        AccountShrinkThreshold::default(),
         false,
         false,
         false,
@@ -12779,8 +12775,6 @@ fn test_get_accounts_for_bank_hash_details(skip_rewrites: bool) {
         Vec::default(),
         None,
         None,
-        AccountSecondaryIndexes::default(),
-        AccountShrinkThreshold::default(),
         false,
         Some(accounts_db_config.clone()),
         None,

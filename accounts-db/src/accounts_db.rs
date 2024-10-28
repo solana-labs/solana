@@ -496,9 +496,11 @@ pub(crate) struct ShrinkCollect<'a, T: ShrinkCollectRefs<'a>> {
 
 pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
+    account_indexes: None,
     base_working_path: None,
     accounts_hash_cache_path: None,
     shrink_paths: None,
+    shrink_ratio: DEFAULT_ACCOUNTS_SHRINK_THRESHOLD_OPTION,
     read_cache_limit_bytes: None,
     write_cache_limit_bytes: None,
     ancient_append_vec_offset: None,
@@ -516,9 +518,11 @@ pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
 };
 pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS),
+    account_indexes: None,
     base_working_path: None,
     accounts_hash_cache_path: None,
     shrink_paths: None,
+    shrink_ratio: DEFAULT_ACCOUNTS_SHRINK_THRESHOLD_OPTION,
     read_cache_limit_bytes: None,
     write_cache_limit_bytes: None,
     ancient_append_vec_offset: None,
@@ -624,10 +628,12 @@ const ANCIENT_APPEND_VEC_DEFAULT_OFFSET: Option<i64> = Some(100_000);
 #[derive(Debug, Default, Clone)]
 pub struct AccountsDbConfig {
     pub index: Option<AccountsIndexConfig>,
+    pub account_indexes: Option<AccountSecondaryIndexes>,
     /// Base directory for various necessary files
     pub base_working_path: Option<PathBuf>,
     pub accounts_hash_cache_path: Option<PathBuf>,
     pub shrink_paths: Option<Vec<PathBuf>>,
+    pub shrink_ratio: AccountShrinkThreshold,
     /// The low and high watermark sizes for the read cache, in bytes.
     /// If None, defaults will be used.
     pub read_cache_limit_bytes: Option<(usize, usize)>,
@@ -1839,8 +1845,6 @@ impl AccountsDb {
     ) -> Self {
         let mut db = AccountsDb::new_with_config(
             paths,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
             Arc::default(),
@@ -1851,8 +1855,6 @@ impl AccountsDb {
 
     pub fn new_with_config(
         paths: Vec<PathBuf>,
-        account_indexes: AccountSecondaryIndexes,
-        shrink_ratio: AccountShrinkThreshold,
         accounts_db_config: Option<AccountsDbConfig>,
         accounts_update_notifier: Option<AccountsUpdateNotifier>,
         exit: Arc<AtomicBool>,
@@ -1943,8 +1945,8 @@ impl AccountsDb {
             ancient_append_vec_offset: accounts_db_config
                 .ancient_append_vec_offset
                 .or(ANCIENT_APPEND_VEC_DEFAULT_OFFSET),
-            account_indexes,
-            shrink_ratio,
+            account_indexes: accounts_db_config.account_indexes.unwrap_or_default(),
+            shrink_ratio: accounts_db_config.shrink_ratio,
             accounts_update_notifier,
             create_ancient_storage: accounts_db_config.create_ancient_storage,
             read_only_accounts_cache: ReadOnlyAccountsCache::new(
@@ -15741,8 +15743,6 @@ pub mod tests {
         ] {
             let db = AccountsDb::new_with_config(
                 Vec::new(),
-                AccountSecondaryIndexes::default(),
-                AccountShrinkThreshold::default(),
                 Some(AccountsDbConfig {
                     ancient_append_vec_offset: Some(ancient_append_vec_offset as i64),
                     ..ACCOUNTS_DB_CONFIG_FOR_TESTING
@@ -15774,8 +15774,6 @@ pub mod tests {
         let ancient_append_vec_offset = 50_000;
         let db = AccountsDb::new_with_config(
             Vec::new(),
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
             Some(AccountsDbConfig {
                 ancient_append_vec_offset: Some(ancient_append_vec_offset),
                 ..ACCOUNTS_DB_CONFIG_FOR_TESTING
@@ -15828,8 +15826,6 @@ pub mod tests {
             for starting_slot_offset in [0, avoid_saturation] {
                 let db = AccountsDb::new_with_config(
                     Vec::new(),
-                    AccountSecondaryIndexes::default(),
-                    AccountShrinkThreshold::default(),
                     Some(AccountsDbConfig {
                         ancient_append_vec_offset: Some(ancient_append_vec_offset),
                         ..ACCOUNTS_DB_CONFIG_FOR_TESTING

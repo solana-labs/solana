@@ -9,10 +9,8 @@ use {
         accounts::Accounts,
         accounts_db::{
             test_utils::{create_test_accounts, update_accounts_bench},
-            AccountShrinkThreshold, AccountsDb, CalcAccountsHashDataSource,
-            ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS,
+            AccountsDb, CalcAccountsHashDataSource, ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS,
         },
-        accounts_index::AccountSecondaryIndexes,
         ancestors::Ancestors,
     },
     solana_measure::measure::Measure,
@@ -71,8 +69,6 @@ fn main() {
     }
     let accounts_db = AccountsDb::new_with_config(
         vec![path],
-        AccountSecondaryIndexes::default(),
-        AccountShrinkThreshold::default(),
         Some(ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS),
         None,
         Arc::default(),

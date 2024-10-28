@@ -282,10 +282,7 @@ mod tests {
         },
         assert_matches::assert_matches,
         solana_accounts_db::{
-            accounts_db::{
-                AccountShrinkThreshold, AccountsDbConfig, ACCOUNTS_DB_CONFIG_FOR_TESTING,
-            },
-            accounts_index::AccountSecondaryIndexes,
+            accounts_db::{AccountsDbConfig, ACCOUNTS_DB_CONFIG_FOR_TESTING},
             partitioned_rewards::TestPartitionedEpochRewards,
         },
         solana_sdk::{
@@ -398,8 +395,6 @@ mod tests {
             Vec::new(),
             None,
             None,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
             false,
             Some(accounts_db_config),
             None,
@@ -507,8 +502,6 @@ mod tests {
             Vec::new(),
             None,
             None,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
             false,
             Some(accounts_db_config),
             None,

@@ -6,8 +6,7 @@ use {
     itertools::Itertools,
     log::{info, trace},
     solana_accounts_db::{
-        accounts_db::{self, AccountsDbConfig, ACCOUNTS_DB_CONFIG_FOR_TESTING},
-        accounts_index::AccountSecondaryIndexes,
+        accounts_db::{AccountsDbConfig, ACCOUNTS_DB_CONFIG_FOR_TESTING},
         epoch_accounts_hash::EpochAccountsHash,
     },
     solana_core::{
@@ -20,7 +19,7 @@ use {
             AbsRequestHandlers, AbsRequestSender, AccountsBackgroundService,
             PrunedBanksRequestHandler, SendDroppedBankCallback, SnapshotRequestHandler,
         },
-        bank::Bank,
+        bank::{Bank, BankTestConfig},
         bank_forks::BankForks,
         genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo},
         runtime_config::RuntimeConfig,
@@ -96,9 +95,8 @@ impl SnapshotTestConfig {
         let bank0 = Bank::new_with_paths_for_tests(
             &genesis_config_info.genesis_config,
             Arc::<RuntimeConfig>::default(),
+            BankTestConfig::default(),
             vec![accounts_dir.clone()],
-            AccountSecondaryIndexes::default(),
-            accounts_db::AccountShrinkThreshold::default(),
         );
         bank0.freeze();
         bank0.set_startup_verification_complete();
@@ -160,9 +158,7 @@ fn restore_from_snapshot(
         &RuntimeConfig::default(),
         None,
         None,
-        AccountSecondaryIndexes::default(),
         None,
-        accounts_db::AccountShrinkThreshold::default(),
         check_hash_calculation,
         false,
         false,
@@ -611,9 +607,7 @@ fn restore_from_snapshots_and_check_banks_are_equal(
         &RuntimeConfig::default(),
         None,
         None,
-        AccountSecondaryIndexes::default(),
         None,
-        accounts_db::AccountShrinkThreshold::default(),
         false,
         false,
         false,
@@ -846,9 +840,7 @@ fn test_snapshots_with_background_services(
         &RuntimeConfig::default(),
         None,
         None,
-        AccountSecondaryIndexes::default(),
         None,
-        accounts_db::AccountShrinkThreshold::default(),
         false,
         false,
         false,

@@ -302,12 +302,8 @@ mod tests {
             runtime_config::RuntimeConfig, snapshot_bank_utils, snapshot_config::SnapshotConfig,
             snapshot_utils,
         },
-        solana_accounts_db::{
-            accounts_db::{
-                AccountShrinkThreshold, AccountsDbConfig, DuplicatesLtHash,
-                ACCOUNTS_DB_CONFIG_FOR_TESTING,
-            },
-            accounts_index::AccountSecondaryIndexes,
+        solana_accounts_db::accounts_db::{
+            AccountsDbConfig, DuplicatesLtHash, ACCOUNTS_DB_CONFIG_FOR_TESTING,
         },
         solana_sdk::{
             account::{ReadableAccount as _, WritableAccount as _},
@@ -885,9 +881,7 @@ mod tests {
             &RuntimeConfig::default(),
             None,
             None,
-            AccountSecondaryIndexes::default(),
             None,
-            AccountShrinkThreshold::default(),
             false,
             false,
             false,

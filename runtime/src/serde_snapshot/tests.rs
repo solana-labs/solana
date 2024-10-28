@@ -15,13 +15,11 @@ mod serde_snapshot_tests {
             account_storage::{AccountStorageMap, AccountStorageReference},
             accounts::Accounts,
             accounts_db::{
-                get_temp_accounts_paths, test_utils::create_test_accounts, AccountShrinkThreshold,
-                AccountStorageEntry, AccountsDb, AtomicAccountsFileId,
-                VerifyAccountsHashAndLamportsConfig,
+                get_temp_accounts_paths, test_utils::create_test_accounts, AccountStorageEntry,
+                AccountsDb, AtomicAccountsFileId, VerifyAccountsHashAndLamportsConfig,
             },
             accounts_file::{AccountsFile, AccountsFileError, StorageAccess},
             accounts_hash::AccountsHash,
-            accounts_index::AccountSecondaryIndexes,
             ancestors::Ancestors,
         },
         solana_sdk::{
@@ -77,9 +75,7 @@ mod serde_snapshot_tests {
                 cluster_type: ClusterType::Development,
                 ..GenesisConfig::default()
             },
-            AccountSecondaryIndexes::default(),
             None,
-            AccountShrinkThreshold::default(),
             false,
             Some(solana_accounts_db::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
