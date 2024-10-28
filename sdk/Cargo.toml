@@ -101,6 +101,7 @@ solana-frozen-abi-macro = { workspace = true, optional = true, features = [
 ] }
 solana-instruction = { workspace = true }
 solana-native-token = { workspace = true }
+solana-packet = { workspace = true, features = ["bincode", "serde"] }
 solana-precompile-error = { workspace = true, optional = true }
 solana-program = { workspace = true }
 solana-program-memory = { workspace = true }
