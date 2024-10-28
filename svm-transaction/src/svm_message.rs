@@ -3,7 +3,10 @@ use {
         instruction::SVMInstruction, message_address_table_lookup::SVMMessageAddressTableLookup,
     },
     core::fmt::Debug,
-    solana_sdk::{hash::Hash, message::AccountKeys, pubkey::Pubkey},
+    solana_sdk::{
+        hash::Hash, message::AccountKeys, nonce::NONCED_TX_MARKER_IX_INDEX, pubkey::Pubkey,
+        system_program,
+    },
 };
 
 mod sanitized_message;
@@ -58,6 +61,55 @@ pub trait SVMMessage: Debug {
         } else {
             false
         }
+    }
+
+    /// If the message uses a durable nonce, return the pubkey of the nonce account
+    fn get_durable_nonce(&self) -> Option<&Pubkey> {
+        let account_keys = self.account_keys();
+        self.instructions_iter()
+            .nth(usize::from(NONCED_TX_MARKER_IX_INDEX))
+            .filter(
+                |ix| match account_keys.get(usize::from(ix.program_id_index)) {
+                    Some(program_id) => system_program::check_id(program_id),
+                    _ => false,
+                },
+            )
+            .filter(|ix| {
+                /// Serialized value of [`SystemInstruction::AdvanceNonceAccount`].
+                const SERIALIZED_ADVANCE_NONCE_ACCOUNT: [u8; 4] = 4u32.to_le_bytes();
+                const SERIALIZED_SIZE: usize = SERIALIZED_ADVANCE_NONCE_ACCOUNT.len();
+
+                ix.data
+                    .get(..SERIALIZED_SIZE)
+                    .map(|data| data == SERIALIZED_ADVANCE_NONCE_ACCOUNT)
+                    .unwrap_or(false)
+            })
+            .and_then(|ix| {
+                ix.accounts.first().and_then(|idx| {
+                    let index = usize::from(*idx);
+                    if !self.is_writable(index) {
+                        None
+                    } else {
+                        account_keys.get(index)
+                    }
+                })
+            })
+    }
+
+    /// For the instruction at `index`, return an iterator over input accounts
+    /// that are signers.
+    fn get_ix_signers(&self, index: usize) -> impl Iterator<Item = &Pubkey> {
+        self.instructions_iter()
+            .nth(index)
+            .into_iter()
+            .flat_map(|ix| {
+                ix.accounts
+                    .iter()
+                    .copied()
+                    .map(usize::from)
+                    .filter(|index| self.is_signer(*index))
+                    .filter_map(|signer_index| self.account_keys().get(signer_index))
+            })
     }
 
     /// Get the number of lookup tables.
