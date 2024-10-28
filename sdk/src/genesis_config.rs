@@ -87,7 +87,7 @@ impl FromStr for ClusterType {
 #[cfg_attr(
     feature = "frozen-abi",
     derive(AbiExample),
-    frozen_abi(digest = "3GwiwngfwuPnrUyCcnTDYEWfQQzWGuBWR9RRyf9YYgif")
+    frozen_abi(digest = "41wPwgEZLhp9AS4tjTQebW7cvHnkbSSTN19vaKwVett6")
 )]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct GenesisConfig {

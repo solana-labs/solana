@@ -5475,6 +5475,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-inflation"
+version = "2.1.0"
+dependencies = [
+ "serde",
+ "serde_derive",
+]
+
+[[package]]
 name = "solana-inline-spl"
 version = "2.1.0"
 dependencies = [
@@ -6779,6 +6787,7 @@ dependencies = [
  "solana-decode-error",
  "solana-derivation-path",
  "solana-feature-set",
+ "solana-inflation",
  "solana-instruction",
  "solana-native-token",
  "solana-packet",

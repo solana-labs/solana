@@ -117,6 +117,7 @@ members = [
     "sdk/fee-calculator",
     "sdk/gen-headers",
     "sdk/hash",
+    "sdk/inflation",
     "sdk/instruction",
     "sdk/macro",
     "sdk/msg",
@@ -434,6 +435,7 @@ agave-geyser-plugin-interface = { path = "geyser-plugin-interface", version = "=
 solana-geyser-plugin-manager = { path = "geyser-plugin-manager", version = "=2.1.0" }
 solana-gossip = { path = "gossip", version = "=2.1.0" }
 solana-hash = { path = "sdk/hash", version = "=2.1.0", default-features = false }
+solana-inflation = { path = "sdk/inflation", version = "=2.1.0" }
 solana-inline-spl = { path = "inline-spl", version = "=2.1.0" }
 solana-instruction = { path = "sdk/instruction", version = "=2.1.0", default-features = false }
 solana-last-restart-slot = { path = "sdk/last-restart-slot", version = "=2.1.0" }
