@@ -5499,6 +5499,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-last-restart-slot"
+version = "2.1.0"
+dependencies = [
+ "serde",
+ "serde_derive",
+ "solana-sdk-macro",
+]
+
+[[package]]
 name = "solana-lattice-hash"
 version = "2.1.0"
 dependencies = [
@@ -5786,6 +5795,7 @@ dependencies = [
  "solana-fee-calculator",
  "solana-hash",
  "solana-instruction",
+ "solana-last-restart-slot",
  "solana-msg",
  "solana-native-token",
  "solana-program-entrypoint",

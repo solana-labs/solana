@@ -435,6 +435,7 @@ solana-gossip = { path = "gossip", version = "=2.1.0" }
 solana-hash = { path = "sdk/hash", version = "=2.1.0", default-features = false }
 solana-inline-spl = { path = "inline-spl", version = "=2.1.0" }
 solana-instruction = { path = "sdk/instruction", version = "=2.1.0", default-features = false }
+solana-last-restart-slot = { path = "sdk/last-restart-slot", version = "=2.1.0" }
 solana-lattice-hash = { path = "lattice-hash", version = "=2.1.0" }
 solana-ledger = { path = "ledger", version = "=2.1.0" }
 solana-loader-v4-program = { path = "programs/loader-v4", version = "=2.1.0" }

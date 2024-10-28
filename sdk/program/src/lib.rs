@@ -487,7 +487,6 @@ pub mod incinerator;
 pub mod instruction;
 pub mod keccak;
 pub mod lamports;
-pub mod last_restart_slot;
 pub mod loader_instruction;
 pub mod loader_upgradeable_instruction;
 pub mod loader_v4;
@@ -522,6 +521,8 @@ pub use solana_borsh::v0_10 as borsh0_10;
 pub use solana_borsh::v1 as borsh1;
 #[deprecated(since = "2.1.0", note = "Use `solana-fee-calculator` crate instead")]
 pub use solana_fee_calculator as fee_calculator;
+#[deprecated(since = "2.1.0", note = "Use `solana-last-restart-slot` crate instead")]
+pub use solana_last_restart_slot as last_restart_slot;
 #[deprecated(since = "2.1.0", note = "Use `solana-program-memory` crate instead")]
 pub use solana_program_memory as program_memory;
 #[deprecated(since = "2.1.0", note = "Use `solana-program-pack` crate instead")]

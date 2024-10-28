@@ -53,6 +53,7 @@ solana-instruction = { workspace = true, default-features = false, features = [
     "serde",
     "std",
 ] }
+solana-last-restart-slot = { workspace = true, features = ["serde"] }
 solana-msg = { workspace = true }
 solana-native-token = { workspace = true }
 solana-program-entrypoint = { workspace = true }
