@@ -5606,8 +5606,14 @@ impl Bank {
         &self,
         base: Option<(Slot, /*capitalization*/ u64)>,
         mut config: VerifyAccountsHashConfig,
-        duplicates_lt_hash: Option<&DuplicatesLtHash>,
+        duplicates_lt_hash: Option<Box<DuplicatesLtHash>>,
     ) -> bool {
+        #[derive(Debug, Eq, PartialEq)]
+        enum VerifyKind {
+            Merkle,
+            Lattice,
+        }
+
         let accounts = &self.rc.accounts;
         // Wait until initial hash calc is complete before starting a new hash calc.
         // This should only occur when we halt at a slot in ledger-tool.
@@ -5617,14 +5623,33 @@ impl Bank {
             .wait_for_complete();
 
         let slot = self.slot();
-        let is_accounts_lt_hash_enabled = self.is_accounts_lt_hash_enabled();
+        let verify_kind = if self
+            .rc
+            .accounts
+            .accounts_db
+            .is_experimental_accumulator_hash_enabled()
+        {
+            VerifyKind::Lattice
+        } else {
+            VerifyKind::Merkle
+        };
+
+        if verify_kind == VerifyKind::Lattice {
+            // Calculating the accounts lt hash from storages *requires* a duplicates_lt_hash.
+            // If it is None here, then we must use the index instead, which also means we
+            // cannot run in the background.
+            if duplicates_lt_hash.is_none() {
+                config.run_in_background = false;
+            }
+        }
+
         if config.require_rooted_bank && !accounts.accounts_db.accounts_index.is_alive_root(slot) {
             if let Some(parent) = self.parent() {
                 info!(
                     "slot {slot} is not a root, so verify accounts hash on parent bank at slot {}",
                     parent.slot(),
                 );
-                if is_accounts_lt_hash_enabled {
+                if verify_kind == VerifyKind::Lattice {
                     // The duplicates_lt_hash is only valid for the current slot, so we must fall
                     // back to verifying the accounts lt hash with the index (which also means we
                     // cannot run in the background).
@@ -5635,15 +5660,6 @@ impl Bank {
                 // this will result in mismatch errors
                 // accounts hash calc doesn't include unrooted slots
                 panic!("cannot verify accounts hash because slot {slot} is not a root");
-            }
-        }
-
-        if is_accounts_lt_hash_enabled {
-            // Calculating the accounts lt hash from storages *requires* a duplicates_lt_hash.
-            // If it is None here, then we must use the index instead, which also means we
-            // cannot run in the background.
-            if duplicates_lt_hash.is_none() {
-                config.run_in_background = false;
             }
         }
 
@@ -5673,7 +5689,6 @@ impl Bank {
             let epoch_schedule = self.epoch_schedule().clone();
             let rent_collector = self.rent_collector().clone();
             let expected_accounts_lt_hash = self.accounts_lt_hash.lock().unwrap().clone();
-            let duplicates_lt_hash = duplicates_lt_hash.cloned();
             accounts.accounts_db.verify_accounts_hash_in_bg.start(|| {
                 Builder::new()
                     .name("solBgHashVerify".into())
@@ -5682,49 +5697,53 @@ impl Bank {
                         let start = Instant::now();
                         let mut lattice_verify_time = None;
                         let mut merkle_verify_time = None;
-                        if is_accounts_lt_hash_enabled {
-                            // accounts lt hash is *enabled* so use lattice-based verification
-                            let accounts_db = &accounts_.accounts_db;
-                            let (calculated_accounts_lt_hash, duration) =
-                                meas_dur!(accounts_db.thread_pool_hash.install(|| {
-                                    accounts_db.calculate_accounts_lt_hash_at_startup_from_storages(
-                                        snapshot_storages.0.as_slice(),
-                                        &duplicates_lt_hash.unwrap(),
-                                    )
-                                }));
-                            if calculated_accounts_lt_hash != expected_accounts_lt_hash {
-                                error!(
-                                    "Verifying accounts lt hash failed: hashes do not match, \
-                                     expected: {}, calculated: {}",
-                                    expected_accounts_lt_hash.0.checksum(),
-                                    calculated_accounts_lt_hash.0.checksum(),
+                        match verify_kind {
+                            VerifyKind::Lattice => {
+                                // accounts lt hash is *enabled* so use lattice-based verification
+                                let accounts_db = &accounts_.accounts_db;
+                                let (calculated_accounts_lt_hash, duration) =
+                                    meas_dur!(accounts_db.thread_pool_hash.install(|| {
+                                        accounts_db
+                                            .calculate_accounts_lt_hash_at_startup_from_storages(
+                                                snapshot_storages.0.as_slice(),
+                                                &duplicates_lt_hash.unwrap(),
+                                            )
+                                    }));
+                                if calculated_accounts_lt_hash != expected_accounts_lt_hash {
+                                    let expected = expected_accounts_lt_hash.0.checksum();
+                                    let calculated = calculated_accounts_lt_hash.0.checksum();
+                                    error!(
+                                        "Verifying accounts failed: accounts lattice hashes do not \
+                                         match, expected: {expected}, calculated: {calculated}",
+                                    );
+                                    return false;
+                                }
+                                lattice_verify_time = Some(duration);
+                            }
+                            VerifyKind::Merkle => {
+                                // accounts lt hash is *disabled* so use merkle-based verification
+                                let snapshot_storages_and_slots = (
+                                    snapshot_storages.0.as_slice(),
+                                    snapshot_storages.1.as_slice(),
                                 );
-                                return false;
+                                let (result, duration) = meas_dur!(accounts_
+                                    .verify_accounts_hash_and_lamports(
+                                        snapshot_storages_and_slots,
+                                        slot,
+                                        capitalization,
+                                        base,
+                                        VerifyAccountsHashAndLamportsConfig {
+                                            ancestors: &ancestors,
+                                            epoch_schedule: &epoch_schedule,
+                                            rent_collector: &rent_collector,
+                                            ..verify_config
+                                        },
+                                    ));
+                                if !result {
+                                    return false;
+                                }
+                                merkle_verify_time = Some(duration);
                             }
-                            lattice_verify_time = Some(duration);
-                        } else {
-                            // accounts lt hash is *disabled* so use merkle-based verification
-                            let snapshot_storages_and_slots = (
-                                snapshot_storages.0.as_slice(),
-                                snapshot_storages.1.as_slice(),
-                            );
-                            let (result, duration) = meas_dur!(accounts_
-                                .verify_accounts_hash_and_lamports(
-                                    snapshot_storages_and_slots,
-                                    slot,
-                                    capitalization,
-                                    base,
-                                    VerifyAccountsHashAndLamportsConfig {
-                                        ancestors: &ancestors,
-                                        epoch_schedule: &epoch_schedule,
-                                        rent_collector: &rent_collector,
-                                        ..verify_config
-                                    },
-                                ));
-                            if !result {
-                                return false;
-                            }
-                            merkle_verify_time = Some(duration);
                         }
                         accounts_
                             .accounts_db
@@ -5751,45 +5770,50 @@ impl Bank {
             });
             true // initial result is true. We haven't failed yet. If verification fails, we'll panic from bg thread.
         } else {
-            if is_accounts_lt_hash_enabled {
-                let expected_accounts_lt_hash = self.accounts_lt_hash.lock().unwrap().clone();
-                let calculated_accounts_lt_hash =
-                    if let Some(duplicates_lt_hash) = duplicates_lt_hash {
+            match verify_kind {
+                VerifyKind::Lattice => {
+                    let expected_accounts_lt_hash = self.accounts_lt_hash.lock().unwrap().clone();
+                    let calculated_accounts_lt_hash = if let Some(duplicates_lt_hash) =
+                        duplicates_lt_hash
+                    {
                         accounts
                             .accounts_db
                             .calculate_accounts_lt_hash_at_startup_from_storages(
                                 snapshot_storages.0.as_slice(),
-                                duplicates_lt_hash,
+                                &duplicates_lt_hash,
                             )
                     } else {
                         accounts
                             .accounts_db
                             .calculate_accounts_lt_hash_at_startup_from_index(&self.ancestors, slot)
                     };
-                if calculated_accounts_lt_hash != expected_accounts_lt_hash {
-                    error!(
-                        "Verifying accounts lt hash failed: hashes do not match, expected: {}, calculated: {}",
-                        expected_accounts_lt_hash.0.checksum(),
-                        calculated_accounts_lt_hash.0.checksum(),
-                    );
-                    return false;
+                    let is_ok = calculated_accounts_lt_hash == expected_accounts_lt_hash;
+                    if !is_ok {
+                        let expected = expected_accounts_lt_hash.0.checksum();
+                        let calculated = calculated_accounts_lt_hash.0.checksum();
+                        error!(
+                            "Verifying accounts failed: accounts lattice hashes do not \
+                             match, expected: {expected}, calculated: {calculated}",
+                        );
+                    }
+                    is_ok
                 }
-                // if we get here then the accounts lt hash is correct
+                VerifyKind::Merkle => {
+                    let snapshot_storages_and_slots = (
+                        snapshot_storages.0.as_slice(),
+                        snapshot_storages.1.as_slice(),
+                    );
+                    let result = accounts.verify_accounts_hash_and_lamports(
+                        snapshot_storages_and_slots,
+                        slot,
+                        capitalization,
+                        base,
+                        verify_config,
+                    );
+                    self.set_initial_accounts_hash_verification_completed();
+                    result
+                }
             }
-
-            let snapshot_storages_and_slots = (
-                snapshot_storages.0.as_slice(),
-                snapshot_storages.1.as_slice(),
-            );
-            let result = accounts.verify_accounts_hash_and_lamports(
-                snapshot_storages_and_slots,
-                slot,
-                capitalization,
-                base,
-                verify_config,
-            );
-            self.set_initial_accounts_hash_verification_completed();
-            result
         }
     }
 
@@ -6108,7 +6132,7 @@ impl Bank {
         force_clean: bool,
         latest_full_snapshot_slot: Slot,
         base: Option<(Slot, /*capitalization*/ u64)>,
-        duplicates_lt_hash: Option<&DuplicatesLtHash>,
+        duplicates_lt_hash: Option<Box<DuplicatesLtHash>>,
     ) -> bool {
         let (_, clean_time_us) = measure_us!({
             let should_clean = force_clean || (!skip_shrink && self.slot() > 0);

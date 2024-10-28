@@ -235,7 +235,7 @@ pub fn bank_from_snapshot_archives(
         accounts_db_force_initial_clean,
         full_snapshot_archive_info.slot(),
         base,
-        Some(&info.duplicates_lt_hash),
+        info.duplicates_lt_hash,
     ) && limit_load_slot_count_from_snapshot.is_none()
     {
         panic!("Snapshot bank for slot {} failed to verify", bank.slot());
@@ -548,7 +548,7 @@ fn deserialize_status_cache(
 /// This struct contains side-info from rebuilding the bank
 #[derive(Debug)]
 struct RebuiltBankInfo {
-    duplicates_lt_hash: Box<DuplicatesLtHash>,
+    duplicates_lt_hash: Option<Box<DuplicatesLtHash>>,
 }
 
 #[allow(clippy::too_many_arguments)]

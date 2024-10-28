@@ -691,7 +691,7 @@ pub struct IndexGenerationInfo {
     pub rent_paying_accounts_by_partition: RentPayingAccountsByPartition,
     /// The lt hash of the old/duplicate accounts identified during index generation.
     /// Will be used when verifying the accounts lt hash, after rebuilding a Bank.
-    pub duplicates_lt_hash: Box<DuplicatesLtHash>,
+    pub duplicates_lt_hash: Option<Box<DuplicatesLtHash>>,
 }
 
 #[derive(Debug, Default)]
@@ -8791,8 +8791,10 @@ impl AccountsDb {
                 self.accounts_index
                     .add_uncleaned_roots(uncleaned_roots.into_iter());
                 accounts_data_len.fetch_sub(accounts_data_len_from_duplicates, Ordering::Relaxed);
-                let old_val = outer_duplicates_lt_hash.replace(duplicates_lt_hash);
-                assert!(old_val.is_none());
+                if self.is_experimental_accumulator_hash_enabled() {
+                    let old_val = outer_duplicates_lt_hash.replace(duplicates_lt_hash);
+                    assert!(old_val.is_none());
+                }
                 info!(
                     "accounts data len: {}",
                     accounts_data_len.load(Ordering::Relaxed)
@@ -8830,7 +8832,7 @@ impl AccountsDb {
             rent_paying_accounts_by_partition: rent_paying_accounts_by_partition
                 .into_inner()
                 .unwrap(),
-            duplicates_lt_hash: outer_duplicates_lt_hash.unwrap(),
+            duplicates_lt_hash: outer_duplicates_lt_hash,
         }
     }
 

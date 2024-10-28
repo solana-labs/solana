@@ -549,7 +549,7 @@ pub(crate) fn fields_from_streams(
 /// This struct contains side-info while reconstructing the bank from streams
 #[derive(Debug)]
 pub struct BankFromStreamsInfo {
-    pub duplicates_lt_hash: Box<DuplicatesLtHash>,
+    pub duplicates_lt_hash: Option<Box<DuplicatesLtHash>>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -842,7 +842,7 @@ impl<'a> solana_frozen_abi::abi_example::TransparentAsHelper for SerializableAcc
 /// This struct contains side-info while reconstructing the bank from fields
 #[derive(Debug)]
 struct ReconstructedBankInfo {
-    duplicates_lt_hash: Box<DuplicatesLtHash>,
+    duplicates_lt_hash: Option<Box<DuplicatesLtHash>>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1037,7 +1037,7 @@ pub(crate) fn remap_and_reconstruct_single_storage(
 #[derive(Debug, Default, Clone)]
 pub struct ReconstructedAccountsDbInfo {
     pub accounts_data_len: u64,
-    pub duplicates_lt_hash: Box<DuplicatesLtHash>,
+    pub duplicates_lt_hash: Option<Box<DuplicatesLtHash>>,
 }
 
 #[allow(clippy::too_many_arguments)]
