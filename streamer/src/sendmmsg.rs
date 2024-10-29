@@ -3,8 +3,12 @@
 #[cfg(target_os = "linux")]
 use {
     itertools::izip,
-    libc::{iovec, mmsghdr, sockaddr_in, sockaddr_in6, sockaddr_storage},
-    std::os::unix::io::AsRawFd,
+    libc::{iovec, mmsghdr, msghdr, sockaddr_in, sockaddr_in6, sockaddr_storage, socklen_t},
+    std::{
+        mem::{self, MaybeUninit},
+        os::unix::io::AsRawFd,
+        ptr,
+    },
 };
 use {
     solana_sdk::transport::TransportError,
@@ -58,41 +62,51 @@ where
 fn mmsghdr_for_packet(
     packet: &[u8],
     dest: &SocketAddr,
-    iov: &mut iovec,
-    addr: &mut sockaddr_storage,
-    hdr: &mut mmsghdr,
+    iov: &mut MaybeUninit<iovec>,
+    addr: &mut MaybeUninit<sockaddr_storage>,
+    hdr: &mut MaybeUninit<mmsghdr>,
 ) {
-    const SIZE_OF_SOCKADDR_IN: usize = std::mem::size_of::<sockaddr_in>();
-    const SIZE_OF_SOCKADDR_IN6: usize = std::mem::size_of::<sockaddr_in6>();
+    const SIZE_OF_SOCKADDR_IN: usize = mem::size_of::<sockaddr_in>();
+    const SIZE_OF_SOCKADDR_IN6: usize = mem::size_of::<sockaddr_in6>();
 
-    *iov = iovec {
+    iov.write(iovec {
         iov_base: packet.as_ptr() as *mut libc::c_void,
         iov_len: packet.len(),
-    };
-    hdr.msg_hdr.msg_iov = iov;
-    hdr.msg_hdr.msg_iovlen = 1;
-    hdr.msg_hdr.msg_name = addr as *mut _ as *mut _;
+    });
 
-    match dest {
+    let msg_namelen = match dest {
         SocketAddr::V4(socket_addr_v4) => {
             unsafe {
-                std::ptr::write(
-                    addr as *mut _ as *mut _,
+                ptr::write(
+                    addr.as_mut_ptr() as *mut _,
                     *nix::sys::socket::SockaddrIn::from(*socket_addr_v4).as_ref(),
                 );
             }
-            hdr.msg_hdr.msg_namelen = SIZE_OF_SOCKADDR_IN as u32;
+            SIZE_OF_SOCKADDR_IN as socklen_t
         }
         SocketAddr::V6(socket_addr_v6) => {
             unsafe {
-                std::ptr::write(
-                    addr as *mut _ as *mut _,
+                ptr::write(
+                    addr.as_mut_ptr() as *mut _,
                     *nix::sys::socket::SockaddrIn6::from(*socket_addr_v6).as_ref(),
                 );
             }
-            hdr.msg_hdr.msg_namelen = SIZE_OF_SOCKADDR_IN6 as u32;
+            SIZE_OF_SOCKADDR_IN6 as socklen_t
         }
-    }
+    };
+
+    hdr.write(mmsghdr {
+        msg_len: 0,
+        msg_hdr: msghdr {
+            msg_name: addr as *mut _ as *mut _,
+            msg_namelen,
+            msg_iov: iov.as_mut_ptr(),
+            msg_iovlen: 1,
+            msg_control: ptr::null::<libc::c_void>() as *mut _,
+            msg_controllen: 0,
+            msg_flags: 0,
+        },
+    });
 }
 
 #[cfg(target_os = "linux")]
@@ -135,14 +149,20 @@ where
     T: AsRef<[u8]>,
 {
     let size = packets.len();
-    #[allow(clippy::uninit_assumed_init)]
-    let iovec = std::mem::MaybeUninit::<iovec>::uninit();
-    let mut iovs = vec![unsafe { iovec.assume_init() }; size];
-    let mut addrs = vec![unsafe { std::mem::zeroed() }; size];
-    let mut hdrs = vec![unsafe { std::mem::zeroed() }; size];
+    let mut iovs = vec![MaybeUninit::uninit(); size];
+    let mut addrs = vec![MaybeUninit::zeroed(); size];
+    let mut hdrs = vec![MaybeUninit::uninit(); size];
     for ((pkt, dest), hdr, iov, addr) in izip!(packets, &mut hdrs, &mut iovs, &mut addrs) {
         mmsghdr_for_packet(pkt.as_ref(), dest.borrow(), iov, addr, hdr);
     }
+    // mmsghdr_for_packet() performs initialization so we can safely transmute
+    // the Vecs to their initialized counterparts
+    let _iovs = unsafe { mem::transmute::<Vec<MaybeUninit<iovec>>, Vec<iovec>>(iovs) };
+    let _addrs = unsafe {
+        mem::transmute::<Vec<MaybeUninit<sockaddr_storage>>, Vec<sockaddr_storage>>(addrs)
+    };
+    let mut hdrs = unsafe { mem::transmute::<Vec<MaybeUninit<mmsghdr>>, Vec<mmsghdr>>(hdrs) };
+
     sendmmsg_retry(sock, &mut hdrs)
 }
 
