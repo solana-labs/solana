@@ -98,6 +98,15 @@ impl AccountsFile {
         }
     }
 
+    /// Return the total number of bytes of the zero lamport single ref accounts in the storage.
+    /// Those bytes are "dead" and can be shrunk away.
+    pub(crate) fn dead_bytes_due_to_zero_lamport_single_ref(&self, count: usize) -> usize {
+        match self {
+            Self::AppendVec(av) => av.dead_bytes_due_to_zero_lamport_single_ref(count),
+            Self::TieredStorage(ts) => ts.dead_bytes_due_to_zero_lamport_single_ref(count),
+        }
+    }
+
     pub fn flush(&self) -> Result<()> {
         match self {
             Self::AppendVec(av) => av.flush(),

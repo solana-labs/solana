@@ -708,6 +708,7 @@ struct SlotIndexGenerationInfo {
     accounts_data_len: u64,
     amount_to_top_off_rent: u64,
     rent_paying_accounts_by_partition: Vec<Pubkey>,
+    zero_lamport_pubkeys: Vec<Pubkey>,
     all_accounts_are_zero_lamports: bool,
 }
 
@@ -748,6 +749,8 @@ struct GenerateIndexTimings {
     pub total_slots: u64,
     pub slots_to_clean: u64,
     pub par_duplicates_lt_hash_us: AtomicU64,
+    pub visit_zero_lamports_us: u64,
+    pub num_zero_lamport_single_refs: u64,
     pub all_accounts_are_zero_lamports_slots: u64,
 }
 
@@ -828,6 +831,16 @@ impl GenerateIndexTimings {
             (
                 "par_duplicates_lt_hash_us",
                 self.par_duplicates_lt_hash_us.load(Ordering::Relaxed),
+                i64
+            ),
+            (
+                "num_zero_lamport_single_refs",
+                self.num_zero_lamport_single_refs as i64,
+                i64
+            ),
+            (
+                "visit_zero_lamports_us",
+                self.visit_zero_lamports_us as i64,
                 i64
             ),
             (
@@ -1176,6 +1189,18 @@ pub struct AccountStorageEntry {
     count_and_status: SeqLock<(usize, AccountStorageStatus)>,
 
     alive_bytes: AtomicUsize,
+
+    /// offsets to accounts that are zero lamport single ref stored in this
+    /// storage. These are still alive. But, shrink will be able to remove them.
+    ///
+    /// NOTE: It's possible that one of these zero lamport single ref accounts
+    /// could be written in a new transaction (and later rooted & flushed) and a
+    /// later clean runs and marks this account dead before this storage gets a
+    /// chance to be shrunk, thus making the account dead in both "alive_bytes"
+    /// and as a zero lamport single ref. If this happens, we will count this
+    /// account as "dead" twice. However, this should be fine. It just makes
+    /// shrink more likely to visit this storage.
+    zero_lamport_single_ref_offsets: RwLock<IntSet<Offset>>,
 }
 
 impl AccountStorageEntry {
@@ -1196,6 +1221,7 @@ impl AccountStorageEntry {
             accounts,
             count_and_status: SeqLock::new((0, AccountStorageStatus::Available)),
             alive_bytes: AtomicUsize::new(0),
+            zero_lamport_single_ref_offsets: RwLock::default(),
         }
     }
 
@@ -1213,6 +1239,7 @@ impl AccountStorageEntry {
             count_and_status: SeqLock::new(*count_and_status),
             alive_bytes: AtomicUsize::new(self.alive_bytes()),
             accounts,
+            zero_lamport_single_ref_offsets: RwLock::default(),
         })
     }
 
@@ -1228,6 +1255,7 @@ impl AccountStorageEntry {
             accounts,
             count_and_status: SeqLock::new((0, AccountStorageStatus::Available)),
             alive_bytes: AtomicUsize::new(0),
+            zero_lamport_single_ref_offsets: RwLock::default(),
         }
     }
 
@@ -1262,6 +1290,27 @@ impl AccountStorageEntry {
 
     pub fn alive_bytes(&self) -> usize {
         self.alive_bytes.load(Ordering::Acquire)
+    }
+
+    /// Return true if offset is "new" and inserted successfully. Otherwise,
+    /// return false if the offset exists already.
+    fn insert_zero_lamport_single_ref_account_offset(&self, offset: usize) -> bool {
+        let mut zero_lamport_single_ref_offsets =
+            self.zero_lamport_single_ref_offsets.write().unwrap();
+        zero_lamport_single_ref_offsets.insert(offset)
+    }
+
+    /// Return the number of zero_lamport_single_ref accounts in the storage.
+    fn num_zero_lamport_single_ref_accounts(&self) -> usize {
+        self.zero_lamport_single_ref_offsets.read().unwrap().len()
+    }
+
+    /// Return the "alive_bytes" minus "zero_lamport_single_ref_accounts bytes".
+    fn alive_bytes_exclude_zero_lamport_single_ref_accounts(&self) -> usize {
+        let zero_lamport_dead_bytes = self
+            .accounts
+            .dead_bytes_due_to_zero_lamport_single_ref(self.num_zero_lamport_single_ref_accounts());
+        self.alive_bytes().saturating_sub(zero_lamport_dead_bytes)
     }
 
     pub fn written_bytes(&self) -> u64 {
@@ -3713,19 +3762,34 @@ impl AccountsDb {
         self.accounts_index.scan(
             pubkeys,
             |pubkey, slot_refs, _entry| {
-                if slot_refs.is_none() {
-                    // We also expect that the accounts index must contain an
-                    // entry for `pubkey`. Log a warning for now. In future,
-                    // we will panic when this happens.
-                    warn!(
+                match slot_refs {
+                    Some((slot_list, ref_count)) => {
+                        // Let's handle the special case - after unref, the result is a single ref zero lamport account.
+                        if slot_list.len() == 1 && ref_count == 2 {
+                            if let Some((slot_alive, acct_info)) = slot_list.first() {
+                                if acct_info.is_zero_lamport() && !acct_info.is_cached() {
+                                    self.zero_lamport_single_ref_found(
+                                        *slot_alive,
+                                        acct_info.offset(),
+                                    );
+                                }
+                            }
+                        }
+                    }
+                    None => {
+                        // We also expect that the accounts index must contain an
+                        // entry for `pubkey`. Log a warning for now. In future,
+                        // we will panic when this happens.
+                        warn!(
                         "pubkey {pubkey} in slot {slot} was NOT found in accounts index during \
                          shrink"
                     );
-                    datapoint_warn!(
-                        "accounts_db-shink_pubkey_missing_from_index",
-                        ("store_slot", slot, i64),
-                        ("pubkey", pubkey.to_string(), String),
-                    )
+                        datapoint_warn!(
+                            "accounts_db-shink_pubkey_missing_from_index",
+                            ("store_slot", slot, i64),
+                            ("pubkey", pubkey.to_string(), String),
+                        );
+                    }
                 }
                 AccountsIndexScanResult::Unref
             },
@@ -3733,6 +3797,55 @@ impl AccountsDb {
             false,
             ScanFilter::All,
         );
+    }
+
+    /// This function handles the case when zero lamport single ref accounts are found during shrink.
+    pub(crate) fn zero_lamport_single_ref_found(&self, slot: Slot, offset: Offset) {
+        // This function can be called when a zero lamport single ref account is
+        // found during shrink. Therefore, we can't use the safe version of
+        // `get_slot_storage_entry` because shrink_in_progress map may not be
+        // empty. We have to use the unsafe version to avoid to assert failure.
+        // However, there is a possibility that the storage entry that we get is
+        // an old one, which is being shrunk away, because multiple slots can be
+        // shrunk away in parallel by thread pool. If this happens, any zero
+        // lamport single ref offset marked on the storage will be lost when the
+        // storage is dropped. However, this is not a problem, because after the
+        // storage being shrunk, the new storage will not have any zero lamport
+        // single ref account anyway. Therefore, we don't need to worry about
+        // marking zero lamport single ref offset on the new storage.
+        if let Some(store) = self
+            .storage
+            .get_slot_storage_entry_shrinking_in_progress_ok(slot)
+        {
+            if store.insert_zero_lamport_single_ref_account_offset(offset) {
+                // this wasn't previously marked as zero lamport single ref
+                self.shrink_stats
+                    .num_zero_lamport_single_ref_accounts_found
+                    .fetch_add(1, Ordering::Relaxed);
+
+                if store.num_zero_lamport_single_ref_accounts() == store.count() {
+                    // all accounts in this storage can be dead
+                    self.accounts_index.add_uncleaned_roots([slot]);
+                    self.shrink_stats
+                        .num_dead_slots_added_to_clean
+                        .fetch_add(1, Ordering::Relaxed);
+                } else if Self::is_shrinking_productive(&store)
+                    && self.is_candidate_for_shrink(&store)
+                {
+                    // this store might be eligible for shrinking now
+                    let is_new = self.shrink_candidate_slots.lock().unwrap().insert(slot);
+                    if is_new {
+                        self.shrink_stats
+                            .num_slots_with_zero_lamport_accounts_added_to_shrink
+                            .fetch_add(1, Ordering::Relaxed);
+                    }
+                } else {
+                    self.shrink_stats
+                        .marking_zero_dead_accounts_in_non_shrinkable_store
+                        .fetch_add(1, Ordering::Relaxed);
+                }
+            }
+        }
     }
 
     /// Shrinks `store` by rewriting the alive accounts to a new storage
@@ -7546,9 +7659,8 @@ impl AccountsDb {
 
     fn is_shrinking_productive(store: &AccountStorageEntry) -> bool {
         let alive_count = store.count();
-        let alive_bytes = store.alive_bytes() as u64;
         let total_bytes = store.capacity();
-
+        let alive_bytes = store.alive_bytes_exclude_zero_lamport_single_ref_accounts() as u64;
         if Self::should_not_shrink(alive_bytes, total_bytes) {
             trace!(
                 "shrink_slot_forced ({}): not able to shrink at all: num alive: {}, bytes alive: \
@@ -7578,12 +7690,12 @@ impl AccountsDb {
         } else {
             store.capacity()
         };
+
+        let alive_bytes = store.alive_bytes_exclude_zero_lamport_single_ref_accounts() as u64;
         match self.shrink_ratio {
-            AccountShrinkThreshold::TotalSpace { shrink_ratio: _ } => {
-                (store.alive_bytes() as u64) < total_bytes
-            }
+            AccountShrinkThreshold::TotalSpace { shrink_ratio: _ } => alive_bytes < total_bytes,
             AccountShrinkThreshold::IndividualStore { shrink_ratio } => {
-                (store.alive_bytes() as f64 / total_bytes as f64) < shrink_ratio
+                (alive_bytes as f64 / total_bytes as f64) < shrink_ratio
             }
         }
     }
@@ -7743,11 +7855,23 @@ impl AccountsDb {
                                 pubkeys_removed_from_accounts_index.contains(pubkey);
                             !already_removed
                         }),
-                    |_pubkey, _slots_refs, _entry| {
-                        /* unused */
+                    |_pubkey, slots_refs, _entry| {
+                        if let Some((slot_list, ref_count)) = slots_refs {
+                            // Let's handle the special case - after unref, the result is a single ref zero lamport account.
+                            if slot_list.len() == 1 && ref_count == 2 {
+                                if let Some((slot_alive, acct_info)) = slot_list.first() {
+                                    if acct_info.is_zero_lamport() && !acct_info.is_cached() {
+                                        self.zero_lamport_single_ref_found(
+                                            *slot_alive,
+                                            acct_info.offset(),
+                                        );
+                                    }
+                                }
+                            }
+                        }
                         AccountsIndexScanResult::Unref
                     },
-                    Some(AccountsIndexScanResult::Unref),
+                    None,
                     false,
                     ScanFilter::All,
                 )
@@ -8365,6 +8489,7 @@ impl AccountsDb {
         let mut num_accounts_rent_paying = 0;
         let mut amount_to_top_off_rent = 0;
         let mut stored_size_alive = 0;
+        let mut zero_lamport_pubkeys = vec![];
         let mut all_accounts_are_zero_lamports = true;
 
         let (dirty_pubkeys, insert_time_us, mut generate_index_results) = {
@@ -8374,6 +8499,9 @@ impl AccountsDb {
                 if info.index_info.lamports > 0 {
                     accounts_data_len += info.index_info.data_len;
                     all_accounts_are_zero_lamports = false;
+                } else {
+                    // zero lamport accounts
+                    zero_lamport_pubkeys.push(info.index_info.pubkey);
                 }
                 items_local.push(info.index_info);
             });
@@ -8458,6 +8586,7 @@ impl AccountsDb {
             accounts_data_len,
             amount_to_top_off_rent,
             rent_paying_accounts_by_partition,
+            zero_lamport_pubkeys,
             all_accounts_are_zero_lamports,
         }
     }
@@ -8486,6 +8615,7 @@ impl AccountsDb {
 
         let rent_paying_accounts_by_partition =
             Mutex::new(RentPayingAccountsByPartition::new(schedule));
+        let zero_lamport_pubkeys = Mutex::new(HashSet::new());
         let mut outer_duplicates_lt_hash = None;
 
         // pass == 0 always runs and generates the index
@@ -8552,6 +8682,7 @@ impl AccountsDb {
                                 amount_to_top_off_rent: amount_to_top_off_rent_this_slot,
                                 rent_paying_accounts_by_partition:
                                     rent_paying_accounts_by_partition_this_slot,
+                                zero_lamport_pubkeys: zero_pubkeys_this_slot,
                                 all_accounts_are_zero_lamports,
                             } = self.generate_index_for_slot(
                                 &storage,
@@ -8580,6 +8711,10 @@ impl AccountsDb {
                                 all_accounts_are_zero_lamports_slots_inner += 1;
                                 all_zeros_slots_inner.push((*slot, Arc::clone(&storage)));
                             }
+                            let mut zero_pubkeys = zero_lamport_pubkeys.lock().unwrap();
+                            zero_pubkeys_this_slot.into_iter().for_each(|k| {
+                                zero_pubkeys.insert(k);
+                            });
 
                             insert_us
                         } else {
@@ -8740,6 +8875,14 @@ impl AccountsDb {
                     }
                 }
 
+                let zero_lamport_pubkeys_to_visit =
+                    std::mem::take(&mut *zero_lamport_pubkeys.lock().unwrap());
+                let (num_zero_lamport_single_refs, visit_zero_lamports_us) = measure_us!(
+                    self.visit_zero_pubkeys_during_startup(&zero_lamport_pubkeys_to_visit)
+                );
+                timings.visit_zero_lamports_us = visit_zero_lamports_us;
+                timings.num_zero_lamport_single_refs = num_zero_lamport_single_refs;
+
                 // subtract data.len() from accounts_data_len for all old accounts that are in the index twice
                 let mut accounts_data_len_dedup_timer =
                     Measure::start("handle accounts data len duplicates");
@@ -8858,6 +9001,33 @@ impl AccountsDb {
             // callers of this are typically run in parallel, so many threads will be sleeping at different starting intervals, waiting to resume insertion.
             sleep(Duration::from_millis(10));
         }
+    }
+
+    /// Visit zero lamport pubkeys and populate zero_lamport_single_ref info on
+    /// storage.
+    /// Returns the number of zero lamport single ref accounts found.
+    fn visit_zero_pubkeys_during_startup(&self, pubkeys: &HashSet<Pubkey>) -> u64 {
+        let mut count = 0;
+        self.accounts_index.scan(
+            pubkeys.iter(),
+            |_pubkey, slots_refs, _entry| {
+                let (slot_list, ref_count) = slots_refs.unwrap();
+                if ref_count == 1 {
+                    assert_eq!(slot_list.len(), 1);
+                    let (slot_alive, account_info) = slot_list.first().unwrap();
+                    assert!(!account_info.is_cached());
+                    if account_info.is_zero_lamport() {
+                        count += 1;
+                        self.zero_lamport_single_ref_found(*slot_alive, account_info.offset());
+                    }
+                }
+                AccountsIndexScanResult::OnlyKeepInMemoryIfDirty
+            },
+            None,
+            false,
+            ScanFilter::All,
+        );
+        count
     }
 
     /// Used during generate_index() to:
@@ -9551,6 +9721,33 @@ pub mod tests {
     define_accounts_db_test!(test_generate_index_duplicates_within_slot_reverse, |db| {
         run_generate_index_duplicates_within_slot_test(db, true);
     });
+
+    #[test]
+    fn test_generate_index_for_single_ref_zero_lamport_slot() {
+        let db = AccountsDb::new_single_for_tests();
+        let slot0 = 0;
+        let pubkey = Pubkey::from([1; 32]);
+        let append_vec = db.create_and_insert_store(slot0, 1000, "test");
+        let account = AccountSharedData::default();
+
+        let data = [(&pubkey, &account)];
+        let storable_accounts = (slot0, &data[..]);
+        append_vec.accounts.append_accounts(&storable_accounts, 0);
+        let genesis_config = GenesisConfig::default();
+        assert!(!db.accounts_index.contains(&pubkey));
+        let result = db.generate_index(None, false, &genesis_config);
+        let entry = db.accounts_index.get_cloned(&pubkey).unwrap();
+        assert_eq!(entry.slot_list.read().unwrap().len(), 1);
+        assert_eq!(append_vec.alive_bytes(), aligned_stored_size(0));
+        assert_eq!(append_vec.accounts_count(), 1);
+        assert_eq!(append_vec.count(), 1);
+        assert_eq!(result.accounts_data_len, 0);
+        assert_eq!(1, append_vec.num_zero_lamport_single_ref_accounts());
+        assert_eq!(
+            0,
+            append_vec.alive_bytes_exclude_zero_lamport_single_ref_accounts()
+        );
+    }
 
     fn generate_sample_account_from_storage(i: u8) -> AccountFromStorage {
         // offset has to be 8 byte aligned
@@ -13556,6 +13753,73 @@ pub mod tests {
         });
     });
 
+    // Test alive_bytes_exclude_zero_lamport_single_ref_accounts calculation
+    define_accounts_db_test!(
+        test_alive_bytes_exclude_zero_lamport_single_ref_accounts,
+        |accounts_db| {
+            let slot: Slot = 0;
+            let num_keys = 10;
+            let mut pubkeys = vec![];
+
+            // populate storage with zero lamport single ref (zlsr) accounts
+            for _i in 0..num_keys {
+                let zero_account =
+                    AccountSharedData::new(0, 0, AccountSharedData::default().owner());
+
+                let key = Pubkey::new_unique();
+                accounts_db.store_cached((slot, &[(&key, &zero_account)][..]), None);
+                pubkeys.push(key);
+            }
+
+            accounts_db.add_root(slot);
+            accounts_db.flush_accounts_cache(true, None);
+
+            // Flushing cache should only create one storage entry
+            let storage = accounts_db.get_and_assert_single_storage(slot);
+            let alive_bytes = storage.alive_bytes();
+            assert!(alive_bytes > 0);
+
+            // scan the accounts to track zlsr accounts
+            accounts_db.accounts_index.scan(
+                pubkeys.iter(),
+                |_pubkey, slots_refs, _entry| {
+                    let (slot_list, ref_count) = slots_refs.unwrap();
+                    assert_eq!(slot_list.len(), 1);
+                    assert_eq!(ref_count, 1);
+
+                    let (slot, acct_info) = slot_list.first().unwrap();
+                    assert_eq!(*slot, 0);
+                    accounts_db.zero_lamport_single_ref_found(*slot, acct_info.offset());
+                    AccountsIndexScanResult::OnlyKeepInMemoryIfDirty
+                },
+                None,
+                false,
+                ScanFilter::All,
+            );
+
+            // assert the number of zlsr accounts
+            assert_eq!(storage.num_zero_lamport_single_ref_accounts(), num_keys);
+
+            // assert the "alive_bytes_exclude_zero_lamport_single_ref_accounts"
+            match accounts_db.accounts_file_provider {
+                AccountsFileProvider::AppendVec => {
+                    assert_eq!(
+                        storage.alive_bytes_exclude_zero_lamport_single_ref_accounts(),
+                        0
+                    );
+                }
+                AccountsFileProvider::HotStorage => {
+                    // For tired-storage, alive bytes are only an approximation.
+                    // Therefore, it won't be zero.
+                    assert!(
+                        storage.alive_bytes_exclude_zero_lamport_single_ref_accounts()
+                            < alive_bytes
+                    );
+                }
+            }
+        }
+    );
+
     fn setup_accounts_db_cache_clean(
         num_slots: usize,
         scan_slot: Option<Slot>,
@@ -14032,6 +14296,148 @@ pub mod tests {
     #[test]
     fn test_shrink_unref_with_intra_slot_cleaning() {
         run_test_shrink_unref(true)
+    }
+
+    #[test]
+    fn test_clean_drop_dead_zero_lamport_single_ref_accounts() {
+        let accounts_db = AccountsDb::new_single_for_tests();
+        let epoch_schedule = EpochSchedule::default();
+        let key1 = Pubkey::new_unique();
+
+        let zero_account = AccountSharedData::new(0, 0, AccountSharedData::default().owner());
+        let one_account = AccountSharedData::new(1, 0, AccountSharedData::default().owner());
+
+        // slot 0 - stored a 1-lamport account
+        let slot = 0;
+        accounts_db.store_cached((slot, &[(&key1, &one_account)][..]), None);
+        accounts_db.add_root(slot);
+
+        // slot 1 - store a 0 -lamport account
+        let slot = 1;
+        accounts_db.store_cached((slot, &[(&key1, &zero_account)][..]), None);
+        accounts_db.add_root(slot);
+
+        accounts_db.flush_accounts_cache(true, None);
+        accounts_db.calculate_accounts_delta_hash(0);
+        accounts_db.calculate_accounts_delta_hash(1);
+
+        // run clean
+        accounts_db.clean_accounts(Some(1), false, &epoch_schedule);
+
+        // After clean, both slot0 and slot1 should be marked dead and dropped
+        // from the store map.
+        assert!(accounts_db.storage.get_slot_storage_entry(0).is_none());
+        assert!(accounts_db.storage.get_slot_storage_entry(1).is_none());
+    }
+
+    #[test]
+    fn test_clean_drop_dead_storage_handle_zero_lamport_single_ref_accounts() {
+        let db = AccountsDb::new_single_for_tests();
+        let account_key1 = Pubkey::new_unique();
+        let account_key2 = Pubkey::new_unique();
+        let account1 = AccountSharedData::new(1, 0, AccountSharedData::default().owner());
+        let account0 = AccountSharedData::new(0, 0, AccountSharedData::default().owner());
+
+        // Store into slot 0
+        db.store_uncached(0, &[(&account_key1, &account1)][..]);
+        db.add_root(0);
+
+        // Make account_key1 in slot 0 outdated by updating in rooted slot 1 with a zero lamport account
+        // And store one additional live account to make the store still alive after clean.
+        db.store_cached((1, &[(&account_key1, &account0)][..]), None);
+        db.store_cached((1, &[(&account_key2, &account1)][..]), None);
+        db.add_root(1);
+        // Flushes all roots
+        db.flush_accounts_cache(true, None);
+        db.calculate_accounts_delta_hash(0);
+        db.calculate_accounts_delta_hash(1);
+
+        // Clean should mark slot 0 dead and drop it. During the dropping, it
+        // will find that slot 1 has a single ref zero accounts and mark it.
+        db.clean_accounts(Some(1), false, &EpochSchedule::default());
+
+        // Assert that after clean, slot 0 is dropped.
+        assert!(db.storage.get_slot_storage_entry(0).is_none());
+
+        // And slot 1's single ref zero accounts is marked. Because slot 1 still
+        // has one other alive account, it is not completely dead. So it won't
+        // be a candidate for "clean" to drop. Instead, it becomes a candidate
+        // for next round shrinking.
+        assert_eq!(db.accounts_index.ref_count_from_storage(&account_key1), 1);
+        assert_eq!(
+            db.get_and_assert_single_storage(1)
+                .num_zero_lamport_single_ref_accounts(),
+            1
+        );
+        assert!(db.shrink_candidate_slots.lock().unwrap().contains(&1));
+    }
+
+    #[test]
+    fn test_shrink_unref_handle_zero_lamport_single_ref_accounts() {
+        let db = AccountsDb::new_single_for_tests();
+        let epoch_schedule = EpochSchedule::default();
+        let account_key1 = Pubkey::new_unique();
+        let account_key2 = Pubkey::new_unique();
+        let account1 = AccountSharedData::new(1, 0, AccountSharedData::default().owner());
+        let account0 = AccountSharedData::new(0, 0, AccountSharedData::default().owner());
+
+        // Store into slot 0
+        db.store_uncached(0, &[(&account_key1, &account1)][..]);
+        db.store_uncached(0, &[(&account_key2, &account1)][..]);
+        db.add_root(0);
+
+        // Make account_key1 in slot 0 outdated by updating in rooted slot 1 with a zero lamport account
+        db.store_cached((1, &[(&account_key1, &account0)][..]), None);
+        db.add_root(1);
+        // Flushes all roots
+        db.flush_accounts_cache(true, None);
+        db.calculate_accounts_delta_hash(0);
+        db.calculate_accounts_delta_hash(1);
+
+        // Clean to remove outdated entry from slot 0
+        db.clean_accounts(Some(1), false, &EpochSchedule::default());
+
+        // Shrink Slot 0
+        {
+            let mut shrink_candidate_slots = db.shrink_candidate_slots.lock().unwrap();
+            shrink_candidate_slots.insert(0);
+        }
+        db.shrink_candidate_slots(&epoch_schedule);
+
+        // After shrink slot 0, check that the zero_lamport account on slot 1
+        // should be marked since it become singe_ref.
+        assert_eq!(db.accounts_index.ref_count_from_storage(&account_key1), 1);
+        assert_eq!(
+            db.get_and_assert_single_storage(1)
+                .num_zero_lamport_single_ref_accounts(),
+            1
+        );
+        // And now, slot 1 should be marked complete dead, which will be added
+        // to uncleaned slots, which handle dropping dead storage. And it WON'T
+        // be participating shrinking in the next round.
+        assert!(db.accounts_index.clone_uncleaned_roots().contains(&1));
+        assert!(!db.shrink_candidate_slots.lock().unwrap().contains(&1));
+
+        // Now, make slot 0 dead by updating the remaining key
+        db.store_cached((2, &[(&account_key2, &account1)][..]), None);
+        db.add_root(2);
+
+        // Flushes all roots
+        db.flush_accounts_cache(true, None);
+
+        // Should be one store before clean for slot 0 and slot 1
+        db.get_and_assert_single_storage(0);
+        db.get_and_assert_single_storage(1);
+        db.calculate_accounts_delta_hash(2);
+        db.clean_accounts(Some(2), false, &EpochSchedule::default());
+
+        // No stores should exist for slot 0 after clean
+        assert_no_storages_at_slot(&db, 0);
+        // No store should exit for slot 1 too as it has only a zero lamport single ref account.
+        assert_no_storages_at_slot(&db, 1);
+        // Store 2 should have a single account.
+        assert_eq!(db.accounts_index.ref_count_from_storage(&account_key2), 1);
+        db.get_and_assert_single_storage(2);
     }
 
     define_accounts_db_test!(test_partial_clean, |db| {

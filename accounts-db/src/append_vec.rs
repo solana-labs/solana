@@ -409,6 +409,10 @@ impl AppendVec {
         }
     }
 
+    pub fn dead_bytes_due_to_zero_lamport_single_ref(&self, count: usize) -> usize {
+        aligned_stored_size(0) * count
+    }
+
     pub fn flush(&self) -> Result<()> {
         match &self.backing {
             AppendVecFileBacking::Mmap(mmap_only) => {
