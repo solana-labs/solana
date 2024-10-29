@@ -24,8 +24,8 @@ mod tests {
         solana_accounts_db::{
             account_storage::{AccountStorageMap, AccountStorageReference},
             accounts_db::{
-                get_temp_accounts_paths, AccountStorageEntry, AccountsDb, AtomicAccountsFileId,
-                ACCOUNTS_DB_CONFIG_FOR_TESTING,
+                get_temp_accounts_paths, AccountStorageEntry, AccountsDb, AccountsDbConfig,
+                AtomicAccountsFileId, ACCOUNTS_DB_CONFIG_FOR_TESTING,
             },
             accounts_file::{AccountsFile, AccountsFileError, StorageAccess},
             accounts_hash::{AccountsDeltaHash, AccountsHash},
@@ -96,16 +96,24 @@ mod tests {
         let storage_access_iter = [StorageAccess::Mmap, StorageAccess::File].into_iter();
         let has_incremental_snapshot_persistence_iter = [false, true].into_iter();
         let has_epoch_accounts_hash_iter = [false, true].into_iter();
+        let has_accounts_lt_hash_iter = [false, true].into_iter();
 
-        for (storage_access, has_incremental_snapshot_persistence, has_epoch_accounts_hash) in itertools::iproduct!(
+        for (
+            storage_access,
+            has_incremental_snapshot_persistence,
+            has_epoch_accounts_hash,
+            has_accounts_lt_hash,
+        ) in itertools::iproduct!(
             storage_access_iter,
             has_incremental_snapshot_persistence_iter,
-            has_epoch_accounts_hash_iter
+            has_epoch_accounts_hash_iter,
+            has_accounts_lt_hash_iter
         ) {
             do_serialize_bank_snapshot(
                 storage_access,
                 has_incremental_snapshot_persistence,
                 has_epoch_accounts_hash,
+                has_accounts_lt_hash,
             );
         }
 
@@ -113,10 +121,16 @@ mod tests {
             storage_access: StorageAccess,
             has_incremental_snapshot_persistence: bool,
             has_epoch_accounts_hash: bool,
+            has_accounts_lt_hash: bool,
         ) {
             let (mut genesis_config, _) = create_genesis_config(500);
             genesis_config.epoch_schedule = EpochSchedule::custom(400, 400, false);
             let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
+            bank0
+                .rc
+                .accounts
+                .accounts_db
+                .set_is_experimental_accumulator_hash_enabled(has_accounts_lt_hash);
             let deposit_amount = bank0.get_minimum_balance_for_rent_exemption(0);
             let eah_start_slot = epoch_accounts_hash_utils::calculation_start(&bank0);
             let bank1 = Bank::new_from_parent(bank0.clone(), &Pubkey::default(), 1);
@@ -166,6 +180,8 @@ mod tests {
                     .set_valid(epoch_accounts_hash, eah_start_slot);
                 epoch_accounts_hash
             });
+            let expected_accounts_lt_hash =
+                has_accounts_lt_hash.then(|| bank2.accounts_lt_hash.lock().unwrap().clone());
 
             // Only if a bank was recently recreated from a snapshot will it have an epoch stakes entry
             // of type "delegations" which cannot be serialized into the versioned epoch stakes map. Simulate
@@ -202,6 +218,7 @@ mod tests {
                 assert!(!bank_fields.versioned_epoch_stakes.is_empty());
 
                 let versioned_epoch_stakes = mem::take(&mut bank_fields.versioned_epoch_stakes);
+                let accounts_lt_hash = bank_fields.accounts_lt_hash.clone().map(Into::into);
                 serde_snapshot::serialize_bank_snapshot_into(
                     &mut writer,
                     bank_fields,
@@ -215,6 +232,7 @@ mod tests {
                             .as_ref(),
                         epoch_accounts_hash: expected_epoch_accounts_hash,
                         versioned_epoch_stakes,
+                        accounts_lt_hash,
                     },
                     accounts_db.write_version.load(Ordering::Acquire),
                 )
@@ -237,6 +255,10 @@ mod tests {
                 full_snapshot_stream: &mut reader,
                 incremental_snapshot_stream: None,
             };
+            let accounts_db_config = AccountsDbConfig {
+                enable_experimental_accumulator_hash: has_accounts_lt_hash,
+                ..ACCOUNTS_DB_CONFIG_FOR_TESTING
+            };
             let (dbank, _) = serde_snapshot::bank_from_streams(
                 &mut snapshot_streams,
                 &dbank_paths,
@@ -247,7 +269,7 @@ mod tests {
                 None,
                 None,
                 false,
-                Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
+                Some(accounts_db_config),
                 None,
                 Arc::default(),
             )
@@ -275,6 +297,14 @@ mod tests {
             assert_eq!(
                 dbank.get_epoch_accounts_hash_to_serialize(),
                 expected_epoch_accounts_hash,
+            );
+            assert_eq!(
+                dbank.is_accounts_lt_hash_enabled().then(|| dbank
+                    .accounts_lt_hash
+                    .lock()
+                    .unwrap()
+                    .clone()),
+                expected_accounts_lt_hash,
             );
 
             assert_eq!(dbank, bank2);
@@ -510,8 +540,10 @@ mod tests {
             super::*,
             solana_accounts_db::{
                 account_storage::meta::StoredMetaWriteVersion, accounts_db::stats::BankHashStats,
+                accounts_hash::AccountsLtHash,
             },
             solana_frozen_abi::abi_example::AbiExample,
+            solana_lattice_hash::lt_hash::LtHash,
             solana_sdk::clock::Slot,
             std::marker::PhantomData,
         };
@@ -537,7 +569,7 @@ mod tests {
         #[cfg_attr(
             feature = "frozen-abi",
             derive(AbiExample),
-            frozen_abi(digest = "WZPdQsksD18CRLSPKbinaMU8uZ5zov3iHJMMNvcamMY")
+            frozen_abi(digest = "EEpMTdTGYGixHBVVtQM2yUJirUiMFMWxNdhABfdscpYW")
         )]
         #[derive(Serialize)]
         pub struct BankAbiTestWrapper {
@@ -576,6 +608,7 @@ mod tests {
                     incremental_snapshot_persistence: Some(&incremental_snapshot_persistence),
                     epoch_accounts_hash: Some(EpochAccountsHash::new(Hash::new_unique())),
                     versioned_epoch_stakes,
+                    accounts_lt_hash: Some(AccountsLtHash(LtHash::identity()).into()),
                 },
                 StoredMetaWriteVersion::default(),
             )

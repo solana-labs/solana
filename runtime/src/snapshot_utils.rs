@@ -884,6 +884,7 @@ fn serialize_snapshot(
                 incremental_snapshot_persistence: bank_incremental_snapshot_persistence,
                 epoch_accounts_hash,
                 versioned_epoch_stakes,
+                accounts_lt_hash: bank_fields.accounts_lt_hash.clone().map(Into::into),
             };
             serde_snapshot::serialize_bank_snapshot_into(
                 stream,
