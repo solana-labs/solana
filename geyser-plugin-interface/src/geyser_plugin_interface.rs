@@ -339,7 +339,7 @@ impl SlotStatus {
             SlotStatus::Confirmed => "confirmed",
             SlotStatus::Processed => "processed",
             SlotStatus::Rooted => "rooted",
-            SlotStatus::FirstShredReceived => "first_shread_received",
+            SlotStatus::FirstShredReceived => "first_shred_received",
             SlotStatus::Completed => "completed",
             SlotStatus::CreatedBank => "created_bank",
             SlotStatus::Dead(_error) => "dead",
