@@ -5,6 +5,7 @@ use {
         crate_description, crate_name, value_t, value_t_or_exit, App, AppSettings, Arg, ArgMatches,
         SubCommand,
     },
+    log::{error, info},
     solana_clap_utils::{
         hidden_unless_forced,
         input_parsers::{keypair_of, pubkeys_of},
@@ -216,6 +217,27 @@ fn process_spy_results(
     }
 }
 
+fn get_entrypoint_shred_version(entrypoint: &Option<SocketAddr>) -> Option<u16> {
+    let Some(entrypoint) = entrypoint else {
+        error!("cannot obtain shred-version without an entrypoint");
+        return None;
+    };
+    match solana_net_utils::get_cluster_shred_version(entrypoint) {
+        Err(err) => {
+            error!("get_cluster_shred_version failed: {entrypoint}, {err}");
+            None
+        }
+        Ok(0) => {
+            error!("entrypoint {entrypoint} returned shred-version zero");
+            None
+        }
+        Ok(shred_version) => {
+            info!("obtained shred-version {shred_version} from entrypoint: {entrypoint}");
+            Some(shred_version)
+        }
+    }
+}
+
 fn process_spy(matches: &ArgMatches, socket_addr_space: SocketAddrSpace) -> std::io::Result<()> {
     let num_nodes_exactly = matches
         .value_of("num_nodes_exactly")
@@ -228,10 +250,15 @@ fn process_spy(matches: &ArgMatches, socket_addr_space: SocketAddrSpace) -> std:
         .value_of("timeout")
         .map(|secs| secs.to_string().parse().unwrap());
     let pubkeys = pubkeys_of(matches, "node_pubkey");
-    let shred_version = value_t_or_exit!(matches, "shred_version", u16);
     let identity_keypair = keypair_of(matches, "identity");
     let entrypoint_addr = parse_entrypoint(matches);
     let gossip_addr = get_gossip_address(matches, entrypoint_addr);
+
+    let mut shred_version = value_t_or_exit!(matches, "shred_version", u16);
+    if shred_version == 0 {
+        shred_version = get_entrypoint_shred_version(&entrypoint_addr)
+            .expect("need non-zero shred-version to join the cluster");
+    }
 
     let discover_timeout = Duration::from_secs(timeout.unwrap_or(u64::MAX));
     let (_all_peers, validators) = discover(
@@ -273,9 +300,14 @@ fn process_rpc_url(
     let any = matches.is_present("any");
     let all = matches.is_present("all");
     let timeout = value_t_or_exit!(matches, "timeout", u64);
-    let shred_version = value_t_or_exit!(matches, "shred_version", u16);
     let entrypoint_addr = parse_entrypoint(matches);
     let gossip_addr = get_gossip_address(matches, entrypoint_addr);
+
+    let mut shred_version = value_t_or_exit!(matches, "shred_version", u16);
+    if shred_version == 0 {
+        shred_version = get_entrypoint_shred_version(&entrypoint_addr)
+            .expect("need non-zero shred-version to join the cluster");
+    }
 
     let (_all_peers, validators) = discover(
         None, // keypair
