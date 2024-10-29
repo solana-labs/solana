@@ -13,12 +13,14 @@ edition = { workspace = true }
 serde = { workspace = true, optional = true }
 serde_derive = { workspace = true, optional = true }
 solana-hash = { workspace = true, default-features = false }
+solana-sysvar-id = { workspace = true, optional = true }
 
 [dev-dependencies]
 solana-sha256-hasher = { workspace = true }
 
 [features]
 serde = ["dep:serde", "dep:serde_derive", "solana-hash/serde"]
+sysvar = ["dep:solana-sysvar-id"]
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

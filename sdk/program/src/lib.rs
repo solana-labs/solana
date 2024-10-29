@@ -606,6 +606,8 @@ pub mod sdk_ids {
 #[deprecated(since = "2.1.0", note = "Use `solana-decode-error` crate instead")]
 pub use solana_decode_error as decode_error;
 pub use solana_pubkey::{declare_deprecated_id, declare_id, pubkey};
+#[deprecated(since = "2.1.0", note = "Use `solana-sysvar-id` crate instead")]
+pub use solana_sysvar_id::{declare_deprecated_sysvar_id, declare_sysvar_id};
 
 #[macro_use]
 extern crate serde_derive;

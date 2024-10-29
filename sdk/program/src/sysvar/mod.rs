@@ -82,6 +82,10 @@
 //! [sysvardoc]: https://docs.solanalabs.com/runtime/sysvars
 
 use crate::{account_info::AccountInfo, program_error::ProgramError, pubkey::Pubkey};
+#[deprecated(since = "2.1.0", note = "Use `solana-sysvar-id` crate instead")]
+pub use solana_sysvar_id::{
+    check_id, declare_deprecated_sysvar_id, declare_sysvar_id, id, SysvarId, ID,
+};
 #[allow(deprecated)]
 pub use sysvar_ids::ALL_IDS;
 
@@ -131,56 +135,6 @@ mod sysvar_ids {
 #[allow(deprecated)]
 pub fn is_sysvar_id(id: &Pubkey) -> bool {
     ALL_IDS.iter().any(|key| key == id)
-}
-
-/// Declares an ID that implements [`SysvarId`].
-#[macro_export]
-macro_rules! declare_sysvar_id(
-    ($name:expr, $type:ty) => (
-        $crate::declare_id!($name);
-
-        impl $crate::sysvar::SysvarId for $type {
-            fn id() -> $crate::pubkey::Pubkey {
-                id()
-            }
-
-            fn check_id(pubkey: &$crate::pubkey::Pubkey) -> bool {
-                check_id(pubkey)
-            }
-        }
-    )
-);
-
-/// Same as [`declare_sysvar_id`] except that it reports that this ID has been deprecated.
-#[macro_export]
-macro_rules! declare_deprecated_sysvar_id(
-    ($name:expr, $type:ty) => (
-        $crate::declare_deprecated_id!($name);
-
-        impl $crate::sysvar::SysvarId for $type {
-            fn id() -> $crate::pubkey::Pubkey {
-                #[allow(deprecated)]
-                id()
-            }
-
-            fn check_id(pubkey: &$crate::pubkey::Pubkey) -> bool {
-                #[allow(deprecated)]
-                check_id(pubkey)
-            }
-        }
-    )
-);
-
-// Owner pubkey for sysvar accounts
-crate::declare_id!("Sysvar1111111111111111111111111111111111111");
-
-/// A type that holds sysvar data and has an associated sysvar `Pubkey`.
-pub trait SysvarId {
-    /// The `Pubkey` of the sysvar.
-    fn id() -> Pubkey;
-
-    /// Returns `true` if the given pubkey is the program ID.
-    fn check_id(pubkey: &Pubkey) -> bool;
 }
 
 /// A type that holds sysvar data.

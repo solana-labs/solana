@@ -20,6 +20,10 @@
 //!
 //! [oracle]: https://docs.solanalabs.com/implemented-proposals/validator-timestamp-oracle
 #![no_std]
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+
+#[cfg(feature = "sysvar")]
+pub mod sysvar;
 
 #[cfg(feature = "serde")]
 use serde_derive::{Deserialize, Serialize};

@@ -36,10 +36,10 @@ solana-account-info = { workspace = true, features = ["bincode"] }
 solana-atomic-u64 = { workspace = true }
 solana-bincode = { workspace = true }
 solana-borsh = { workspace = true, optional = true }
-solana-clock = { workspace = true, features = ["serde"] }
+solana-clock = { workspace = true, features = ["serde", "sysvar"] }
 solana-cpi = { workspace = true }
 solana-decode-error = { workspace = true }
-solana-epoch-schedule = { workspace = true, features = ["serde"] }
+solana-epoch-schedule = { workspace = true, features = ["serde", "sysvar"] }
 solana-fee-calculator = { workspace = true, features = ["serde"] }
 solana-frozen-abi = { workspace = true, optional = true, features = ["frozen-abi"] }
 solana-frozen-abi-macro = { workspace = true, optional = true, features = ["frozen-abi"] }
@@ -53,7 +53,7 @@ solana-instruction = { workspace = true, default-features = false, features = [
     "serde",
     "std",
 ] }
-solana-last-restart-slot = { workspace = true, features = ["serde"] }
+solana-last-restart-slot = { workspace = true, features = ["serde", "sysvar"] }
 solana-msg = { workspace = true }
 solana-native-token = { workspace = true }
 solana-program-entrypoint = { workspace = true }
@@ -62,7 +62,7 @@ solana-program-memory = { workspace = true }
 solana-program-option = { workspace = true }
 solana-program-pack = { workspace = true }
 solana-pubkey = { workspace = true, features = ["bytemuck", "curve25519", "serde", "std"] }
-solana-rent = { workspace = true, features = ["serde"] }
+solana-rent = { workspace = true, features = ["serde", "sysvar"] }
 solana-sanitize = { workspace = true }
 solana-sdk-macro = { workspace = true }
 solana-secp256k1-recover = { workspace = true }
@@ -70,9 +70,10 @@ solana-serde-varint = { workspace = true }
 solana-serialize-utils = { workspace = true }
 solana-sha256-hasher = { workspace = true, features = ["sha2"] }
 solana-short-vec = { workspace = true }
-solana-slot-hashes = { workspace = true, features = ["serde"] }
-solana-slot-history = { workspace = true, features = ["serde"] }
+solana-slot-hashes = { workspace = true, features = ["serde", "sysvar"] }
+solana-slot-history = { workspace = true, features = ["serde", "sysvar"] }
 solana-stable-layout = { workspace = true }
+solana-sysvar-id = { workspace = true }
 thiserror = { workspace = true }
 
 # This is currently needed to build on-chain programs reliably.

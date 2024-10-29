@@ -5087,6 +5087,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "solana-sdk-macro",
+ "solana-sysvar-id",
 ]
 
 [[package]]
@@ -5320,6 +5321,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "solana-sdk-macro",
+ "solana-sysvar-id",
 ]
 
 [[package]]
@@ -5513,6 +5515,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "solana-sdk-macro",
+ "solana-sysvar-id",
 ]
 
 [[package]]
@@ -5823,6 +5826,7 @@ dependencies = [
  "solana-slot-hashes",
  "solana-slot-history",
  "solana-stable-layout",
+ "solana-sysvar-id",
  "solana-transaction-error",
  "thiserror",
  "wasm-bindgen",
@@ -6038,6 +6042,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "solana-sdk-macro",
+ "solana-sysvar-id",
 ]
 
 [[package]]
@@ -6899,6 +6904,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "solana-hash",
+ "solana-sysvar-id",
 ]
 
 [[package]]
@@ -6908,6 +6914,7 @@ dependencies = [
  "bv",
  "serde",
  "serde_derive",
+ "solana-sysvar-id",
 ]
 
 [[package]]
@@ -7071,6 +7078,13 @@ dependencies = [
  "solana-program-runtime",
  "solana-sdk",
  "solana-type-overrides",
+]
+
+[[package]]
+name = "solana-sysvar-id"
+version = "2.2.0"
+dependencies = [
+ "solana-pubkey",
 ]
 
 [[package]]

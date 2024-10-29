@@ -38,7 +38,7 @@
 //!     Ok(())
 //! }
 //! #
-//! # use solana_program::sysvar::SysvarId;
+//! # use solana_sysvar_id::SysvarId;
 //! # let p = Clock::id();
 //! # let l = &mut 1169280;
 //! # let d = &mut vec![240, 153, 233, 7, 0, 0, 0, 0, 11, 115, 118, 98, 0, 0, 0, 0, 51, 1, 0, 0, 0, 0, 0, 0, 52, 1, 0, 0, 0, 0, 0, 0, 121, 50, 119, 98, 0, 0, 0, 0];
@@ -81,7 +81,7 @@
 //!     Ok(())
 //! }
 //! #
-//! # use solana_program::sysvar::SysvarId;
+//! # use solana_sysvar_id::SysvarId;
 //! # let p = Clock::id();
 //! # let l = &mut 1169280;
 //! # let d = &mut vec![240, 153, 233, 7, 0, 0, 0, 0, 11, 115, 118, 98, 0, 0, 0, 0, 51, 1, 0, 0, 0, 0, 0, 0, 52, 1, 0, 0, 0, 0, 0, 0, 121, 50, 119, 98, 0, 0, 0, 0];
@@ -127,9 +127,10 @@
 //! ```
 
 use crate::{impl_sysvar_get, program_error::ProgramError, sysvar::Sysvar};
-pub use solana_clock::Clock;
-
-crate::declare_sysvar_id!("SysvarC1ock11111111111111111111111111111111", Clock);
+pub use solana_clock::{
+    sysvar::{check_id, id, ID},
+    Clock,
+};
 
 impl Sysvar for Clock {
     impl_sysvar_get!(sol_get_clock_sysvar);

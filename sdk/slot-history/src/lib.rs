@@ -9,6 +9,9 @@
 #![allow(clippy::arithmetic_side_effects)]
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
 
+#[cfg(feature = "sysvar")]
+pub mod sysvar;
+
 use bv::{BitVec, BitsMut};
 
 /// A bitvector indicating which slots are present in the past epoch.

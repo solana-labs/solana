@@ -17,6 +17,9 @@
 #[cfg(feature = "frozen-abi")]
 extern crate std;
 
+#[cfg(feature = "sysvar")]
+pub mod sysvar;
+
 #[cfg(feature = "serde")]
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk_macro::CloneZeroed;

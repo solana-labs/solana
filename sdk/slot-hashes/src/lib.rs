@@ -6,6 +6,9 @@
 //!
 //! [`solana_program::sysvar::slot_hashes`]: https://docs.rs/solana-program/latest/solana_program/sysvar/slot_hashes/index.html
 
+#[cfg(feature = "sysvar")]
+pub mod sysvar;
+
 use {
     solana_hash::Hash,
     std::{

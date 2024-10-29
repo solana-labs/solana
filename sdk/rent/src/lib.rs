@@ -8,6 +8,9 @@
 #[cfg(feature = "frozen-abi")]
 extern crate std;
 
+#[cfg(feature = "sysvar")]
+pub mod sysvar;
+
 use solana_sdk_macro::CloneZeroed;
 
 // inlined to avoid solana_clock dep

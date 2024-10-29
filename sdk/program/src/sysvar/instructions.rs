@@ -45,6 +45,7 @@ use {
         serialize_utils::{read_pubkey, read_slice, read_u16, read_u8},
     },
     solana_sanitize::SanitizeError,
+    solana_sysvar_id::declare_sysvar_id,
 };
 
 /// Instructions sysvar, dummy type.
@@ -59,7 +60,7 @@ use {
 /// Use the free functions in this module to access the instructions sysvar.
 pub struct Instructions();
 
-crate::declare_sysvar_id!("Sysvar1nstructions1111111111111111111111111", Instructions);
+declare_sysvar_id!("Sysvar1nstructions1111111111111111111111111", Instructions);
 
 /// Construct the account data for the instructions sysvar.
 ///

@@ -25,9 +25,10 @@ use {
         fee_calculator::FeeCalculator, impl_sysvar_get, program_error::ProgramError, sysvar::Sysvar,
     },
     solana_sdk_macro::CloneZeroed,
+    solana_sysvar_id::declare_deprecated_sysvar_id,
 };
 
-crate::declare_deprecated_sysvar_id!("SysvarFees111111111111111111111111111111111", Fees);
+declare_deprecated_sysvar_id!("SysvarFees111111111111111111111111111111111", Fees);
 
 /// Transaction fees.
 #[deprecated(

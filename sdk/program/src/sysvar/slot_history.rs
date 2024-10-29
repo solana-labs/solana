@@ -9,8 +9,8 @@
 //! [`Sysvar::size_of`] methods in an on-chain program, and it can be accessed
 //! off-chain through RPC.
 //!
-//! [`SysvarId::id`]: crate::sysvar::SysvarId::id
-//! [`SysvarId::check_id`]: crate::sysvar::SysvarId::check_id
+//! [`SysvarId::id`]: https://docs.rs/solana-sysvar-id/latest/solana_sysvar_id/trait.SysvarId.html#tymethod.id
+//! [`SysvarId::check_id`]: https://docs.rs/solana-sysvar-id/latest/solana_sysvar_id/trait.SysvarId.html#tymethod.check_id
 //!
 //! # Examples
 //!
@@ -48,11 +48,13 @@
 //! ```
 
 use crate::sysvar::Sysvar;
-pub use crate::{
-    account_info::AccountInfo, program_error::ProgramError, slot_history::SlotHistory,
+pub use {
+    crate::{account_info::AccountInfo, program_error::ProgramError},
+    solana_slot_history::{
+        sysvar::{check_id, id, ID},
+        SlotHistory,
+    },
 };
-
-crate::declare_sysvar_id!("SysvarS1otHistory11111111111111111111111111", SlotHistory);
 
 impl Sysvar for SlotHistory {
     // override
