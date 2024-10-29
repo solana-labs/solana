@@ -26,6 +26,7 @@ use {
     solana_streamer::socket::SocketAddrSpace,
     std::{
         collections::{HashMap, HashSet},
+        net::Ipv4Addr,
         ops::Deref,
         sync::{Arc, Mutex},
         time::{Duration, Instant},
@@ -96,13 +97,20 @@ fn stakes(network: &Network) -> HashMap<Pubkey, u64> {
 }
 
 fn star_network_create(num: usize) -> Network {
+    let gossip_port_offset = 9000;
     let node_keypair = Arc::new(Keypair::new());
     let contact_info = ContactInfo::new_localhost(&node_keypair.pubkey(), 0);
     let entry = CrdsValue::new_unsigned(CrdsData::ContactInfo(contact_info.clone()));
     let mut network: HashMap<_, _> = (1..num)
-        .map(|_| {
+        .map(|k| {
             let node_keypair = Arc::new(Keypair::new());
-            let contact_info = ContactInfo::new_localhost(&node_keypair.pubkey(), 0);
+            // Need unique gossip addresses, otherwise nodes will be deduped by
+            // crds_gossip::dedup_gossip_addresses before peer sampling.
+            let mut contact_info = ContactInfo::new_localhost(&node_keypair.pubkey(), 0);
+            let gossip_port = gossip_port_offset + u16::try_from(k).unwrap();
+            contact_info
+                .set_gossip((Ipv4Addr::LOCALHOST, gossip_port))
+                .unwrap();
             let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(contact_info.clone()));
             let node = CrdsGossip::default();
             {
@@ -246,6 +254,24 @@ fn connected_staked_network_create(stakes: &[u64]) -> Network {
 
 fn network_simulator_pull_only(thread_pool: &ThreadPool, network: &Network) {
     let num = network.len();
+    // In absence of gossip push messages, a pull only network with star
+    // topology will not converge because it forms a DAG. We add additional
+    // edges so that there is a directed path between every two pair of nodes.
+    let (pubkeys, mut entries): (Vec<_>, Vec<_>) = network
+        .nodes
+        .iter()
+        .map(|(&pubkey, node)| {
+            let label = CrdsValueLabel::ContactInfo(pubkey);
+            let crds = node.gossip.crds.read().unwrap();
+            let entry = crds.get::<&CrdsValue>(&label).unwrap().clone();
+            (pubkey, entry)
+        })
+        .unzip();
+    entries.rotate_right(1);
+    for (pubkey, entry) in pubkeys.into_iter().zip(entries) {
+        let mut crds = network.nodes[&pubkey].gossip.crds.write().unwrap();
+        let _ = crds.insert(entry, timestamp(), GossipRoute::LocalMessage);
+    }
     let (converged, bytes_tx) = network_run_pull(thread_pool, network, 0, num * 2, 0.9);
     trace!(
         "network_simulator_pull_{}: converged: {} total_bytes: {}",
@@ -540,8 +566,7 @@ fn network_run_pull(
                 let rsp: Vec<_> = network
                     .get(&to)
                     .map(|node| {
-                        let rsp = node
-                            .gossip
+                        node.gossip
                             .generate_pull_responses(
                                 thread_pool,
                                 &filters,
@@ -551,12 +576,7 @@ fn network_run_pull(
                             )
                             .into_iter()
                             .flatten()
-                            .collect();
-                        node.gossip.process_pull_requests(
-                            filters.into_iter().map(|(caller, _)| caller),
-                            now,
-                        );
-                        rsp
+                            .collect()
                     })
                     .unwrap();
                 bytes += serialized_size(&rsp).unwrap() as usize;

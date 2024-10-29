@@ -2107,12 +2107,6 @@ impl ClusterInfo {
     ) -> PacketBatch {
         const DEFAULT_EPOCH_DURATION_MS: u64 = DEFAULT_SLOTS_PER_EPOCH * DEFAULT_MS_PER_SLOT;
         let mut time = Measure::start("handle_pull_requests");
-        let callers = crds_value::filter_current(requests.iter().map(|r| &r.caller));
-        {
-            let _st = ScopedTimer::from(&self.stats.process_pull_requests);
-            self.gossip
-                .process_pull_requests(callers.cloned(), timestamp());
-        }
         let output_size_limit =
             self.update_data_budget(stakes.len()) / PULL_RESPONSE_MIN_SERIALIZED_SIZE;
         let mut packet_batch =

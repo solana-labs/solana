@@ -146,7 +146,6 @@ pub struct GossipStats {
     pub(crate) packets_sent_push_messages_count: Counter,
     pub(crate) process_gossip_packets_time: Counter,
     pub(crate) process_prune: Counter,
-    pub(crate) process_pull_requests: Counter,
     pub(crate) process_pull_response: Counter,
     pub(crate) process_pull_response_count: Counter,
     pub(crate) process_pull_response_fail_insert: Counter,
@@ -326,11 +325,6 @@ pub(crate) fn submit_gossip_stats(
         (
             "process_pull_resp_len",
             stats.process_pull_response_len.clear(),
-            i64
-        ),
-        (
-            "process_pull_requests",
-            stats.process_pull_requests.clear(),
             i64
         ),
         (
