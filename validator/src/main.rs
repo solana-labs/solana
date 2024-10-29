@@ -433,7 +433,7 @@ fn get_cluster_shred_version(entrypoints: &[SocketAddr]) -> Option<u16> {
     for entrypoint in entrypoints {
         match solana_net_utils::get_cluster_shred_version(entrypoint) {
             Err(err) => eprintln!("get_cluster_shred_version failed: {entrypoint}, {err}"),
-            Ok(0) => eprintln!("zero shred-version from entrypoint: {entrypoint}"),
+            Ok(0) => eprintln!("entrypoint {entrypoint} returned shred-version zero"),
             Ok(shred_version) => {
                 info!(
                     "obtained shred-version {} from {}",
