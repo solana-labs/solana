@@ -69,7 +69,7 @@ fn test_rpc_send_tx() {
 
     let alice = Keypair::new();
     let test_validator =
-        TestValidator::with_no_base_fees(alice.pubkey(), None, SocketAddrSpace::Unspecified);
+        TestValidator::with_no_fees(alice.pubkey(), None, SocketAddrSpace::Unspecified);
     let rpc_url = test_validator.rpc_url();
 
     let bob_pubkey = solana_sdk::pubkey::new_rand();
@@ -141,8 +141,7 @@ fn test_simulation_replaced_blockhash() -> ClientResult<()> {
     solana_logger::setup();
 
     let alice = Keypair::new();
-    let validator =
-        TestValidator::with_no_base_fees(alice.pubkey(), None, SocketAddrSpace::Unspecified);
+    let validator = TestValidator::with_no_fees(alice.pubkey(), None, SocketAddrSpace::Unspecified);
     let rpc_client = RpcClient::new(validator.rpc_url());
 
     let bob = Keypair::new();
@@ -188,7 +187,7 @@ fn test_rpc_invalid_requests() {
 
     let alice = Keypair::new();
     let test_validator =
-        TestValidator::with_no_base_fees(alice.pubkey(), None, SocketAddrSpace::Unspecified);
+        TestValidator::with_no_fees(alice.pubkey(), None, SocketAddrSpace::Unspecified);
     let rpc_url = test_validator.rpc_url();
 
     let bob_pubkey = solana_sdk::pubkey::new_rand();
@@ -220,7 +219,7 @@ fn test_rpc_slot_updates() {
     solana_logger::setup();
 
     let test_validator =
-        TestValidator::with_no_base_fees(Pubkey::new_unique(), None, SocketAddrSpace::Unspecified);
+        TestValidator::with_no_fees(Pubkey::new_unique(), None, SocketAddrSpace::Unspecified);
 
     // Track when slot updates are ready
     let (update_sender, update_receiver) = unbounded::<SlotUpdate>();
@@ -498,7 +497,7 @@ fn run_tpu_send_transaction(tpu_use_quic: bool) {
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
     let test_validator =
-        TestValidator::with_no_base_fees(mint_pubkey, None, SocketAddrSpace::Unspecified);
+        TestValidator::with_no_fees(mint_pubkey, None, SocketAddrSpace::Unspecified);
     let rpc_client = Arc::new(RpcClient::new_with_commitment(
         test_validator.rpc_url(),
         CommitmentConfig::processed(),
@@ -560,8 +559,7 @@ fn deserialize_rpc_error() -> ClientResult<()> {
     solana_logger::setup();
 
     let alice = Keypair::new();
-    let validator =
-        TestValidator::with_no_base_fees(alice.pubkey(), None, SocketAddrSpace::Unspecified);
+    let validator = TestValidator::with_no_fees(alice.pubkey(), None, SocketAddrSpace::Unspecified);
     let rpc_client = RpcClient::new(validator.rpc_url());
 
     let bob = Keypair::new();

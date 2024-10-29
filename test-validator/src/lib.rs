@@ -702,7 +702,7 @@ impl TestValidator {
     /// Faucet optional.
     ///
     /// This function panics on initialization failure.
-    pub fn with_no_base_fees(
+    pub fn with_no_fees(
         mint_address: Pubkey,
         faucet_addr: Option<SocketAddr>,
         socket_addr_space: SocketAddrSpace,

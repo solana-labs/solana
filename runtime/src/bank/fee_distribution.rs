@@ -78,6 +78,7 @@ impl Bank {
     ) -> u64 {
         let fee_details = solana_fee::calculate_fee_details(
             transaction,
+            self.get_lamports_per_signature() == 0,
             self.fee_structure().lamports_per_signature,
             fee_budget_limits.prioritization_fee,
             self.feature_set

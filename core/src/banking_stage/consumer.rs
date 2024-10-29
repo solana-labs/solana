@@ -761,6 +761,7 @@ impl Consumer {
         )?);
         let fee = solana_fee::calculate_fee(
             message,
+            bank.get_lamports_per_signature() == 0,
             bank.fee_structure().lamports_per_signature,
             fee_budget_limits.prioritization_fee,
             bank.feature_set

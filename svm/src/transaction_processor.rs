@@ -479,12 +479,13 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
 
         let CheckedTransactionDetails {
             nonce,
-            lamports_per_signature: _,
+            lamports_per_signature,
         } = checked_details;
 
         let fee_budget_limits = FeeBudgetLimits::from(compute_budget_limits);
         let fee_details = solana_fee::calculate_fee_details(
             message,
+            lamports_per_signature == 0,
             fee_structure.lamports_per_signature,
             fee_budget_limits.prioritization_fee,
             feature_set.is_active(&remove_rounding_in_fee_calculation::id()),

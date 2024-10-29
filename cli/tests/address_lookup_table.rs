@@ -23,11 +23,8 @@ fn test_cli_create_extend_and_freeze_address_lookup_table() {
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
-    let test_validator = TestValidator::with_no_base_fees(
-        mint_pubkey,
-        Some(faucet_addr),
-        SocketAddrSpace::Unspecified,
-    );
+    let test_validator =
+        TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr), SocketAddrSpace::Unspecified);
 
     let mut config = CliConfig::recent_for_tests();
     let keypair = Keypair::new();
@@ -141,11 +138,8 @@ fn test_cli_create_and_deactivate_address_lookup_table() {
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
-    let test_validator = TestValidator::with_no_base_fees(
-        mint_pubkey,
-        Some(faucet_addr),
-        SocketAddrSpace::Unspecified,
-    );
+    let test_validator =
+        TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr), SocketAddrSpace::Unspecified);
 
     let mut config = CliConfig::recent_for_tests();
     let keypair = Keypair::new();
