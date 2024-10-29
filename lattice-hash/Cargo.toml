@@ -1,5 +1,6 @@
 [package]
 name = "solana-lattice-hash"
+description = "Solana Lattice Hash"
 version = { workspace = true }
 authors = { workspace = true }
 repository = { workspace = true }
