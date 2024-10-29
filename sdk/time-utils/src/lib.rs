@@ -1,4 +1,4 @@
-//! The `timing` module provides std::time utility functions.
+//! `std::time` utility functions.
 use std::{
     sync::atomic::{AtomicU64, Ordering},
     time::{Duration, SystemTime, UNIX_EPOCH},
@@ -103,7 +103,6 @@ mod test {
 
     #[test]
     fn test_interval_update() {
-        solana_logger::setup();
         let i = AtomicInterval::default();
         assert!(!i.should_update(1000));
 

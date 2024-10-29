@@ -144,6 +144,7 @@ members = [
     "sdk/slot-history",
     "sdk/stable-layout",
     "sdk/sysvar-id",
+    "sdk/time-utils",
     "sdk/transaction-error",
     "send-transaction-service",
     "short-vec",
@@ -483,6 +484,7 @@ solana-sha256-hasher = { path = "sdk/sha256-hasher", version = "=2.2.0" }
 solana-signature = { path = "sdk/signature", version = "=2.2.0", default-features = false }
 solana-slot-hashes = { path = "sdk/slot-hashes", version = "=2.2.0" }
 solana-slot-history = { path = "sdk/slot-history", version = "=2.2.0" }
+solana-time-utils = { path = "sdk/time-utils", version = "=2.2.0" }
 solana-timings = { path = "timings", version = "=2.2.0" }
 solana-unified-scheduler-logic = { path = "unified-scheduler-logic", version = "=2.2.0" }
 solana-unified-scheduler-pool = { path = "unified-scheduler-pool", version = "=2.2.0" }

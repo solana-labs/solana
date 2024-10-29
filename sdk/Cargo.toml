@@ -119,6 +119,7 @@ solana-signature = { workspace = true, features = [
     "std",
     "verify",
 ], optional = true }
+solana-time-utils = { workspace = true }
 solana-transaction-error = { workspace = true, features = ["serde"], optional = true }
 thiserror = { workspace = true }
 
