@@ -122,6 +122,7 @@ members = [
     "sdk/macro",
     "sdk/msg",
     "sdk/native-token",
+    "sdk/nonce",
     "sdk/package-metadata",
     "sdk/package-metadata-macro",
     "sdk/packet",
@@ -453,6 +454,7 @@ solana-msg = { path = "sdk/msg", version = "=2.2.0" }
 solana-native-token = { path = "sdk/native-token", version = "=2.2.0" }
 solana-net-utils = { path = "net-utils", version = "=2.2.0" }
 solana-nohash-hasher = "0.2.1"
+solana-nonce = { path = "sdk/nonce", version = "=2.2.0" }
 solana-notifier = { path = "notifier", version = "=2.2.0" }
 solana-package-metadata = { path = "sdk/package-metadata", version = "=2.2.0" }
 solana-package-metadata-macro = { path = "sdk/package-metadata-macro", version = "=2.2.0" }

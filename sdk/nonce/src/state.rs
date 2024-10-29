@@ -1,21 +1,21 @@
+#[cfg(feature = "serde")]
+use serde_derive::{Deserialize, Serialize};
 use {
-    crate::{
-        fee_calculator::FeeCalculator,
-        hash::{hashv, Hash},
-        pubkey::Pubkey,
-    },
-    serde_derive::{Deserialize, Serialize},
+    solana_fee_calculator::FeeCalculator, solana_hash::Hash, solana_pubkey::Pubkey,
+    solana_sha256_hasher::hashv,
 };
 
 const DURABLE_NONCE_HASH_PREFIX: &[u8] = "DURABLE_NONCE".as_bytes();
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Deserialize, Serialize)]
+#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct DurableNonce(Hash);
 
 /// Initialized data of a durable transaction nonce account.
 ///
 /// This is stored within [`State`] for initialized nonce accounts.
-#[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+#[derive(Debug, Default, PartialEq, Eq, Clone)]
 pub struct Data {
     /// Address of the account that signs transactions using the nonce account.
     pub authority: Pubkey,
@@ -67,7 +67,8 @@ impl DurableNonce {
 ///
 /// When created in memory with [`State::default`] or when deserialized from an
 /// uninitialized account, a nonce account will be [`State::Uninitialized`].
-#[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+#[derive(Debug, Default, PartialEq, Eq, Clone)]
 pub enum State {
     #[default]
     Uninitialized,
@@ -92,7 +93,7 @@ impl State {
 
 #[cfg(test)]
 mod test {
-    use {super::*, crate::nonce::state::Versions};
+    use {super::*, crate::versions::Versions};
 
     #[test]
     fn default_is_uninitialized() {

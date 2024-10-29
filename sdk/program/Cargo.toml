@@ -56,6 +56,7 @@ solana-instruction = { workspace = true, default-features = false, features = [
 solana-last-restart-slot = { workspace = true, features = ["serde", "sysvar"] }
 solana-msg = { workspace = true }
 solana-native-token = { workspace = true }
+solana-nonce = { workspace = true, features = ["serde"] }
 solana-program-entrypoint = { workspace = true }
 solana-program-error = { workspace = true, features = ["serde"] }
 solana-program-memory = { workspace = true }
