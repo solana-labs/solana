@@ -18,7 +18,7 @@ Release channels have their own copy of this changelog:
 ## [2.1.0]
 * Breaking:
   * SDK:
-    * `cargo-build-sbf` and `cargo-build-bpf` have been deprecated for two years and have now been definitely removed.
+    * `cargo-build-bpf` and `cargo-test-bpf` have been deprecated for two years and have now been definitely removed.
        Use `cargo-build-sbf` and `cargo-test-sbf` instead.
     * dependency: `curve25519-dalek` upgraded to new major version 4 (#1693). This causes breakage when mixing v2.0 and v2.1 Solana crates, so be sure to use all of one or the other. Please use only crates compatible with v2.1.
   * Stake:
