@@ -113,6 +113,7 @@ members = [
     "sdk/cpi",
     "sdk/decode-error",
     "sdk/derivation-path",
+    "sdk/epoch-rewards",
     "sdk/epoch-schedule",
     "sdk/feature-set",
     "sdk/fee-calculator",
@@ -427,6 +428,7 @@ solana-derivation-path = { path = "sdk/derivation-path", version = "=2.2.0" }
 solana-download-utils = { path = "download-utils", version = "=2.2.0" }
 solana-entry = { path = "entry", version = "=2.2.0" }
 solana-program-entrypoint = { path = "sdk/program-entrypoint", version = "=2.2.0" }
+solana-epoch-rewards = { path = "sdk/epoch-rewards", version = "=2.2.0" }
 solana-epoch-schedule = { path = "sdk/epoch-schedule", version = "=2.2.0" }
 solana-faucet = { path = "faucet", version = "=2.2.0" }
 solana-feature-set = { path = "sdk/feature-set", version = "=2.2.0" }

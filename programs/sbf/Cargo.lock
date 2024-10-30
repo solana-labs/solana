@@ -5324,6 +5324,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-epoch-rewards"
+version = "2.2.0"
+dependencies = [
+ "serde",
+ "serde_derive",
+ "solana-hash",
+ "solana-sdk-macro",
+ "solana-sysvar-id",
+]
+
+[[package]]
 name = "solana-epoch-schedule"
 version = "2.2.0"
 dependencies = [
@@ -5833,6 +5844,7 @@ dependencies = [
  "solana-cpi",
  "solana-decode-error",
  "solana-define-syscall",
+ "solana-epoch-rewards",
  "solana-epoch-schedule",
  "solana-fee-calculator",
  "solana-hash",

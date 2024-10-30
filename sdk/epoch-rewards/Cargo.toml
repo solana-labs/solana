@@ -1,0 +1,36 @@
+[package]
+name = "solana-epoch-rewards"
+description = "Solana epoch rewards sysvar."
+documentation = "https://docs.rs/solana-epoch-rewards"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+serde = { workspace = true, optional = true }
+serde_derive = { workspace = true, optional = true }
+solana-frozen-abi = { workspace = true, optional = true }
+solana-frozen-abi-macro = { workspace = true, optional = true }
+solana-hash = { workspace = true, default-features = false }
+solana-sdk-macro = { workspace = true }
+solana-sysvar-id = { workspace = true, optional = true }
+
+[dev-dependencies]
+solana-epoch-rewards = { path = ".", features = ["sysvar"] }
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+all-features = true
+rustdoc-args = ["--cfg=docsrs"]
+
+[features]
+frozen-abi = ["dep:solana-frozen-abi", "dep:solana-frozen-abi-macro", "solana-hash/frozen-abi", "std"]
+serde = ["dep:serde", "dep:serde_derive", "solana-hash/serde"]
+std = []
+sysvar = ["dep:solana-sysvar-id"]
+
+[lints]
+workspace = true

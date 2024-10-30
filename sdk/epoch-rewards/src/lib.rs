@@ -2,15 +2,27 @@
 //!
 //! [sv]: https://docs.solanalabs.com/runtime/sysvars#epochrewards
 //!
-//! The sysvar ID is declared in [`sysvar::epoch_rewards`].
+//! The sysvar ID is declared in [`sysvar`].
 //!
-//! [`sysvar::epoch_rewards`]: crate::sysvar::epoch_rewards
+//! [`sysvar`]: crate::sysvar
 
-use {crate::hash::Hash, solana_sdk_macro::CloneZeroed};
+#![no_std]
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+#![cfg_attr(feature = "frozen-abi", feature(min_specialization))]
+
+#[cfg(feature = "sysvar")]
+pub mod sysvar;
+
+#[cfg(feature = "std")]
+extern crate std;
+#[cfg(feature = "serde")]
+use serde_derive::{Deserialize, Serialize};
+use {solana_hash::Hash, solana_sdk_macro::CloneZeroed};
 
 #[repr(C, align(16))]
-#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Default, CloneZeroed)]
+#[cfg_attr(feature = "frozen-abi", derive(solana_frozen_abi_macro::AbiExample))]
+#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+#[derive(Debug, PartialEq, Eq, Default, CloneZeroed)]
 pub struct EpochRewards {
     /// The starting block height of the rewards distribution in the current
     /// epoch

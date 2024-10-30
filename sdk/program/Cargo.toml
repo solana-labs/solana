@@ -39,6 +39,7 @@ solana-borsh = { workspace = true, optional = true }
 solana-clock = { workspace = true, features = ["serde", "sysvar"] }
 solana-cpi = { workspace = true }
 solana-decode-error = { workspace = true }
+solana-epoch-rewards = { workspace = true, features = ["serde", "sysvar"] }
 solana-epoch-schedule = { workspace = true, features = ["serde", "sysvar"] }
 solana-fee-calculator = { workspace = true, features = ["serde"] }
 solana-frozen-abi = { workspace = true, optional = true, features = ["frozen-abi"] }
@@ -142,6 +143,7 @@ dev-context-only-utils = ["dep:qualifier_attr"]
 frozen-abi = [
     "dep:solana-frozen-abi",
     "dep:solana-frozen-abi-macro",
+    "solana-epoch-rewards/frozen-abi",
     "solana-epoch-schedule/frozen-abi",
     "solana-fee-calculator/frozen-abi",
     "solana-hash/frozen-abi",
