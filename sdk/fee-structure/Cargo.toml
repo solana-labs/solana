@@ -1,0 +1,33 @@
+[package]
+name = "solana-fee-structure"
+description = "Solana fee structures."
+documentation = "https://docs.rs/solana-fee-structure"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+serde = { workspace = true, optional = true }
+serde_derive = { workspace = true, optional = true }
+solana-frozen-abi = { workspace = true, optional = true, features = [
+    "frozen-abi",
+] }
+solana-native-token = { workspace = true }
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+all-features = true
+rustdoc-args = ["--cfg=docsrs"]
+
+[target.'cfg(not(target_os = "solana"))'.dependencies]
+solana-program = { workspace = true, default-features = false }
+
+[features]
+frozen-abi = ["dep:solana-frozen-abi"]
+serde = ["dep:serde", "dep:serde_derive"]
+
+[lints]
+workspace = true

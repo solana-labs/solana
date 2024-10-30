@@ -5384,6 +5384,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-fee-structure"
+version = "2.2.0"
+dependencies = [
+ "serde",
+ "serde_derive",
+ "solana-native-token",
+ "solana-program",
+]
+
+[[package]]
 name = "solana-genesis-utils"
 version = "2.2.0"
 dependencies = [
@@ -6814,6 +6824,7 @@ dependencies = [
  "solana-decode-error",
  "solana-derivation-path",
  "solana-feature-set",
+ "solana-fee-structure",
  "solana-inflation",
  "solana-instruction",
  "solana-native-token",

@@ -1,4 +1,6 @@
 //! Fee structures.
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+#![cfg_attr(feature = "frozen-abi", feature(min_specialization))]
 
 #[cfg(not(target_os = "solana"))]
 use solana_program::message::SanitizedMessage;
@@ -31,7 +33,11 @@ pub struct FeeStructure {
     pub compute_fee_bins: Vec<FeeBin>,
 }
 
-#[derive(Debug, Default, Clone, Copy, Eq, PartialEq, Deserialize, Serialize)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde_derive::Deserialize, serde_derive::Serialize)
+)]
+#[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
 pub struct FeeDetails {
     transaction_fee: u64,
     prioritization_fee: u64,

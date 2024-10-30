@@ -44,6 +44,7 @@ frozen-abi = [
     "dep:solana-frozen-abi",
     "dep:solana-frozen-abi-macro",
     "solana-feature-set/frozen-abi",
+    "solana-fee-structure/frozen-abi",
     "solana-account/frozen-abi",
     "solana-inflation/frozen-abi",
     "solana-program/frozen-abi",
@@ -96,6 +97,7 @@ solana-commitment-config = { workspace = true, optional = true, features = ["ser
 solana-decode-error = { workspace = true }
 solana-derivation-path = { workspace = true }
 solana-feature-set = { workspace = true }
+solana-fee-structure = { workspace = true, features = ["serde"] }
 solana-frozen-abi = { workspace = true, optional = true, features = [
     "frozen-abi",
 ] }

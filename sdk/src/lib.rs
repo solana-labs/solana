@@ -71,7 +71,6 @@ pub mod epoch_rewards_hasher;
 pub mod example_mocks;
 pub mod exit;
 pub mod feature;
-pub mod fee;
 pub mod genesis_config;
 pub mod hard_forks;
 pub mod hash;
@@ -118,6 +117,8 @@ pub use solana_decode_error as decode_error;
 pub use solana_derivation_path as derivation_path;
 #[deprecated(since = "2.1.0", note = "Use `solana-feature-set` crate instead")]
 pub use solana_feature_set as feature_set;
+#[deprecated(since = "2.2.0", note = "Use `solana-fee-structure` crate instead")]
+pub use solana_fee_structure as fee;
 #[deprecated(since = "2.1.0", note = "Use `solana-inflation` crate instead")]
 pub use solana_inflation as inflation;
 #[deprecated(since = "2.1.0", note = "Use `solana-packet` crate instead")]
