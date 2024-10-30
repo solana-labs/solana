@@ -679,6 +679,8 @@ impl SystemMonitorService {
                 "memory-stats",
                 ("total", info.total * KB, i64),
                 ("swap_total", info.swap_total * KB, i64),
+                ("buffers_bytes", info.buffers * KB, i64),
+                ("cached_bytes", info.cached * KB, i64),
                 (
                     "free_percent",
                     Self::calc_percent(info.free, info.total),
