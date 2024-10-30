@@ -1,6 +1,7 @@
 use {
     crate::prioritization_fee::{PrioritizationFeeDetails, PrioritizationFeeType},
-    solana_sdk::{entrypoint::HEAP_LENGTH, fee::FeeBudgetLimits},
+    solana_fee_structure::FeeBudgetLimits,
+    solana_program_entrypoint::HEAP_LENGTH,
     std::num::NonZeroU32,
 };
 

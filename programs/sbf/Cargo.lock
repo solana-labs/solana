@@ -5102,7 +5102,8 @@ dependencies = [
 name = "solana-compute-budget"
 version = "2.2.0"
 dependencies = [
- "solana-sdk",
+ "solana-fee-structure",
+ "solana-program-entrypoint",
 ]
 
 [[package]]
