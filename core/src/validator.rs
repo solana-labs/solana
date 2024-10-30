@@ -282,6 +282,7 @@ pub struct ValidatorConfig {
     pub wen_restart_coordinator: Option<Pubkey>,
     pub unified_scheduler_handler_threads: Option<usize>,
     pub ip_echo_server_threads: NonZeroUsize,
+    pub rayon_global_threads: NonZeroUsize,
     pub replay_forks_threads: NonZeroUsize,
     pub replay_transactions_threads: NonZeroUsize,
     pub tvu_shred_sigverify_threads: NonZeroUsize,
@@ -354,6 +355,7 @@ impl Default for ValidatorConfig {
             wen_restart_coordinator: None,
             unified_scheduler_handler_threads: None,
             ip_echo_server_threads: NonZeroUsize::new(1).expect("1 is non-zero"),
+            rayon_global_threads: NonZeroUsize::new(1).expect("1 is non-zero"),
             replay_forks_threads: NonZeroUsize::new(1).expect("1 is non-zero"),
             replay_transactions_threads: NonZeroUsize::new(1).expect("1 is non-zero"),
             tvu_shred_sigverify_threads: NonZeroUsize::new(1).expect("1 is non-zero"),
@@ -364,15 +366,18 @@ impl Default for ValidatorConfig {
 
 impl ValidatorConfig {
     pub fn default_for_test() -> Self {
+        let max_thread_count =
+            NonZeroUsize::new(get_max_thread_count()).expect("thread count is non-zero");
+
         Self {
             enforce_ulimit_nofile: false,
             accounts_db_config: Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             rpc_config: JsonRpcConfig::default_for_test(),
             block_production_method: BlockProductionMethod::default(),
             enable_block_production_forwarding: true, // enable forwarding by default for tests
+            rayon_global_threads: max_thread_count,
             replay_forks_threads: NonZeroUsize::new(1).expect("1 is non-zero"),
-            replay_transactions_threads: NonZeroUsize::new(get_max_thread_count())
-                .expect("thread count is non-zero"),
+            replay_transactions_threads: max_thread_count,
             tvu_shred_sigverify_threads: NonZeroUsize::new(get_thread_count())
                 .expect("thread count is non-zero"),
             ..Self::default()
@@ -533,6 +538,18 @@ impl Validator {
     ) -> Result<Self> {
         let start_time = Instant::now();
 
+        // Initialize the global rayon pool first to ensure the value in config
+        // is honored. Otherwise, some code accessing the global pool could
+        // cause it to get initialized with Rayon's default (not ours)
+        if rayon::ThreadPoolBuilder::new()
+            .thread_name(|i| format!("solRayonGlob{i:02}"))
+            .num_threads(config.rayon_global_threads.get())
+            .build_global()
+            .is_err()
+        {
+            warn!("Rayon global thread pool already initialized");
+        }
+
         let id = identity_keypair.pubkey();
         assert_eq!(&id, node.info.pubkey());
 
@@ -580,14 +597,6 @@ impl Validator {
 
         for cluster_entrypoint in &cluster_entrypoints {
             info!("entrypoint: {:?}", cluster_entrypoint);
-        }
-
-        if rayon::ThreadPoolBuilder::new()
-            .thread_name(|i| format!("solRayonGlob{i:02}"))
-            .build_global()
-            .is_err()
-        {
-            warn!("Rayon global thread pool already initialized");
         }
 
         if solana_perf::perf_libs::api().is_some() {

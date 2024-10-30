@@ -915,6 +915,7 @@ pub fn main() {
         accounts_db_hash_threads,
         accounts_index_flush_threads,
         ip_echo_server_threads,
+        rayon_global_threads,
         replay_forks_threads,
         replay_transactions_threads,
         tvu_receive_threads,
@@ -1542,6 +1543,7 @@ pub fn main() {
             UseSnapshotArchivesAtStartup
         ),
         ip_echo_server_threads,
+        rayon_global_threads,
         replay_forks_threads,
         replay_transactions_threads,
         tvu_shred_sigverify_threads: tvu_sigverify_threads,
