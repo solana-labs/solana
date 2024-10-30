@@ -552,7 +552,7 @@ async fn test_rate_limiting() {
         None,
         TestServerConfig {
             max_connections_per_peer: 100,
-            max_connections_per_ipaddr_per_minute: 1,
+            max_connections_per_ipaddr_per_min: 1,
             ..Default::default()
         },
     );
@@ -610,7 +610,7 @@ async fn test_rate_limiting_establish_connection() {
         None,
         TestServerConfig {
             max_connections_per_peer: 100,
-            max_connections_per_ipaddr_per_minute: 1,
+            max_connections_per_ipaddr_per_min: 1,
             ..Default::default()
         },
     );

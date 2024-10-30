@@ -37,9 +37,9 @@ use {
     },
     solana_sdk::{clock::Slot, pubkey::Pubkey, quic::NotifyKeyUpdate, signature::Keypair},
     solana_streamer::{
-        nonblocking::quic::{DEFAULT_MAX_STREAMS_PER_MS, DEFAULT_WAIT_FOR_CHUNK_TIMEOUT},
         quic::{
-            spawn_server_multi, SpawnServerResult, MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS,
+            spawn_server_multi, QuicServerParams, SpawnServerResult, MAX_STAKED_CONNECTIONS,
+            MAX_UNSTAKED_CONNECTIONS,
         },
         streamer::StakedNodes,
     },
@@ -166,14 +166,13 @@ impl Tpu {
             keypair,
             packet_sender,
             exit.clone(),
-            MAX_QUIC_CONNECTIONS_PER_PEER,
             staked_nodes.clone(),
-            MAX_STAKED_CONNECTIONS,
-            MAX_UNSTAKED_CONNECTIONS,
-            DEFAULT_MAX_STREAMS_PER_MS,
-            tpu_max_connections_per_ipaddr_per_minute,
-            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
-            tpu_coalesce,
+            QuicServerParams {
+                max_connections_per_peer: MAX_QUIC_CONNECTIONS_PER_PEER,
+                max_connections_per_ipaddr_per_min: tpu_max_connections_per_ipaddr_per_minute,
+                coalesce: tpu_coalesce,
+                ..QuicServerParams::default()
+            },
         )
         .unwrap();
 
@@ -188,14 +187,16 @@ impl Tpu {
             keypair,
             forwarded_packet_sender,
             exit.clone(),
-            MAX_QUIC_CONNECTIONS_PER_PEER,
             staked_nodes.clone(),
-            MAX_STAKED_CONNECTIONS.saturating_add(MAX_UNSTAKED_CONNECTIONS),
-            0, // Prevent unstaked nodes from forwarding transactions
-            DEFAULT_MAX_STREAMS_PER_MS,
-            tpu_max_connections_per_ipaddr_per_minute,
-            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
-            tpu_coalesce,
+            QuicServerParams {
+                max_connections_per_peer: MAX_QUIC_CONNECTIONS_PER_PEER,
+                max_staked_connections: MAX_STAKED_CONNECTIONS
+                    .saturating_add(MAX_UNSTAKED_CONNECTIONS),
+                max_unstaked_connections: 0, // Prevent unstaked nodes from forwarding transactions
+                max_connections_per_ipaddr_per_min: tpu_max_connections_per_ipaddr_per_minute,
+                coalesce: tpu_coalesce,
+                ..QuicServerParams::default()
+            },
         )
         .unwrap();
 

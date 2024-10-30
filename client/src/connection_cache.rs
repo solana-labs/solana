@@ -201,13 +201,9 @@ mod tests {
         super::*,
         crate::connection_cache::ConnectionCache,
         crossbeam_channel::unbounded,
-        solana_sdk::{net::DEFAULT_TPU_COALESCE, signature::Keypair},
+        solana_sdk::signature::Keypair,
         solana_streamer::{
-            nonblocking::quic::{
-                DEFAULT_MAX_CONNECTIONS_PER_IPADDR_PER_MINUTE, DEFAULT_MAX_STREAMS_PER_MS,
-                DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
-            },
-            quic::SpawnServerResult,
+            quic::{QuicServerParams, SpawnServerResult},
             streamer::StakedNodes,
         },
         std::{
@@ -246,14 +242,13 @@ mod tests {
             &keypair2,
             sender2,
             response_recv_exit.clone(),
-            1,
             staked_nodes,
-            10,
-            10,
-            DEFAULT_MAX_STREAMS_PER_MS,
-            DEFAULT_MAX_CONNECTIONS_PER_IPADDR_PER_MINUTE,
-            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
-            DEFAULT_TPU_COALESCE,
+            QuicServerParams {
+                max_connections_per_peer: 1,
+                max_staked_connections: 10,
+                max_unstaked_connections: 10,
+                ..QuicServerParams::default()
+            },
         )
         .unwrap();
 
