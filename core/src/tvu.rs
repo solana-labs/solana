@@ -15,7 +15,7 @@ use {
         cost_update_service::CostUpdateService,
         drop_bank_service::DropBankService,
         repair::repair_service::{OutstandingShredRepairs, RepairInfo},
-        replay_stage::{ReplayStage, ReplayStageConfig},
+        replay_stage::{ReplayReceivers, ReplaySenders, ReplayStage, ReplayStageConfig},
         rewards_recorder_service::RewardsRecorderSender,
         shred_fetch_stage::ShredFetchStage,
         voting_service::VotingService,
@@ -269,29 +269,62 @@ impl Tvu {
             exit.clone(),
         );
 
-        let replay_stage_config = ReplayStageConfig {
-            vote_account: *vote_account,
-            authorized_voter_keypairs,
-            exit: exit.clone(),
+        let (cost_update_sender, cost_update_receiver) = unbounded();
+        let (drop_bank_sender, drop_bank_receiver) = unbounded();
+        let (voting_sender, voting_receiver) = unbounded();
+
+        let replay_senders = ReplaySenders {
             rpc_subscriptions: rpc_subscriptions.clone(),
             slot_status_notifier,
-            leader_schedule_cache: leader_schedule_cache.clone(),
             accounts_background_request_sender,
-            block_commitment_cache,
             transaction_status_sender,
             rewards_recorder_sender,
             cache_block_meta_sender,
             entry_notification_sender,
             bank_notification_sender,
-            wait_for_vote_to_start_leader: tvu_config.wait_for_vote_to_start_leader,
             ancestor_hashes_replay_update_sender,
+            retransmit_slots_sender,
+            replay_vote_sender,
+            cluster_slots_update_sender,
+            cost_update_sender,
+            voting_sender,
+            drop_bank_sender,
+            block_metadata_notifier,
+            dumped_slots_sender,
+        };
+
+        let replay_receivers = ReplayReceivers {
+            ledger_signal_receiver,
+            duplicate_slots_receiver,
+            ancestor_duplicate_slots_receiver,
+            duplicate_confirmed_slots_receiver,
+            gossip_verified_vote_hash_receiver,
+            popular_pruned_forks_receiver,
+        };
+
+        let replay_stage_config = ReplayStageConfig {
+            vote_account: *vote_account,
+            authorized_voter_keypairs,
+            exit: exit.clone(),
+            leader_schedule_cache: leader_schedule_cache.clone(),
+            block_commitment_cache,
+            wait_for_vote_to_start_leader: tvu_config.wait_for_vote_to_start_leader,
             tower_storage: tower_storage.clone(),
             wait_to_vote_slot,
             replay_forks_threads: tvu_config.replay_forks_threads,
             replay_transactions_threads: tvu_config.replay_transactions_threads,
+            blockstore: blockstore.clone(),
+            bank_forks: bank_forks.clone(),
+            cluster_info: cluster_info.clone(),
+            poh_recorder: poh_recorder.clone(),
+            tower,
+            vote_tracker,
+            cluster_slots,
+            log_messages_bytes_limit,
+            prioritization_fee_cache: prioritization_fee_cache.clone(),
+            banking_tracer,
         };
 
-        let (voting_sender, voting_receiver) = unbounded();
         let voting_service = VotingService::new(
             voting_receiver,
             cluster_info.clone(),
@@ -312,10 +345,7 @@ impl Tvu {
             }
         });
 
-        let (cost_update_sender, cost_update_receiver) = unbounded();
         let cost_update_service = CostUpdateService::new(blockstore.clone(), cost_update_receiver);
-
-        let (drop_bank_sender, drop_bank_receiver) = unbounded();
 
         let drop_bank_service = DropBankService::new(drop_bank_receiver);
 
@@ -324,30 +354,8 @@ impl Tvu {
         } else {
             Some(ReplayStage::new(
                 replay_stage_config,
-                blockstore.clone(),
-                bank_forks.clone(),
-                cluster_info.clone(),
-                ledger_signal_receiver,
-                duplicate_slots_receiver,
-                poh_recorder.clone(),
-                tower,
-                vote_tracker,
-                cluster_slots,
-                retransmit_slots_sender,
-                ancestor_duplicate_slots_receiver,
-                replay_vote_sender,
-                duplicate_confirmed_slots_receiver,
-                gossip_verified_vote_hash_receiver,
-                cluster_slots_update_sender,
-                cost_update_sender,
-                voting_sender,
-                drop_bank_sender,
-                block_metadata_notifier,
-                log_messages_bytes_limit,
-                prioritization_fee_cache.clone(),
-                dumped_slots_sender,
-                banking_tracer,
-                popular_pruned_forks_receiver,
+                replay_senders,
+                replay_receivers,
             )?)
         };
 
