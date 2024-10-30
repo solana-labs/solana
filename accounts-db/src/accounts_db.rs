@@ -7516,8 +7516,9 @@ impl AccountsDb {
             hashes.retain(|k| k.0 != ignore);
         }
 
-        let accounts_delta_hash =
-            AccountsDeltaHash(AccountsHasher::accumulate_account_hashes(hashes));
+        let accounts_delta_hash = self
+            .thread_pool
+            .install(|| AccountsDeltaHash(AccountsHasher::accumulate_account_hashes(hashes)));
         accumulate.stop();
         let mut uncleaned_time = Measure::start("uncleaned_index");
         self.uncleaned_pubkeys.insert(slot, dirty_keys);
