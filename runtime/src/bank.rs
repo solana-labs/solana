@@ -1732,13 +1732,15 @@ impl Bank {
             // then it will be *required* that the snapshot contains an accounts lt hash.
             let accounts_lt_hash = fields.accounts_lt_hash.unwrap_or_else(|| {
                 let (accounts_lt_hash, duration) = meas_dur!({
-                    bank.rc
-                        .accounts
-                        .accounts_db
-                        .calculate_accounts_lt_hash_at_startup_from_index(
-                            &bank.ancestors,
-                            bank.slot(),
-                        )
+                    thread_pool.install(|| {
+                        bank.rc
+                            .accounts
+                            .accounts_db
+                            .calculate_accounts_lt_hash_at_startup_from_index(
+                                &bank.ancestors,
+                                bank.slot(),
+                            )
+                    })
                 });
                 calculate_accounts_lt_hash_duration = Some(duration);
                 accounts_lt_hash
