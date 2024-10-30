@@ -1,11 +1,13 @@
 //! Definitions of commitment levels.
 
-#![cfg(feature = "full")]
+use core::{fmt, str::FromStr};
 
-use {std::str::FromStr, thiserror::Error};
-
-#[derive(Serialize, Deserialize, Default, Clone, Copy, Debug, PartialEq, Eq, Hash)]
-#[serde(rename_all = "camelCase")]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize),
+    serde(rename_all = "camelCase")
+)]
+#[derive(Default, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct CommitmentConfig {
     pub commitment: CommitmentLevel,
 }
@@ -70,8 +72,12 @@ impl FromStr for CommitmentConfig {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Hash)]
-#[serde(rename_all = "camelCase")]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize),
+    serde(rename_all = "camelCase")
+)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 /// An attribute of a slot. It describes how finalized a block is at some point in time. For example, a slot
 /// is said to be at the max level immediately after the cluster recognizes the block at that slot as
 /// finalized. When querying the ledger state, use lower levels of commitment to report progress and higher
@@ -123,8 +129,17 @@ impl std::fmt::Display for CommitmentLevel {
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Debug)]
 pub enum ParseCommitmentLevelError {
-    #[error("invalid variant")]
     Invalid,
+}
+
+impl std::error::Error for ParseCommitmentLevelError {}
+
+impl fmt::Display for ParseCommitmentLevelError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Invalid => f.write_str("invalid variant"),
+        }
+    }
 }

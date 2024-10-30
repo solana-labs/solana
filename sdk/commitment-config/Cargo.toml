@@ -1,0 +1,20 @@
+[package]
+name = "solana-commitment-config"
+description = "Solana commitment config."
+documentation = "https://docs.rs/solana-commitment-config"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+serde = { workspace = true, optional = true }
+serde_derive = { workspace = true, optional = true }
+
+[features]
+serde = ["dep:serde", "dep:serde_derive"]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
