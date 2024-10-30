@@ -45,7 +45,7 @@ pub fn thread_args<'a>(defaults: &DefaultThreadArgs) -> Vec<Arg<'_, 'a>> {
         new_thread_arg::<AccountsDbCleanThreadsArg>(&defaults.accounts_db_clean_threads),
         new_thread_arg::<AccountsDbForegroundThreadsArg>(&defaults.accounts_db_foreground_threads),
         new_thread_arg::<AccountsDbHashThreadsArg>(&defaults.accounts_db_hash_threads),
-        new_thread_arg::<AccountsIndexFlushThreadsArg>(&defaults.accounts_db_foreground_threads),
+        new_thread_arg::<AccountsIndexFlushThreadsArg>(&defaults.accounts_index_flush_threads),
         new_thread_arg::<IpEchoServerThreadsArg>(&defaults.ip_echo_server_threads),
         new_thread_arg::<ReplayForksThreadsArg>(&defaults.replay_forks_threads),
         new_thread_arg::<ReplayTransactionsThreadsArg>(&defaults.replay_transactions_threads),
