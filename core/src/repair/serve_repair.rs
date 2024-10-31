@@ -33,7 +33,7 @@ use {
         data_budget::DataBudget,
         packet::{Packet, PacketBatch, PacketBatchRecycler},
     },
-    solana_runtime::bank_forks::BankForks,
+    solana_runtime::{bank_forks::BankForks, root_bank_cache::RootBankCache},
     solana_sdk::{
         clock::Slot,
         genesis_config::ClusterType,
@@ -337,10 +337,9 @@ impl RepairProtocol {
     }
 }
 
-#[derive(Clone)]
 pub struct ServeRepair {
     cluster_info: Arc<ClusterInfo>,
-    bank_forks: Arc<RwLock<BankForks>>,
+    root_bank_cache: RootBankCache,
     repair_whitelist: Arc<RwLock<HashSet<Pubkey>>>,
 }
 
@@ -407,7 +406,7 @@ impl ServeRepair {
     ) -> Self {
         Self {
             cluster_info,
-            bank_forks,
+            root_bank_cache: RootBankCache::new(bank_forks),
             repair_whitelist,
         }
     }
@@ -631,7 +630,7 @@ impl ServeRepair {
 
     /// Process messages from the network
     fn run_listen(
-        &self,
+        &mut self,
         ping_cache: &mut PingCache,
         recycler: &PacketBatchRecycler,
         blockstore: &Blockstore,
@@ -647,7 +646,7 @@ impl ServeRepair {
         let mut total_requests = requests.len();
 
         let socket_addr_space = *self.cluster_info.socket_addr_space();
-        let root_bank = self.bank_forks.read().unwrap().root_bank();
+        let root_bank = self.root_bank_cache.root_bank();
         let epoch_staked_nodes = root_bank.epoch_staked_nodes(root_bank.epoch());
         let identity_keypair = self.cluster_info.keypair().clone();
         let my_id = identity_keypair.pubkey();
@@ -810,7 +809,7 @@ impl ServeRepair {
     }
 
     pub(crate) fn listen(
-        self,
+        mut self,
         blockstore: Arc<Blockstore>,
         requests_receiver: Receiver<RemoteRequest>,
         response_sender: PacketBatchSender,

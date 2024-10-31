@@ -31,7 +31,7 @@ use {
         shred,
     },
     solana_measure::measure::Measure,
-    solana_runtime::bank_forks::BankForks,
+    solana_runtime::{bank_forks::BankForks, root_bank_cache::RootBankCache},
     solana_sdk::{
         clock::{Slot, DEFAULT_TICKS_PER_SECOND, MS_PER_TICK},
         epoch_schedule::EpochSchedule,
@@ -314,7 +314,8 @@ impl RepairService {
         dumped_slots_receiver: DumpedSlotsReceiver,
         popular_pruned_forks_sender: PopularPrunedForksSender,
     ) {
-        let mut repair_weight = RepairWeight::new(repair_info.bank_forks.read().unwrap().root());
+        let mut root_bank_cache = RootBankCache::new(repair_info.bank_forks.clone());
+        let mut repair_weight = RepairWeight::new(root_bank_cache.root_bank().slot());
         let serve_repair = ServeRepair::new(
             repair_info.cluster_info.clone(),
             repair_info.bank_forks.clone(),
@@ -334,7 +335,7 @@ impl RepairService {
             let mut get_votes_elapsed;
             let mut add_votes_elapsed;
 
-            let root_bank = repair_info.bank_forks.read().unwrap().root_bank();
+            let root_bank = root_bank_cache.root_bank();
             let repair_protocol = serve_repair::get_repair_protocol(root_bank.cluster_type());
             let repairs = {
                 let new_root = root_bank.slot();
