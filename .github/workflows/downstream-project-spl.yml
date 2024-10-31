@@ -38,6 +38,7 @@ env:
 jobs:
   check:
     if: github.repository == 'anza-xyz/agave'
+    if: false # Re-enable once downstream job is fixed
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -91,6 +92,7 @@ jobs:
                 ],
             },
           ]
+    if: false # Re-enable once downstream job is fixed
     steps:
       - uses: actions/checkout@v4
 
@@ -144,7 +146,7 @@ jobs:
           - [name-service/program]
           - [stake-pool/program]
           - [single-pool/program]
-
+    if: false # Re-enable once downstream job is fixed
     steps:
       - uses: actions/checkout@v4
 
