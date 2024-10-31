@@ -145,10 +145,6 @@ const SHRINK_COLLECT_CHUNK_SIZE: usize = 50;
 /// candidates for shrinking.
 const SHRINK_INSERT_ANCIENT_THRESHOLD: usize = 10;
 
-/// Default value for the number of ancient storages the ancient slot
-/// combining should converge to.
-pub const MAX_ANCIENT_SLOTS_DEFAULT: usize = 100_000;
-
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum CreateAncientStorage {
     /// ancient storages are created by appending
@@ -504,6 +500,8 @@ pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
     read_cache_limit_bytes: None,
     write_cache_limit_bytes: None,
     ancient_append_vec_offset: None,
+    ancient_storage_ideal_size: None,
+    max_ancient_storages: None,
     skip_initial_hash_calc: false,
     exhaustively_verify_refcounts: false,
     create_ancient_storage: CreateAncientStorage::Pack,
@@ -526,6 +524,8 @@ pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig
     read_cache_limit_bytes: None,
     write_cache_limit_bytes: None,
     ancient_append_vec_offset: None,
+    ancient_storage_ideal_size: None,
+    max_ancient_storages: None,
     skip_initial_hash_calc: false,
     exhaustively_verify_refcounts: false,
     create_ancient_storage: CreateAncientStorage::Pack,
@@ -617,13 +617,20 @@ pub struct AccountsAddRootTiming {
 /// |  older  |<- abs(offset) ->|<- slots in an epoch ->| max root
 /// | ancient |                 modern                  |
 ///
-/// Note that another constant MAX_ANCIENT_SLOTS_DEFAULT sets a
+/// Note that another constant DEFAULT_MAX_ANCIENT_STORAGES sets a
 /// threshold for combining ancient storages so that their overall
 /// number is under a certain limit, whereas this constant establishes
 /// the distance from the max root slot beyond which storages holding
 /// the account data for the slots are considered ancient by the
 /// shrinking algorithm.
 const ANCIENT_APPEND_VEC_DEFAULT_OFFSET: Option<i64> = Some(100_000);
+/// The smallest size of ideal ancient storage.
+/// The setting can be overridden on the command line
+/// with --accounts-db-ancient-ideal-storage-size option.
+const DEFAULT_ANCIENT_STORAGE_IDEAL_SIZE: u64 = 100_000;
+/// Default value for the number of ancient storages the ancient slot
+/// combining should converge to.
+pub const DEFAULT_MAX_ANCIENT_STORAGES: usize = 100_000;
 
 #[derive(Debug, Default, Clone)]
 pub struct AccountsDbConfig {
@@ -641,6 +648,8 @@ pub struct AccountsDbConfig {
     /// if None, ancient append vecs are set to ANCIENT_APPEND_VEC_DEFAULT_OFFSET
     /// Some(offset) means include slots up to (max_slot - (slots_per_epoch - 'offset'))
     pub ancient_append_vec_offset: Option<i64>,
+    pub ancient_storage_ideal_size: Option<u64>,
+    pub max_ancient_storages: Option<usize>,
     pub test_skip_rewrites_but_include_in_bank_hash: bool,
     pub skip_initial_hash_calc: bool,
     pub exhaustively_verify_refcounts: bool,
@@ -1459,7 +1468,8 @@ pub struct AccountsDb {
     /// Some(offset) iff we want to squash old append vecs together into 'ancient append vecs'
     /// Some(offset) means for slots up to (max_slot - (slots_per_epoch - 'offset')), put them in ancient append vecs
     pub ancient_append_vec_offset: Option<i64>,
-
+    pub ancient_storage_ideal_size: u64,
+    pub max_ancient_storages: usize,
     /// true iff we want to skip the initial hash calculation on startup
     pub skip_initial_hash_calc: bool,
 
@@ -1994,6 +2004,12 @@ impl AccountsDb {
             ancient_append_vec_offset: accounts_db_config
                 .ancient_append_vec_offset
                 .or(ANCIENT_APPEND_VEC_DEFAULT_OFFSET),
+            ancient_storage_ideal_size: accounts_db_config
+                .ancient_storage_ideal_size
+                .unwrap_or(DEFAULT_ANCIENT_STORAGE_IDEAL_SIZE),
+            max_ancient_storages: accounts_db_config
+                .max_ancient_storages
+                .unwrap_or(DEFAULT_MAX_ANCIENT_STORAGES),
             account_indexes: accounts_db_config.account_indexes.unwrap_or_default(),
             shrink_ratio: accounts_db_config.shrink_ratio,
             accounts_update_notifier,
@@ -16380,7 +16396,7 @@ pub mod tests {
         assert!(db
             .get_sorted_potential_ancient_slots(oldest_non_ancient_slot)
             .is_empty());
-        let root1 = MAX_ANCIENT_SLOTS_DEFAULT as u64 + ancient_append_vec_offset as u64 + 1;
+        let root1 = DEFAULT_MAX_ANCIENT_STORAGES as u64 + ancient_append_vec_offset as u64 + 1;
         db.add_root(root1);
         let root2 = root1 + 1;
         db.add_root(root2);

@@ -1376,6 +1376,24 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .hidden(hidden_unless_forced()),
         )
         .arg(
+            Arg::with_name("accounts_db_ancient_storage_ideal_size")
+                .long("accounts-db-ancient-storage-ideal-size")
+                .value_name("BYTES")
+                .validator(is_parsable::<u64>)
+                .takes_value(true)
+                .help("The smallest size of ideal ancient storage.")
+                .hidden(hidden_unless_forced()),
+        )
+        .arg(
+            Arg::with_name("accounts_db_max_ancient_storages")
+                .long("accounts-db-max-ancient-storages")
+                .value_name("USIZE")
+                .validator(is_parsable::<usize>)
+                .takes_value(true)
+                .help("The number of ancient storages the ancient slot combining should converge to.")
+                .hidden(hidden_unless_forced()),
+        )
+        .arg(
             Arg::with_name("accounts_db_cache_limit_mb")
                 .long("accounts-db-cache-limit-mb")
                 .value_name("MEGABYTES")

@@ -11,7 +11,6 @@ use {
             stats::{ShrinkAncientStats, ShrinkStatsSub},
             AccountFromStorage, AccountStorageEntry, AccountsDb, AliveAccounts,
             GetUniqueAccountsResult, ShrinkCollect, ShrinkCollectAliveSeparatedByRefs,
-            MAX_ANCIENT_SLOTS_DEFAULT,
         },
         accounts_file::AccountsFile,
         active_stats::ActiveStatItem,
@@ -31,8 +30,6 @@ use {
 /// this many # of highest slot values should be treated as desirable to pack.
 /// This gives us high slots to move packed accounts into.
 const HIGH_SLOT_OFFSET: u64 = 100;
-/// The smallest size of ideal ancient storage.
-const MINIMAL_IDEAL_STORAGE_SIZE: u64 = 5_000_000;
 
 /// ancient packing algorithm tuning per pass
 #[derive(Debug)]
@@ -344,9 +341,8 @@ impl AccountsDb {
         can_randomly_shrink: bool,
     ) {
         let tuning = PackedAncientStorageTuning {
-            // Slots old enough to be ancient.  Setting this parameter
-            // to 100k makes ancient storages to be approx 5M.
-            max_ancient_slots: MAX_ANCIENT_SLOTS_DEFAULT,
+            // Slots old enough to be ancient.
+            max_ancient_slots: self.max_ancient_storages,
             // Don't re-pack anything just to shrink.
             // shrink_candidate_slots will handle these old storages.
             percent_of_alive_shrunk_data: 0,
@@ -529,7 +525,7 @@ impl AccountsDb {
         // divided by half of max ancient slots
         tuning.ideal_storage_size = NonZeroU64::new(
             (ancient_slot_infos.total_alive_bytes.0 * 2 / tuning.max_ancient_slots.max(1) as u64)
-                .max(MINIMAL_IDEAL_STORAGE_SIZE),
+                .max(self.ancient_storage_ideal_size),
         )
         .unwrap();
 
@@ -4007,7 +4003,7 @@ pub mod tests {
         let infos = db.collect_sort_filter_ancient_slots(slot_vec.clone(), &mut tuning);
         let ideal_storage_size = tuning.ideal_storage_size.get();
         let max_resulting_storages = tuning.max_resulting_storages.get();
-        let expected_all_infos_len = max_resulting_storages * ideal_storage_size / data_size - 1;
+        let expected_all_infos_len = max_resulting_storages * ideal_storage_size / data_size;
         assert_eq!(infos.all_infos.len(), expected_all_infos_len as usize);
     }
 
