@@ -16,7 +16,8 @@ bytemuck_derive = { workspace = true }
 merlin = { workspace = true }
 num-derive = { workspace = true }
 num-traits = { workspace = true }
-solana-program = { workspace = true }
+solana-instruction = { workspace = true, features = ["std"] }
+solana-pubkey = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
