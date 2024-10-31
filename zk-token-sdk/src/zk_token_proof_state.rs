@@ -2,10 +2,8 @@ use {
     crate::{zk_token_elgamal::pod::PodProofType, zk_token_proof_instruction::ProofType},
     bytemuck::{bytes_of, Pod, Zeroable},
     num_traits::ToPrimitive,
-    solana_program::{
-        instruction::{InstructionError, InstructionError::InvalidAccountData},
-        pubkey::Pubkey,
-    },
+    solana_instruction::error::{InstructionError, InstructionError::InvalidAccountData},
+    solana_pubkey::Pubkey,
     std::mem::size_of,
 };
 

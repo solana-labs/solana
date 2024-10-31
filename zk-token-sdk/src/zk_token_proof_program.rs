@@ -8,4 +8,4 @@
 //! [`ZK Token proof`]: https://docs.solanalabs.com/runtime/zk-token-proof
 
 // Program Id of the ZkToken Proof program
-solana_program::declare_id!("ZkTokenProof1111111111111111111111111111111");
+solana_pubkey::declare_id!("ZkTokenProof1111111111111111111111111111111");
