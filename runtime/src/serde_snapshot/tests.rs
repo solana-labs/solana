@@ -83,6 +83,7 @@ mod serde_snapshot_tests {
             None,
             (u64::default(), None),
             None,
+            false,
         )
         .map(|(accounts_db, _)| accounts_db)
     }

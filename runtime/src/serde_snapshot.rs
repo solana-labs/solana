@@ -884,6 +884,7 @@ where
         bank_fields.epoch_accounts_hash,
         capitalizations,
         bank_fields.incremental_snapshot_persistence.as_ref(),
+        bank_fields.accounts_lt_hash.is_some(),
     )?;
 
     let bank_rc = BankRc::new(Accounts::new(Arc::new(accounts_db)));
@@ -1049,6 +1050,7 @@ fn reconstruct_accountsdb_from_fields<E>(
     epoch_accounts_hash: Option<Hash>,
     capitalizations: (u64, Option<u64>),
     incremental_snapshot_persistence: Option<&BankIncrementalSnapshotPersistence>,
+    has_accounts_lt_hash: bool,
 ) -> Result<(AccountsDb, ReconstructedAccountsDbInfo), Error>
 where
     E: SerializableStorage + std::marker::Sync,
@@ -1232,6 +1234,11 @@ where
         })
         .unwrap();
 
+    // When generating the index, we want to calculate the duplicates lt hash value (needed to do
+    // the lattice-based verification of the accounts in the background) optimistically.
+    // This means, either when the cli arg is set, or when the snapshot has an accounts lt hash.
+    let is_accounts_lt_hash_enabled =
+        accounts_db.is_experimental_accumulator_hash_enabled() || has_accounts_lt_hash;
     let IndexGenerationInfo {
         accounts_data_len,
         rent_paying_accounts_by_partition,
@@ -1240,6 +1247,7 @@ where
         limit_load_slot_count_from_snapshot,
         verify_index,
         genesis_config,
+        is_accounts_lt_hash_enabled,
     );
     accounts_db
         .accounts_index

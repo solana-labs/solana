@@ -1731,6 +1731,7 @@ impl Bank {
             // When there is a feature gate for the accounts lt hash, if the feature is enabled
             // then it will be *required* that the snapshot contains an accounts lt hash.
             let accounts_lt_hash = fields.accounts_lt_hash.unwrap_or_else(|| {
+                info!("Calculating the accounts lt hash...");
                 let (accounts_lt_hash, duration) = meas_dur!({
                     thread_pool.install(|| {
                         bank.rc
@@ -1742,6 +1743,7 @@ impl Bank {
                             )
                     })
                 });
+                info!("Calculating the accounts lt hash... Done in {duration:?}");
                 calculate_accounts_lt_hash_duration = Some(duration);
                 accounts_lt_hash
             });
@@ -5619,25 +5621,24 @@ impl Bank {
             .wait_for_complete();
 
         let slot = self.slot();
-        let verify_kind = if self
-            .rc
-            .accounts
-            .accounts_db
-            .is_experimental_accumulator_hash_enabled()
-        {
-            VerifyKind::Lattice
-        } else {
-            VerifyKind::Merkle
-        };
 
-        if verify_kind == VerifyKind::Lattice {
-            // Calculating the accounts lt hash from storages *requires* a duplicates_lt_hash.
-            // If it is None here, then we must use the index instead, which also means we
-            // cannot run in the background.
-            if duplicates_lt_hash.is_none() {
+        let verify_kind = match (
+            duplicates_lt_hash.is_some(),
+            self.rc
+                .accounts
+                .accounts_db
+                .is_experimental_accumulator_hash_enabled(),
+        ) {
+            (true, _) => VerifyKind::Lattice,
+            (false, false) => VerifyKind::Merkle,
+            (false, true) => {
+                // Calculating the accounts lt hash from storages *requires* a duplicates_lt_hash.
+                // If it is None here, then we must use the index instead, which also means we
+                // cannot run in the background.
                 config.run_in_background = false;
+                VerifyKind::Lattice
             }
-        }
+        };
 
         if config.require_rooted_bank && !accounts.accounts_db.accounts_index.is_alive_root(slot) {
             if let Some(parent) = self.parent() {
@@ -5678,6 +5679,10 @@ impl Bank {
             use_bg_thread_pool: config.run_in_background,
         };
 
+        info!(
+            "Verifying accounts, in background? {}, verify kind: {verify_kind:?}",
+            config.run_in_background,
+        );
         if config.run_in_background {
             let accounts = Arc::clone(accounts);
             let accounts_ = Arc::clone(&accounts);

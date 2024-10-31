@@ -8597,6 +8597,7 @@ impl AccountsDb {
         limit_load_slot_count_from_snapshot: Option<usize>,
         verify: bool,
         genesis_config: &GenesisConfig,
+        should_calculate_duplicates_lt_hash: bool,
     ) -> IndexGenerationInfo {
         let mut total_time = Measure::start("generate_index");
         let mut slots = self.storage.all_slots();
@@ -8853,7 +8854,7 @@ impl AccountsDb {
                     accounts_data_len_from_duplicates: u64,
                     num_duplicate_accounts: u64,
                     uncleaned_roots: IntSet<Slot>,
-                    duplicates_lt_hash: Box<DuplicatesLtHash>,
+                    duplicates_lt_hash: Option<Box<DuplicatesLtHash>>,
                 }
                 impl DuplicatePubkeysVisitedInfo {
                     fn reduce(mut a: Self, mut b: Self) -> Self {
@@ -8870,9 +8871,30 @@ impl AccountsDb {
                             other.accounts_data_len_from_duplicates;
                         self.num_duplicate_accounts += other.num_duplicate_accounts;
                         self.uncleaned_roots.extend(other.uncleaned_roots);
-                        self.duplicates_lt_hash
-                            .0
-                            .mix_in(&other.duplicates_lt_hash.0);
+
+                        match (
+                            self.duplicates_lt_hash.is_some(),
+                            other.duplicates_lt_hash.is_some(),
+                        ) {
+                            (true, true) => {
+                                // SAFETY: We just checked that both values are Some
+                                self.duplicates_lt_hash
+                                    .as_mut()
+                                    .unwrap()
+                                    .0
+                                    .mix_in(&other.duplicates_lt_hash.as_ref().unwrap().0);
+                            }
+                            (true, false) => {
+                                // nothing to do; `other` doesn't have a duplicates lt hash
+                            }
+                            (false, true) => {
+                                // `self` doesn't have a duplicates lt hash, so pilfer from `other`
+                                self.duplicates_lt_hash = other.duplicates_lt_hash;
+                            }
+                            (false, false) => {
+                                // nothing to do; no duplicates lt hash at all
+                            }
+                        }
                     }
                 }
 
@@ -8909,6 +8931,7 @@ impl AccountsDb {
                                         pubkeys,
                                         &rent_collector,
                                         &timings,
+                                        should_calculate_duplicates_lt_hash,
                                     );
                                     let intermediate = DuplicatePubkeysVisitedInfo {
                                         accounts_data_len_from_duplicates,
@@ -8937,7 +8960,7 @@ impl AccountsDb {
                 self.accounts_index
                     .add_uncleaned_roots(uncleaned_roots.into_iter());
                 accounts_data_len.fetch_sub(accounts_data_len_from_duplicates, Ordering::Relaxed);
-                if self.is_experimental_accumulator_hash_enabled() {
+                if let Some(duplicates_lt_hash) = duplicates_lt_hash {
                     let old_val = outer_duplicates_lt_hash.replace(duplicates_lt_hash);
                     assert!(old_val.is_none());
                 }
@@ -9049,11 +9072,13 @@ impl AccountsDb {
         pubkeys: &[Pubkey],
         rent_collector: &RentCollector,
         timings: &GenerateIndexTimings,
-    ) -> (u64, u64, IntSet<Slot>, Box<DuplicatesLtHash>) {
+        should_calculate_duplicates_lt_hash: bool,
+    ) -> (u64, u64, IntSet<Slot>, Option<Box<DuplicatesLtHash>>) {
         let mut accounts_data_len_from_duplicates = 0;
         let mut num_duplicate_accounts = 0_u64;
         let mut uncleaned_slots = IntSet::default();
-        let mut duplicates_lt_hash = Box::new(DuplicatesLtHash::default());
+        let mut duplicates_lt_hash =
+            should_calculate_duplicates_lt_hash.then(|| Box::new(DuplicatesLtHash::default()));
         let mut removed_rent_paying = 0;
         let mut removed_top_off = 0;
         let mut lt_hash_time = Duration::default();
@@ -9097,7 +9122,7 @@ impl AccountsDb {
                                     removed_rent_paying += 1;
                                     removed_top_off += lamports_to_top_off;
                                 }
-                                if self.is_experimental_accumulator_hash_enabled() {
+                                if let Some(duplicates_lt_hash) = duplicates_lt_hash.as_mut() {
                                     let (_, duration) = meas_dur!({
                                         let account_lt_hash =
                                             Self::lt_hash_account(&loaded_account, pubkey);
@@ -9696,7 +9721,7 @@ pub mod tests {
 
         let genesis_config = GenesisConfig::default();
         assert!(!db.accounts_index.contains(&pubkey));
-        let result = db.generate_index(None, false, &genesis_config);
+        let result = db.generate_index(None, false, &genesis_config, false);
         // index entry should only contain a single entry for the pubkey since index cannot hold more than 1 entry per slot
         let entry = db.accounts_index.get_cloned(&pubkey).unwrap();
         assert_eq!(entry.slot_list.read().unwrap().len(), 1);
@@ -9736,7 +9761,7 @@ pub mod tests {
         append_vec.accounts.append_accounts(&storable_accounts, 0);
         let genesis_config = GenesisConfig::default();
         assert!(!db.accounts_index.contains(&pubkey));
-        let result = db.generate_index(None, false, &genesis_config);
+        let result = db.generate_index(None, false, &genesis_config, false);
         let entry = db.accounts_index.get_cloned(&pubkey).unwrap();
         assert_eq!(entry.slot_list.read().unwrap().len(), 1);
         assert_eq!(append_vec.alive_bytes(), aligned_stored_size(0));
