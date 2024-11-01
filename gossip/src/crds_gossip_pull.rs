@@ -22,6 +22,7 @@ use {
         crds_value::CrdsValue,
         ping_pong::PingCache,
     },
+    itertools::Itertools,
     rand::{
         distributions::{Distribution, WeightedIndex},
         Rng,
@@ -31,6 +32,7 @@ use {
     solana_sdk::{
         hash::{hash, Hash},
         native_token::LAMPORTS_PER_SOL,
+        packet::PACKET_DATA_SIZE,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
     },
@@ -43,7 +45,7 @@ use {
         ops::Index,
         sync::{
             atomic::{AtomicI64, AtomicUsize, Ordering},
-            Mutex, RwLock,
+            LazyLock, Mutex, RwLock,
         },
         time::Duration,
     },
@@ -598,13 +600,64 @@ impl<'a> Index<&Pubkey> for CrdsTimeouts<'a> {
     }
 }
 
+// Returns max_bytes for the bloom filter such that bincode serialized
+// Protocol::PullRequest(CrdsFilter, CrdsValue) fits in a packet.
+pub(crate) fn get_max_bloom_filter_bytes(caller: &CrdsValue) -> usize {
+    // Maps serialized size of CrdsFilter to max_bytes of bloom filter.
+    static MAX_BYTES_CACHE: LazyLock<[u16; PACKET_DATA_SIZE + 1]> = LazyLock::new(|| {
+        let mut rng = rand::thread_rng();
+        let mut out = [0u16; PACKET_DATA_SIZE + 1];
+        for max_bytes in 1..=PACKET_DATA_SIZE {
+            let filters = CrdsFilterSet::new(&mut rng, /*num_items:*/ 1, max_bytes);
+            let mut iter = Vec::<CrdsFilter>::from(filters)
+                .into_iter()
+                .map(|filter| {
+                    bincode::serialized_size(&filter)
+                        .map(usize::try_from)
+                        .unwrap()
+                        .unwrap()
+                })
+                .dedup();
+            let size_of_filter = iter.next().unwrap();
+            // All filters should have the same serialzied size.
+            assert_eq!(iter.next(), None);
+            out[size_of_filter] = u16::try_from(max_bytes).unwrap();
+        }
+        // Forward fill zero entries by assigning the last non-zero value.
+        let _ = out.iter_mut().fold(0, |state, entry| {
+            if *entry == 0 {
+                *entry = state;
+            }
+            *entry
+        });
+        out
+    });
+    // Maximum bincode serialized size of CrdsFilter in
+    // Protocol::PullRequest(CrdsFilter, CrdsValue)
+    let size_of_filter = PACKET_DATA_SIZE
+        .checked_sub(
+            // 4 bytes for u32 enum variant identifier of Protocol.
+            4 + bincode::serialized_size(caller)
+                .map(usize::try_from)
+                .unwrap()
+                .unwrap(),
+        )
+        .unwrap();
+    MAX_BYTES_CACHE
+        .get(size_of_filter)
+        .copied()
+        .map(usize::from)
+        .unwrap()
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use {
         super::*,
         crate::{
-            cluster_info::MAX_BLOOM_SIZE,
+            cluster_info::Protocol,
             crds_value::{CrdsData, Vote},
+            legacy_contact_info::LegacyContactInfo,
         },
         itertools::Itertools,
         rand::{seq::SliceRandom, SeedableRng},
@@ -617,7 +670,11 @@ pub(crate) mod tests {
             signer::keypair::keypair_from_seed,
             timing::timestamp,
         },
-        std::time::Instant,
+        std::{
+            net::{IpAddr, Ipv6Addr},
+            time::Instant,
+        },
+        test_case::test_case,
     };
 
     #[cfg(debug_assertions)]
@@ -746,7 +803,11 @@ pub(crate) mod tests {
         }
         let crds = RwLock::new(crds);
         assert!(num_inserts > 30_000, "num inserts: {num_inserts}");
-        let filters = crds_gossip_pull.build_crds_filters(&thread_pool, &crds, MAX_BLOOM_SIZE);
+        let filters = crds_gossip_pull.build_crds_filters(
+            &thread_pool,
+            &crds,
+            992, // max_bloom_filter_bytes
+        );
         assert_eq!(filters.len(), MIN_NUM_BLOOM_FILTERS.max(4));
         let crds = crds.read().unwrap();
         let purged: Vec<_> = thread_pool.install(|| crds.purged().collect());
@@ -1383,5 +1444,72 @@ pub(crate) mod tests {
             .0,
             2
         );
+    }
+
+    // Asserts that all bincode serialized pull requests fit in a Packet.
+    fn verify_get_max_bloom_filter_bytes<R: Rng>(
+        rng: &mut R,
+        caller: &CrdsValue,
+        num_items: usize,
+    ) {
+        let packet_data_size_range = (PACKET_DATA_SIZE - 5)..=PACKET_DATA_SIZE;
+        let max_bytes = get_max_bloom_filter_bytes(caller);
+        let filters = CrdsFilterSet::new(rng, num_items, max_bytes);
+        let request_bytes = bincode::serialized_size(caller).unwrap();
+        for filter in Vec::<CrdsFilter>::from(filters) {
+            let request_bytes = 4 + request_bytes + bincode::serialized_size(&filter).unwrap();
+            let request = Protocol::PullRequest(filter, caller.clone());
+            let request = bincode::serialize(&request).unwrap();
+            assert!(packet_data_size_range.contains(&request.len()));
+            assert_eq!(request.len() as u64, request_bytes);
+        }
+    }
+
+    #[test_case(1)]
+    #[test_case(7)]
+    #[test_case(81)]
+    #[test_case(329)]
+    #[test_case(5691)]
+    #[test_case(85689)]
+    #[test_case(645043)]
+    #[test_case(3873238)]
+    fn test_get_max_bloom_filter_bytes(num_items: usize) {
+        let mut rng = rand::thread_rng();
+        let keypair = Keypair::new();
+        let node = {
+            let mut node =
+                ContactInfo::new_localhost(&keypair.pubkey(), /*wallclock:*/ rng.gen());
+            node.set_shred_version(rng.gen());
+            node
+        };
+        {
+            let caller = CrdsValue::new_signed(CrdsData::ContactInfo(node.clone()), &keypair);
+            assert_eq!(get_max_bloom_filter_bytes(&caller), 1175);
+            verify_get_max_bloom_filter_bytes(&mut rng, &caller, num_items);
+        }
+        let node = LegacyContactInfo::try_from(&node).unwrap();
+        {
+            let caller = CrdsValue::new_signed(CrdsData::LegacyContactInfo(node), &keypair);
+            assert_eq!(get_max_bloom_filter_bytes(&caller), 1136);
+            verify_get_max_bloom_filter_bytes(&mut rng, &caller, num_items);
+        }
+        let node = {
+            let addr = Ipv6Addr::new(0x2001, 0x4860, 0x4860, 0, 0, 0, 0, 0x8888);
+            let socket = SocketAddr::new(IpAddr::from(addr), 8053);
+            let mut node = ContactInfo::new_with_socketaddr(&keypair.pubkey(), &socket);
+            node.set_shred_version(rng.gen());
+            node
+        };
+        {
+            let caller = CrdsValue::new_signed(CrdsData::ContactInfo(node.clone()), &keypair);
+            assert_eq!(get_max_bloom_filter_bytes(&caller), 1165);
+            verify_get_max_bloom_filter_bytes(&mut rng, &caller, num_items);
+        }
+        let node = LegacyContactInfo::try_from(&node).unwrap();
+        {
+            let caller = CrdsValue::new_signed(CrdsData::LegacyContactInfo(node), &keypair);
+            assert_eq!(get_max_bloom_filter_bytes(&caller), 992);
+            verify_get_max_bloom_filter_bytes(&mut rng, &caller, num_items);
+        }
     }
 }

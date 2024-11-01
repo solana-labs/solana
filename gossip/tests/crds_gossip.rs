@@ -5,7 +5,6 @@ use {
     rayon::{prelude::*, ThreadPool, ThreadPoolBuilder},
     serial_test::serial,
     solana_gossip::{
-        cluster_info,
         cluster_info_metrics::GossipStats,
         contact_info::ContactInfo,
         crds::GossipRoute,
@@ -530,7 +529,7 @@ fn network_run_pull(
                             now,
                             None,
                             &HashMap::new(),
-                            cluster_info::MAX_BLOOM_SIZE,
+                            992, // max_bloom_filter_bytes
                             from.ping_cache.deref(),
                             &mut pings,
                             &SocketAddrSpace::Unspecified,

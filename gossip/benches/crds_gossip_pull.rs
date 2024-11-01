@@ -6,7 +6,6 @@ use {
     rand::{thread_rng, Rng},
     rayon::ThreadPoolBuilder,
     solana_gossip::{
-        cluster_info::MAX_BLOOM_SIZE,
         crds::{Crds, GossipRoute},
         crds_gossip_pull::{CrdsFilter, CrdsGossipPull},
         crds_value::CrdsValue,
@@ -51,7 +50,11 @@ fn bench_build_crds_filters(bencher: &mut Bencher) {
     assert_eq!(num_inserts, 90_000);
     let crds = RwLock::new(crds);
     bencher.iter(|| {
-        let filters = crds_gossip_pull.build_crds_filters(&thread_pool, &crds, MAX_BLOOM_SIZE);
+        let filters = crds_gossip_pull.build_crds_filters(
+            &thread_pool,
+            &crds,
+            992, // max_bloom_filter_bytes
+        );
         assert_eq!(filters.len(), 16);
     });
 }

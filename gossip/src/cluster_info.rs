@@ -23,7 +23,8 @@ use {
         crds_gossip::CrdsGossip,
         crds_gossip_error::CrdsGossipError,
         crds_gossip_pull::{
-            CrdsFilter, CrdsTimeouts, ProcessPullStats, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS,
+            get_max_bloom_filter_bytes, CrdsFilter, CrdsTimeouts, ProcessPullStats,
+            CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS,
         },
         crds_value::{
             self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlotsIndex, LowestSlot, NodeInstance,
@@ -102,8 +103,6 @@ use {
 
 /// milliseconds we sleep for between gossip requests
 pub const GOSSIP_SLEEP_MILLIS: u64 = 100;
-/// The maximum size of a bloom filter
-pub const MAX_BLOOM_SIZE: usize = MAX_CRDS_OBJECT_SIZE;
 pub const MAX_CRDS_OBJECT_SIZE: usize = 928;
 /// A hard limit on incoming gossip messages
 /// Chosen to be able to handle 1Gbps of pure gossip traffic
@@ -1476,6 +1475,7 @@ impl ClusterInfo {
     fn append_entrypoint_to_pulls(
         &self,
         thread_pool: &ThreadPool,
+        max_bloom_filter_bytes: usize,
         pulls: &mut Vec<(ContactInfo, Vec<CrdsFilter>)>,
     ) {
         const THROTTLE_DELAY: u64 = CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS / 2;
@@ -1504,9 +1504,11 @@ impl ClusterInfo {
         };
         let filters = if pulls.is_empty() {
             let _st = ScopedTimer::from(&self.stats.entrypoint2);
-            self.gossip
-                .pull
-                .build_crds_filters(thread_pool, &self.gossip.crds, MAX_BLOOM_SIZE)
+            self.gossip.pull.build_crds_filters(
+                thread_pool,
+                &self.gossip.crds,
+                max_bloom_filter_bytes,
+            )
         } else {
             pulls
                 .iter()
@@ -1579,6 +1581,13 @@ impl ClusterInfo {
         Vec<(SocketAddr, Protocol)>, // Pull requests
     ) {
         let now = timestamp();
+        // TODO: Use new ContactInfo once the cluster has upgraded to:
+        // https://github.com/anza-xyz/agave/pull/803
+        let self_info = LegacyContactInfo::try_from(&self.my_contact_info())
+            .map(CrdsData::LegacyContactInfo)
+            .expect("Operator must spin up node with valid contact-info");
+        let self_info = CrdsValue::new_signed(self_info, &self.keypair());
+        let max_bloom_filter_bytes = get_max_bloom_filter_bytes(&self_info);
         let mut pings = Vec::new();
         let mut pulls = {
             let _st = ScopedTimer::from(&self.stats.new_pull_requests);
@@ -1590,25 +1599,19 @@ impl ClusterInfo {
                     now,
                     gossip_validators,
                     stakes,
-                    MAX_BLOOM_SIZE,
+                    max_bloom_filter_bytes,
                     &self.ping_cache,
                     &mut pings,
                     &self.socket_addr_space,
                 )
                 .unwrap_or_default()
         };
-        self.append_entrypoint_to_pulls(thread_pool, &mut pulls);
+        self.append_entrypoint_to_pulls(thread_pool, max_bloom_filter_bytes, &mut pulls);
         let num_requests = pulls
             .iter()
             .map(|(_, filters)| filters.len())
             .sum::<usize>() as u64;
         self.stats.new_pull_requests_count.add_relaxed(num_requests);
-        // TODO: Use new ContactInfo once the cluster has upgraded to:
-        // https://github.com/anza-xyz/agave/pull/803
-        let self_info = LegacyContactInfo::try_from(&self.my_contact_info())
-            .map(CrdsData::LegacyContactInfo)
-            .expect("Operator must spin up node with valid contact-info");
-        let self_info = CrdsValue::new_signed(self_info, &self.keypair());
         let pulls = pulls
             .into_iter()
             .filter_map(|(peer, filters)| Some((peer.gossip().ok()?, filters)))
@@ -3920,7 +3923,7 @@ mod tests {
                 timestamp(),
                 None,
                 &HashMap::new(),
-                MAX_BLOOM_SIZE,
+                992, // max_bloom_filter_bytes
                 &cluster_info.ping_cache,
                 &mut pings,
                 &cluster_info.socket_addr_space,
@@ -4372,24 +4375,6 @@ mod tests {
     }
 
     #[test]
-    fn test_crds_filter_size() {
-        //sanity test to ensure filter size never exceeds MTU size
-        check_pull_request_size(CrdsFilter::new_rand(1000, 10));
-        check_pull_request_size(CrdsFilter::new_rand(1000, 1000));
-        check_pull_request_size(CrdsFilter::new_rand(100_000, 1000));
-        check_pull_request_size(CrdsFilter::new_rand(100_000, MAX_BLOOM_SIZE));
-    }
-
-    fn check_pull_request_size(filter: CrdsFilter) {
-        // TODO: Use new ContactInfo once the cluster has upgraded to:
-        // https://github.com/anza-xyz/agave/pull/803
-        let value =
-            CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(LegacyContactInfo::default()));
-        let protocol = Protocol::PullRequest(filter, value);
-        assert!(serialized_size(&protocol).unwrap() <= PACKET_DATA_SIZE as u64);
-    }
-
-    #[test]
     fn test_tvu_peers_and_stakes() {
         let keypair = Arc::new(Keypair::new());
         let d = ContactInfo::new_localhost(&keypair.pubkey(), timestamp());
@@ -4516,12 +4501,6 @@ mod tests {
     }
 
     #[test]
-    fn test_max_bloom_size() {
-        // check that the constant fits into the dynamic size
-        assert!(MAX_BLOOM_SIZE <= max_bloom_size());
-    }
-
-    #[test]
     fn test_protocol_sanitize() {
         let pd = PruneData {
             wallclock: MAX_WALLCLOCK,
@@ -4546,21 +4525,6 @@ mod tests {
         assert_eq!(prune_message.sanitize(), Ok(()));
         let prune_message = Protocol::PruneMessage(Pubkey::new_unique(), prune_data);
         assert_eq!(prune_message.sanitize(), Err(SanitizeError::InvalidValue));
-    }
-
-    // computes the maximum size for pull request blooms
-    fn max_bloom_size() -> usize {
-        let filter_size = serialized_size(&CrdsFilter::default())
-            .expect("unable to serialize default filter") as usize;
-        // TODO: Use new ContactInfo once the cluster has upgraded to:
-        // https://github.com/anza-xyz/agave/pull/803
-        let protocol = Protocol::PullRequest(
-            CrdsFilter::default(),
-            CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(LegacyContactInfo::default())),
-        );
-        let protocol_size =
-            serialized_size(&protocol).expect("unable to serialize gossip protocol") as usize;
-        PACKET_DATA_SIZE - (protocol_size - filter_size)
     }
 
     #[test]
