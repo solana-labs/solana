@@ -24,13 +24,3 @@ if semverGT "$project_used_solana_version" "$SOLANA_VER"; then
 fi
 
 ./patch.crates-io.sh "$SOLANA_DIR"
-
-# anza migration stopgap. can be removed when agave is fully recommended for public usage.
-sed -i 's/solana-geyser-plugin-interface/agave-geyser-plugin-interface/g' ./Cargo.toml
-
-# should be removed when spl bump their curve25519-dalek
-sed -i "s/^curve25519-dalek =.*/curve25519-dalek = \"4.1.3\"/" token/confidential-transfer/proof-generation/Cargo.toml
-
-# fix curve25519-dalek
-
-sed -i '/\[patch.crates-io\]/a curve25519-dalek = { git = "https://github.com/anza-xyz/curve25519-dalek.git", rev = "b500cdc2a920cd5bff9e2dd974d7b97349d61464" }' ./Cargo.toml
