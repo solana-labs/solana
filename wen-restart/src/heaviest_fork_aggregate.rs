@@ -161,8 +161,10 @@ impl HeaviestForkAggregate {
         })
     }
 
-    pub(crate) fn block_stake_map(self) -> HashMap<(Slot, Hash), u64> {
-        self.block_stake_map
+    pub(crate) fn print_block_stake_map(&self) {
+        for ((slot, hash), stake) in self.block_stake_map.iter() {
+            info!("Slot: {}, Hash: {}, Stake: {}", slot, hash, stake,);
+        }
     }
 }
 

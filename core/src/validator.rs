@@ -1433,7 +1433,7 @@ impl Validator {
         .map_err(ValidatorError::Other)?;
 
         if in_wen_restart {
-            info!("Waiting for wen_restart phase one to finish");
+            info!("Waiting for wen_restart to finish");
             wait_for_wen_restart(WenRestartConfig {
                 wen_restart_path: config.wen_restart_proto_path.clone().unwrap(),
                 wen_restart_coordinator: config.wen_restart_coordinator.unwrap(),
