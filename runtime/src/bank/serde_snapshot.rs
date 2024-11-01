@@ -325,7 +325,7 @@ mod tests {
         let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
         bank0.squash();
         let mut bank = Bank::new_from_parent(bank0.clone(), &Pubkey::default(), 1);
-
+        bank.freeze();
         add_root_and_flush_write_cache(&bank0);
         bank.rc
             .accounts
@@ -470,6 +470,7 @@ mod tests {
         let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
         bank0.squash();
         let mut bank = Bank::new_from_parent(bank0.clone(), &Pubkey::default(), 1);
+        bank.freeze();
         add_root_and_flush_write_cache(&bank0);
         bank.rc
             .accounts
