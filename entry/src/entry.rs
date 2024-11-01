@@ -1434,4 +1434,19 @@ mod tests {
             info!("{} {}", time, res);
         }
     }
+
+    #[test]
+    fn test_hash_transactions() {
+        let mut transactions: Vec<_> = [test_tx(), test_tx(), test_tx()]
+            .into_iter()
+            .map(VersionedTransaction::from)
+            .collect();
+
+        // Test different permutations of the transactions have different final hashes.
+        // i.e. that **order** of transactions is included in the hash.
+        let hash1 = hash_transactions(&transactions);
+        transactions.swap(0, 1);
+        let hash2 = hash_transactions(&transactions);
+        assert_ne!(hash1, hash2);
+    }
 }
