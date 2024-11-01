@@ -1581,12 +1581,10 @@ impl ClusterInfo {
         Vec<(SocketAddr, Protocol)>, // Pull requests
     ) {
         let now = timestamp();
-        // TODO: Use new ContactInfo once the cluster has upgraded to:
-        // https://github.com/anza-xyz/agave/pull/803
-        let self_info = LegacyContactInfo::try_from(&self.my_contact_info())
-            .map(CrdsData::LegacyContactInfo)
-            .expect("Operator must spin up node with valid contact-info");
-        let self_info = CrdsValue::new_signed(self_info, &self.keypair());
+        let self_info = CrdsValue::new_signed(
+            CrdsData::ContactInfo(self.my_contact_info()),
+            &self.keypair(),
+        );
         let max_bloom_filter_bytes = get_max_bloom_filter_bytes(&self_info);
         let mut pings = Vec::new();
         let mut pulls = {
