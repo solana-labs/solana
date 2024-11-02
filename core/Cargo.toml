@@ -124,7 +124,10 @@ test-case = { workspace = true }
 sysctl = { workspace = true }
 
 [features]
-dev-context-only-utils = ["solana-runtime/dev-context-only-utils"]
+dev-context-only-utils = [
+    "solana-runtime/dev-context-only-utils",
+    "solana-streamer/dev-context-only-utils",
+]
 frozen-abi = [
     "dep:solana-frozen-abi",
     "dep:solana-frozen-abi-macro",

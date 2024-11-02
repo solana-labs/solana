@@ -8381,6 +8381,7 @@ dependencies = [
  "solana-metrics",
  "solana-perf",
  "solana-sdk",
+ "solana-streamer",
  "solana-transaction-metrics-tracker",
  "thiserror",
  "tokio",
