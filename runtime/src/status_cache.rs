@@ -183,16 +183,28 @@ impl<T: Serialize + Clone> StatusCache<T> {
         res: T,
     ) {
         let max_key_index = key.as_ref().len().saturating_sub(CACHED_KEY_SIZE + 1);
-        let hash_map = self.cache.entry(*transaction_blockhash).or_insert_with(|| {
-            let key_index = thread_rng().gen_range(0..max_key_index + 1);
-            (slot, key_index, HashMap::new())
-        });
 
-        hash_map.0 = std::cmp::max(slot, hash_map.0);
-        let key_index = hash_map.1.min(max_key_index);
+        // Get the cache entry for this blockhash.
+        let (max_slot, key_index, hash_map) =
+            self.cache.entry(*transaction_blockhash).or_insert_with(|| {
+                let key_index = thread_rng().gen_range(0..max_key_index + 1);
+                (slot, key_index, HashMap::new())
+            });
+
+        // Update the max slot observed to contain txs using this blockhash.
+        *max_slot = std::cmp::max(slot, *max_slot);
+
+        // Grab the key slice.
+        let key_index = (*key_index).min(max_key_index);
         let mut key_slice = [0u8; CACHED_KEY_SIZE];
         key_slice.clone_from_slice(&key.as_ref()[key_index..key_index + CACHED_KEY_SIZE]);
-        self.insert_with_slice(transaction_blockhash, slot, key_index, key_slice, res);
+
+        // Insert the slot and tx result into the cache entry associated with
+        // this blockhash and keyslice.
+        let forks = hash_map.entry(key_slice).or_default();
+        forks.push((slot, res.clone()));
+
+        self.add_to_slot_delta(transaction_blockhash, slot, key_index, key_slice, res);
     }
 
     pub fn purge_roots(&mut self) {
@@ -271,9 +283,22 @@ impl<T: Serialize + Clone> StatusCache<T> {
 
         let forks = hash_map.2.entry(key_slice).or_default();
         forks.push((slot, res.clone()));
-        let slot_deltas = self.slot_deltas.entry(slot).or_default();
-        let mut fork_entry = slot_deltas.lock().unwrap();
-        let (_, hash_entry) = fork_entry
+
+        self.add_to_slot_delta(transaction_blockhash, slot, key_index, key_slice, res);
+    }
+
+    // Add this key slice to the list of key slices for this slot and blockhash
+    // combo.
+    fn add_to_slot_delta(
+        &mut self,
+        transaction_blockhash: &Hash,
+        slot: Slot,
+        key_index: usize,
+        key_slice: [u8; CACHED_KEY_SIZE],
+        res: T,
+    ) {
+        let mut fork_entry = self.slot_deltas.entry(slot).or_default().lock().unwrap();
+        let (_key_index, hash_entry) = fork_entry
             .entry(*transaction_blockhash)
             .or_insert((key_index, vec![]));
         hash_entry.push((key_slice, res))
