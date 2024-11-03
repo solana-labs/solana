@@ -30,6 +30,12 @@ use {
 };
 
 const PACKET_COALESCE_DURATION: Duration = Duration::from_millis(1);
+// When running with very short epochs (e.g. for testing), we want to avoid
+// filtering out shreds that we actually need. This value was chosen empirically
+// because it's large enough to protect against observed short epoch problems
+// while being small enough to keep the overhead small on deduper, blockstore,
+// etc.
+const MAX_SHRED_DISTANCE_MINIMUM: u64 = 500;
 
 pub(crate) struct ShredFetchStage {
     thread_hdls: Vec<JoinHandle<()>>,
@@ -107,8 +113,9 @@ impl ShredFetchStage {
                 }
             }
 
-            // Limit shreds to 2 epochs away.
-            let max_slot = last_slot + 2 * slots_per_epoch;
+            // Filter out shreds that are way too far in the future to avoid the
+            // overhead of having to hold onto them.
+            let max_slot = last_slot + MAX_SHRED_DISTANCE_MINIMUM.max(2 * slots_per_epoch);
             let enable_chained_merkle_shreds = |shred_slot| {
                 cluster_type == ClusterType::Development
                     || check_feature_activation(
