@@ -27,10 +27,16 @@ solana-frozen-abi = { workspace = true, optional = true, features = [
 solana-frozen-abi-macro = { workspace = true, optional = true, features = [
     "frozen-abi",
 ] }
+solana-hash = { workspace = true }
 solana-metrics = { workspace = true }
+solana-packet = { workspace = true }
+solana-program = { workspace = true, default-features = false }
+solana-pubkey = { workspace = true, default-features = false }
 solana-rayon-threadlimit = { workspace = true }
-solana-sdk = { workspace = true }
+solana-sdk = { workspace = true, optional = true }
 solana-short-vec = { workspace = true }
+solana-signature = { workspace = true }
+solana-time-utils = { workspace = true }
 solana-vote-program = { workspace = true, optional = true }
 
 [target."cfg(target_os = \"linux\")".dependencies]
@@ -49,13 +55,13 @@ solana-perf = { path = ".", features = ["dev-context-only-utils"] }
 test-case = { workspace = true }
 
 [features]
-dev-context-only-utils = ["dep:solana-vote-program"]
+dev-context-only-utils = ["dep:solana-vote-program", "dep:solana-sdk"]
 frozen-abi = [
     "dep:solana-frozen-abi",
     "dep:solana-frozen-abi-macro",
     "solana-sdk/frozen-abi",
     "solana-short-vec/frozen-abi",
-    "solana-vote-program/frozen-abi",
+    "solana-vote-program/frozen-abi"
 ]
 
 [[bench]]
@@ -69,7 +75,4 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [lints.rust.unexpected_cfgs]
 level = "warn"
-check-cfg = [
-    'cfg(build_target_feature_avx)',
-    'cfg(build_target_feature_avx2)',
-]
+check-cfg = ['cfg(build_target_feature_avx)', 'cfg(build_target_feature_avx2)']

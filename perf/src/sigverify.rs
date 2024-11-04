@@ -11,14 +11,12 @@ use {
         recycler::Recycler,
     },
     rayon::{prelude::*, ThreadPool},
+    solana_hash::Hash,
+    solana_program::message::{MESSAGE_HEADER_LENGTH, MESSAGE_VERSION_PREFIX},
+    solana_pubkey::Pubkey,
     solana_rayon_threadlimit::get_thread_count,
-    solana_sdk::{
-        hash::Hash,
-        message::{MESSAGE_HEADER_LENGTH, MESSAGE_VERSION_PREFIX},
-        pubkey::Pubkey,
-        signature::Signature,
-    },
     solana_short_vec::decode_shortu16_len,
+    solana_signature::Signature,
     std::{convert::TryFrom, mem::size_of},
 };
 
@@ -417,7 +415,7 @@ fn check_for_simple_vote_transaction(
     if packet
         .data(instruction_program_id_start..instruction_program_id_end)
         .ok_or(PacketError::InvalidLen)?
-        == solana_sdk::vote::program::id().as_ref()
+        == solana_program::vote::program::id().as_ref()
     {
         packet.meta_mut().flags |= PacketFlags::SIMPLE_VOTE_TX;
     }
@@ -684,12 +682,15 @@ mod tests {
         bincode::{deserialize, serialize},
         curve25519_dalek::{edwards::CompressedEdwardsY, scalar::Scalar},
         rand::{thread_rng, Rng},
-        solana_sdk::{
+        solana_program::{
             instruction::CompiledInstruction,
             message::{Message, MessageHeader},
-            signature::{Keypair, Signature, Signer},
+        },
+        solana_sdk::{
+            signature::{Keypair, Signer},
             transaction::Transaction,
         },
+        solana_signature::Signature,
         std::{
             iter::repeat_with,
             sync::atomic::{AtomicU64, Ordering},

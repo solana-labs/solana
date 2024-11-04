@@ -5762,10 +5762,15 @@ dependencies = [
  "rand 0.8.5",
  "rayon",
  "serde",
+ "solana-hash",
  "solana-metrics",
+ "solana-packet",
+ "solana-program",
+ "solana-pubkey",
  "solana-rayon-threadlimit",
- "solana-sdk",
  "solana-short-vec",
+ "solana-signature",
+ "solana-time-utils",
 ]
 
 [[package]]

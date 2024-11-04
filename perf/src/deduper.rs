@@ -121,7 +121,7 @@ mod tests {
         crate::{packet::to_packet_batches, sigverify, test_tx::test_tx},
         rand::SeedableRng,
         rand_chacha::ChaChaRng,
-        solana_sdk::packet::{Meta, PACKET_DATA_SIZE},
+        solana_packet::{Meta, PACKET_DATA_SIZE},
         test_case::test_case,
     };
 

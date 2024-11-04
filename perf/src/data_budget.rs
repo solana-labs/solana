@@ -42,7 +42,7 @@ impl DataBudget {
     // Updates timestamp and returns true, if at least given milliseconds
     // has passed since last update. Otherwise returns false.
     fn can_update(&self, duration_millis: u64) -> bool {
-        let now = solana_sdk::timing::timestamp();
+        let now = solana_time_utils::timestamp();
         let mut asof = self.asof.load(Ordering::Acquire);
         while asof.saturating_add(duration_millis) <= now {
             asof = match self.asof.compare_exchange_weak(
