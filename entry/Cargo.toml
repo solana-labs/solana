@@ -28,6 +28,7 @@ solana-sdk = { workspace = true }
 [dev-dependencies]
 assert_matches = { workspace = true }
 solana-logger = { workspace = true }
+solana-perf = { workspace = true, features = ["dev-context-only-utils"] }
 
 [lib]
 crate-type = ["lib"]

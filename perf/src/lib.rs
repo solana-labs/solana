@@ -8,6 +8,7 @@ pub mod perf_libs;
 pub mod recycler;
 pub mod recycler_cache;
 pub mod sigverify;
+#[cfg(feature = "dev-context-only-utils")]
 pub mod test_tx;
 pub mod thread;
 

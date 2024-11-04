@@ -5766,7 +5766,6 @@ dependencies = [
  "solana-rayon-threadlimit",
  "solana-sdk",
  "solana-short-vec",
- "solana-vote-program",
 ]
 
 [[package]]

@@ -7369,6 +7369,7 @@ dependencies = [
  "solana-frozen-abi-macro",
  "solana-logger",
  "solana-metrics",
+ "solana-perf",
  "solana-rayon-threadlimit",
  "solana-sdk",
  "solana-short-vec",

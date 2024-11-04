@@ -26,7 +26,7 @@ assert_matches = { workspace = true }
 bincode = { workspace = true }
 rand = { workspace = true }
 solana-logger = { workspace = true }
-solana-perf = { workspace = true }
+solana-perf = { workspace = true, features = ["dev-context-only-utils"] }
 solana-poh = { path = ".", features = ["dev-context-only-utils"] }
 solana-runtime = { workspace = true, features = ["dev-context-only-utils"] }
 

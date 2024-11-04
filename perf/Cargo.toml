@@ -31,7 +31,7 @@ solana-metrics = { workspace = true }
 solana-rayon-threadlimit = { workspace = true }
 solana-sdk = { workspace = true }
 solana-short-vec = { workspace = true }
-solana-vote-program = { workspace = true }
+solana-vote-program = { workspace = true, optional = true }
 
 [target."cfg(target_os = \"linux\")".dependencies]
 caps = { workspace = true }
@@ -45,9 +45,11 @@ name = "solana_perf"
 assert_matches = { workspace = true }
 rand_chacha = { workspace = true }
 solana-logger = { workspace = true }
+solana-perf = { path = ".", features = ["dev-context-only-utils"] }
 test-case = { workspace = true }
 
 [features]
+dev-context-only-utils = ["dep:solana-vote-program"]
 frozen-abi = [
     "dep:solana-frozen-abi",
     "dep:solana-frozen-abi-macro",
