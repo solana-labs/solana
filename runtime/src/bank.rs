@@ -1732,15 +1732,30 @@ impl Bank {
             // then it will be *required* that the snapshot contains an accounts lt hash.
             let accounts_lt_hash = fields.accounts_lt_hash.unwrap_or_else(|| {
                 info!("Calculating the accounts lt hash...");
+                let (ancestors, slot) = if bank.is_frozen() {
+                    // Loading from a snapshot necessarily means this slot was rooted, and thus
+                    // the bank has been frozen.  So when calculating the accounts lt hash,
+                    // do it based on *this slot*, not our parent, since
+                    // update_accounts_lt_hash() will not be called on us again.
+                    (bank.ancestors.clone(), bank.slot())
+                } else {
+                    // If the bank is not frozen (e.g. if called from tests), then when this bank
+                    // is frozen later it will call `update_accounts_lt_hash()`.  Therefore, we
+                    // must calculate the accounts lt hash *here* based on *our parent*, so that
+                    // the accounts lt hash is correct after freezing.
+                    let parent_ancestors = {
+                        let mut ancestors = bank.ancestors.clone();
+                        ancestors.remove(&bank.slot());
+                        ancestors
+                    };
+                    (parent_ancestors, bank.parent_slot)
+                };
                 let (accounts_lt_hash, duration) = meas_dur!({
                     thread_pool.install(|| {
                         bank.rc
                             .accounts
                             .accounts_db
-                            .calculate_accounts_lt_hash_at_startup_from_index(
-                                &bank.ancestors,
-                                bank.slot(),
-                            )
+                            .calculate_accounts_lt_hash_at_startup_from_index(&ancestors, slot)
                     })
                 });
                 info!("Calculating the accounts lt hash... Done in {duration:?}");
