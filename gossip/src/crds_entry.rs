@@ -37,7 +37,7 @@ macro_rules! impl_crds_entry (
             type Key = Pubkey;
             fn get_entry(table:&'a CrdsTable, key: Self::Key) -> Option<Self> {
                 let key = CrdsValueLabel::$name(key);
-                match &table.get(&key)?.value.data {
+                match table.get(&key)?.value.data() {
                     $pat => Some($expr),
                     _ => None,
                 }
@@ -47,7 +47,7 @@ macro_rules! impl_crds_entry (
 );
 
 // Lookup by CrdsValueLabel.
-impl_crds_entry!(CrdsData, |entry| Some(&entry?.value.data));
+impl_crds_entry!(CrdsData, |entry| Some(entry?.value.data()));
 impl_crds_entry!(CrdsValue, |entry| Some(&entry?.value));
 impl_crds_entry!(VersionedCrdsValue, |entry| entry);
 
@@ -98,10 +98,10 @@ mod tests {
         for entry in entries.values() {
             let key = entry.label();
             assert_eq!(crds.get::<&CrdsValue>(&key), Some(entry));
-            assert_eq!(crds.get::<&CrdsData>(&key), Some(&entry.data));
+            assert_eq!(crds.get::<&CrdsData>(&key), Some(entry.data()));
             assert_eq!(crds.get::<&VersionedCrdsValue>(&key).unwrap().value, *entry);
             let key = entry.pubkey();
-            match &entry.data {
+            match entry.data() {
                 CrdsData::ContactInfo(node) => {
                     assert_eq!(crds.get::<&ContactInfo>(key), Some(node))
                 }

@@ -101,7 +101,7 @@ impl CrdsGossip {
         let mut crds = self.crds.write().unwrap();
         if crds
             .get_records(&pubkey)
-            .any(|value| match &value.value.data {
+            .any(|value| match value.value.data() {
                 CrdsData::DuplicateShred(_, value) => value.slot == shred_slot,
                 _ => false,
             })
@@ -121,7 +121,7 @@ impl CrdsGossip {
         let mut num_dup_shreds = 0;
         let offset = crds
             .get_records(&pubkey)
-            .filter_map(|value| match &value.value.data {
+            .filter_map(|value| match value.value.data() {
                 CrdsData::DuplicateShred(ix, value) => {
                     num_dup_shreds += 1;
                     Some((value.wallclock, *ix))

@@ -424,7 +424,7 @@ fn retain_staked(
     drop_unstaked_node_instance: bool,
 ) {
     values.retain(|value| {
-        match value.data {
+        match value.data() {
             CrdsData::ContactInfo(_) => true,
             CrdsData::LegacyContactInfo(_) => true,
             // May Impact new validators starting up without any stake yet.
@@ -1191,7 +1191,7 @@ impl ClusterInfo {
             .time_gossip_read_lock("get_votes", &self.stats.get_votes)
             .get_votes(cursor)
             .map(|vote| {
-                let CrdsData::Vote(_, vote) = &vote.value.data else {
+                let CrdsData::Vote(_, vote) = vote.value.data() else {
                     panic!("this should not happen!");
                 };
                 vote.transaction().clone()
@@ -1211,7 +1211,7 @@ impl ClusterInfo {
             .get_votes(cursor)
             .map(|vote| {
                 let label = vote.value.label();
-                let CrdsData::Vote(_, vote) = &vote.value.data else {
+                let CrdsData::Vote(_, vote) = vote.value.data() else {
                     panic!("this should not happen!");
                 };
                 (label, vote.transaction().clone())
@@ -1257,7 +1257,7 @@ impl ClusterInfo {
                 let origin = entry.value.pubkey();
                 gossip_crds.get_shred_version(&origin) == self_shred_version
             })
-            .map(|entry| match &entry.value.data {
+            .map(|entry| match entry.value.data() {
                 CrdsData::EpochSlots(_, slots) => slots.clone(),
                 _ => panic!("this should not happen!"),
             })
@@ -1273,7 +1273,7 @@ impl ClusterInfo {
         gossip_crds
             .get_entries(cursor)
             .filter_map(|entry| {
-                let CrdsData::RestartLastVotedForkSlots(slots) = &entry.value.data else {
+                let CrdsData::RestartLastVotedForkSlots(slots) = entry.value.data() else {
                     return None;
                 };
                 (slots.shred_version == self_shred_version).then_some(slots)
@@ -1288,7 +1288,7 @@ impl ClusterInfo {
         gossip_crds
             .get_entries(cursor)
             .filter_map(|entry| {
-                let CrdsData::RestartHeaviestFork(fork) = &entry.value.data else {
+                let CrdsData::RestartHeaviestFork(fork) = entry.value.data() else {
                     return None;
                 };
                 (fork.shred_version == self_shred_version).then_some(fork)
@@ -1302,7 +1302,7 @@ impl ClusterInfo {
         let gossip_crds = self.gossip.crds.read().unwrap();
         gossip_crds
             .get_duplicate_shreds(cursor)
-            .map(|entry| match &entry.value.data {
+            .map(|entry| match entry.value.data() {
                 CrdsData::DuplicateShred(_, dup) => dup.clone(),
                 _ => panic!("this should not happen!"),
             })
@@ -2003,7 +2003,7 @@ impl ClusterInfo {
             requests
                 .into_par_iter()
                 .with_min_len(1024)
-                .filter(|(_, _, caller)| match &caller.data {
+                .filter(|(_, _, caller)| match caller.data() {
                     CrdsData::LegacyContactInfo(_) | CrdsData::ContactInfo(_) => {
                         if caller.pubkey() == self_pubkey {
                             warn!("PullRequest ignored, I'm talking to myself");
@@ -2154,7 +2154,7 @@ impl ClusterInfo {
                 } else {
                     score
                 };
-                let score = match response.data {
+                let score = match response.data() {
                     CrdsData::LegacyContactInfo(_) | CrdsData::ContactInfo(_) => 2 * score,
                     _ => score,
                 };
@@ -2479,7 +2479,7 @@ impl ClusterInfo {
                 if should_check_duplicate_instance
                     && values.iter().any(|value| {
                         instance.check_duplicate(value)
-                            || matches!(&value.data, CrdsData::ContactInfo(other)
+                            || matches!(value.data(), CrdsData::ContactInfo(other)
                                 if my_contact_info.check_duplicate(other))
                     })
                 {
@@ -3297,7 +3297,7 @@ fn filter_on_shred_version(
         // * prevent two running instances of the same identity key cross
         //   contaminate gossip between clusters.
         if crds.get_shred_version(from) == Some(self_shred_version) {
-            values.retain(|value| match &value.data {
+            values.retain(|value| match value.data() {
                 // Allow contact-infos so that shred-versions are updated.
                 CrdsData::ContactInfo(_) => true,
                 CrdsData::LegacyContactInfo(_) => true,
@@ -3306,7 +3306,7 @@ fn filter_on_shred_version(
                 _ => crds.get_shred_version(&value.pubkey()) == Some(self_shred_version),
             })
         } else {
-            values.retain(|value| match &value.data {
+            values.retain(|value| match value.data() {
                 // Allow node to update its own contact info in case their
                 // shred-version changes
                 CrdsData::ContactInfo(node) => node.pubkey() == from,
@@ -3321,7 +3321,7 @@ fn filter_on_shred_version(
         }
     };
     match &mut msg {
-        Protocol::PullRequest(_, caller) => match &caller.data {
+        Protocol::PullRequest(_, caller) => match caller.data() {
             // Allow spy nodes with shred-verion == 0 to pull from other nodes.
             CrdsData::LegacyContactInfo(node)
                 if node.shred_version() == 0 || node.shred_version() == self_shred_version =>
@@ -3373,7 +3373,7 @@ fn verify_gossip_addr<R: Rng + CryptoRng>(
     ping_cache: &Mutex<PingCache>,
     pings: &mut Vec<(SocketAddr, Protocol /* ::PingMessage */)>,
 ) -> bool {
-    let (pubkey, addr) = match &value.data {
+    let (pubkey, addr) = match value.data() {
         CrdsData::ContactInfo(node) => (node.pubkey(), node.gossip()),
         CrdsData::LegacyContactInfo(node) => (node.pubkey(), node.gossip()),
         _ => return true, // If not a contact-info, nothing to verify.
@@ -4344,11 +4344,11 @@ mod tests {
 
         let mut i = 0;
         while value.size() < PUSH_MESSAGE_MAX_PAYLOAD_SIZE as u64 {
-            value.data = CrdsData::AccountsHashes(AccountsHashes {
+            value = CrdsValue::new_unsigned(CrdsData::AccountsHashes(AccountsHashes {
                 from: Pubkey::default(),
                 hashes: vec![(0, Hash::default()); i],
                 wallclock: 0,
-            });
+            }));
             i += 1;
         }
         let split: Vec<_> =

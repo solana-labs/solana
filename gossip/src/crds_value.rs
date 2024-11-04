@@ -44,8 +44,8 @@ pub const MAX_EPOCH_SLOTS: EpochSlotsIndex = 255;
 #[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct CrdsValue {
-    pub signature: Signature,
-    pub data: CrdsData,
+    signature: Signature,
+    data: CrdsData,
 }
 
 impl Sanitize for CrdsValue {
@@ -603,6 +603,16 @@ impl CrdsValue {
                 Self::new_signed(data, keypair)
             }
         }
+    }
+
+    #[inline]
+    pub(crate) fn signature(&self) -> &Signature {
+        &self.signature
+    }
+
+    #[inline]
+    pub(crate) fn data(&self) -> &CrdsData {
+        &self.data
     }
 
     /// Totally unsecure unverifiable wallclock of the node that generated this message
