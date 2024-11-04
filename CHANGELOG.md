@@ -25,6 +25,8 @@ Release channels have their own copy of this changelog:
     * removed the unreleased `redelegate` instruction processor and CLI commands (#2213)
   * Banks-client:
     * relax functions to use `&self` instead of `&mut self` (#2591)
+  * `agave-validator`:
+    * Remove the deprecated value of `fifo` for `--rocksdb-shred-compaction` (#3451)
 * Changes
   * SDK:
     * removed the `respan` macro. This was marked as "internal use only" and was no longer used internally.

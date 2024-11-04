@@ -666,14 +666,12 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .long("rocksdb-shred-compaction")
                 .value_name("ROCKSDB_COMPACTION_STYLE")
                 .takes_value(true)
-                .possible_values(&["level", "fifo"])
+                .possible_values(&["level"])
                 .default_value(&default_args.rocksdb_shred_compaction)
                 .help(
                     "Controls how RocksDB compacts shreds. *WARNING*: You will lose your \
                      Blockstore data when you switch between options. Possible values are: \
-                     'level': stores shreds using RocksDB's default (level) compaction. \
-                     'fifo': stores shreds under RocksDB's FIFO compaction. This option is more \
-                     efficient on disk-write-bytes of the Blockstore.",
+                     'level': stores shreds using RocksDB's default (level) compaction.",
                 ),
         )
         .arg(
