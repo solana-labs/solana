@@ -5,7 +5,7 @@ use {
         contact_info::{
             sanitize_quic_offset, ContactInfo, Error, Protocol, SOCKET_ADDR_UNSPECIFIED,
         },
-        crds_value::MAX_WALLCLOCK,
+        crds_data::MAX_WALLCLOCK,
     },
     solana_sanitize::{Sanitize, SanitizeError},
     solana_sdk::pubkey::Pubkey,

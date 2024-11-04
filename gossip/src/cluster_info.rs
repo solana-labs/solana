@@ -20,16 +20,17 @@ use {
         },
         contact_info::{self, ContactInfo, Error as ContactInfoError},
         crds::{Crds, Cursor, GossipRoute},
+        crds_data::{
+            self, CrdsData, EpochSlotsIndex, LowestSlot, NodeInstance, SnapshotHashes, Version,
+            Vote, MAX_WALLCLOCK,
+        },
         crds_gossip::CrdsGossip,
         crds_gossip_error::CrdsGossipError,
         crds_gossip_pull::{
             get_max_bloom_filter_bytes, CrdsFilter, CrdsTimeouts, ProcessPullStats,
             CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS,
         },
-        crds_value::{
-            self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlotsIndex, LowestSlot, NodeInstance,
-            SnapshotHashes, Version, Vote, MAX_WALLCLOCK,
-        },
+        crds_value::{CrdsValue, CrdsValueLabel},
         duplicate_shred::DuplicateShred,
         epoch_slots::EpochSlots,
         gossip_error::GossipError,
@@ -201,7 +202,7 @@ impl PruneData {
     /// New random PruneData for tests and benchmarks.
     #[cfg(test)]
     fn new_rand<R: Rng>(rng: &mut R, self_keypair: &Keypair, num_nodes: Option<usize>) -> Self {
-        let wallclock = crds_value::new_rand_timestamp(rng);
+        let wallclock = crds_data::new_rand_timestamp(rng);
         let num_nodes = num_nodes.unwrap_or_else(|| rng.gen_range(0..MAX_PRUNE_DATA_NODES + 1));
         let prunes = std::iter::repeat_with(Pubkey::new_unique)
             .take(num_nodes)
@@ -310,7 +311,7 @@ pub(crate) type Ping = ping_pong::Ping<[u8; GOSSIP_PING_TOKEN_SIZE]>;
 #[cfg_attr(
     feature = "frozen-abi",
     derive(AbiExample, AbiEnumVisitor),
-    frozen_abi(digest = "GfVFxfPfYcFLCaa29uxQxyKJAuTZ1cYqcRKhVrEKwDK7")
+    frozen_abi(digest = "AbxVYLVnKbfJRjtnj9gSHegnE31wcTGAm2nEFuuyJKr4")
 )]
 #[derive(Serialize, Deserialize, Debug)]
 #[allow(clippy::large_enum_variant)]
@@ -915,7 +916,7 @@ impl ClusterInfo {
         let current_slots: Vec<_> = {
             let gossip_crds =
                 self.time_gossip_read_lock("lookup_epoch_slots", &self.stats.epoch_slots_lookup);
-            (0..crds_value::MAX_EPOCH_SLOTS)
+            (0..crds_data::MAX_EPOCH_SLOTS)
                 .filter_map(|ix| {
                     let label = CrdsValueLabel::EpochSlots(ix, self_pubkey);
                     let crds_value = gossip_crds.get::<&CrdsValue>(&label)?;
@@ -934,7 +935,7 @@ impl ClusterInfo {
         let total_slots = max_slot as isize - min_slot as isize;
         // WARN if CRDS is not storing at least a full epoch worth of slots
         if DEFAULT_SLOTS_PER_EPOCH as isize > total_slots
-            && crds_value::MAX_EPOCH_SLOTS as usize <= current_slots.len()
+            && crds_data::MAX_EPOCH_SLOTS as usize <= current_slots.len()
         {
             self.stats.epoch_slots_filled.add_relaxed(1);
             warn!(
@@ -951,7 +952,7 @@ impl ClusterInfo {
         let mut entries = Vec::default();
         let keypair = self.keypair();
         while !update.is_empty() {
-            let ix = epoch_slot_index % crds_value::MAX_EPOCH_SLOTS;
+            let ix = epoch_slot_index % crds_data::MAX_EPOCH_SLOTS;
             let now = timestamp();
             let mut slots = if !reset {
                 self.lookup_epoch_slots(ix)
@@ -1321,7 +1322,7 @@ impl ClusterInfo {
                     .map(|entry| entry.version.clone())
                     .or_else(|| {
                         gossip_crds
-                            .get::<&crds_value::LegacyVersion>(*pubkey)
+                            .get::<&crds_data::LegacyVersion>(*pubkey)
                             .map(|entry| entry.version.clone())
                             .map(solana_version::LegacyVersion2::from)
                     })
@@ -2477,10 +2478,10 @@ impl ClusterInfo {
             let my_contact_info = self.my_contact_info();
             move |values: &[CrdsValue]| {
                 if should_check_duplicate_instance
-                    && values.iter().any(|value| {
-                        instance.check_duplicate(value)
-                            || matches!(value.data(), CrdsData::ContactInfo(other)
-                                if my_contact_info.check_duplicate(other))
+                    && values.iter().any(|value| match value.data() {
+                        CrdsData::ContactInfo(other) => my_contact_info.check_duplicate(other),
+                        CrdsData::NodeInstance(other) => instance.check_duplicate(other),
+                        _ => false,
                     })
                 {
                     return Err(GossipError::DuplicateNodeInstance);
@@ -3403,8 +3404,9 @@ mod tests {
     use {
         super::*,
         crate::{
+            crds_data::{AccountsHashes, Vote as CrdsVote},
             crds_gossip_pull::tests::MIN_NUM_BLOOM_FILTERS,
-            crds_value::{AccountsHashes, CrdsValue, CrdsValueLabel, Vote as CrdsVote},
+            crds_value::{CrdsValue, CrdsValueLabel},
             duplicate_shred::{self, tests::new_rand_shred, MAX_DUPLICATE_SHREDS},
             socketaddr,
         },

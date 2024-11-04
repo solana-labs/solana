@@ -1402,7 +1402,8 @@ mod tests {
             cluster_info::ClusterInfo,
             contact_info::ContactInfo,
             crds::GossipRoute,
-            crds_value::{CrdsData, CrdsValue},
+            crds_data::CrdsData,
+            crds_value::CrdsValue,
             restart_crds_values::{RestartHeaviestFork, RestartLastVotedForkSlots},
         },
         solana_ledger::{

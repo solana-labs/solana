@@ -10,10 +10,11 @@ use {
         cluster_info_metrics::GossipStats,
         contact_info::ContactInfo,
         crds::{Crds, GossipRoute},
+        crds_data::CrdsData,
         crds_gossip_error::CrdsGossipError,
         crds_gossip_pull::{CrdsFilter, CrdsGossipPull, CrdsTimeouts, ProcessPullStats},
         crds_gossip_push::CrdsGossipPush,
-        crds_value::{CrdsData, CrdsValue},
+        crds_value::CrdsValue,
         duplicate_shred::{self, DuplicateShredIndex, MAX_DUPLICATE_SHREDS},
         ping_pong::PingCache,
     },
@@ -409,7 +410,6 @@ pub(crate) fn maybe_ping_gossip_addresses<R: Rng + CryptoRng>(
 mod test {
     use {
         super::*,
-        crate::crds_value::CrdsData,
         solana_sdk::{hash::hash, timing::timestamp},
     };
 

@@ -14,7 +14,8 @@ use {
         cluster_info::{self, ClusterInfo},
         contact_info::ContactInfo,
         crds::Cursor,
-        crds_value::{self, CrdsData, CrdsValue, CrdsValueLabel},
+        crds_data::{self, CrdsData},
+        crds_value::{CrdsValue, CrdsValueLabel},
         gossip_error::GossipError,
         gossip_service::{self, discover_cluster, GossipService},
     },
@@ -679,7 +680,7 @@ pub fn submit_vote_to_cluster_gossip(
         vec![CrdsValue::new_signed(
             CrdsData::Vote(
                 0,
-                crds_value::Vote::new(node_keypair.pubkey(), vote_tx, timestamp()).unwrap(),
+                crds_data::Vote::new(node_keypair.pubkey(), vote_tx, timestamp()).unwrap(),
             ),
             node_keypair,
         )],

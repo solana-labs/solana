@@ -656,7 +656,7 @@ pub(crate) mod tests {
         super::*,
         crate::{
             cluster_info::Protocol,
-            crds_value::{CrdsData, Vote},
+            crds_data::{CrdsData, Vote},
             legacy_contact_info::LegacyContactInfo,
         },
         itertools::Itertools,

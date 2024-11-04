@@ -280,7 +280,7 @@ impl CrdsGossipPush {
 mod tests {
     use {
         super::*,
-        crate::{contact_info::ContactInfo, crds_value::CrdsData},
+        crate::{contact_info::ContactInfo, crds_data::CrdsData},
         std::time::{Duration, Instant},
     };
 

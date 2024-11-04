@@ -2,9 +2,8 @@ use {
     crate::{
         contact_info::ContactInfo,
         crds::VersionedCrdsValue,
-        crds_value::{
-            CrdsData, CrdsValue, CrdsValueLabel, LegacyVersion, LowestSlot, SnapshotHashes, Version,
-        },
+        crds_data::{CrdsData, LegacyVersion, LowestSlot, SnapshotHashes, Version},
+        crds_value::{CrdsValue, CrdsValueLabel},
     },
     indexmap::IndexMap,
     solana_sdk::pubkey::Pubkey,
@@ -68,7 +67,7 @@ mod tests {
         super::*,
         crate::{
             crds::{Crds, GossipRoute},
-            crds_value::new_rand_timestamp,
+            crds_data::new_rand_timestamp,
         },
         rand::seq::SliceRandom,
         solana_sdk::signature::Keypair,

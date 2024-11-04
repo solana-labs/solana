@@ -1,6 +1,6 @@
 pub use solana_client::connection_cache::Protocol;
 use {
-    crate::{crds_value::MAX_WALLCLOCK, legacy_contact_info::LegacyContactInfo},
+    crate::{crds_data::MAX_WALLCLOCK, legacy_contact_info::LegacyContactInfo},
     assert_matches::{assert_matches, debug_assert_matches},
     serde::{Deserialize, Deserializer, Serialize},
     solana_sanitize::{Sanitize, SanitizeError},

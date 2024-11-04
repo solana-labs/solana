@@ -9,7 +9,7 @@ use {
     solana_gossip::{
         cluster_info::{ClusterInfo, Node},
         contact_info::{ContactInfo, Protocol},
-        crds_value,
+        crds_data,
         gossip_service::GossipService,
     },
     solana_metrics::datapoint_info,
@@ -1356,7 +1356,7 @@ fn should_use_local_snapshot(
 /// Get the node's highest snapshot hashes from CRDS
 fn get_snapshot_hashes_for_node(cluster_info: &ClusterInfo, node: &Pubkey) -> Option<SnapshotHash> {
     cluster_info.get_snapshot_hashes_for_node(node).map(
-        |crds_value::SnapshotHashes {
+        |crds_data::SnapshotHashes {
              full, incremental, ..
          }| {
             let highest_incremental_snapshot_hash = incremental.into_iter().max();

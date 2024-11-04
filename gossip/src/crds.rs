@@ -28,10 +28,11 @@
 use {
     crate::{
         contact_info::ContactInfo,
+        crds_data::CrdsData,
         crds_entry::CrdsEntry,
         crds_gossip_pull::CrdsTimeouts,
         crds_shards::CrdsShards,
-        crds_value::{CrdsData, CrdsValue, CrdsValueLabel},
+        crds_value::{CrdsValue, CrdsValueLabel},
     },
     assert_matches::debug_assert_matches,
     bincode::serialize,
@@ -199,17 +200,22 @@ fn overrides(value: &CrdsValue, other: &VersionedCrdsValue) -> bool {
     // Contact-infos and node instances are special cased so that if there are
     // two running instances of the same node, the more recent start is
     // propagated through gossip regardless of wallclocks.
-    if let CrdsData::NodeInstance(value) = value.data() {
-        if let Some(out) = value.overrides(&other.value) {
-            return out;
-        }
-    }
-    if let CrdsData::ContactInfo(value) = value.data() {
-        if let CrdsData::ContactInfo(other) = other.value.data() {
-            if let Some(out) = value.overrides(other) {
-                return out;
+    match value.data() {
+        CrdsData::ContactInfo(value) => {
+            if let CrdsData::ContactInfo(other) = other.value.data() {
+                if let Some(out) = value.overrides(other) {
+                    return out;
+                }
             }
         }
+        CrdsData::NodeInstance(value) => {
+            if let CrdsData::NodeInstance(other) = other.value.data() {
+                if let Some(out) = value.overrides(other) {
+                    return out;
+                }
+            }
+        }
+        _ => (),
     }
     match value.wallclock().cmp(&other.value.wallclock()) {
         Ordering::Less => false,
@@ -311,7 +317,7 @@ impl Crds {
             Entry::Occupied(mut entry) => {
                 stats.record_fail(&value, route);
                 trace!(
-                    "INSERT FAILED data: {} new.wallclock: {}",
+                    "INSERT FAILED data: {:?} new.wallclock: {}",
                     value.value.label(),
                     value.value.wallclock(),
                 );
@@ -786,7 +792,7 @@ fn should_report_message_signature(signature: &Signature) -> bool {
 mod tests {
     use {
         super::*,
-        crate::crds_value::{new_rand_timestamp, AccountsHashes, NodeInstance},
+        crate::crds_data::{new_rand_timestamp, AccountsHashes, NodeInstance},
         rand::{thread_rng, Rng, SeedableRng},
         rand_chacha::ChaChaRng,
         rayon::ThreadPoolBuilder,

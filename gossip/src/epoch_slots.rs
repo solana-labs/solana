@@ -1,7 +1,7 @@
 use {
     crate::{
         cluster_info::MAX_CRDS_OBJECT_SIZE,
-        crds_value::{self, MAX_SLOT, MAX_WALLCLOCK},
+        crds_data::{self, MAX_SLOT, MAX_WALLCLOCK},
     },
     bincode::serialized_size,
     bv::BitVec,
@@ -324,7 +324,7 @@ impl EpochSlots {
 
     /// New random EpochSlots for tests and simulations.
     pub(crate) fn new_rand<R: rand::Rng>(rng: &mut R, pubkey: Option<Pubkey>) -> Self {
-        let now = crds_value::new_rand_timestamp(rng);
+        let now = crds_data::new_rand_timestamp(rng);
         let pubkey = pubkey.unwrap_or_else(solana_sdk::pubkey::new_rand);
         let mut epoch_slots = Self::new(pubkey, now);
         let num_slots = rng.gen_range(0..20);

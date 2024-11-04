@@ -1,5 +1,5 @@
 use {
-    crate::crds_value::sanitize_wallclock,
+    crate::crds_data::sanitize_wallclock,
     itertools::Itertools,
     solana_ledger::{
         blockstore::BlockstoreError,
