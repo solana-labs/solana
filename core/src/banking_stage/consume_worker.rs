@@ -296,6 +296,12 @@ impl ConsumeWorkerMetrics {
             .collect_balances_us
             .fetch_add(*collect_balances_us, Ordering::Relaxed);
         self.timing_metrics
+            .load_execute_us_min
+            .fetch_min(*load_execute_us, Ordering::Relaxed);
+        self.timing_metrics
+            .load_execute_us_max
+            .fetch_max(*load_execute_us, Ordering::Relaxed);
+        self.timing_metrics
             .load_execute_us
             .fetch_add(*load_execute_us, Ordering::Relaxed);
         self.timing_metrics
@@ -310,6 +316,9 @@ impl ConsumeWorkerMetrics {
         self.timing_metrics
             .find_and_send_votes_us
             .fetch_add(*find_and_send_votes_us, Ordering::Relaxed);
+        self.timing_metrics
+            .num_batches_processed
+            .fetch_add(1, Ordering::Relaxed);
     }
 
     fn update_on_error_counters(
@@ -505,12 +514,15 @@ struct ConsumeWorkerTimingMetrics {
     cost_model_us: AtomicU64,
     collect_balances_us: AtomicU64,
     load_execute_us: AtomicU64,
+    load_execute_us_min: AtomicU64,
+    load_execute_us_max: AtomicU64,
     freeze_lock_us: AtomicU64,
     record_us: AtomicU64,
     commit_us: AtomicU64,
     find_and_send_votes_us: AtomicU64,
     wait_for_bank_success_us: AtomicU64,
     wait_for_bank_failure_us: AtomicU64,
+    num_batches_processed: AtomicU64,
 }
 
 impl ConsumeWorkerTimingMetrics {
@@ -531,6 +543,21 @@ impl ConsumeWorkerTimingMetrics {
             (
                 "load_execute_us",
                 self.load_execute_us.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "load_execute_us_min",
+                self.load_execute_us_min.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "load_execute_us_max",
+                self.load_execute_us_max.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "num_batches_processed",
+                self.num_batches_processed.swap(0, Ordering::Relaxed),
                 i64
             ),
             (
