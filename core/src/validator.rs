@@ -65,7 +65,7 @@ use {
             MAX_REPLAY_WAKE_UP_SIGNALS,
         },
         blockstore_metric_report_service::BlockstoreMetricReportService,
-        blockstore_options::{BlockstoreOptions, BlockstoreRecoveryMode, LedgerColumnOptions},
+        blockstore_options::BlockstoreOptions,
         blockstore_processor::{self, TransactionStatusSender},
         entry_notifier_interface::EntryNotifierArc,
         entry_notifier_service::{EntryNotifierSender, EntryNotifierService},
@@ -230,9 +230,9 @@ pub struct ValidatorConfig {
     pub pubsub_config: PubSubConfig,
     pub snapshot_config: SnapshotConfig,
     pub max_ledger_shreds: Option<u64>,
+    pub blockstore_options: BlockstoreOptions,
     pub broadcast_stage_type: BroadcastStageType,
     pub turbine_disabled: Arc<AtomicBool>,
-    pub enforce_ulimit_nofile: bool,
     pub fixed_leader_schedule: Option<FixedSchedule>,
     pub wait_for_supermajority: Option<Slot>,
     pub new_hard_forks: Option<Vec<Slot>>,
@@ -242,7 +242,6 @@ pub struct ValidatorConfig {
     pub gossip_validators: Option<HashSet<Pubkey>>, // None = gossip with all
     pub accounts_hash_interval_slots: u64,
     pub max_genesis_archive_unpacked_size: u64,
-    pub wal_recovery_mode: Option<BlockstoreRecoveryMode>,
     /// Run PoH, transaction signature and other transaction verifications during blockstore
     /// processing.
     pub run_verification: bool,
@@ -270,7 +269,6 @@ pub struct ValidatorConfig {
     pub validator_exit: Arc<RwLock<Exit>>,
     pub no_wait_for_vote_to_start_leader: bool,
     pub wait_to_vote_slot: Option<Slot>,
-    pub ledger_column_options: LedgerColumnOptions,
     pub runtime_config: RuntimeConfig,
     pub banking_trace_dir_byte_limit: banking_trace::DirByteLimit,
     pub block_verification_method: BlockVerificationMethod,
@@ -298,6 +296,7 @@ impl Default for ValidatorConfig {
             expected_shred_version: None,
             voting_disabled: false,
             max_ledger_shreds: None,
+            blockstore_options: BlockstoreOptions::default(),
             account_paths: Vec::new(),
             account_snapshot_paths: Vec::new(),
             rpc_config: JsonRpcConfig::default(),
@@ -307,7 +306,6 @@ impl Default for ValidatorConfig {
             snapshot_config: SnapshotConfig::new_load_only(),
             broadcast_stage_type: BroadcastStageType::Standard,
             turbine_disabled: Arc::<AtomicBool>::default(),
-            enforce_ulimit_nofile: true,
             fixed_leader_schedule: None,
             wait_for_supermajority: None,
             new_hard_forks: None,
@@ -317,7 +315,6 @@ impl Default for ValidatorConfig {
             gossip_validators: None,
             accounts_hash_interval_slots: u64::MAX,
             max_genesis_archive_unpacked_size: MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
-            wal_recovery_mode: None,
             run_verification: true,
             require_tower: false,
             tower_storage: Arc::new(NullTowerStorage::default()),
@@ -343,7 +340,6 @@ impl Default for ValidatorConfig {
             no_wait_for_vote_to_start_leader: true,
             accounts_db_config: None,
             wait_to_vote_slot: None,
-            ledger_column_options: LedgerColumnOptions::default(),
             runtime_config: RuntimeConfig::default(),
             banking_trace_dir_byte_limit: 0,
             block_verification_method: BlockVerificationMethod::default(),
@@ -370,8 +366,8 @@ impl ValidatorConfig {
             NonZeroUsize::new(get_max_thread_count()).expect("thread count is non-zero");
 
         Self {
-            enforce_ulimit_nofile: false,
             accounts_db_config: Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
+            blockstore_options: BlockstoreOptions::default_for_tests(),
             rpc_config: JsonRpcConfig::default_for_test(),
             block_production_method: BlockProductionMethod::default(),
             enable_block_production_forwarding: true, // enable forwarding by default for tests
@@ -1857,15 +1853,6 @@ fn post_process_restored_tower(
     Ok(restored_tower)
 }
 
-fn blockstore_options_from_config(config: &ValidatorConfig) -> BlockstoreOptions {
-    BlockstoreOptions {
-        recovery_mode: config.wal_recovery_mode.clone(),
-        column_options: config.ledger_column_options.clone(),
-        enforce_ulimit_nofile: config.enforce_ulimit_nofile,
-        ..BlockstoreOptions::default()
-    }
-}
-
 fn load_genesis(
     config: &ValidatorConfig,
     ledger_path: &Path,
@@ -1926,7 +1913,7 @@ fn load_blockstore(
     *start_progress.write().unwrap() = ValidatorStartProgress::LoadingLedger;
 
     let mut blockstore =
-        Blockstore::open_with_options(ledger_path, blockstore_options_from_config(config))
+        Blockstore::open_with_options(ledger_path, config.blockstore_options.clone())
             .map_err(|err| format!("Failed to open Blockstore: {err:?}"))?;
 
     let (ledger_signal_sender, ledger_signal_receiver) = bounded(MAX_REPLAY_WAKE_UP_SIGNALS);
@@ -2353,7 +2340,8 @@ fn cleanup_blockstore_incorrect_shred_versions(
     let backup_folder = format!(
         "{}_backup_{}_{}_{}",
         config
-            .ledger_column_options
+            .blockstore_options
+            .column_options
             .shred_storage_type
             .blockstore_directory(),
         incorrect_shred_version,
@@ -2362,7 +2350,7 @@ fn cleanup_blockstore_incorrect_shred_versions(
     );
     match Blockstore::open_with_options(
         &blockstore.ledger_path().join(backup_folder),
-        blockstore_options_from_config(config),
+        config.blockstore_options.clone(),
     ) {
         Ok(backup_blockstore) => {
             info!("Backing up slots from {start_slot} to {end_slot}");

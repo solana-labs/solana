@@ -3,6 +3,7 @@ use {
     std::path::Path,
 };
 
+#[derive(Debug, Clone)]
 pub struct BlockstoreOptions {
     // The access type of blockstore. Default: Primary
     pub access_type: AccessType,
@@ -23,6 +24,17 @@ impl Default for BlockstoreOptions {
             access_type: AccessType::Primary,
             recovery_mode: None,
             enforce_ulimit_nofile: true,
+            column_options: LedgerColumnOptions::default(),
+        }
+    }
+}
+
+impl BlockstoreOptions {
+    pub fn default_for_tests() -> Self {
+        Self {
+            access_type: AccessType::Primary,
+            recovery_mode: None,
+            enforce_ulimit_nofile: false,
             column_options: LedgerColumnOptions::default(),
         }
     }
