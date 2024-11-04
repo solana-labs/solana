@@ -198,6 +198,7 @@ pub fn process_instruction_truncate(
             LoaderV4State::program_data_offset().saturating_add(new_size as usize),
         )?;
         if is_initialization {
+            program.set_executable(true)?;
             let state = get_state_mut(program.get_data_mut()?)?;
             state.slot = 0;
             state.status = LoaderV4Status::Retracted;

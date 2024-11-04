@@ -339,6 +339,7 @@ fn serialize_parameters_unaligned(
                 s.write::<u64>((account.get_data().len() as u64).to_le());
                 let vm_data_addr = s.write_account(&mut account)?;
                 let vm_owner_addr = s.write_all(account.get_owner().as_ref());
+                #[allow(deprecated)]
                 s.write::<u8>(account.is_executable() as u8);
                 s.write::<u64>((account.get_rent_epoch()).to_le());
                 accounts_metadata.push(SerializedAccountMetadata {
@@ -467,6 +468,7 @@ fn serialize_parameters_aligned(
                 s.write::<u8>(NON_DUP_MARKER);
                 s.write::<u8>(borrowed_account.is_signer() as u8);
                 s.write::<u8>(borrowed_account.is_writable() as u8);
+                #[allow(deprecated)]
                 s.write::<u8>(borrowed_account.is_executable() as u8);
                 s.write_all(&[0u8, 0, 0, 0]);
                 let vm_key_addr = s.write_all(borrowed_account.get_key().as_ref());

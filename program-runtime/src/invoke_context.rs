@@ -8,7 +8,9 @@ use {
         sysvar_cache::SysvarCache,
     },
     solana_compute_budget::compute_budget::ComputeBudget,
-    solana_feature_set::{move_precompile_verification_to_svm, FeatureSet},
+    solana_feature_set::{
+        move_precompile_verification_to_svm, remove_accounts_executable_flag_checks, FeatureSet,
+    },
     solana_log_collector::{ic_msg, LogCollector},
     solana_measure::measure::Measure,
     solana_rbpf::{
@@ -435,7 +437,12 @@ impl<'a> InvokeContext<'a> {
             })?;
         let borrowed_program_account = instruction_context
             .try_borrow_instruction_account(self.transaction_context, program_account_index)?;
-        if !borrowed_program_account.is_executable() {
+        #[allow(deprecated)]
+        if !self
+            .get_feature_set()
+            .is_active(&remove_accounts_executable_flag_checks::id())
+            && !borrowed_program_account.is_executable()
+        {
             ic_msg!(self, "Account {} is not executable", callee_program_id);
             return Err(InstructionError::AccountNotExecutable);
         }

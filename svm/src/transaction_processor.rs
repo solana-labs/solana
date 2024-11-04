@@ -25,7 +25,8 @@ use {
     },
     solana_compute_budget::compute_budget::ComputeBudget,
     solana_feature_set::{
-        enable_transaction_loading_failure_fees, remove_rounding_in_fee_calculation, FeatureSet,
+        enable_transaction_loading_failure_fees, remove_accounts_executable_flag_checks,
+        remove_rounding_in_fee_calculation, FeatureSet,
     },
     solana_log_collector::LogCollector,
     solana_measure::{measure::Measure, measure_us},
@@ -779,6 +780,11 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
             rent_collector.get_rent().clone(),
             compute_budget.max_instruction_stack_depth,
             compute_budget.max_instruction_trace_length,
+        );
+        transaction_context.set_remove_accounts_executable_flag_checks(
+            environment
+                .feature_set
+                .is_active(&remove_accounts_executable_flag_checks::id()),
         );
         #[cfg(debug_assertions)]
         transaction_context.set_signature(tx.signature());

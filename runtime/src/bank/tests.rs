@@ -7230,7 +7230,7 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
         bank.process_transaction(&transaction),
         Err(TransactionError::InstructionError(
             0,
-            InstructionError::InvalidAccountData
+            InstructionError::UnsupportedProgramId
         )),
     );
     {
@@ -7254,7 +7254,7 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
         bank.process_transaction(&transaction),
         Err(TransactionError::InstructionError(
             0,
-            InstructionError::InvalidAccountData,
+            InstructionError::UnsupportedProgramId,
         )),
     );
     {

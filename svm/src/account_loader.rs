@@ -356,7 +356,9 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
                 return Err(TransactionError::ProgramAccountNotFound);
             }
 
-            if !program_account.executable() {
+            if !feature_set.is_active(&feature_set::remove_accounts_executable_flag_checks::id())
+                && !program_account.executable()
+            {
                 error_metrics.invalid_program_for_execution += 1;
                 return Err(TransactionError::InvalidProgramForExecution);
             }
@@ -373,7 +375,9 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
             {
                 if let Some(owner_account) = callbacks.get_account_shared_data(owner_id) {
                     if !native_loader::check_id(owner_account.owner())
-                        || !owner_account.executable()
+                        || (!feature_set
+                            .is_active(&feature_set::remove_accounts_executable_flag_checks::id())
+                            && !owner_account.executable())
                     {
                         error_metrics.invalid_program_for_execution += 1;
                         return Err(TransactionError::InvalidProgramForExecution);
@@ -882,7 +886,15 @@ mod tests {
             instructions,
         );
 
-        let load_results = load_accounts_aux_test(tx, &accounts, &mut error_metrics);
+        let mut feature_set = FeatureSet::all_enabled();
+        feature_set.deactivate(&feature_set::remove_accounts_executable_flag_checks::id());
+        let load_results = load_accounts_with_features_and_rent(
+            tx,
+            &accounts,
+            &RentCollector::default(),
+            &mut error_metrics,
+            &mut feature_set,
+        );
 
         assert_eq!(error_metrics.invalid_program_for_execution, 1);
         assert_eq!(load_results.len(), 1);

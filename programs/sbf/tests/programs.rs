@@ -921,15 +921,15 @@ fn test_program_sbf_invoke_sanity() {
 
         do_invoke_failure_test_local(
             TEST_PPROGRAM_NOT_OWNED_BY_LOADER,
-            TransactionError::InstructionError(0, InstructionError::AccountNotExecutable),
-            &[],
+            TransactionError::InstructionError(0, InstructionError::UnsupportedProgramId),
+            &[argument_keypair.pubkey()],
             None,
         );
 
         do_invoke_failure_test_local(
             TEST_PPROGRAM_NOT_EXECUTABLE,
-            TransactionError::InstructionError(0, InstructionError::AccountNotExecutable),
-            &[],
+            TransactionError::InstructionError(0, InstructionError::UnsupportedProgramId),
+            &[unexecutable_program_keypair.pubkey()],
             None,
         );
 
@@ -1898,7 +1898,7 @@ fn test_program_sbf_invoke_in_same_tx_as_deployment() {
             let (result, _, _) = process_transaction_and_record_inner(&bank, tx);
             assert_eq!(
                 result.unwrap_err(),
-                TransactionError::InstructionError(2, InstructionError::InvalidAccountData),
+                TransactionError::InstructionError(2, InstructionError::UnsupportedProgramId),
             );
         }
     }
@@ -2009,7 +2009,7 @@ fn test_program_sbf_invoke_in_same_tx_as_redeployment() {
         let (result, _, _) = process_transaction_and_record_inner(&bank, tx);
         assert_eq!(
             result.unwrap_err(),
-            TransactionError::InstructionError(1, InstructionError::InvalidAccountData),
+            TransactionError::InstructionError(1, InstructionError::UnsupportedProgramId),
         );
     }
 }
@@ -2104,7 +2104,7 @@ fn test_program_sbf_invoke_in_same_tx_as_undeployment() {
         let (result, _, _) = process_transaction_and_record_inner(&bank, tx);
         assert_eq!(
             result.unwrap_err(),
-            TransactionError::InstructionError(1, InstructionError::InvalidAccountData),
+            TransactionError::InstructionError(1, InstructionError::UnsupportedProgramId),
         );
     }
 }
@@ -4653,7 +4653,7 @@ fn test_deny_executable_write() {
         let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
         assert_eq!(
             result.unwrap_err().unwrap(),
-            TransactionError::InstructionError(0, InstructionError::ExecutableDataModified)
+            TransactionError::InstructionError(0, InstructionError::ReadonlyDataModified)
         );
     }
 }

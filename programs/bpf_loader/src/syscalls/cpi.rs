@@ -890,6 +890,7 @@ where
             .transaction_context
             .get_key_of_account_at_index(instruction_account.index_in_transaction)?;
 
+        #[allow(deprecated)]
         if callee_account.is_executable() {
             // Use the known account
             consume_compute_meter(
