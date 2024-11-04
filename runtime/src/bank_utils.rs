@@ -1,5 +1,6 @@
 use {
     crate::vote_sender_types::ReplayVoteSender,
+    solana_runtime_transaction::runtime_transaction::RuntimeTransaction,
     solana_sdk::transaction::SanitizedTransaction,
     solana_svm::transaction_commit_result::{
         TransactionCommitResult, TransactionCommitResultExtensions,
@@ -40,7 +41,7 @@ pub fn setup_bank_and_vote_pubkeys_for_tests(
 }
 
 pub fn find_and_send_votes(
-    sanitized_txs: &[SanitizedTransaction],
+    sanitized_txs: &[RuntimeTransaction<SanitizedTransaction>],
     commit_results: &[TransactionCommitResult],
     vote_sender: Option<&ReplayVoteSender>,
 ) {

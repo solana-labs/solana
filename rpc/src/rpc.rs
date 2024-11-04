@@ -62,6 +62,7 @@ use {
         snapshot_utils,
         verify_precompiles::verify_precompiles,
     },
+    solana_runtime_transaction::runtime_transaction::RuntimeTransaction,
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         clock::{Slot, UnixTimestamp, MAX_PROCESSING_AGE},
@@ -4212,8 +4213,8 @@ fn sanitize_transaction(
     transaction: VersionedTransaction,
     address_loader: impl AddressLoader,
     reserved_account_keys: &HashSet<Pubkey>,
-) -> Result<SanitizedTransaction> {
-    SanitizedTransaction::try_create(
+) -> Result<RuntimeTransaction<SanitizedTransaction>> {
+    RuntimeTransaction::try_create(
         transaction,
         MessageHash::Compute,
         None,
@@ -4737,7 +4738,7 @@ pub mod tests {
             let prioritization_fee_cache = &self.meta.prioritization_fee_cache;
             let transactions: Vec<_> = transactions
                 .into_iter()
-                .map(SanitizedTransaction::from_transaction_for_tests)
+                .map(RuntimeTransaction::from_transaction_for_tests)
                 .collect();
             prioritization_fee_cache.update(&bank, transactions.iter());
         }

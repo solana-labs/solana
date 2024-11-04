@@ -19,6 +19,7 @@ qualifier_attr = { workspace = true }
 scopeguard = { workspace = true }
 solana-ledger = { workspace = true }
 solana-runtime = { workspace = true }
+solana-runtime-transaction = { workspace = true }
 solana-sdk = { workspace = true }
 solana-timings = { workspace = true }
 solana-unified-scheduler-logic = { workspace = true }

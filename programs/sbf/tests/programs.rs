@@ -33,7 +33,10 @@ use {
             load_upgradeable_program_wrapper, set_upgrade_authority, upgrade_program,
         },
     },
-    solana_runtime_transaction::instructions_processor::process_compute_budget_instructions,
+    solana_runtime_transaction::{
+        instructions_processor::process_compute_budget_instructions,
+        runtime_transaction::RuntimeTransaction,
+    },
     solana_sbf_rust_invoke_dep::*,
     solana_sbf_rust_realloc_dep::*,
     solana_sbf_rust_realloc_invoke_dep::*,
@@ -59,7 +62,7 @@ use {
         system_instruction::{self, MAX_PERMITTED_DATA_LENGTH},
         system_program,
         sysvar::{self, clock},
-        transaction::{SanitizedTransaction, Transaction, TransactionError, VersionedTransaction},
+        transaction::{Transaction, TransactionError, VersionedTransaction},
     },
     solana_svm::{
         transaction_commit_result::{CommittedTransaction, TransactionCommitResult},
@@ -652,7 +655,7 @@ fn test_return_data_and_log_data_syscall() {
         let blockhash = bank.last_blockhash();
         let message = Message::new(&[instruction], Some(&mint_keypair.pubkey()));
         let transaction = Transaction::new(&[&mint_keypair], message, blockhash);
-        let sanitized_tx = SanitizedTransaction::from_transaction_for_tests(transaction);
+        let sanitized_tx = RuntimeTransaction::from_transaction_for_tests(transaction);
 
         let result = bank.simulate_transaction(&sanitized_tx, false);
 

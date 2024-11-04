@@ -21,6 +21,7 @@ use {
         sigverify,
     },
     solana_rayon_threadlimit::get_max_thread_count,
+    solana_runtime_transaction::runtime_transaction::RuntimeTransaction,
     solana_sdk::{
         hash::Hash,
         packet::Meta,
@@ -151,7 +152,7 @@ impl From<&Entry> for EntrySummary {
 
 /// Typed entry to distinguish between transaction and tick entries
 pub enum EntryType {
-    Transactions(Vec<SanitizedTransaction>),
+    Transactions(Vec<RuntimeTransaction<SanitizedTransaction>>),
     Tick(Hash),
 }
 
@@ -394,7 +395,11 @@ impl EntryVerificationState {
 pub fn verify_transactions(
     entries: Vec<Entry>,
     thread_pool: &ThreadPool,
-    verify: Arc<dyn Fn(VersionedTransaction) -> Result<SanitizedTransaction> + Send + Sync>,
+    verify: Arc<
+        dyn Fn(VersionedTransaction) -> Result<RuntimeTransaction<SanitizedTransaction>>
+            + Send
+            + Sync,
+    >,
 ) -> Result<Vec<EntryType>> {
     thread_pool.install(|| {
         entries
@@ -422,7 +427,10 @@ pub fn start_verify_transactions(
     thread_pool: &ThreadPool,
     verify_recyclers: VerifyRecyclers,
     verify: Arc<
-        dyn Fn(VersionedTransaction, TransactionVerificationMode) -> Result<SanitizedTransaction>
+        dyn Fn(
+                VersionedTransaction,
+                TransactionVerificationMode,
+            ) -> Result<RuntimeTransaction<SanitizedTransaction>>
             + Send
             + Sync,
     >,
@@ -460,7 +468,10 @@ fn start_verify_transactions_cpu(
     skip_verification: bool,
     thread_pool: &ThreadPool,
     verify: Arc<
-        dyn Fn(VersionedTransaction, TransactionVerificationMode) -> Result<SanitizedTransaction>
+        dyn Fn(
+                VersionedTransaction,
+                TransactionVerificationMode,
+            ) -> Result<RuntimeTransaction<SanitizedTransaction>>
             + Send
             + Sync,
     >,
@@ -490,13 +501,16 @@ fn start_verify_transactions_gpu(
     verify_recyclers: VerifyRecyclers,
     thread_pool: &ThreadPool,
     verify: Arc<
-        dyn Fn(VersionedTransaction, TransactionVerificationMode) -> Result<SanitizedTransaction>
+        dyn Fn(
+                VersionedTransaction,
+                TransactionVerificationMode,
+            ) -> Result<RuntimeTransaction<SanitizedTransaction>>
             + Send
             + Sync,
     >,
 ) -> Result<EntrySigVerificationState> {
     let verify_func = {
-        move |versioned_tx: VersionedTransaction| -> Result<SanitizedTransaction> {
+        move |versioned_tx: VersionedTransaction| -> Result<RuntimeTransaction<SanitizedTransaction>> {
             verify(
                 versioned_tx,
                 TransactionVerificationMode::HashAndVerifyPrecompiles,
@@ -506,7 +520,7 @@ fn start_verify_transactions_gpu(
 
     let entries = verify_transactions(entries, thread_pool, Arc::new(verify_func))?;
 
-    let transactions: Vec<&SanitizedTransaction> = entries
+    let transactions = entries
         .iter()
         .filter_map(|entry_type| match entry_type {
             EntryType::Tick(_) => None,
@@ -987,7 +1001,8 @@ mod tests {
             signature::{Keypair, Signer},
             system_transaction,
             transaction::{
-                Result, SanitizedTransaction, SimpleAddressLoader, VersionedTransaction,
+                MessageHash, Result, SanitizedTransaction, SimpleAddressLoader,
+                VersionedTransaction,
             },
         },
     };
@@ -1011,7 +1026,7 @@ mod tests {
             dyn Fn(
                     VersionedTransaction,
                     TransactionVerificationMode,
-                ) -> Result<SanitizedTransaction>
+                ) -> Result<RuntimeTransaction<SanitizedTransaction>>
                 + Send
                 + Sync,
         >,
@@ -1023,7 +1038,7 @@ mod tests {
             } else {
                 TransactionVerificationMode::FullVerification
             };
-            move |versioned_tx: VersionedTransaction| -> Result<SanitizedTransaction> {
+            move |versioned_tx: VersionedTransaction| -> Result<RuntimeTransaction<SanitizedTransaction>> {
                 verify(versioned_tx, verification_mode)
             }
         };
@@ -1072,7 +1087,7 @@ mod tests {
         let verify_transaction = {
             move |versioned_tx: VersionedTransaction,
                   verification_mode: TransactionVerificationMode|
-                  -> Result<SanitizedTransaction> {
+                  -> Result<RuntimeTransaction<SanitizedTransaction>> {
                 let sanitized_tx = {
                     let message_hash =
                         if verification_mode == TransactionVerificationMode::FullVerification {
@@ -1081,9 +1096,9 @@ mod tests {
                             versioned_tx.message.hash()
                         };
 
-                    SanitizedTransaction::try_create(
+                    RuntimeTransaction::try_create(
                         versioned_tx,
-                        message_hash,
+                        MessageHash::Precomputed(message_hash),
                         None,
                         SimpleAddressLoader::Disabled,
                         &ReservedAccountKeys::empty_key_set(),

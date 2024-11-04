@@ -10,11 +10,12 @@ use {
         },
         loader_utils::load_upgradeable_program_and_advance_slot,
     },
+    solana_runtime_transaction::runtime_transaction::RuntimeTransaction,
     solana_sdk::{
         instruction::{AccountMeta, Instruction},
         message::Message,
         signature::{Keypair, Signer},
-        transaction::{SanitizedTransaction, Transaction},
+        transaction::Transaction,
     },
     solana_vote::vote_account::VoteAccount,
     solana_vote_program::vote_state::create_account_with_authorized,
@@ -90,7 +91,7 @@ fn test_syscall_get_epoch_stake() {
     let blockhash = bank.last_blockhash();
     let message = Message::new(&[instruction], Some(&mint_keypair.pubkey()));
     let transaction = Transaction::new(&[&mint_keypair], message, blockhash);
-    let sanitized_tx = SanitizedTransaction::from_transaction_for_tests(transaction);
+    let sanitized_tx = RuntimeTransaction::from_transaction_for_tests(transaction);
 
     let result = bank.simulate_transaction(&sanitized_tx, false);
 

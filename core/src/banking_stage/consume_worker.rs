@@ -733,6 +733,7 @@ mod tests {
             bank_forks::BankForks, prioritization_fee_cache::PrioritizationFeeCache,
             vote_sender_types::ReplayVoteReceiver,
         },
+        solana_runtime_transaction::runtime_transaction::RuntimeTransaction,
         solana_sdk::{
             address_lookup_table::AddressLookupTableAccount,
             clock::{Slot, MAX_PROCESSING_AGE},
@@ -746,9 +747,7 @@ mod tests {
             signature::Keypair,
             signer::Signer,
             system_instruction, system_transaction,
-            transaction::{
-                MessageHash, SanitizedTransaction, TransactionError, VersionedTransaction,
-            },
+            transaction::{MessageHash, TransactionError, VersionedTransaction},
         },
         solana_svm_transaction::svm_message::SVMMessage,
         std::{
@@ -1101,7 +1100,7 @@ mod tests {
                 readonly: vec![],
             };
             let loader = SimpleAddressLoader::Enabled(loaded_addresses);
-            SanitizedTransaction::try_create(
+            RuntimeTransaction::try_create(
                 VersionedTransaction::try_new(
                     VersionedMessage::V0(
                         v0::Message::try_compile(

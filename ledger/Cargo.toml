@@ -59,6 +59,7 @@ solana-perf = { workspace = true }
 solana-program-runtime = { workspace = true }
 solana-rayon-threadlimit = { workspace = true }
 solana-runtime = { workspace = true }
+solana-runtime-transaction = { workspace = true }
 solana-sdk = { workspace = true }
 solana-stake-program = { workspace = true }
 solana-storage-bigtable = { workspace = true }

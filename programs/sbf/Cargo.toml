@@ -120,7 +120,9 @@ solana-measure = { workspace = true }
 solana-program = { workspace = true }
 solana-program-runtime = { workspace = true }
 solana-runtime = { workspace = true, features = ["dev-context-only-utils"] }
-solana-runtime-transaction = { workspace = true }
+solana-runtime-transaction = { workspace = true, features = [
+    "dev-context-only-utils",
+] }
 solana-sbf-rust-invoke-dep = { workspace = true }
 solana-sbf-rust-realloc-dep = { workspace = true }
 solana-sbf-rust-realloc-invoke-dep = { workspace = true }

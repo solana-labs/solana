@@ -9,6 +9,7 @@ use {
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         prioritization_fee_cache::*,
     },
+    solana_runtime_transaction::runtime_transaction::RuntimeTransaction,
     solana_sdk::{
         compute_budget::ComputeBudgetInstruction,
         message::Message,
@@ -25,7 +26,7 @@ fn build_sanitized_transaction(
     compute_unit_price: u64,
     signer_account: &Pubkey,
     write_account: &Pubkey,
-) -> SanitizedTransaction {
+) -> RuntimeTransaction<SanitizedTransaction> {
     let transfer_lamports = 1;
     let transaction = Transaction::new_unsigned(Message::new(
         &[
@@ -36,7 +37,7 @@ fn build_sanitized_transaction(
         Some(signer_account),
     ));
 
-    SanitizedTransaction::from_transaction_for_tests(transaction)
+    RuntimeTransaction::from_transaction_for_tests(transaction)
 }
 
 #[bench]

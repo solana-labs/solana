@@ -4,11 +4,12 @@ use {
     log::*,
     solana_accounts_db::account_locks::validate_account_locks,
     solana_measure::measure_us,
-    solana_runtime_transaction::instructions_processor::process_compute_budget_instructions,
+    solana_runtime_transaction::{
+        runtime_transaction::RuntimeTransaction, transaction_meta::StaticMeta,
+    },
     solana_sdk::{
         clock::{BankId, Slot},
         pubkey::Pubkey,
-        transaction::SanitizedTransaction,
     },
     solana_svm_transaction::svm_message::SVMMessage,
     std::{
@@ -195,7 +196,11 @@ impl PrioritizationFeeCache {
     /// Update with a list of non-vote transactions' compute_budget_details and account_locks; Only
     /// transactions have both valid compute_budget_details and account_locks will be used to update
     /// fee_cache asynchronously.
-    pub fn update<'a>(&self, bank: &Bank, txs: impl Iterator<Item = &'a SanitizedTransaction>) {
+    pub fn update<'a, Tx: SVMMessage + 'a>(
+        &self,
+        bank: &Bank,
+        txs: impl Iterator<Item = &'a RuntimeTransaction<Tx>>,
+    ) {
         let (_, send_updates_us) = measure_us!({
             for sanitized_transaction in txs {
                 // Vote transactions are not prioritized, therefore they are excluded from
@@ -204,13 +209,11 @@ impl PrioritizationFeeCache {
                     continue;
                 }
 
-                let compute_budget_limits = process_compute_budget_instructions(
-                    SVMMessage::program_instructions_iter(sanitized_transaction),
-                );
+                let compute_budget_limits =
+                    sanitized_transaction.compute_budget_limits(&bank.feature_set);
 
-                let message = sanitized_transaction.message();
                 let lock_result = validate_account_locks(
-                    message.account_keys(),
+                    sanitized_transaction.account_keys(),
                     bank.get_transaction_account_lock_limit(),
                 );
 
@@ -225,11 +228,11 @@ impl PrioritizationFeeCache {
                     continue;
                 }
 
-                let writable_accounts = message
+                let writable_accounts = sanitized_transaction
                     .account_keys()
                     .iter()
                     .enumerate()
-                    .filter(|(index, _)| message.is_writable(*index))
+                    .filter(|(index, _)| sanitized_transaction.is_writable(*index))
                     .map(|(_, key)| *key)
                     .collect();
 
@@ -440,7 +443,7 @@ mod tests {
         compute_unit_price: u64,
         signer_account: &Pubkey,
         write_account: &Pubkey,
-    ) -> SanitizedTransaction {
+    ) -> RuntimeTransaction<SanitizedTransaction> {
         let transaction = Transaction::new_unsigned(Message::new(
             &[
                 system_instruction::transfer(signer_account, write_account, 1),
@@ -449,14 +452,14 @@ mod tests {
             Some(signer_account),
         ));
 
-        SanitizedTransaction::from_transaction_for_tests(transaction)
+        RuntimeTransaction::from_transaction_for_tests(transaction)
     }
 
     // update fee cache is asynchronous, this test helper blocks until update is completed.
     fn sync_update<'a>(
         prioritization_fee_cache: &PrioritizationFeeCache,
         bank: Arc<Bank>,
-        txs: impl ExactSizeIterator<Item = &'a SanitizedTransaction>,
+        txs: impl ExactSizeIterator<Item = &'a RuntimeTransaction<SanitizedTransaction>>,
     ) {
         let expected_update_count = prioritization_fee_cache
             .metrics

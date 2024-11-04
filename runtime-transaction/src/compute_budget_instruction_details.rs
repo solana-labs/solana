@@ -14,6 +14,7 @@ use {
 };
 
 #[cfg_attr(test, derive(Eq, PartialEq))]
+#[cfg_attr(feature = "dev-context-only-utils", derive(Clone))]
 #[derive(Default, Debug)]
 pub(crate) struct ComputeBudgetInstructionDetails {
     // compute-budget instruction details:

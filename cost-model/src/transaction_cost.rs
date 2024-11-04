@@ -1,6 +1,9 @@
 use {
     crate::block_cost_limits,
-    solana_sdk::{message::TransactionSignatureDetails, pubkey::Pubkey},
+    solana_runtime_transaction::{
+        runtime_transaction::RuntimeTransaction, transaction_meta::StaticMeta,
+    },
+    solana_sdk::pubkey::Pubkey,
     solana_svm_transaction::svm_message::SVMMessage,
 };
 
@@ -16,8 +19,10 @@ const SIMPLE_VOTE_USAGE_COST: u64 = 3428;
 
 #[derive(Debug)]
 pub enum TransactionCost<'a, Tx: SVMMessage> {
-    SimpleVote { transaction: &'a Tx },
-    Transaction(UsageCostDetails<'a, Tx>),
+    SimpleVote {
+        transaction: &'a RuntimeTransaction<Tx>,
+    },
+    Transaction(UsageCostDetails<'a, RuntimeTransaction<Tx>>),
 }
 
 impl<'a, Tx: SVMMessage> TransactionCost<'a, Tx> {
@@ -104,9 +109,10 @@ impl<'a, Tx: SVMMessage> TransactionCost<'a, Tx> {
     pub fn num_transaction_signatures(&self) -> u64 {
         match self {
             Self::SimpleVote { .. } => 1,
-            Self::Transaction(usage_cost) => {
-                usage_cost.signature_details.num_transaction_signatures()
-            }
+            Self::Transaction(usage_cost) => usage_cost
+                .transaction
+                .signature_details()
+                .num_transaction_signatures(),
         }
     }
 
@@ -114,7 +120,8 @@ impl<'a, Tx: SVMMessage> TransactionCost<'a, Tx> {
         match self {
             Self::SimpleVote { .. } => 0,
             Self::Transaction(usage_cost) => usage_cost
-                .signature_details
+                .transaction
+                .signature_details()
                 .num_secp256k1_instruction_signatures(),
         }
     }
@@ -123,7 +130,8 @@ impl<'a, Tx: SVMMessage> TransactionCost<'a, Tx> {
         match self {
             Self::SimpleVote { .. } => 0,
             Self::Transaction(usage_cost) => usage_cost
-                .signature_details
+                .transaction
+                .signature_details()
                 .num_ed25519_instruction_signatures(),
         }
     }
@@ -139,7 +147,6 @@ pub struct UsageCostDetails<'a, Tx: SVMMessage> {
     pub programs_execution_cost: u64,
     pub loaded_accounts_data_size_cost: u64,
     pub allocated_accounts_data_size: u64,
-    pub signature_details: TransactionSignatureDetails,
 }
 
 impl<'a, Tx: SVMMessage> UsageCostDetails<'a, Tx> {
@@ -225,12 +232,13 @@ mod tests {
         super::*,
         crate::cost_model::CostModel,
         solana_feature_set::FeatureSet,
+        solana_runtime_transaction::runtime_transaction::RuntimeTransaction,
         solana_sdk::{
             hash::Hash,
             message::SimpleAddressLoader,
             reserved_account_keys::ReservedAccountKeys,
             signer::keypair::Keypair,
-            transaction::{MessageHash, SanitizedTransaction, VersionedTransaction},
+            transaction::{MessageHash, VersionedTransaction},
         },
         solana_vote_program::{vote_state::TowerSync, vote_transaction},
     };
@@ -251,7 +259,7 @@ mod tests {
         );
 
         // create a sanitized vote transaction
-        let vote_transaction = SanitizedTransaction::try_create(
+        let vote_transaction = RuntimeTransaction::try_create(
             VersionedTransaction::from(transaction.clone()),
             MessageHash::Compute,
             Some(true),
@@ -261,7 +269,7 @@ mod tests {
         .unwrap();
 
         // create a identical sanitized transaction, but identified as non-vote
-        let none_vote_transaction = SanitizedTransaction::try_create(
+        let none_vote_transaction = RuntimeTransaction::try_create(
             VersionedTransaction::from(transaction),
             MessageHash::Compute,
             Some(false),

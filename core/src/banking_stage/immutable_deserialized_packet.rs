@@ -3,7 +3,10 @@ use {
     solana_compute_budget::compute_budget_limits::ComputeBudgetLimits,
     solana_perf::packet::Packet,
     solana_runtime::bank::Bank,
-    solana_runtime_transaction::instructions_processor::process_compute_budget_instructions,
+    solana_runtime_transaction::{
+        instructions_processor::process_compute_budget_instructions,
+        runtime_transaction::RuntimeTransaction,
+    },
     solana_sanitize::SanitizeError,
     solana_sdk::{
         clock::Slot,
@@ -11,7 +14,9 @@ use {
         message::{v0::LoadedAddresses, AddressLoaderError, Message, SimpleAddressLoader},
         pubkey::Pubkey,
         signature::Signature,
-        transaction::{SanitizedTransaction, SanitizedVersionedTransaction, VersionedTransaction},
+        transaction::{
+            MessageHash, SanitizedTransaction, SanitizedVersionedTransaction, VersionedTransaction,
+        },
     },
     solana_short_vec::decode_shortu16_len,
     solana_svm_transaction::{
@@ -40,7 +45,7 @@ pub enum DeserializedPacketError {
     FailedFilter(#[from] PacketFilterFailure),
 }
 
-#[derive(Debug, Eq)]
+#[derive(Debug)]
 pub struct ImmutableDeserializedPacket {
     original_packet: Packet,
     transaction: SanitizedVersionedTransaction,
@@ -118,7 +123,7 @@ impl ImmutableDeserializedPacket {
         votes_only: bool,
         bank: &Bank,
         reserved_account_keys: &HashSet<Pubkey>,
-    ) -> Option<(SanitizedTransaction, Slot)> {
+    ) -> Option<(RuntimeTransaction<SanitizedTransaction>, Slot)> {
         if votes_only && !self.is_simple_vote() {
             return None;
         }
@@ -127,14 +132,18 @@ impl ImmutableDeserializedPacket {
         let (loaded_addresses, deactivation_slot) =
             Self::resolve_addresses_with_deactivation(self.transaction(), bank).ok()?;
         let address_loader = SimpleAddressLoader::Enabled(loaded_addresses);
-
-        let tx = SanitizedTransaction::try_new(
-            self.transaction().clone(),
-            *self.message_hash(),
-            self.is_simple_vote(),
-            address_loader,
-            reserved_account_keys,
+        let tx = RuntimeTransaction::<SanitizedVersionedTransaction>::try_from(
+            self.transaction.clone(),
+            MessageHash::Precomputed(self.message_hash),
+            Some(self.is_simple_vote),
         )
+        .and_then(|tx| {
+            RuntimeTransaction::<SanitizedTransaction>::try_from(
+                tx,
+                address_loader,
+                reserved_account_keys,
+            )
+        })
         .ok()?;
         Some((tx, deactivation_slot))
     }
@@ -156,7 +165,8 @@ impl ImmutableDeserializedPacket {
     }
 }
 
-// PartialEq MUST be consistent with PartialOrd and Ord
+// Eq and PartialEq MUST be consistent with PartialOrd and Ord
+impl Eq for ImmutableDeserializedPacket {}
 impl PartialEq for ImmutableDeserializedPacket {
     fn eq(&self, other: &Self) -> bool {
         self.compute_unit_price() == other.compute_unit_price()

@@ -17,6 +17,7 @@ solana-banks-interface = { workspace = true }
 solana-client = { workspace = true }
 solana-feature-set = { workspace = true }
 solana-runtime = { workspace = true }
+solana-runtime-transaction = { workspace = true }
 solana-sdk = { workspace = true }
 solana-send-transaction-service = { workspace = true }
 solana-svm = { workspace = true }

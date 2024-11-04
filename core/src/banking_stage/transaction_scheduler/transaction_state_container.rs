@@ -154,16 +154,11 @@ mod tests {
     use {
         super::*,
         crate::banking_stage::scheduler_messages::MaxAge,
+        solana_runtime_transaction::runtime_transaction::RuntimeTransaction,
         solana_sdk::{
-            compute_budget::ComputeBudgetInstruction,
-            hash::Hash,
-            message::Message,
-            packet::Packet,
-            signature::Keypair,
-            signer::Signer,
-            slot_history::Slot,
-            system_instruction,
-            transaction::{SanitizedTransaction, Transaction},
+            compute_budget::ComputeBudgetInstruction, hash::Hash, message::Message, packet::Packet,
+            signature::Keypair, signer::Signer, slot_history::Slot, system_instruction,
+            transaction::Transaction,
         },
     };
 
@@ -186,7 +181,7 @@ mod tests {
             ComputeBudgetInstruction::set_compute_unit_price(priority),
         ];
         let message = Message::new(&ixs, Some(&from_keypair.pubkey()));
-        let tx = SanitizedTransaction::from_transaction_for_tests(Transaction::new(
+        let tx = RuntimeTransaction::from_transaction_for_tests(Transaction::new(
             &[&from_keypair],
             message,
             Hash::default(),

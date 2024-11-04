@@ -45,6 +45,7 @@ solana-poh = { workspace = true }
 solana-rayon-threadlimit = { workspace = true }
 solana-rpc-client-api = { workspace = true }
 solana-runtime = { workspace = true }
+solana-runtime-transaction = { workspace = true }
 solana-sdk = { workspace = true }
 solana-send-transaction-service = { workspace = true }
 solana-stake-program = { workspace = true }
@@ -67,6 +68,9 @@ tokio-util = { workspace = true, features = ["codec", "compat"] }
 serial_test = { workspace = true }
 solana-net-utils = { workspace = true }
 solana-runtime = { workspace = true, features = ["dev-context-only-utils"] }
+solana-runtime-transaction = { workspace = true, features = [
+    "dev-context-only-utils",
+] }
 solana-stake-program = { workspace = true }
 spl-pod = { workspace = true }
 symlink = { workspace = true }

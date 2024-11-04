@@ -36,6 +36,7 @@ pub trait StaticMeta {
 /// on-chain ALT, examples are: transaction usage costs, nonce account.
 pub trait DynamicMeta: StaticMeta {}
 
+#[cfg_attr(feature = "dev-context-only-utils", derive(Clone))]
 #[derive(Debug)]
 pub struct TransactionMeta {
     pub(crate) message_hash: Hash,

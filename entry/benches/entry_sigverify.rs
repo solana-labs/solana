@@ -3,12 +3,13 @@ extern crate test;
 use {
     solana_entry::entry::{self, VerifyRecyclers},
     solana_perf::test_tx::test_tx,
+    solana_runtime_transaction::runtime_transaction::RuntimeTransaction,
     solana_sdk::{
         hash::Hash,
         reserved_account_keys::ReservedAccountKeys,
         transaction::{
-            Result, SanitizedTransaction, SimpleAddressLoader, TransactionVerificationMode,
-            VersionedTransaction,
+            MessageHash, Result, SanitizedTransaction, SimpleAddressLoader,
+            TransactionVerificationMode, VersionedTransaction,
         },
     },
     std::sync::Arc,
@@ -28,7 +29,7 @@ fn bench_gpusigverify(bencher: &mut Bencher) {
     let verify_transaction = {
         move |versioned_tx: VersionedTransaction,
               verification_mode: TransactionVerificationMode|
-              -> Result<SanitizedTransaction> {
+              -> Result<RuntimeTransaction<SanitizedTransaction>> {
             let sanitized_tx = {
                 let message_hash =
                     if verification_mode == TransactionVerificationMode::FullVerification {
@@ -37,9 +38,9 @@ fn bench_gpusigverify(bencher: &mut Bencher) {
                         versioned_tx.message.hash()
                     };
 
-                SanitizedTransaction::try_create(
+                RuntimeTransaction::try_create(
                     versioned_tx,
-                    message_hash,
+                    MessageHash::Precomputed(message_hash),
                     None,
                     SimpleAddressLoader::Disabled,
                     &ReservedAccountKeys::empty_key_set(),
@@ -78,12 +79,12 @@ fn bench_cpusigverify(bencher: &mut Bencher) {
         .collect::<Vec<_>>();
 
     let verify_transaction = {
-        move |versioned_tx: VersionedTransaction| -> Result<SanitizedTransaction> {
+        move |versioned_tx: VersionedTransaction| -> Result<RuntimeTransaction<SanitizedTransaction>> {
             let sanitized_tx = {
                 let message_hash = versioned_tx.verify_and_hash_message()?;
-                SanitizedTransaction::try_create(
+                RuntimeTransaction::try_create(
                     versioned_tx,
-                    message_hash,
+                    MessageHash::Precomputed(message_hash),
                     None,
                     SimpleAddressLoader::Disabled,
                     &ReservedAccountKeys::empty_key_set(),

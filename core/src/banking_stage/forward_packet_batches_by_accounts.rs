@@ -8,7 +8,7 @@ use {
     },
     solana_feature_set::FeatureSet,
     solana_perf::packet::Packet,
-    solana_sdk::transaction::SanitizedTransaction,
+    solana_runtime_transaction::runtime_transaction::RuntimeTransaction,
     solana_svm_transaction::svm_message::SVMMessage,
     std::sync::Arc,
 };
@@ -106,7 +106,7 @@ impl ForwardPacketBatchesByAccounts {
 
     pub fn try_add_packet(
         &mut self,
-        sanitized_transaction: &SanitizedTransaction,
+        sanitized_transaction: &RuntimeTransaction<impl SVMMessage>,
         immutable_packet: Arc<ImmutableDeserializedPacket>,
         feature_set: &FeatureSet,
     ) -> bool {
@@ -171,14 +171,15 @@ mod tests {
     use {
         super::*,
         crate::banking_stage::unprocessed_packet_batches::DeserializedPacket,
+        lazy_static::lazy_static,
         solana_cost_model::transaction_cost::{UsageCostDetails, WritableKeysTransaction},
         solana_feature_set::FeatureSet,
         solana_sdk::{
             compute_budget::ComputeBudgetInstruction,
-            message::{Message, TransactionSignatureDetails},
+            message::Message,
             pubkey::Pubkey,
             system_instruction,
-            transaction::Transaction,
+            transaction::{SanitizedTransaction, Transaction},
         },
     };
 
@@ -187,7 +188,11 @@ mod tests {
     fn build_test_transaction_and_packet(
         priority: u64,
         write_to_account: &Pubkey,
-    ) -> (SanitizedTransaction, DeserializedPacket, u32) {
+    ) -> (
+        RuntimeTransaction<SanitizedTransaction>,
+        DeserializedPacket,
+        u32,
+    ) {
         let from_account = solana_sdk::pubkey::new_rand();
 
         let transaction = Transaction::new_unsigned(Message::new(
@@ -198,7 +203,7 @@ mod tests {
             Some(&from_account),
         ));
         let sanitized_transaction =
-            SanitizedTransaction::from_transaction_for_tests(transaction.clone());
+            RuntimeTransaction::from_transaction_for_tests(transaction.clone());
         let tx_cost = CostModel::calculate_cost(&sanitized_transaction, &FeatureSet::all_enabled());
         let cost = tx_cost.sum();
         let deserialized_packet =
@@ -211,7 +216,10 @@ mod tests {
     }
 
     fn zero_transaction_cost() -> TransactionCost<'static, WritableKeysTransaction> {
-        static DUMMY_TRANSACTION: WritableKeysTransaction = WritableKeysTransaction(vec![]);
+        lazy_static! {
+            static ref DUMMY_TRANSACTION: RuntimeTransaction<WritableKeysTransaction> =
+                RuntimeTransaction::new_for_tests(WritableKeysTransaction(vec![]));
+        };
 
         TransactionCost::Transaction(UsageCostDetails {
             transaction: &DUMMY_TRANSACTION,
@@ -221,7 +229,6 @@ mod tests {
             programs_execution_cost: 0,
             loaded_accounts_data_size_cost: 0,
             allocated_accounts_data_size: 0,
-            signature_details: TransactionSignatureDetails::new(0, 0, 0),
         })
     }
 
@@ -370,7 +377,8 @@ mod tests {
                 ForwardPacketBatchesByAccounts::new_with_default_batch_limits();
             forward_packet_batches_by_accounts.batch_vote_limit = test_cost + 1;
 
-            let dummy_transaction = WritableKeysTransaction(vec![]);
+            let dummy_transaction =
+                RuntimeTransaction::new_for_tests(WritableKeysTransaction(vec![]));
             let transaction_cost = TransactionCost::SimpleVote {
                 transaction: &dummy_transaction,
             };

@@ -2,6 +2,7 @@
 extern crate test;
 use {
     solana_cost_model::cost_model::CostModel,
+    solana_runtime_transaction::runtime_transaction::RuntimeTransaction,
     solana_sdk::{
         feature_set::FeatureSet,
         hash::Hash,
@@ -16,7 +17,7 @@ use {
 };
 
 struct BenchSetup {
-    transactions: Vec<SanitizedTransaction>,
+    transactions: Vec<RuntimeTransaction<SanitizedTransaction>>,
     feature_set: FeatureSet,
 }
 
@@ -32,7 +33,7 @@ fn setup(num_transactions: usize) -> BenchSetup {
             let ixs = system_instruction::transfer_many(&from_keypair.pubkey(), &to_lamports);
             let message = Message::new(&ixs, Some(&from_keypair.pubkey()));
             let transaction = Transaction::new(&[from_keypair], message, Hash::default());
-            SanitizedTransaction::from_transaction_for_tests(transaction)
+            RuntimeTransaction::from_transaction_for_tests(transaction)
         })
         .collect();
 

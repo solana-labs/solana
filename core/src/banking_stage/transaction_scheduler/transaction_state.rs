@@ -2,13 +2,14 @@ use {
     crate::banking_stage::{
         immutable_deserialized_packet::ImmutableDeserializedPacket, scheduler_messages::MaxAge,
     },
+    solana_runtime_transaction::runtime_transaction::RuntimeTransaction,
     solana_sdk::transaction::SanitizedTransaction,
     std::sync::Arc,
 };
 
 /// Simple wrapper type to tie a sanitized transaction to max age slot.
 pub(crate) struct SanitizedTransactionTTL {
-    pub(crate) transaction: SanitizedTransaction,
+    pub(crate) transaction: RuntimeTransaction<SanitizedTransaction>,
     pub(crate) max_age: MaxAge,
 }
 
@@ -232,7 +233,7 @@ mod tests {
             ImmutableDeserializedPacket::new(Packet::from_data(None, tx.clone()).unwrap()).unwrap(),
         );
         let transaction_ttl = SanitizedTransactionTTL {
-            transaction: SanitizedTransaction::from_transaction_for_tests(tx),
+            transaction: RuntimeTransaction::from_transaction_for_tests(tx),
             max_age: MaxAge {
                 epoch_invalidation_slot: Slot::MAX,
                 alt_invalidation_slot: Slot::MAX,

@@ -6,13 +6,14 @@ use {
         cost_tracker::CostTracker,
         transaction_cost::{TransactionCost, UsageCostDetails, WritableKeysTransaction},
     },
-    solana_sdk::{message::TransactionSignatureDetails, pubkey::Pubkey},
+    solana_runtime_transaction::runtime_transaction::RuntimeTransaction,
+    solana_sdk::pubkey::Pubkey,
     test::Bencher,
 };
 
 struct BenchSetup {
     cost_tracker: CostTracker,
-    transactions: Vec<WritableKeysTransaction>,
+    transactions: Vec<RuntimeTransaction<WritableKeysTransaction>>,
 }
 
 fn setup(num_transactions: usize, contentious_transactions: bool) -> BenchSetup {
@@ -33,7 +34,7 @@ fn setup(num_transactions: usize, contentious_transactions: bool) -> BenchSetup 
                 };
                 writable_accounts.push(writable_account_key)
             });
-            WritableKeysTransaction(writable_accounts)
+            RuntimeTransaction::new_for_tests(WritableKeysTransaction(writable_accounts))
         })
         .collect_vec();
 
@@ -44,7 +45,7 @@ fn setup(num_transactions: usize, contentious_transactions: bool) -> BenchSetup 
 }
 
 fn get_costs(
-    transactions: &[WritableKeysTransaction],
+    transactions: &[RuntimeTransaction<WritableKeysTransaction>],
 ) -> Vec<TransactionCost<WritableKeysTransaction>> {
     transactions
         .iter()
@@ -57,7 +58,6 @@ fn get_costs(
                 programs_execution_cost: 9999,
                 loaded_accounts_data_size_cost: 0,
                 allocated_accounts_data_size: 0,
-                signature_details: TransactionSignatureDetails::new(0, 0, 0),
             })
         })
         .collect_vec()

@@ -2,6 +2,7 @@ use {
     super::{Bank, BankStatusCache},
     solana_accounts_db::blockhash_queue::BlockhashQueue,
     solana_perf::perf_libs,
+    solana_runtime_transaction::runtime_transaction::RuntimeTransaction,
     solana_sdk::{
         account::AccountSharedData,
         account_utils::StateMut,
@@ -31,7 +32,7 @@ impl Bank {
     /// Checks a batch of sanitized transactions again bank for age and status
     pub fn check_transactions_with_forwarding_delay(
         &self,
-        transactions: &[SanitizedTransaction],
+        transactions: &[RuntimeTransaction<SanitizedTransaction>],
         filter: &[TransactionResult<()>],
         forward_transactions_to_leader_at_slot_offset: u64,
     ) -> Vec<TransactionCheckResult> {
@@ -60,7 +61,7 @@ impl Bank {
 
     pub fn check_transactions(
         &self,
-        sanitized_txs: &[impl core::borrow::Borrow<SanitizedTransaction>],
+        sanitized_txs: &[impl core::borrow::Borrow<RuntimeTransaction<SanitizedTransaction>>],
         lock_results: &[TransactionResult<()>],
         max_age: usize,
         error_counters: &mut TransactionErrorMetrics,
@@ -71,7 +72,7 @@ impl Bank {
 
     fn check_age(
         &self,
-        sanitized_txs: &[impl core::borrow::Borrow<SanitizedTransaction>],
+        sanitized_txs: &[impl core::borrow::Borrow<RuntimeTransaction<SanitizedTransaction>>],
         lock_results: &[TransactionResult<()>],
         max_age: usize,
         error_counters: &mut TransactionErrorMetrics,
@@ -184,7 +185,7 @@ impl Bank {
 
     fn check_status_cache(
         &self,
-        sanitized_txs: &[impl core::borrow::Borrow<SanitizedTransaction>],
+        sanitized_txs: &[impl core::borrow::Borrow<RuntimeTransaction<SanitizedTransaction>>],
         lock_results: Vec<TransactionCheckResult>,
         error_counters: &mut TransactionErrorMetrics,
     ) -> Vec<TransactionCheckResult> {

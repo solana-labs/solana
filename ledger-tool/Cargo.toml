@@ -45,6 +45,7 @@ solana-measure = { workspace = true }
 solana-program-runtime = { workspace = true }
 solana-rpc = { workspace = true }
 solana-runtime = { workspace = true, features = ["dev-context-only-utils"] }
+solana-runtime-transaction = { workspace = true }
 solana-sdk = { workspace = true }
 solana-stake-program = { workspace = true }
 solana-storage-bigtable = { workspace = true }

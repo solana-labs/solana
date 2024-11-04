@@ -17,6 +17,7 @@ use {
         prioritization_fee_cache::PrioritizationFeeCache,
         transaction_batch::{OwnedOrBorrowed, TransactionBatch},
     },
+    solana_runtime_transaction::runtime_transaction::RuntimeTransaction,
     solana_sdk::{
         account::{Account, ReadableAccount},
         signature::Keypair,
@@ -60,7 +61,7 @@ fn create_funded_accounts(bank: &Bank, num: usize) -> Vec<Keypair> {
     accounts
 }
 
-fn create_transactions(bank: &Bank, num: usize) -> Vec<SanitizedTransaction> {
+fn create_transactions(bank: &Bank, num: usize) -> Vec<RuntimeTransaction<SanitizedTransaction>> {
     let funded_accounts = create_funded_accounts(bank, 2 * num);
     funded_accounts
         .into_par_iter()
@@ -70,7 +71,7 @@ fn create_transactions(bank: &Bank, num: usize) -> Vec<SanitizedTransaction> {
             let to = &chunk[1];
             system_transaction::transfer(from, &to.pubkey(), 1, bank.last_blockhash())
         })
-        .map(SanitizedTransaction::from_transaction_for_tests)
+        .map(RuntimeTransaction::from_transaction_for_tests)
         .collect()
 }
 

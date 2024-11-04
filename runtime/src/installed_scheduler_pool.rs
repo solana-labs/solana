@@ -23,6 +23,7 @@
 use {
     crate::bank::Bank,
     log::*,
+    solana_runtime_transaction::runtime_transaction::RuntimeTransaction,
     solana_sdk::{
         clock::Slot,
         hash::Hash,
@@ -161,8 +162,11 @@ pub trait InstalledScheduler: Send + Sync + Debug + 'static {
     /// optimize the fast code-path of normal transaction scheduling to be multi-threaded at the
     /// cost of far slower error code-path while giving implementors increased flexibility by
     /// having &mut.
-    fn schedule_execution(&self, transaction: SanitizedTransaction, index: usize)
-        -> ScheduleResult;
+    fn schedule_execution(
+        &self,
+        transaction: RuntimeTransaction<SanitizedTransaction>,
+        index: usize,
+    ) -> ScheduleResult;
 
     /// Return the error which caused the scheduler to abort.
     ///
@@ -440,7 +444,9 @@ impl BankWithScheduler {
     /// wait_for_termination()-ed or the unified scheduler is disabled in the first place).
     pub fn schedule_transaction_executions(
         &self,
-        transactions_with_indexes: impl ExactSizeIterator<Item = (SanitizedTransaction, usize)>,
+        transactions_with_indexes: impl ExactSizeIterator<
+            Item = (RuntimeTransaction<SanitizedTransaction>, usize),
+        >,
     ) -> Result<()> {
         trace!(
             "schedule_transaction_executions(): {} txs",
@@ -834,7 +840,7 @@ mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(10_000);
-        let tx0 = SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+        let tx0 = RuntimeTransaction::from_transaction_for_tests(system_transaction::transfer(
             &mint_keypair,
             &solana_sdk::pubkey::new_rand(),
             2,

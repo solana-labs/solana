@@ -8,6 +8,7 @@ use {
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         loader_utils::load_upgradeable_program_and_advance_slot,
     },
+    solana_runtime_transaction::runtime_transaction::RuntimeTransaction,
     solana_sdk::{
         instruction::{AccountMeta, Instruction},
         message::Message,
@@ -18,7 +19,7 @@ use {
             clock, epoch_rewards, epoch_schedule, instructions, recent_blockhashes, rent,
             slot_hashes, slot_history, stake_history,
         },
-        transaction::{SanitizedTransaction, Transaction},
+        transaction::Transaction,
     },
 };
 
@@ -92,7 +93,7 @@ fn test_sysvar_syscalls() {
         let blockhash = bank.last_blockhash();
         let message = Message::new(&[instruction], Some(&mint_keypair.pubkey()));
         let transaction = Transaction::new(&[&mint_keypair], message, blockhash);
-        let sanitized_tx = SanitizedTransaction::from_transaction_for_tests(transaction);
+        let sanitized_tx = RuntimeTransaction::from_transaction_for_tests(transaction);
         let result = bank.simulate_transaction(&sanitized_tx, false);
         assert!(result.result.is_ok());
     }

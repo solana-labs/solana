@@ -6,4 +6,5 @@ mod compute_budget_program_id_filter;
 pub mod instructions_processor;
 pub mod runtime_transaction;
 pub mod signature_details;
+pub mod svm_transaction_adapter;
 pub mod transaction_meta;

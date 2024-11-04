@@ -59,6 +59,7 @@ use {
             SUPPORTED_ARCHIVE_COMPRESSION,
         },
     },
+    solana_runtime_transaction::runtime_transaction::RuntimeTransaction,
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::StateMut,
@@ -73,7 +74,7 @@ use {
         shred_version::compute_shred_version,
         stake::{self, state::StakeStateV2},
         system_program,
-        transaction::{MessageHash, SanitizedTransaction, SimpleAddressLoader},
+        transaction::{MessageHash, SimpleAddressLoader},
     },
     solana_stake_program::{points::PointValue, stake_state},
     solana_transaction_status::parse_ui_instruction,
@@ -472,7 +473,7 @@ fn compute_slot_cost(
             .transactions
             .into_iter()
             .filter_map(|transaction| {
-                SanitizedTransaction::try_create(
+                RuntimeTransaction::try_create(
                     transaction,
                     MessageHash::Compute,
                     None,
