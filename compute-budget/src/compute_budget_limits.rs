@@ -1,7 +1,5 @@
 use {
-    crate::prioritization_fee::{PrioritizationFeeDetails, PrioritizationFeeType},
-    solana_fee_structure::FeeBudgetLimits,
-    solana_program_entrypoint::HEAP_LENGTH,
+    solana_fee_structure::FeeBudgetLimits, solana_program_entrypoint::HEAP_LENGTH,
     std::num::NonZeroU32,
 };
 
@@ -12,6 +10,11 @@ pub const DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT: u32 = 200_000;
 pub const MAX_COMPUTE_UNIT_LIMIT: u32 = 1_400_000;
 pub const MAX_HEAP_FRAME_BYTES: u32 = 256 * 1024;
 pub const MIN_HEAP_FRAME_BYTES: u32 = HEAP_LENGTH as u32;
+
+type MicroLamports = u128;
+
+/// There are 10^6 micro-lamports in one lamport
+const MICRO_LAMPORTS_PER_LAMPORT: u64 = 1_000_000;
 
 /// The total accounts data a transaction can load is limited to 64MiB to not break
 /// anyone in Mainnet-beta today. It can be set by set_loaded_accounts_data_size_limit instruction
@@ -37,13 +40,20 @@ impl Default for ComputeBudgetLimits {
     }
 }
 
+fn get_prioritization_fee(compute_unit_price: u64, compute_unit_limit: u64) -> u64 {
+    let micro_lamport_fee: MicroLamports =
+        (compute_unit_price as u128).saturating_mul(compute_unit_limit as u128);
+    micro_lamport_fee
+        .saturating_add(MICRO_LAMPORTS_PER_LAMPORT.saturating_sub(1) as u128)
+        .checked_div(MICRO_LAMPORTS_PER_LAMPORT as u128)
+        .and_then(|fee| u64::try_from(fee).ok())
+        .unwrap_or(u64::MAX)
+}
+
 impl From<ComputeBudgetLimits> for FeeBudgetLimits {
     fn from(val: ComputeBudgetLimits) -> Self {
-        let prioritization_fee_details = PrioritizationFeeDetails::new(
-            PrioritizationFeeType::ComputeUnitPrice(val.compute_unit_price),
-            u64::from(val.compute_unit_limit),
-        );
-        let prioritization_fee = prioritization_fee_details.get_fee();
+        let prioritization_fee =
+            get_prioritization_fee(val.compute_unit_price, u64::from(val.compute_unit_limit));
 
         FeeBudgetLimits {
             loaded_accounts_data_size_limit: val.loaded_accounts_bytes,
@@ -51,5 +61,43 @@ impl From<ComputeBudgetLimits> for FeeBudgetLimits {
             compute_unit_limit: u64::from(val.compute_unit_limit),
             prioritization_fee,
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_new_with_no_fee() {
+        for compute_units in [0, 1, MICRO_LAMPORTS_PER_LAMPORT, u64::MAX] {
+            assert_eq!(get_prioritization_fee(0, compute_units), 0);
+        }
+    }
+
+    #[test]
+    fn test_new_with_compute_unit_price() {
+        assert_eq!(
+            get_prioritization_fee(MICRO_LAMPORTS_PER_LAMPORT - 1, 1),
+            1,
+            "should round up (<1.0) lamport fee to 1 lamport"
+        );
+
+        assert_eq!(get_prioritization_fee(MICRO_LAMPORTS_PER_LAMPORT, 1), 1);
+
+        assert_eq!(
+            get_prioritization_fee(MICRO_LAMPORTS_PER_LAMPORT + 1, 1),
+            2,
+            "should round up (>1.0) lamport fee to 2 lamports"
+        );
+
+        assert_eq!(get_prioritization_fee(200, 100_000), 20);
+
+        assert_eq!(
+            get_prioritization_fee(MICRO_LAMPORTS_PER_LAMPORT, u64::MAX),
+            u64::MAX
+        );
+
+        assert_eq!(get_prioritization_fee(u64::MAX, u64::MAX), u64::MAX);
     }
 }
