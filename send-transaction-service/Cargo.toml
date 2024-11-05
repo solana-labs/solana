@@ -11,6 +11,7 @@ edition = { workspace = true }
 
 [dependencies]
 crossbeam-channel = { workspace = true }
+itertools = { workspace = true }
 log = { workspace = true }
 solana-client = { workspace = true }
 solana-connection-cache = { workspace = true }

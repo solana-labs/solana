@@ -479,7 +479,7 @@ impl JsonRpcService {
             &bank_forks,
             leader_info,
             receiver,
-            &connection_cache,
+            connection_cache,
             send_transaction_service_config,
             exit,
         ));
