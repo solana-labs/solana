@@ -88,8 +88,14 @@ pub mod quic;
 pub mod rent_collector;
 pub mod rent_debits;
 pub mod reserved_account_keys;
-pub mod reward_info;
-pub mod reward_type;
+#[deprecated(since = "2.2.0", note = "Use `solana-reward-info` crate instead")]
+pub mod reward_info {
+    pub use solana_reward_info::RewardInfo;
+}
+#[deprecated(since = "2.2.0", note = "Use `solana-reward-info` crate instead")]
+pub mod reward_type {
+    pub use solana_reward_info::RewardType;
+}
 pub mod rpc_port;
 pub mod secp256k1_instruction;
 pub mod shred_version;

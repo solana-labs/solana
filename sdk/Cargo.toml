@@ -48,6 +48,7 @@ frozen-abi = [
     "solana-account/frozen-abi",
     "solana-inflation/frozen-abi",
     "solana-program/frozen-abi",
+    "solana-reward-info/frozen-abi",
     "solana-short-vec/frozen-abi",
     "solana-signature/frozen-abi",
     "solana-transaction-error/frozen-abi"
@@ -112,6 +113,7 @@ solana-precompile-error = { workspace = true, optional = true }
 solana-program = { workspace = true }
 solana-program-memory = { workspace = true }
 solana-pubkey = { workspace = true, default-features = false, features = ["std"] }
+solana-reward-info = { workspace = true, features = ["serde"] }
 solana-sanitize = { workspace = true }
 solana-sdk-macro = { workspace = true }
 solana-secp256k1-recover = { workspace = true }

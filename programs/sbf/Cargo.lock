@@ -6097,6 +6097,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-reward-info"
+version = "2.2.0"
+dependencies = [
+ "serde",
+ "serde_derive",
+]
+
+[[package]]
 name = "solana-rpc"
 version = "2.2.0"
 dependencies = [
@@ -6854,6 +6862,7 @@ dependencies = [
  "solana-program",
  "solana-program-memory",
  "solana-pubkey",
+ "solana-reward-info",
  "solana-sanitize",
  "solana-sdk-macro",
  "solana-secp256k1-recover",
