@@ -279,13 +279,15 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
             &mut error_metrics
         ));
 
-        let (mut program_cache_for_tx_batch, program_cache_us) = measure_us!({
-            let mut program_accounts_map = Self::filter_executable_program_accounts(
+        let (mut program_accounts_map, filter_executable_us) =
+            measure_us!(Self::filter_executable_program_accounts(
                 callbacks,
                 sanitized_txs,
                 &validation_results,
-                PROGRAM_OWNERS,
-            );
+                PROGRAM_OWNERS
+            ));
+
+        let (mut program_cache_for_tx_batch, program_cache_us) = measure_us!({
             for builtin_program in self.builtin_program_ids.read().unwrap().iter() {
                 program_accounts_map.insert(*builtin_program, 0);
             }
@@ -385,6 +387,8 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
 
         execute_timings
             .saturating_add_in_place(ExecuteTimingType::ValidateFeesUs, validate_fees_us);
+        execute_timings
+            .saturating_add_in_place(ExecuteTimingType::FilterExecutableUs, filter_executable_us);
         execute_timings
             .saturating_add_in_place(ExecuteTimingType::ProgramCacheUs, program_cache_us);
         execute_timings.saturating_add_in_place(ExecuteTimingType::LoadUs, load_accounts_us);
