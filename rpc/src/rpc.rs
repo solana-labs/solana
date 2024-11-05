@@ -20,11 +20,11 @@ use {
         accounts::AccountAddressFilter,
         accounts_index::{AccountIndex, AccountSecondaryIndexes, IndexKey, ScanConfig},
     },
-    solana_client::connection_cache::{ConnectionCache, Protocol},
+    solana_client::connection_cache::Protocol,
     solana_entry::entry::Entry,
     solana_faucet::faucet::request_airdrop_transaction,
     solana_feature_set as feature_set,
-    solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
+    solana_gossip::cluster_info::ClusterInfo,
     solana_inline_spl::{
         token::{SPL_TOKEN_ACCOUNT_MINT_OFFSET, SPL_TOKEN_ACCOUNT_OWNER_OFFSET},
         token_2022::{self, ACCOUNTTYPE_ACCOUNT},
@@ -33,7 +33,6 @@ use {
         blockstore::{Blockstore, SignatureInfosForAddress},
         blockstore_db::BlockstoreError,
         blockstore_meta::{PerfSample, PerfSampleV1, PerfSampleV2},
-        get_tmp_ledger_path,
         leader_schedule_cache::LeaderScheduleCache,
     },
     solana_metrics::inc_new_counter_info,
@@ -54,7 +53,7 @@ use {
     solana_runtime::{
         bank::{Bank, TransactionSimulationResult},
         bank_forks::BankForks,
-        commitment::{BlockCommitmentArray, BlockCommitmentCache, CommitmentSlots},
+        commitment::{BlockCommitmentArray, BlockCommitmentCache},
         installed_scheduler_pool::BankWithScheduler,
         non_circulating_supply::calculate_non_circulating_supply,
         prioritization_fee_cache::PrioritizationFeeCache,
@@ -81,13 +80,9 @@ use {
             VersionedTransaction, MAX_TX_ACCOUNT_LOCKS,
         },
     },
-    solana_send_transaction_service::{
-        send_transaction_service::{SendTransactionService, TransactionInfo},
-        tpu_info::NullTpuInfo,
-    },
+    solana_send_transaction_service::send_transaction_service::TransactionInfo,
     solana_stake_program,
     solana_storage_bigtable::Error as StorageError,
-    solana_streamer::socket::SocketAddrSpace,
     solana_transaction_status::{
         map_inner_instructions, BlockEncodingOptions, ConfirmedBlock,
         ConfirmedTransactionStatusWithSignature, ConfirmedTransactionWithStatusMeta,
@@ -117,6 +112,17 @@ use {
         },
         time::Duration,
     },
+};
+#[cfg(test)]
+use {
+    solana_client::connection_cache::ConnectionCache,
+    solana_gossip::contact_info::ContactInfo,
+    solana_ledger::get_tmp_ledger_path,
+    solana_runtime::commitment::CommitmentSlots,
+    solana_send_transaction_service::{
+        send_transaction_service::SendTransactionService, tpu_info::NullTpuInfo,
+    },
+    solana_streamer::socket::SocketAddrSpace,
 };
 
 pub mod account_resolver;
@@ -349,7 +355,7 @@ impl JsonRpcRequestProcessor {
         )
     }
 
-    // Useful for unit testing
+    #[cfg(test)]
     pub fn new_from_bank(
         bank: Bank,
         socket_addr_space: SocketAddrSpace,
@@ -4333,11 +4339,12 @@ pub mod tests {
         serde::de::DeserializeOwned,
         solana_accounts_db::accounts_db::{AccountsDbConfig, ACCOUNTS_DB_CONFIG_FOR_TESTING},
         solana_entry::entry::next_versioned_entry,
-        solana_gossip::socketaddr,
+        solana_gossip::{contact_info::ContactInfo, socketaddr},
         solana_ledger::{
             blockstore_meta::PerfSampleV2,
             blockstore_processor::fill_blockstore_slot_with_ticks,
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
+            get_tmp_ledger_path,
         },
         solana_rpc_client_api::{
             custom_error::{
@@ -4348,8 +4355,10 @@ pub mod tests {
             filter::MemcmpEncodedBytes,
         },
         solana_runtime::{
-            accounts_background_service::AbsRequestSender, bank::BankTestConfig,
-            commitment::BlockCommitment, non_circulating_supply::non_circulating_accounts,
+            accounts_background_service::AbsRequestSender,
+            bank::BankTestConfig,
+            commitment::{BlockCommitment, CommitmentSlots},
+            non_circulating_supply::non_circulating_accounts,
         },
         solana_sdk::{
             account::{Account, WritableAccount},
@@ -4377,6 +4386,7 @@ pub mod tests {
             },
             vote::state::VoteState,
         },
+        solana_send_transaction_service::tpu_info::NullTpuInfo,
         solana_transaction_status::{
             EncodedConfirmedBlock, EncodedTransaction, EncodedTransactionWithStatusMeta,
             TransactionDetails,
