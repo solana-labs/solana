@@ -33,7 +33,7 @@ use {
 };
 
 pub type ProgramRuntimeEnvironment = Arc<BuiltinProgram<InvokeContext<'static>>>;
-pub const MAX_LOADED_ENTRY_COUNT: usize = 256;
+pub const MAX_LOADED_ENTRY_COUNT: usize = 512;
 pub const DELAY_VISIBILITY_SLOT_OFFSET: Slot = 1;
 
 /// Relationship between two fork IDs
@@ -1624,7 +1624,7 @@ mod tests {
         assert_eq!(num_tombstones, num_tombstones_expected);
 
         // Evict entries from the cache
-        let eviction_pct = 2;
+        let eviction_pct = 1;
 
         let num_loaded_expected =
             Percentage::from(eviction_pct).apply_to(crate::loaded_programs::MAX_LOADED_ENTRY_COUNT);
@@ -1707,7 +1707,7 @@ mod tests {
         assert_eq!(num_tombstones, num_tombstones_expected);
 
         // Evict entries from the cache
-        let eviction_pct = 2;
+        let eviction_pct = 1;
 
         let num_loaded_expected =
             Percentage::from(eviction_pct).apply_to(crate::loaded_programs::MAX_LOADED_ENTRY_COUNT);
