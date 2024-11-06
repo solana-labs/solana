@@ -1546,9 +1546,16 @@ fn test_wait_for_max_stake() {
     // make a root and derive the new leader schedule in time.
     let stakers_slot_offset = slots_per_epoch.saturating_mul(MAX_LEADER_SCHEDULE_EPOCH_OFFSET);
     // Reduce this so that we can complete the test faster by advancing through
-    // slots/epochs faster. But don't make it too small because it can make us
-    // susceptible to skipped slots and the cluster getting stuck.
-    let ticks_per_slot = 16;
+    // slots/epochs faster. But don't make it too small because it can cause the
+    // test to fail in two important ways:
+    // 1. Increase likelihood of skipped slots, which can prevent rooting and
+    //    lead to not generating leader schedule in time and cluster getting
+    //    stuck.
+    // 2. Make the cluster advance through too many epochs before all the
+    //    validators spin up, which can lead to not properly observing gossip
+    //    votes, not repairing missing slots, and some subset of nodes getting
+    //    stuck.
+    let ticks_per_slot = 32;
     let num_validators = 4;
     let mut config = ClusterConfig {
         cluster_lamports: DEFAULT_CLUSTER_LAMPORTS,
