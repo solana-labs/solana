@@ -7746,16 +7746,12 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
         .get_mut(6)
         .unwrap() = AccountMeta::new_readonly(Pubkey::new_unique(), false);
     let message = Message::new(&instructions, Some(&mint_keypair.pubkey()));
-    assert_eq!(
-        TransactionError::InstructionError(1, InstructionError::MissingAccount),
-        bank_client
-            .send_and_confirm_message(
-                &[&mint_keypair, &program_keypair, &upgrade_authority_keypair],
-                message
-            )
-            .unwrap_err()
-            .unwrap()
-    );
+    assert!(bank_client
+        .send_and_confirm_message(
+            &[&mint_keypair, &program_keypair, &upgrade_authority_keypair],
+            message
+        )
+        .is_ok());
 
     fn truncate_data(account: &mut AccountSharedData, len: usize) {
         let mut data = account.data().to_vec();

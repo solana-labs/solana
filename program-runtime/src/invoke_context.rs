@@ -9,7 +9,8 @@ use {
     },
     solana_compute_budget::compute_budget::ComputeBudget,
     solana_feature_set::{
-        move_precompile_verification_to_svm, remove_accounts_executable_flag_checks, FeatureSet,
+        lift_cpi_caller_restriction, move_precompile_verification_to_svm,
+        remove_accounts_executable_flag_checks, FeatureSet,
     },
     solana_log_collector::{ic_msg, LogCollector},
     solana_measure::measure::Measure,
@@ -429,28 +430,38 @@ impl<'a> InvokeContext<'a> {
 
         // Find and validate executables / program accounts
         let callee_program_id = instruction.program_id;
-        let program_account_index = instruction_context
-            .find_index_of_instruction_account(self.transaction_context, &callee_program_id)
-            .ok_or_else(|| {
-                ic_msg!(self, "Unknown program {}", callee_program_id);
-                InstructionError::MissingAccount
-            })?;
-        let borrowed_program_account = instruction_context
-            .try_borrow_instruction_account(self.transaction_context, program_account_index)?;
-        #[allow(deprecated)]
-        if !self
+        let program_account_index = if self
             .get_feature_set()
-            .is_active(&remove_accounts_executable_flag_checks::id())
-            && !borrowed_program_account.is_executable()
+            .is_active(&lift_cpi_caller_restriction::id())
         {
-            ic_msg!(self, "Account {} is not executable", callee_program_id);
-            return Err(InstructionError::AccountNotExecutable);
-        }
+            self.transaction_context
+                .find_index_of_program_account(&callee_program_id)
+                .ok_or_else(|| {
+                    ic_msg!(self, "Unknown program {}", callee_program_id);
+                    InstructionError::MissingAccount
+                })?
+        } else {
+            let program_account_index = instruction_context
+                .find_index_of_instruction_account(self.transaction_context, &callee_program_id)
+                .ok_or_else(|| {
+                    ic_msg!(self, "Unknown program {}", callee_program_id);
+                    InstructionError::MissingAccount
+                })?;
+            let borrowed_program_account = instruction_context
+                .try_borrow_instruction_account(self.transaction_context, program_account_index)?;
+            #[allow(deprecated)]
+            if !self
+                .get_feature_set()
+                .is_active(&remove_accounts_executable_flag_checks::id())
+                && !borrowed_program_account.is_executable()
+            {
+                ic_msg!(self, "Account {} is not executable", callee_program_id);
+                return Err(InstructionError::AccountNotExecutable);
+            }
+            borrowed_program_account.get_index_in_transaction()
+        };
 
-        Ok((
-            instruction_accounts,
-            vec![borrowed_program_account.get_index_in_transaction()],
-        ))
+        Ok((instruction_accounts, vec![program_account_index]))
     }
 
     /// Processes an instruction and returns how many compute units were used

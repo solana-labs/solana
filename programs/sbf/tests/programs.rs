@@ -1203,10 +1203,7 @@ fn test_program_sbf_caller_has_access_to_cpi_program() {
     ];
     let instruction = Instruction::new_with_bytes(caller_pubkey, &[1], account_metas.clone());
     let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
-    assert_eq!(
-        result.unwrap_err().unwrap(),
-        TransactionError::InstructionError(0, InstructionError::MissingAccount)
-    );
+    assert!(result.is_ok());
 }
 
 #[test]
