@@ -5442,10 +5442,8 @@ dependencies = [
 name = "solana-download-utils"
 version = "2.2.0"
 dependencies = [
- "console",
- "indicatif",
  "log",
- "reqwest",
+ "solana-file-download",
  "solana-runtime",
  "solana-sdk",
 ]
@@ -5551,6 +5549,16 @@ dependencies = [
  "serde_derive",
  "solana-native-token",
  "solana-program",
+]
+
+[[package]]
+name = "solana-file-download"
+version = "2.2.0"
+dependencies = [
+ "console",
+ "indicatif",
+ "log",
+ "reqwest",
 ]
 
 [[package]]

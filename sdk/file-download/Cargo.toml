@@ -1,0 +1,19 @@
+[package]
+name = "solana-file-download"
+description = "Solana File Download Utility"
+documentation = "https://docs.rs/solana-file-download"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+console = { workspace = true }
+indicatif = { workspace = true }
+log = { workspace = true }
+reqwest = { workspace = true, features = ["blocking", "brotli", "deflate", "gzip", "rustls-tls", "json"] }
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

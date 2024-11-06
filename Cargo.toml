@@ -115,6 +115,7 @@ members = [
     "sdk/feature-set",
     "sdk/fee-calculator",
     "sdk/fee-structure",
+    "sdk/file-download",
     "sdk/frozen-abi",
     "sdk/frozen-abi/macro",
     "sdk/gen-headers",
@@ -444,6 +445,7 @@ solana-fee-structure = { path = "sdk/fee-structure", version = "=2.2.0" }
 solana-frozen-abi = { path = "sdk/frozen-abi", version = "=2.2.0" }
 solana-frozen-abi-macro = { path = "sdk/frozen-abi/macro", version = "=2.2.0" }
 solana-tps-client = { path = "tps-client", version = "=2.2.0" }
+solana-file-download = { path = "sdk/file-download", version = "=2.2.0" }
 solana-genesis = { path = "genesis", version = "=2.2.0" }
 solana-genesis-utils = { path = "genesis-utils", version = "=2.2.0" }
 agave-geyser-plugin-interface = { path = "geyser-plugin-interface", version = "=2.2.0" }

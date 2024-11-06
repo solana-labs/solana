@@ -6290,7 +6290,7 @@ dependencies = [
  "reqwest",
  "semver 1.0.23",
  "serial_test",
- "solana-download-utils",
+ "solana-file-download",
  "solana-logger",
  "solana-sdk",
  "tar",
@@ -6791,10 +6791,8 @@ dependencies = [
 name = "solana-download-utils"
 version = "2.2.0"
 dependencies = [
- "console",
- "indicatif",
  "log",
- "reqwest",
+ "solana-file-download",
  "solana-runtime",
  "solana-sdk",
 ]
@@ -6929,6 +6927,16 @@ dependencies = [
  "solana-frozen-abi",
  "solana-native-token",
  "solana-program",
+]
+
+[[package]]
+name = "solana-file-download"
+version = "2.2.0"
+dependencies = [
+ "console",
+ "indicatif",
+ "log",
+ "reqwest",
 ]
 
 [[package]]
