@@ -747,10 +747,12 @@ pub(crate) fn aggregate_restart_heaviest_fork(
                 .unwrap()
                 .total_active_stake = current_total_active_stake;
         }
+        let total_active_stake = heaviest_fork_aggregate.total_active_stake();
         info!(
-            "Total active stake: {} Total stake {}",
-            heaviest_fork_aggregate.total_active_stake(),
-            total_stake
+            "Total active stake: {} Total stake {} Active percent: {:.2}%",
+            total_active_stake,
+            total_stake,
+            total_active_stake as f64 / total_stake as f64 * 100.0,
         );
         write_wen_restart_records(wen_restart_path, progress)?;
         let elapsed = timestamp().saturating_sub(start);
