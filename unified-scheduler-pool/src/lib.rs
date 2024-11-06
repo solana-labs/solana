@@ -14,7 +14,7 @@ use {
     assert_matches::assert_matches,
     crossbeam_channel::{self, never, select_biased, Receiver, RecvError, SendError, Sender},
     dashmap::DashMap,
-    derivative::Derivative,
+    derive_where::derive_where,
     log::*,
     scopeguard::defer,
     solana_ledger::blockstore_processor::{
@@ -570,8 +570,7 @@ mod chained_channel {
 
     // P doesn't need to be `: Clone`, yet rustc derive can't handle it.
     // see https://github.com/rust-lang/rust/issues/26925
-    #[derive(Derivative)]
-    #[derivative(Clone(bound = "C: Clone"))]
+    #[derive_where(Clone)]
     pub(super) struct ChainedChannelReceiver<P, C: Clone> {
         receiver: Receiver<ChainedChannel<P, C>>,
         aux_receiver: Receiver<P>,

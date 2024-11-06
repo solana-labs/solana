@@ -13,7 +13,7 @@ edition = { workspace = true }
 assert_matches = { workspace = true }
 crossbeam-channel = { workspace = true }
 dashmap = { workspace = true }
-derivative = { workspace = true }
+derive-where = { workspace = true }
 log = { workspace = true }
 qualifier_attr = { workspace = true }
 scopeguard = { workspace = true }
