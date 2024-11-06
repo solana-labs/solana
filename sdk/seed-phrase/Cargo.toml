@@ -1,0 +1,18 @@
+[package]
+name = "solana-seed-phrase"
+description = "Solana functions for generating keypairs from seed phrases."
+documentation = "https://docs.rs/solana-seed-phrase"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+hmac = { workspace = true }
+pbkdf2 = { workspace = true }
+sha2 = { workspace = true }
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

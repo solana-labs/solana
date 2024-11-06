@@ -1,0 +1,20 @@
+[package]
+name = "solana-signer"
+description = "Abstractions for Solana transaction signers. See `solana-keypair` for a concrete implementation."
+documentation = "https://docs.rs/solana-signer"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+solana-pubkey = { workspace = true }
+solana-signature = { workspace = true }
+solana-transaction-error = { workspace = true }
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+all-features = true
+rustdoc-args = ["--cfg=docsrs"]

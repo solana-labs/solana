@@ -1,0 +1,21 @@
+[package]
+name = "solana-presigner"
+description = "A Solana `Signer` implementation representing an externally-constructed `Signature`."
+documentation = "https://docs.rs/solana-presigner"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+solana-pubkey = { workspace = true }
+solana-signature = { workspace = true, features = ["verify"] }
+solana-signer = { workspace = true }
+
+[dev-dependencies]
+solana-keypair = { workspace = true }
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

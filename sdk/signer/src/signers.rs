@@ -1,8 +1,7 @@
-#![cfg(feature = "full")]
-
-use crate::{
-    pubkey::Pubkey,
-    signature::{Signature, Signer, SignerError},
+use {
+    crate::{Signer, SignerError},
+    solana_pubkey::Pubkey,
+    solana_signature::Signature,
 };
 
 /// Convenience trait for working with mixed collections of `Signer`s

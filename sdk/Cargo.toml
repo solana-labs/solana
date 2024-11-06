@@ -29,13 +29,17 @@ full = [
     "serde_json",
     "solana-signature",
     "ed25519-dalek",
-    "ed25519-dalek-bip32",
     "libsecp256k1",
     "sha3",
     "solana-commitment-config",
     "digest",
     "solana-pubkey/rand",
+    "dep:solana-keypair",
     "dep:solana-precompile-error",
+    "dep:solana-presigner",
+    "dep:solana-seed-derivable",
+    "dep:solana-seed-phrase",
+    "dep:solana-signer",
     "dep:solana-transaction-error"
 ]
 borsh = ["dep:borsh", "solana-program/borsh", "solana-secp256k1-recover/borsh"]
@@ -66,12 +70,10 @@ chrono = { workspace = true, features = ["alloc"], optional = true }
 curve25519-dalek = { workspace = true, optional = true }
 digest = { workspace = true, optional = true }
 ed25519-dalek = { workspace = true, optional = true }
-ed25519-dalek-bip32 = { workspace = true, optional = true }
 generic-array = { workspace = true, features = [
     "serde",
     "more_lengths",
 ], optional = true }
-hmac = { workspace = true }
 itertools = { workspace = true }
 lazy_static = { workspace = true }
 libsecp256k1 = { workspace = true, optional = true, features = ["hmac"] }
@@ -80,10 +82,9 @@ memmap2 = { workspace = true, optional = true }
 num-derive = { workspace = true }
 num-traits = { workspace = true }
 num_enum = { workspace = true }
-pbkdf2 = { workspace = true }
 qualifier_attr = { workspace = true, optional = true }
 rand = { workspace = true, optional = true }
-rand0-7 = { package = "rand", version = "0.7", optional = true }
+rand0-7 = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_bytes = { workspace = true }
 serde_derive = { workspace = true }
@@ -107,9 +108,11 @@ solana-frozen-abi-macro = { workspace = true, optional = true, features = [
 ] }
 solana-inflation = { workspace = true, features = ["serde"] }
 solana-instruction = { workspace = true }
+solana-keypair = { workspace = true, optional = true, features = ["seed-derivable"] }
 solana-native-token = { workspace = true }
 solana-packet = { workspace = true, features = ["bincode", "serde"] }
 solana-precompile-error = { workspace = true, optional = true }
+solana-presigner = { workspace = true, optional = true }
 solana-program = { workspace = true }
 solana-program-memory = { workspace = true }
 solana-pubkey = { workspace = true, default-features = false, features = ["std"] }
@@ -117,6 +120,8 @@ solana-reward-info = { workspace = true, features = ["serde"] }
 solana-sanitize = { workspace = true }
 solana-sdk-macro = { workspace = true }
 solana-secp256k1-recover = { workspace = true }
+solana-seed-derivable = { workspace = true, optional = true }
+solana-seed-phrase = { workspace = true, optional = true }
 solana-serde-varint = { workspace = true }
 solana-short-vec = { workspace = true }
 solana-signature = { workspace = true, features = [
@@ -125,6 +130,7 @@ solana-signature = { workspace = true, features = [
     "std",
     "verify",
 ], optional = true }
+solana-signer = { workspace = true, optional = true }
 solana-time-utils = { workspace = true }
 solana-transaction-error = { workspace = true, features = ["serde"], optional = true }
 thiserror = { workspace = true }

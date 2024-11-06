@@ -1,12 +1,8 @@
-#![cfg(feature = "full")]
-
+pub use solana_signer::PresignerError;
 use {
-    crate::{
-        pubkey::Pubkey,
-        signature::Signature,
-        signer::{Signer, SignerError},
-    },
-    thiserror::Error,
+    solana_pubkey::Pubkey,
+    solana_signature::Signature,
+    solana_signer::{Signer, SignerError},
 };
 
 /// A `Signer` implementation that represents a `Signature` that has been
@@ -26,12 +22,6 @@ impl Presigner {
             signature: *signature,
         }
     }
-}
-
-#[derive(Debug, Error, PartialEq, Eq)]
-pub enum PresignerError {
-    #[error("pre-generated signature cannot verify data")]
-    VerificationFailure,
 }
 
 impl Signer for Presigner {
@@ -63,7 +53,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use {super::*, crate::signer::keypair::keypair_from_seed};
+    use {super::*, solana_keypair::keypair_from_seed};
 
     #[test]
     fn test_presigner() {

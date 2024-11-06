@@ -1,9 +1,7 @@
-#![cfg(feature = "full")]
-
-use crate::{
-    pubkey::Pubkey,
-    signature::Signature,
-    signer::{Signer, SignerError},
+use {
+    crate::{Signer, SignerError},
+    solana_pubkey::Pubkey,
+    solana_signature::Signature,
 };
 
 /// NullSigner - A `Signer` implementation that always produces `Signature::default()`.

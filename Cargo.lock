@@ -7154,6 +7154,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-keypair"
+version = "2.2.0"
+dependencies = [
+ "bs58",
+ "ed25519-dalek",
+ "ed25519-dalek-bip32",
+ "rand 0.7.3",
+ "serde_json",
+ "solana-derivation-path",
+ "solana-pubkey",
+ "solana-seed-derivable",
+ "solana-seed-phrase",
+ "solana-signature",
+ "solana-signer",
+ "static_assertions",
+ "tiny-bip39",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "solana-last-restart-slot"
 version = "2.2.0"
 dependencies = [
@@ -7587,6 +7607,16 @@ version = "2.2.0"
 dependencies = [
  "num-traits",
  "solana-decode-error",
+]
+
+[[package]]
+name = "solana-presigner"
+version = "2.2.0"
+dependencies = [
+ "solana-keypair",
+ "solana-pubkey",
+ "solana-signature",
+ "solana-signer",
 ]
 
 [[package]]
@@ -8224,11 +8254,9 @@ dependencies = [
  "curve25519-dalek 4.1.3",
  "digest 0.10.7",
  "ed25519-dalek",
- "ed25519-dalek-bip32",
  "generic-array 0.14.7",
  "getrandom 0.1.16",
  "hex",
- "hmac 0.12.1",
  "itertools 0.12.1",
  "js-sys",
  "lazy_static",
@@ -8238,7 +8266,6 @@ dependencies = [
  "num-derive",
  "num-traits",
  "num_enum",
- "pbkdf2 0.11.0",
  "qualifier_attr",
  "rand 0.7.3",
  "rand 0.8.5",
@@ -8261,10 +8288,12 @@ dependencies = [
  "solana-frozen-abi-macro",
  "solana-inflation",
  "solana-instruction",
+ "solana-keypair",
  "solana-logger",
  "solana-native-token",
  "solana-packet",
  "solana-precompile-error",
+ "solana-presigner",
  "solana-program",
  "solana-program-memory",
  "solana-pubkey",
@@ -8273,9 +8302,12 @@ dependencies = [
  "solana-sdk",
  "solana-sdk-macro",
  "solana-secp256k1-recover",
+ "solana-seed-derivable",
+ "solana-seed-phrase",
  "solana-serde-varint",
  "solana-short-vec",
  "solana-signature",
+ "solana-signer",
  "solana-time-utils",
  "solana-transaction-error",
  "static_assertions",
@@ -8313,6 +8345,22 @@ name = "solana-security-txt"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "468aa43b7edb1f9b7b7b686d5c3aeb6630dc1708e86e31343499dd5c4d775183"
+
+[[package]]
+name = "solana-seed-derivable"
+version = "2.2.0"
+dependencies = [
+ "solana-derivation-path",
+]
+
+[[package]]
+name = "solana-seed-phrase"
+version = "2.2.0"
+dependencies = [
+ "hmac 0.12.1",
+ "pbkdf2 0.11.0",
+ "sha2 0.10.8",
+]
 
 [[package]]
 name = "solana-send-transaction-service"
@@ -8391,6 +8439,15 @@ dependencies = [
  "solana-frozen-abi-macro",
  "solana-program",
  "solana-sanitize",
+]
+
+[[package]]
+name = "solana-signer"
+version = "2.2.0"
+dependencies = [
+ "solana-pubkey",
+ "solana-signature",
+ "solana-transaction-error",
 ]
 
 [[package]]

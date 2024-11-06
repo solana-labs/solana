@@ -122,6 +122,7 @@ members = [
     "sdk/hash",
     "sdk/inflation",
     "sdk/instruction",
+    "sdk/keypair",
     "sdk/macro",
     "sdk/msg",
     "sdk/native-token",
@@ -130,6 +131,7 @@ members = [
     "sdk/package-metadata-macro",
     "sdk/packet",
     "sdk/precompile-error",
+    "sdk/presigner",
     "sdk/program",
     "sdk/program-entrypoint",
     "sdk/program-error",
@@ -139,10 +141,13 @@ members = [
     "sdk/pubkey",
     "sdk/rent",
     "sdk/sanitize",
+    "sdk/seed-derivable",
+    "sdk/seed-phrase",
     "sdk/serde-varint",
     "sdk/serialize-utils",
     "sdk/sha256-hasher",
     "sdk/signature",
+    "sdk/signer",
     "sdk/slot-hashes",
     "sdk/slot-history",
     "sdk/stable-layout",
@@ -359,6 +364,7 @@ quinn = "0.11.4"
 quinn-proto = "0.11.7"
 quote = "1.0"
 rand = "0.8.5"
+rand0-7 = { package = "rand", version = "0.7" }
 rand_chacha = "0.3.1"
 rayon = "1.10.0"
 reed-solomon-erasure = "6.0.0"
@@ -447,6 +453,7 @@ solana-hash = { path = "sdk/hash", version = "=2.2.0", default-features = false 
 solana-inflation = { path = "sdk/inflation", version = "=2.2.0" }
 solana-inline-spl = { path = "inline-spl", version = "=2.2.0" }
 solana-instruction = { path = "sdk/instruction", version = "=2.2.0", default-features = false }
+solana-keypair = { path = "sdk/keypair", version = "=2.2.0" }
 solana-last-restart-slot = { path = "sdk/last-restart-slot", version = "=2.2.0" }
 solana-lattice-hash = { path = "lattice-hash", version = "=2.2.0" }
 solana-ledger = { path = "ledger", version = "=2.2.0" }
@@ -470,6 +477,7 @@ solana-perf = { path = "perf", version = "=2.2.0" }
 solana-poh = { path = "poh", version = "=2.2.0" }
 solana-poseidon = { path = "poseidon", version = "=2.2.0" }
 solana-precompile-error = { path = "sdk/precompile-error", version = "=2.2.0" }
+solana-presigner = { path = "sdk/presigner", version = "=2.2.0" }
 solana-program = { path = "sdk/program", version = "=2.2.0", default-features = false }
 solana-program-error = { path = "sdk/program-error", version = "=2.2.0" }
 solana-program-memory = { path = "sdk/program-memory", version = "=2.2.0" }
@@ -485,10 +493,13 @@ solana-remote-wallet = { path = "remote-wallet", version = "=2.2.0", default-fea
 solana-rent = { path = "sdk/rent", version = "=2.2.0", default-features = false }
 solana-reward-info = { path = "sdk/reward-info", version = "=2.2.0" }
 solana-sanitize = { path = "sdk/sanitize", version = "=2.2.0" }
+solana-seed-derivable = { path = "sdk/seed-derivable", version = "=2.2.0" }
+solana-seed-phrase = { path = "sdk/seed-phrase", version = "=2.2.0" }
 solana-serde-varint = { path = "sdk/serde-varint", version = "=2.2.0" }
 solana-serialize-utils = { path = "sdk/serialize-utils", version = "=2.2.0" }
 solana-sha256-hasher = { path = "sdk/sha256-hasher", version = "=2.2.0" }
 solana-signature = { path = "sdk/signature", version = "=2.2.0", default-features = false }
+solana-signer = { path = "sdk/signer", version = "=2.2.0" }
 solana-slot-hashes = { path = "sdk/slot-hashes", version = "=2.2.0" }
 solana-slot-history = { path = "sdk/slot-history", version = "=2.2.0" }
 solana-time-utils = { path = "sdk/time-utils", version = "=2.2.0" }
