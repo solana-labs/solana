@@ -218,9 +218,9 @@ mod test {
     use {
         super::*,
         crate::{
-            cluster_info::MAX_CRDS_OBJECT_SIZE,
             crds_data::CrdsData,
             crds_value::{CrdsValue, CrdsValueLabel},
+            protocol::MAX_CRDS_OBJECT_SIZE,
         },
         bincode::serialized_size,
         solana_sdk::{signature::Signer, signer::keypair::Keypair, timing::timestamp},

@@ -227,8 +227,8 @@ mod tests {
     use {
         super::*,
         crate::{
-            cluster_info::DUPLICATE_SHRED_MAX_PAYLOAD_SIZE,
             duplicate_shred::{from_shred, tests::new_rand_shred},
+            protocol::DUPLICATE_SHRED_MAX_PAYLOAD_SIZE,
         },
         crossbeam_channel::unbounded,
         itertools::Itertools,

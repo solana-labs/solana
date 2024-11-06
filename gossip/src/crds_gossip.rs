@@ -6,7 +6,6 @@
 
 use {
     crate::{
-        cluster_info::Ping,
         cluster_info_metrics::GossipStats,
         contact_info::ContactInfo,
         crds::{Crds, GossipRoute},
@@ -17,6 +16,7 @@ use {
         crds_value::CrdsValue,
         duplicate_shred::{self, DuplicateShredIndex, MAX_DUPLICATE_SHREDS},
         ping_pong::PingCache,
+        protocol::Ping,
     },
     itertools::Itertools,
     rand::{CryptoRng, Rng},

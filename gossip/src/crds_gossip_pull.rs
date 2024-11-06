@@ -13,7 +13,6 @@
 
 use {
     crate::{
-        cluster_info::Ping,
         cluster_info_metrics::GossipStats,
         contact_info::ContactInfo,
         crds::{Crds, GossipRoute, VersionedCrdsValue},
@@ -21,6 +20,7 @@ use {
         crds_gossip_error::CrdsGossipError,
         crds_value::CrdsValue,
         ping_pong::PingCache,
+        protocol::Ping,
     },
     itertools::Itertools,
     rand::{
@@ -655,9 +655,9 @@ pub(crate) mod tests {
     use {
         super::*,
         crate::{
-            cluster_info::Protocol,
             crds_data::{CrdsData, Vote},
             legacy_contact_info::LegacyContactInfo,
+            protocol::Protocol,
         },
         itertools::Itertools,
         rand::{seq::SliceRandom, SeedableRng},

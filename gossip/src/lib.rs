@@ -23,6 +23,7 @@ pub mod gossip_service;
 #[macro_use]
 mod legacy_contact_info;
 pub mod ping_pong;
+mod protocol;
 mod push_active_set;
 mod received_cache;
 pub mod restart_crds_values;

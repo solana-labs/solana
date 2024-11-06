@@ -1,7 +1,7 @@
 use {
     crate::{
-        cluster_info::MAX_CRDS_OBJECT_SIZE,
         crds_data::{self, MAX_SLOT, MAX_WALLCLOCK},
+        protocol::MAX_CRDS_OBJECT_SIZE,
     },
     bincode::serialized_size,
     bv::BitVec,
