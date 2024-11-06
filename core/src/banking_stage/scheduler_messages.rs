@@ -1,6 +1,9 @@
 use {
     solana_runtime_transaction::runtime_transaction::RuntimeTransaction,
-    solana_sdk::{clock::Slot, transaction::SanitizedTransaction},
+    solana_sdk::{
+        clock::{Epoch, Slot},
+        transaction::SanitizedTransaction,
+    },
     std::fmt::Display,
 };
 
@@ -38,8 +41,15 @@ impl Display for TransactionId {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct MaxAge {
-    pub epoch_invalidation_slot: Slot,
+    pub sanitized_epoch: Epoch,
     pub alt_invalidation_slot: Slot,
+}
+
+impl MaxAge {
+    pub const MAX: Self = Self {
+        sanitized_epoch: Epoch::MAX,
+        alt_invalidation_slot: Slot::MAX,
+    };
 }
 
 /// Message: [Scheduler -> Worker]

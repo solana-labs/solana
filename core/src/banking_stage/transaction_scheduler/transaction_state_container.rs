@@ -157,8 +157,7 @@ mod tests {
         solana_runtime_transaction::runtime_transaction::RuntimeTransaction,
         solana_sdk::{
             compute_budget::ComputeBudgetInstruction, hash::Hash, message::Message, packet::Packet,
-            signature::Keypair, signer::Signer, slot_history::Slot, system_instruction,
-            transaction::Transaction,
+            signature::Keypair, signer::Signer, system_instruction, transaction::Transaction,
         },
     };
 
@@ -194,10 +193,7 @@ mod tests {
         );
         let transaction_ttl = SanitizedTransactionTTL {
             transaction: tx,
-            max_age: MaxAge {
-                epoch_invalidation_slot: Slot::MAX,
-                alt_invalidation_slot: Slot::MAX,
-            },
+            max_age: MaxAge::MAX,
         };
         const TEST_TRANSACTION_COST: u64 = 5000;
         (transaction_ttl, packet, priority, TEST_TRANSACTION_COST)

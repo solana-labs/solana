@@ -622,8 +622,8 @@ mod tests {
         crossbeam_channel::{unbounded, Receiver},
         itertools::Itertools,
         solana_sdk::{
-            clock::Slot, compute_budget::ComputeBudgetInstruction, hash::Hash, message::Message,
-            packet::Packet, pubkey::Pubkey, signature::Keypair, signer::Signer, system_instruction,
+            compute_budget::ComputeBudgetInstruction, hash::Hash, message::Message, packet::Packet,
+            pubkey::Pubkey, signature::Keypair, signer::Signer, system_instruction,
             transaction::Transaction,
         },
         std::{borrow::Borrow, sync::Arc},
@@ -709,10 +709,7 @@ mod tests {
             );
             let transaction_ttl = SanitizedTransactionTTL {
                 transaction,
-                max_age: MaxAge {
-                    epoch_invalidation_slot: Slot::MAX,
-                    alt_invalidation_slot: Slot::MAX,
-                },
+                max_age: MaxAge::MAX,
             };
             const TEST_TRANSACTION_COST: u64 = 5000;
             container.insert_new_transaction(

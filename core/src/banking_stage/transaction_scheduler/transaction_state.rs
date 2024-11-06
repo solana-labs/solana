@@ -210,9 +210,8 @@ mod tests {
     use {
         super::*,
         solana_sdk::{
-            clock::Slot, compute_budget::ComputeBudgetInstruction, hash::Hash, message::Message,
-            packet::Packet, signature::Keypair, signer::Signer, system_instruction,
-            transaction::Transaction,
+            compute_budget::ComputeBudgetInstruction, hash::Hash, message::Message, packet::Packet,
+            signature::Keypair, signer::Signer, system_instruction, transaction::Transaction,
         },
     };
 
@@ -234,10 +233,7 @@ mod tests {
         );
         let transaction_ttl = SanitizedTransactionTTL {
             transaction: RuntimeTransaction::from_transaction_for_tests(tx),
-            max_age: MaxAge {
-                epoch_invalidation_slot: Slot::MAX,
-                alt_invalidation_slot: Slot::MAX,
-            },
+            max_age: MaxAge::MAX,
         };
         const TEST_TRANSACTION_COST: u64 = 5000;
         TransactionState::new(
@@ -328,13 +324,7 @@ mod tests {
             transaction_state,
             TransactionState::Unprocessed { .. }
         ));
-        assert_eq!(
-            transaction_ttl.max_age,
-            MaxAge {
-                epoch_invalidation_slot: Slot::MAX,
-                alt_invalidation_slot: Slot::MAX,
-            }
-        );
+        assert_eq!(transaction_ttl.max_age, MaxAge::MAX);
 
         let _ = transaction_state.transition_to_pending();
         assert!(matches!(
@@ -352,13 +342,7 @@ mod tests {
             transaction_state,
             TransactionState::Unprocessed { .. }
         ));
-        assert_eq!(
-            transaction_ttl.max_age,
-            MaxAge {
-                epoch_invalidation_slot: Slot::MAX,
-                alt_invalidation_slot: Slot::MAX,
-            }
-        );
+        assert_eq!(transaction_ttl.max_age, MaxAge::MAX);
 
         // ensure transaction_ttl is not lost through state transitions
         let transaction_ttl = transaction_state.transition_to_pending();
@@ -373,12 +357,6 @@ mod tests {
             transaction_state,
             TransactionState::Unprocessed { .. }
         ));
-        assert_eq!(
-            transaction_ttl.max_age,
-            MaxAge {
-                epoch_invalidation_slot: Slot::MAX,
-                alt_invalidation_slot: Slot::MAX,
-            }
-        );
+        assert_eq!(transaction_ttl.max_age, MaxAge::MAX);
     }
 }

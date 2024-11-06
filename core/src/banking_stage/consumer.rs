@@ -445,8 +445,8 @@ impl Consumer {
         let pre_results = txs.iter().zip(max_ages).map(|(tx, max_age)| {
             // If the transaction was sanitized before this bank's epoch,
             // additional checks are necessary.
-            if bank.slot() > max_age.epoch_invalidation_slot {
-                // Reserved key set may have cahnged, so we must verify that
+            if bank.epoch() != max_age.sanitized_epoch {
+                // Reserved key set may have changed, so we must verify that
                 // no writable keys are reserved.
                 bank.check_reserved_keys(tx)?;
             }

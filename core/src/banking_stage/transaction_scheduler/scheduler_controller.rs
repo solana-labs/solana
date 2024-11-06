@@ -35,7 +35,7 @@ use {
     solana_sdk::{
         self,
         address_lookup_table::state::estimate_last_valid_slot,
-        clock::{Slot, FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET, MAX_PROCESSING_AGE},
+        clock::{Epoch, Slot, FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET, MAX_PROCESSING_AGE},
         fee::FeeBudgetLimits,
         saturating_add_assign,
         transaction::SanitizedTransaction,
@@ -512,9 +512,7 @@ impl<T: LikeClusterInfo> SchedulerController<T> {
             (root_bank, working_bank)
         };
         let alt_resolved_slot = root_bank.slot();
-        let last_slot_in_epoch = working_bank
-            .epoch_schedule()
-            .get_last_slot_in_epoch(working_bank.epoch());
+        let sanitized_epoch = root_bank.epoch();
         let transaction_account_lock_limit = working_bank.get_transaction_account_lock_limit();
         let vote_only = working_bank.vote_only_bank();
 
@@ -536,7 +534,7 @@ impl<T: LikeClusterInfo> SchedulerController<T> {
                         .build_sanitized_transaction(
                             vote_only,
                             root_bank.as_ref(),
-                            working_bank.get_reserved_account_keys(),
+                            root_bank.get_reserved_account_keys(),
                         )
                         .map(|(tx, deactivation_slot)| (packet.clone(), tx, deactivation_slot))
                 })
@@ -559,7 +557,7 @@ impl<T: LikeClusterInfo> SchedulerController<T> {
                     arc_packets.push(packet);
                     transactions.push(tx);
                     max_ages.push(calculate_max_age(
-                        last_slot_in_epoch,
+                        sanitized_epoch,
                         deactivation_slot,
                         alt_resolved_slot,
                     ));
@@ -686,11 +684,10 @@ impl<T: LikeClusterInfo> SchedulerController<T> {
     }
 }
 
-/// Given the last slot in the epoch, the minimum deactivation slot,
-/// and the current slot, return the `MaxAge` that should be used for
-/// the transaction. This is used to determine the maximum slot that a
-/// transaction will be considered valid for, without re-resolving addresses
-/// or resanitizing.
+/// Given the epoch, the minimum deactivation slot, and the current slot,
+/// return the `MaxAge` that should be used for the transaction. This is used
+/// to determine the maximum slot that a transaction will be considered valid
+/// for, without re-resolving addresses or resanitizing.
 ///
 /// This function considers the deactivation period of Address Table
 /// accounts. If the deactivation period runs past the end of the epoch,
@@ -703,13 +700,13 @@ impl<T: LikeClusterInfo> SchedulerController<T> {
 /// period, i.e. the transaction's address lookups are valid until
 /// AT LEAST this slot.
 fn calculate_max_age(
-    last_slot_in_epoch: Slot,
+    sanitized_epoch: Epoch,
     deactivation_slot: Slot,
     current_slot: Slot,
 ) -> MaxAge {
     let alt_min_expire_slot = estimate_last_valid_slot(deactivation_slot.min(current_slot));
     MaxAge {
-        epoch_invalidation_slot: last_slot_in_epoch,
+        sanitized_epoch,
         alt_invalidation_slot: alt_min_expire_slot,
     }
 }
@@ -1221,13 +1218,13 @@ mod tests {
     #[test]
     fn test_calculate_max_age() {
         let current_slot = 100;
-        let last_slot_in_epoch = 1000;
+        let sanitized_epoch = 10;
 
         // ALT deactivation slot is delayed
         assert_eq!(
-            calculate_max_age(last_slot_in_epoch, current_slot - 1, current_slot),
+            calculate_max_age(sanitized_epoch, current_slot - 1, current_slot),
             MaxAge {
-                epoch_invalidation_slot: last_slot_in_epoch,
+                sanitized_epoch,
                 alt_invalidation_slot: current_slot - 1
                     + solana_sdk::slot_hashes::get_entries() as u64,
             }
@@ -1235,9 +1232,9 @@ mod tests {
 
         // no deactivation slot
         assert_eq!(
-            calculate_max_age(last_slot_in_epoch, u64::MAX, current_slot),
+            calculate_max_age(sanitized_epoch, u64::MAX, current_slot),
             MaxAge {
-                epoch_invalidation_slot: last_slot_in_epoch,
+                sanitized_epoch,
                 alt_invalidation_slot: current_slot + solana_sdk::slot_hashes::get_entries() as u64,
             }
         );
