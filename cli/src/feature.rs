@@ -990,6 +990,10 @@ fn process_activate(
         FEATURE_NAMES.get(&feature_id).unwrap(),
         feature_id
     );
-    let result = rpc_client.send_and_confirm_transaction_with_spinner(&transaction);
+    let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
+        &transaction,
+        config.commitment,
+        config.send_transaction_config,
+    );
     log_instruction_custom_error::<SystemError>(result, config)
 }

@@ -14,6 +14,13 @@ pub fn get_clap_app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> A
         .about(about)
         .version(version)
         .setting(AppSettings::SubcommandRequiredElseHelp)
+        .arg(
+            Arg::with_name("skip_preflight")
+                .long("skip-preflight")
+                .global(true)
+                .takes_value(false)
+                .help("Skip the preflight check when sending transactions"),
+        )
         .arg({
             let arg = Arg::with_name("config_file")
                 .short("C")

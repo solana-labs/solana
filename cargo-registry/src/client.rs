@@ -12,6 +12,7 @@ use {
     solana_cli_config::{Config, ConfigInput},
     solana_cli_output::OutputFormat,
     solana_rpc_client::rpc_client::RpcClient,
+    solana_rpc_client_api::config::RpcSendTransactionConfig,
     solana_sdk::{
         commitment_config,
         signature::{read_keypair_file, Keypair},
@@ -30,6 +31,7 @@ impl<'a> RPCCommandConfig<'a> {
             authority: &client.cli_signers[client.authority_signer_index],
             output_format: &OutputFormat::Display,
             use_quic: true,
+            rpc_send_transaction_config: client.rpc_transaction_config,
         })
     }
 }
@@ -42,6 +44,7 @@ pub(crate) struct Client {
     commitment: commitment_config::CommitmentConfig,
     cli_signers: Vec<Keypair>,
     authority_signer_index: SignerIndex,
+    rpc_transaction_config: RpcSendTransactionConfig,
 }
 
 impl Client {
@@ -64,6 +67,13 @@ impl Client {
         App::new(name)
             .about(about)
             .version(version)
+            .arg(
+                Arg::with_name("skip_preflight")
+                    .long("skip-preflight")
+                    .global(true)
+                    .takes_value(false)
+                    .help("Skip the preflight check when sending transactions"),
+            )
             .arg(
                 Arg::with_name("config_file")
                     .short("C")
@@ -208,6 +218,8 @@ impl Client {
         let server_url =
             value_t!(matches, "server_url", String).unwrap_or(format!("http://0.0.0.0:{}", port));
 
+        let skip_preflight = matches.is_present("skip_preflight");
+
         Ok(Client {
             rpc_client: Arc::new(RpcClient::new_with_timeouts_and_commitment(
                 json_rpc_url.to_string(),
@@ -221,6 +233,11 @@ impl Client {
             commitment,
             cli_signers: vec![payer_keypair, authority_keypair],
             authority_signer_index: 1,
+            rpc_transaction_config: RpcSendTransactionConfig {
+                skip_preflight,
+                preflight_commitment: Some(commitment.commitment),
+                ..RpcSendTransactionConfig::default()
+            },
         })
     }
 }

@@ -26,8 +26,9 @@ use {
     test_case::test_case,
 };
 
-#[test]
-fn test_transfer() {
+#[test_case(true; "Skip Preflight")]
+#[test_case(false; "Don`t skip Preflight")]
+fn test_transfer(skip_preflight: bool) {
     solana_logger::setup();
     let fee_one_sig = FeeStructure::default().get_max_fee(1, 0);
     let fee_two_sig = FeeStructure::default().get_max_fee(2, 0);
@@ -50,6 +51,7 @@ fn test_transfer() {
     let mut config = CliConfig::recent_for_tests();
     config.json_rpc_url = test_validator.rpc_url();
     config.signers = vec![&default_signer];
+    config.send_transaction_config.skip_preflight = skip_preflight;
 
     let sender_pubkey = config.signers[0].pubkey();
     let recipient_pubkey = Pubkey::from([1u8; 32]);
@@ -577,6 +579,7 @@ fn test_transfer_unfunded_recipient() {
     let mut config = CliConfig::recent_for_tests();
     config.json_rpc_url = test_validator.rpc_url();
     config.signers = vec![&default_signer];
+    config.send_transaction_config.skip_preflight = false;
 
     let sender_pubkey = config.signers[0].pubkey();
     let recipient_pubkey = Pubkey::from([1u8; 32]);

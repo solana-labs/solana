@@ -14,6 +14,9 @@ Release channels have their own copy of this changelog:
 
 <a name="edge-channel"></a>
 ## [2.2.0] - Unreleased
+* Changes
+  * CLI:
+    * Add global `--skip-preflight` option for skipping preflight checks on all transactions sent through RPC. This flag, along with `--use-rpc`, can improve success rate with program deployments using the public RPC nodes.
 
 ## [2.1.0]
 * Breaking:

@@ -11,6 +11,7 @@ use {
         test_utils::wait_n_slots,
     },
     solana_cli_output::{parse_sign_only_reply_string, OutputFormat},
+    solana_client::rpc_config::RpcSendTransactionConfig,
     solana_faucet::faucet::run_local_faucet,
     solana_feature_set::enable_alt_bn128_syscall,
     solana_rpc::rpc::JsonRpcConfig,
@@ -373,9 +374,11 @@ fn test_cli_program_deploy_no_authority() {
     );
 }
 
-#[test_case(true; "Feature enabled")]
-#[test_case(false; "Feature disabled")]
-fn test_cli_program_deploy_feature(enable_feature: bool) {
+#[test_case(true, true; "Feature enabled, skip preflight")]
+#[test_case(true, false; "Feature enabled, don't skip preflight")]
+#[test_case(false, true; "Feature disabled, skip preflight")]
+#[test_case(false, false; "Feature disabled, don't skip preflight")]
+fn test_cli_program_deploy_feature(enable_feature: bool, skip_preflight: bool) {
     solana_logger::setup();
 
     let mut program_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -432,6 +435,7 @@ fn test_cli_program_deploy_feature(enable_feature: bool) {
         lamports: 100 * minimum_balance_for_programdata + minimum_balance_for_program,
     };
     config.signers = vec![&keypair];
+    config.send_transaction_config.skip_preflight = skip_preflight;
     process_command(&config).unwrap();
 
     config.signers = vec![&keypair, &upgrade_authority];
@@ -459,10 +463,10 @@ fn test_cli_program_deploy_feature(enable_feature: bool) {
         assert!(res.is_ok());
     } else {
         expect_command_failure(
-            &config,
-            "Program contains a syscall from a deactivated feature",
-            "ELF error: ELF error: Unresolved symbol (sol_alt_bn128_group_op) at instruction #49 (ELF file offset 0x188)"
-        );
+                &config,
+                "Program contains a syscall from a deactivated feature",
+                "ELF error: ELF error: Unresolved symbol (sol_alt_bn128_group_op) at instruction #49 (ELF file offset 0x188)"
+            );
 
         // If we bypass the verification, there should be no error
         config.command = CliCommand::Program(ProgramCliCommand::Deploy {
@@ -485,11 +489,19 @@ fn test_cli_program_deploy_feature(enable_feature: bool) {
 
         // When we skip verification, we fail at a later stage
         let response = process_command(&config);
-        assert!(response
-            .err()
-            .unwrap()
-            .to_string()
-            .contains("Deploying program failed: RPC response error -32002:"));
+        if skip_preflight {
+            assert!(response
+                .err()
+                .unwrap()
+                .to_string()
+                .contains("Deploying program failed"));
+        } else {
+            assert!(response
+                .err()
+                .unwrap()
+                .to_string()
+                .contains("Deploying program failed: RPC response error -32002:"));
+        }
     }
 }
 
@@ -551,6 +563,7 @@ fn test_cli_program_upgrade_with_feature(enable_feature: bool) {
 
     let mut config = CliConfig::recent_for_tests();
     config.json_rpc_url = test_validator.rpc_url();
+    config.send_transaction_config.skip_preflight = false;
 
     let online_signer = Keypair::new();
     let offline_signer = Keypair::new();
@@ -1060,8 +1073,9 @@ fn test_cli_program_deploy_with_authority() {
     assert_eq!("none", authority_pubkey_str);
 }
 
-#[test]
-fn test_cli_program_upgrade_auto_extend() {
+#[test_case(true; "Skip preflight")]
+#[test_case(false; "Dont skip preflight")]
+fn test_cli_program_upgrade_auto_extend(skip_preflight: bool) {
     solana_logger::setup();
 
     let mut noop_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -1136,6 +1150,7 @@ fn test_cli_program_upgrade_auto_extend() {
         skip_feature_verification: true,
     });
     config.output_format = OutputFormat::JsonCompact;
+    config.send_transaction_config.skip_preflight = skip_preflight;
     process_command(&config).unwrap();
 
     // Attempt to upgrade the program with a larger program, but with the
@@ -1158,18 +1173,26 @@ fn test_cli_program_upgrade_auto_extend() {
         use_rpc: false,
         skip_feature_verification: true,
     });
-    expect_command_failure(
-        &config,
-        "Can not upgrade a program when ELF does not fit into the allocated data account",
-        "Deploying program failed: \
-         RPC response error -32002: \
-         Transaction simulation failed: \
-         Error processing Instruction 0: \
-         account data too small for instruction; 3 log messages:\n  \
-         Program BPFLoaderUpgradeab1e11111111111111111111111 invoke [1]\n  \
-         ProgramData account not large enough\n  \
-         Program BPFLoaderUpgradeab1e11111111111111111111111 failed: account data too small for instruction\n",
-    );
+    if skip_preflight {
+        expect_command_failure(
+            &config,
+            "Cannot upgrade a program when ELF does not fit into the allocated data account",
+            "Deploying program failed: Error processing Instruction 0: account data too small for instruction",
+        );
+    } else {
+        expect_command_failure(
+            &config,
+            "Can not upgrade a program when ELF does not fit into the allocated data account",
+            "Deploying program failed: \
+            RPC response error -32002: \
+            Transaction simulation failed: \
+            Error processing Instruction 0: \
+            account data too small for instruction; 3 log messages:\n  \
+            Program BPFLoaderUpgradeab1e11111111111111111111111 invoke [1]\n  \
+            ProgramData account not large enough\n  \
+            Program BPFLoaderUpgradeab1e11111111111111111111111 failed: account data too small for instruction\n",
+        );
+    }
 
     // Attempt to upgrade the program with a larger program, this time without
     // the --no-auto-extend flag. This should automatically extend the program data.
@@ -1379,6 +1402,11 @@ fn test_cli_program_extend_program() {
         pubkey: None,
         lamports: 100 * minimum_balance_for_programdata + minimum_balance_for_program,
     };
+    config.send_transaction_config = RpcSendTransactionConfig {
+        skip_preflight: false,
+        preflight_commitment: Some(CommitmentConfig::processed().commitment),
+        ..RpcSendTransactionConfig::default()
+    };
     process_command(&config).unwrap();
 
     // Deploy an upgradeable program
@@ -1452,6 +1480,7 @@ fn test_cli_program_extend_program() {
         use_rpc: false,
         skip_feature_verification: true,
     });
+
     expect_command_failure(
         &config,
         "Program upgrade must fail, as the buffer is 1 byte too short",

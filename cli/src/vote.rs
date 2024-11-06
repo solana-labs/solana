@@ -932,7 +932,11 @@ pub fn process_create_vote_account(
         )
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
-        let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
+        let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
+            &tx,
+            config.commitment,
+            config.send_transaction_config,
+        );
         log_instruction_custom_error::<SystemError>(result, config)
     }
 }
@@ -1071,7 +1075,11 @@ pub fn process_vote_authorize(
             &tx.message,
             config.commitment,
         )?;
-        let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
+        let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
+            &tx,
+            config.commitment,
+            config.send_transaction_config,
+        );
         log_instruction_custom_error::<VoteError>(result, config)
     }
 }
@@ -1155,7 +1163,11 @@ pub fn process_vote_update_validator(
             &tx.message,
             config.commitment,
         )?;
-        let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
+        let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
+            &tx,
+            config.commitment,
+            config.send_transaction_config,
+        );
         log_instruction_custom_error::<VoteError>(result, config)
     }
 }
@@ -1232,7 +1244,11 @@ pub fn process_vote_update_commission(
             &tx.message,
             config.commitment,
         )?;
-        let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
+        let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
+            &tx,
+            config.commitment,
+            config.send_transaction_config,
+        );
         log_instruction_custom_error::<VoteError>(result, config)
     }
 }
@@ -1440,7 +1456,11 @@ pub fn process_withdraw_from_vote_account(
             &tx.message,
             config.commitment,
         )?;
-        let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
+        let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
+            &tx,
+            config.commitment,
+            config.send_transaction_config,
+        );
         log_instruction_custom_error::<VoteError>(result, config)
     }
 }
@@ -1504,7 +1524,11 @@ pub fn process_close_vote_account(
         &tx.message,
         config.commitment,
     )?;
-    let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
+    let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
+        &tx,
+        config.commitment,
+        config.send_transaction_config,
+    );
     log_instruction_custom_error::<VoteError>(result, config)
 }
 

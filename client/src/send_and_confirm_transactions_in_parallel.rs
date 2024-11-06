@@ -10,6 +10,7 @@ use {
     solana_rpc_client::spinner::{self, SendTransactionProgress},
     solana_rpc_client_api::{
         client_error::ErrorKind,
+        config::RpcSendTransactionConfig,
         request::{RpcError, RpcResponseErrorData, MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS},
         response::RpcSimulateTransactionResult,
     },
@@ -54,13 +55,55 @@ struct BlockHashData {
     pub last_valid_block_height: u64,
 }
 
+// Deprecated struct to maintain backward compatibility
+#[deprecated(
+    since = "2.2.0",
+    note = "Use SendAndConfirmConfigV2 with send_and_confirm_transactions_in_parallel_v2"
+)]
 #[derive(Clone, Debug, Copy)]
 pub struct SendAndConfirmConfig {
     pub with_spinner: bool,
     pub resign_txs_count: Option<usize>,
 }
 
-/// Sends and confirms transactions concurrently in a sync context
+// New struct with RpcSendTransactionConfig for non-breaking change
+#[derive(Clone, Debug, Copy)]
+pub struct SendAndConfirmConfigV2 {
+    pub with_spinner: bool,
+    pub resign_txs_count: Option<usize>,
+    pub rpc_send_transaction_config: RpcSendTransactionConfig,
+}
+
+#[allow(deprecated)]
+#[deprecated(
+    since = "2.2.0",
+    note = "Use send_and_confirm_transactions_in_parallel_v2"
+)]
+pub async fn send_and_confirm_transactions_in_parallel<T: Signers + ?Sized>(
+    rpc_client: Arc<RpcClient>,
+    tpu_client: Option<QuicTpuClient>,
+    messages: &[Message],
+    signers: &T,
+    config: SendAndConfirmConfig,
+) -> Result<Vec<Option<TransactionError>>> {
+    let config_v2 = SendAndConfirmConfigV2 {
+        with_spinner: config.with_spinner,
+        resign_txs_count: config.resign_txs_count,
+        rpc_send_transaction_config: RpcSendTransactionConfig {
+            ..RpcSendTransactionConfig::default()
+        },
+    };
+    send_and_confirm_transactions_in_parallel_v2(
+        rpc_client, tpu_client, messages, signers, config_v2,
+    )
+    .await
+}
+
+#[allow(deprecated)]
+#[deprecated(
+    since = "2.2.0",
+    note = "Use send_and_confirm_transactions_in_parallel_blocking_v2"
+)]
 pub fn send_and_confirm_transactions_in_parallel_blocking<T: Signers + ?Sized>(
     rpc_client: Arc<BlockingRpcClient>,
     tpu_client: Option<QuicTpuClient>,
@@ -68,7 +111,27 @@ pub fn send_and_confirm_transactions_in_parallel_blocking<T: Signers + ?Sized>(
     signers: &T,
     config: SendAndConfirmConfig,
 ) -> Result<Vec<Option<TransactionError>>> {
-    let fut = send_and_confirm_transactions_in_parallel(
+    let config_v2 = SendAndConfirmConfigV2 {
+        with_spinner: config.with_spinner,
+        resign_txs_count: config.resign_txs_count,
+        rpc_send_transaction_config: RpcSendTransactionConfig {
+            ..RpcSendTransactionConfig::default()
+        },
+    };
+    send_and_confirm_transactions_in_parallel_blocking_v2(
+        rpc_client, tpu_client, messages, signers, config_v2,
+    )
+}
+
+/// Sends and confirms transactions concurrently in a sync context
+pub fn send_and_confirm_transactions_in_parallel_blocking_v2<T: Signers + ?Sized>(
+    rpc_client: Arc<BlockingRpcClient>,
+    tpu_client: Option<QuicTpuClient>,
+    messages: &[Message],
+    signers: &T,
+    config: SendAndConfirmConfigV2,
+) -> Result<Vec<Option<TransactionError>>> {
+    let fut = send_and_confirm_transactions_in_parallel_v2(
         rpc_client.get_inner_client().clone(),
         tpu_client,
         messages,
@@ -195,6 +258,7 @@ async fn send_transaction_with_rpc_fallback(
     serialized_transaction: Vec<u8>,
     context: &SendingContext,
     index: usize,
+    rpc_send_transaction_config: RpcSendTransactionConfig,
 ) -> Result<()> {
     let send_over_rpc = if let Some(tpu_client) = tpu_client {
         !tokio::time::timeout(
@@ -207,7 +271,16 @@ async fn send_transaction_with_rpc_fallback(
         true
     };
     if send_over_rpc {
-        if let Err(e) = rpc_client.send_transaction(&transaction).await {
+        if let Err(e) = rpc_client
+            .send_transaction_with_config(
+                &transaction,
+                RpcSendTransactionConfig {
+                    preflight_commitment: Some(rpc_client.commitment().commitment),
+                    ..rpc_send_transaction_config
+                },
+            )
+            .await
+        {
             match &e.kind {
                 ErrorKind::Io(_) | ErrorKind::Reqwest(_) => {
                     // fall through on io error, we will retry the transaction
@@ -255,6 +328,7 @@ async fn sign_all_messages_and_send<T: Signers + ?Sized>(
     messages_with_index: Vec<(usize, Message)>,
     signers: &T,
     context: &SendingContext,
+    rpc_send_transaction_config: RpcSendTransactionConfig,
 ) -> Result<()> {
     let current_transaction_count = messages_with_index.len();
     let mut futures = vec![];
@@ -304,6 +378,7 @@ async fn sign_all_messages_and_send<T: Signers + ?Sized>(
                 serialized_transaction,
                 context,
                 *index,
+                rpc_send_transaction_config,
             )
             .await
         });
@@ -418,12 +493,12 @@ async fn send_staggered_transactions(
 /// The sending and confirmation of transactions is done in parallel tasks
 /// The method signs transactions just before sending so that blockhash does not
 /// expire.
-pub async fn send_and_confirm_transactions_in_parallel<T: Signers + ?Sized>(
+pub async fn send_and_confirm_transactions_in_parallel_v2<T: Signers + ?Sized>(
     rpc_client: Arc<RpcClient>,
     tpu_client: Option<QuicTpuClient>,
     messages: &[Message],
     signers: &T,
-    config: SendAndConfirmConfig,
+    config: SendAndConfirmConfigV2,
 ) -> Result<Vec<Option<TransactionError>>> {
     // get current blockhash and corresponding last valid block height
     let (blockhash, last_valid_block_height) = rpc_client
@@ -512,6 +587,7 @@ pub async fn send_and_confirm_transactions_in_parallel<T: Signers + ?Sized>(
             messages_with_index,
             signers,
             &context,
+            config.rpc_send_transaction_config,
         )
         .await?;
         confirm_transactions_till_block_height_and_resend_unexpired_transaction_over_tpu(

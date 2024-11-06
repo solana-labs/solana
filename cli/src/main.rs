@@ -212,6 +212,8 @@ pub fn parse_args<'a>(
         !DEFAULT_TPU_ENABLE_UDP
     };
 
+    let skip_preflight = matches.is_present("skip_preflight");
+
     let use_tpu_client = matches.is_present("use_tpu_client");
 
     Ok((
@@ -227,6 +229,7 @@ pub fn parse_args<'a>(
             output_format,
             commitment,
             send_transaction_config: RpcSendTransactionConfig {
+                skip_preflight,
                 preflight_commitment: Some(commitment.commitment),
                 ..RpcSendTransactionConfig::default()
             },

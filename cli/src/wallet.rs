@@ -986,9 +986,13 @@ pub fn process_transfer(
 
         tx.try_sign(&config.signers, recent_blockhash)?;
         let result = if no_wait {
-            rpc_client.send_transaction(&tx)
+            rpc_client.send_transaction_with_config(&tx, config.send_transaction_config)
         } else {
-            rpc_client.send_and_confirm_transaction_with_spinner(&tx)
+            rpc_client.send_and_confirm_transaction_with_spinner_and_config(
+                &tx,
+                config.commitment,
+                config.send_transaction_config,
+            )
         };
         log_instruction_custom_error::<SystemError>(result, config)
     }
