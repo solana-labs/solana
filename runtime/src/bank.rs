@@ -3518,7 +3518,7 @@ impl Bank {
     pub fn prepare_unlocked_batch_from_single_tx<'a, Tx: SVMMessage>(
         &'a self,
         transaction: &'a RuntimeTransaction<Tx>,
-    ) -> TransactionBatch<'_, '_, Tx> {
+    ) -> TransactionBatch<'a, 'a, Tx> {
         let tx_account_lock_limit = self.get_transaction_account_lock_limit();
         let lock_result = validate_account_locks(transaction.account_keys(), tx_account_lock_limit);
         let mut batch = TransactionBatch::new(

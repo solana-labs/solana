@@ -774,7 +774,7 @@ impl ClusterInfo {
         &'a self,
         label: &'static str,
         counter: &'a Counter,
-    ) -> TimedGuard<'a, RwLockReadGuard<Crds>> {
+    ) -> TimedGuard<'a, RwLockReadGuard<'a, Crds>> {
         TimedGuard::new(self.gossip.crds.read().unwrap(), label, counter)
     }
 

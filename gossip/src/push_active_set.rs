@@ -34,7 +34,7 @@ impl PushActiveSet {
         // If true forces gossip push even if the node has pruned the origin.
         should_force_push: impl FnMut(&Pubkey) -> bool + 'a,
         stakes: &HashMap<Pubkey, u64>,
-    ) -> impl Iterator<Item = &Pubkey> + 'a {
+    ) -> impl Iterator<Item = &'a Pubkey> + 'a {
         let stake = stakes.get(pubkey).min(stakes.get(origin));
         self.get_entry(stake)
             .get_nodes(pubkey, origin, should_force_push)
@@ -115,7 +115,7 @@ impl PushActiveSetEntry {
         origin: &'a Pubkey, // CRDS value owner.
         // If true forces gossip push even if the node has pruned the origin.
         mut should_force_push: impl FnMut(&Pubkey) -> bool + 'a,
-    ) -> impl Iterator<Item = &Pubkey> + 'a {
+    ) -> impl Iterator<Item = &'a Pubkey> + 'a {
         let pubkey_eq_origin = pubkey == origin;
         self.0
             .iter()

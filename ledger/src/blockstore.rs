@@ -541,7 +541,7 @@ impl Blockstore {
         &'a self,
         erasure_set: ErasureSetId,
         erasure_metas: &'a BTreeMap<ErasureSetId, WorkingEntry<ErasureMeta>>,
-    ) -> Result<Option<(ErasureSetId, Cow<ErasureMeta>)>> {
+    ) -> Result<Option<(ErasureSetId, Cow<'a, ErasureMeta>)>> {
         let (slot, fec_set_index) = erasure_set.store_key();
 
         // Check the previous entry from the in memory map to see if it is the consecutive
@@ -1534,7 +1534,7 @@ impl Blockstore {
         slot: Slot,
         erasure_meta: &ErasureMeta,
         just_received_shreds: &'a HashMap<ShredId, Shred>,
-    ) -> Option<Cow<Vec<u8>>> {
+    ) -> Option<Cow<'a, Vec<u8>>> {
         // Search for the shred which set the initial erasure config, either inserted,
         // or in the current batch in just_received_shreds.
         let index = erasure_meta.first_received_coding_shred_index()?;

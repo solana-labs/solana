@@ -380,7 +380,7 @@ impl JsonRpcRequestProcessor {
     fn prepare_unlocked_batch_from_single_tx<'a>(
         &'a self,
         transaction: &'a SanitizedTransaction,
-    ) -> TransactionBatch<'_> {
+    ) -> TransactionBatch<'a> {
         let tx_account_lock_limit = solana_sdk::transaction::MAX_TX_ACCOUNT_LOCKS;
         let lock_result = transaction
             .get_account_locks(tx_account_lock_limit)
