@@ -347,7 +347,6 @@ impl BlockstoreRocksDbColumnFamilyMetrics {
             "blockstore_rocksdb_cfs",
             // tags that support group-by operations
             "cf_name" => cf_name,
-            "storage" => column_options.get_storage_type_string(),
             "compression" => column_options.get_compression_type_string(),
             // Size related
             (
@@ -459,7 +458,6 @@ pub(crate) fn report_rocksdb_read_perf(
             // tags that support group-by operations
             "op" => op_name,
             "cf_name" => cf_name,
-            "storage" => column_options.get_storage_type_string(),
             "compression" => column_options.get_compression_type_string(),
             // total nanos spent on the entire operation.
             ("total_op_nanos", total_op_duration.as_nanos() as i64, i64),
@@ -635,7 +633,6 @@ pub(crate) fn report_rocksdb_write_perf(
             // tags that support group-by operations
             "op" => op_name,
             "cf_name" => cf_name,
-            "storage" => column_options.get_storage_type_string(),
             "compression" => column_options.get_compression_type_string(),
             // total nanos spent on the entire operation.
             ("total_op_nanos", total_op_duration.as_nanos() as i64, i64),

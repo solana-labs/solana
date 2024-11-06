@@ -65,7 +65,7 @@ use {
             MAX_REPLAY_WAKE_UP_SIGNALS,
         },
         blockstore_metric_report_service::BlockstoreMetricReportService,
-        blockstore_options::BlockstoreOptions,
+        blockstore_options::{BlockstoreOptions, BLOCKSTORE_DIRECTORY_ROCKS_LEVEL},
         blockstore_processor::{self, TransactionStatusSender},
         entry_notifier_interface::EntryNotifierArc,
         entry_notifier_service::{EntryNotifierSender, EntryNotifierService},
@@ -2339,14 +2339,7 @@ fn cleanup_blockstore_incorrect_shred_versions(
     // not critical, so swallow errors from backup blockstore operations.
     let backup_folder = format!(
         "{}_backup_{}_{}_{}",
-        config
-            .blockstore_options
-            .column_options
-            .shred_storage_type
-            .blockstore_directory(),
-        incorrect_shred_version,
-        start_slot,
-        end_slot
+        BLOCKSTORE_DIRECTORY_ROCKS_LEVEL, incorrect_shred_version, start_slot, end_slot
     );
     match Blockstore::open_with_options(
         &blockstore.ledger_path().join(backup_folder),

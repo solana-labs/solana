@@ -45,7 +45,7 @@ use {
         blockstore_cleanup_service::{DEFAULT_MAX_LEDGER_SHREDS, DEFAULT_MIN_MAX_LEDGER_SHREDS},
         blockstore_options::{
             AccessType, BlockstoreCompressionType, BlockstoreOptions, BlockstoreRecoveryMode,
-            LedgerColumnOptions, ShredStorageType,
+            LedgerColumnOptions,
         },
         use_snapshot_archives_at_startup::{self, UseSnapshotArchivesAtStartup},
     },
@@ -379,20 +379,6 @@ fn set_repair_whitelist(
             )
         })?;
     Ok(())
-}
-
-/// Returns the default fifo shred storage size (include both data and coding
-/// shreds) based on the validator config.
-fn default_fifo_shred_storage_size(max_ledger_shreds: Option<u64>) -> Option<u64> {
-    // The max shred size is around 1228 bytes.
-    // Here we reserve a little bit more than that to give extra storage for FIFO
-    // to prevent it from purging data that have not yet being marked as obsoleted
-    // by LedgerCleanupService.
-    const RESERVED_BYTES_PER_SHRED: u64 = 1500;
-    max_ledger_shreds.map(|max_ledger_shreds| {
-        // x2 as we have data shred and coding shred.
-        max_ledger_shreds * RESERVED_BYTES_PER_SHRED * 2
-    })
 }
 
 // This function is duplicated in ledger-tool/src/main.rs...
@@ -1049,33 +1035,6 @@ pub fn main() {
                 "lz4" => BlockstoreCompressionType::Lz4,
                 "zlib" => BlockstoreCompressionType::Zlib,
                 _ => panic!("Unsupported ledger_compression: {ledger_compression_string}"),
-            },
-        },
-        shred_storage_type: match matches.value_of("rocksdb_shred_compaction") {
-            None => ShredStorageType::default(),
-            Some(shred_compaction_string) => match shred_compaction_string {
-                "level" => ShredStorageType::RocksLevel,
-                "fifo" => {
-                    warn!(
-                        "The value \"fifo\" for --rocksdb-shred-compaction has been deprecated. \
-                         Use of \"fifo\" will still work for now, but is planned for full removal \
-                         in v2.1. To update, use \"level\" for --rocksdb-shred-compaction, or \
-                         remove the --rocksdb-shred-compaction argument altogether. Note that the \
-                         entire \"rocksdb_fifo\" subdirectory within the ledger directory will \
-                         need to be manually removed once the validator is running with \"level\"."
-                    );
-                    match matches.value_of("rocksdb_fifo_shred_storage_size") {
-                        None => ShredStorageType::rocks_fifo(default_fifo_shred_storage_size(
-                            max_ledger_shreds,
-                        )),
-                        Some(_) => ShredStorageType::rocks_fifo(Some(value_t_or_exit!(
-                            matches,
-                            "rocksdb_fifo_shred_storage_size",
-                            u64
-                        ))),
-                    }
-                }
-                _ => panic!("Unrecognized rocksdb-shred-compaction: {shred_compaction_string}"),
             },
         },
         rocks_perf_sample_interval: value_t_or_exit!(

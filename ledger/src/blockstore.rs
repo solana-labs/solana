@@ -12,8 +12,7 @@ use {
         blockstore_meta::*,
         blockstore_metrics::BlockstoreRpcApiMetrics,
         blockstore_options::{
-            AccessType, BlockstoreOptions, LedgerColumnOptions, BLOCKSTORE_DIRECTORY_ROCKS_FIFO,
-            BLOCKSTORE_DIRECTORY_ROCKS_LEVEL,
+            AccessType, BlockstoreOptions, LedgerColumnOptions, BLOCKSTORE_DIRECTORY_ROCKS_LEVEL,
         },
         blockstore_processor::BlockstoreProcessorError,
         leader_schedule_cache::LeaderScheduleCache,
@@ -336,12 +335,7 @@ impl Blockstore {
 
     fn do_open(ledger_path: &Path, options: BlockstoreOptions) -> Result<Blockstore> {
         fs::create_dir_all(ledger_path)?;
-        let blockstore_path = ledger_path.join(
-            options
-                .column_options
-                .shred_storage_type
-                .blockstore_directory(),
-        );
+        let blockstore_path = ledger_path.join(BLOCKSTORE_DIRECTORY_ROCKS_LEVEL);
 
         adjust_ulimit_nofile(options.enforce_ulimit_nofile)?;
 
@@ -497,9 +491,7 @@ impl Blockstore {
     pub fn destroy(ledger_path: &Path) -> Result<()> {
         // Database::destroy() fails if the root directory doesn't exist
         fs::create_dir_all(ledger_path)?;
-        Database::destroy(&Path::new(ledger_path).join(BLOCKSTORE_DIRECTORY_ROCKS_LEVEL)).and(
-            Database::destroy(&Path::new(ledger_path).join(BLOCKSTORE_DIRECTORY_ROCKS_FIFO)),
-        )
+        Database::destroy(&Path::new(ledger_path).join(BLOCKSTORE_DIRECTORY_ROCKS_LEVEL))
     }
 
     /// Returns the SlotMeta of the specified slot.
@@ -4866,7 +4858,7 @@ pub fn create_new_ledger(
     genesis_config.write(ledger_path)?;
 
     // Fill slot 0 with ticks that link back to the genesis_config to bootstrap the ledger.
-    let blockstore_dir = column_options.shred_storage_type.blockstore_directory();
+    let blockstore_dir = BLOCKSTORE_DIRECTORY_ROCKS_LEVEL;
     let blockstore = Blockstore::open_with_options(
         ledger_path,
         BlockstoreOptions {
@@ -5048,23 +5040,6 @@ macro_rules! create_new_tmp_ledger_with_size {
 }
 
 #[macro_export]
-macro_rules! create_new_tmp_ledger_fifo {
-    ($genesis_config:expr) => {
-        $crate::blockstore::create_new_ledger_from_name(
-            $crate::tmp_ledger_name!(),
-            $genesis_config,
-            $crate::macro_reexports::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
-            $crate::blockstore_options::LedgerColumnOptions {
-                shred_storage_type: $crate::blockstore_options::ShredStorageType::RocksFifo(
-                    $crate::blockstore_options::BlockstoreRocksFifoOptions::new_for_tests(),
-                ),
-                ..$crate::blockstore_options::LedgerColumnOptions::default()
-            },
-        )
-    };
-}
-
-#[macro_export]
 macro_rules! create_new_tmp_ledger_auto_delete {
     ($genesis_config:expr) => {
         $crate::blockstore::create_new_ledger_from_name_auto_delete(
@@ -5072,23 +5047,6 @@ macro_rules! create_new_tmp_ledger_auto_delete {
             $genesis_config,
             $crate::macro_reexports::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
             $crate::blockstore_options::LedgerColumnOptions::default(),
-        )
-    };
-}
-
-#[macro_export]
-macro_rules! create_new_tmp_ledger_fifo_auto_delete {
-    ($genesis_config:expr) => {
-        $crate::blockstore::create_new_ledger_from_name_auto_delete(
-            $crate::tmp_ledger_name!(),
-            $genesis_config,
-            $crate::macro_reexports::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
-            $crate::blockstore_options::LedgerColumnOptions {
-                shred_storage_type: $crate::blockstore_options::ShredStorageType::RocksFifo(
-                    $crate::blockstore_options::BlockstoreRocksFifoOptions::new_for_tests(),
-                ),
-                ..$crate::blockstore_options::LedgerColumnOptions::default()
-            },
         )
     };
 }
@@ -5390,7 +5348,6 @@ pub mod tests {
     use {
         super::*,
         crate::{
-            blockstore_options::{BlockstoreRocksFifoOptions, ShredStorageType},
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
             leader_schedule::{FixedSchedule, LeaderSchedule},
             shred::{max_ticks_per_n_shreds, ShredFlags, LEGACY_SHRED_DATA_CAPACITY},
@@ -5484,35 +5441,6 @@ pub mod tests {
             genesis_config,
             open_genesis_config(ledger_path.path(), MAX_GENESIS_ARCHIVE_UNPACKED_SIZE).unwrap()
         );
-    }
-
-    #[test]
-    fn test_create_new_ledger_with_options_fifo() {
-        solana_logger::setup();
-        let mint_total = 1_000_000_000_000;
-        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(mint_total);
-        let (ledger_path, _blockhash) = create_new_tmp_ledger_fifo_auto_delete!(&genesis_config);
-        let blockstore = Blockstore::open_with_options(
-            ledger_path.path(),
-            BlockstoreOptions {
-                column_options: LedgerColumnOptions {
-                    shred_storage_type: ShredStorageType::RocksFifo(
-                        BlockstoreRocksFifoOptions::new_for_tests(),
-                    ),
-                    ..LedgerColumnOptions::default()
-                },
-                ..BlockstoreOptions::default()
-            },
-        )
-        .unwrap();
-
-        let ticks = create_ticks(genesis_config.ticks_per_slot, 0, genesis_config.hash());
-        let entries = blockstore.get_slot_entries(0, 0).unwrap();
-
-        assert_eq!(ticks, entries);
-        assert!(Path::new(ledger_path.path())
-            .join(BLOCKSTORE_DIRECTORY_ROCKS_FIFO)
-            .exists());
     }
 
     #[test]
