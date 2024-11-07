@@ -22,7 +22,7 @@ use {
     solana_ledger::blockstore::Blockstore,
     solana_rpc_client::rpc_client::RpcClient,
     solana_sdk::{
-        clock::{self, Slot, NUM_CONSECUTIVE_LEADER_SLOTS},
+        clock::{self, Slot},
         commitment_config::CommitmentConfig,
         epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
         exit::Exit,
@@ -237,6 +237,8 @@ pub fn kill_entry_and_spend_and_verify_rest(
     socket_addr_space: SocketAddrSpace,
 ) {
     info!("kill_entry_and_spend_and_verify_rest...");
+
+    // Ensure all nodes have spun up and are funded.
     let cluster_nodes = discover_cluster(
         &entry_point_info.gossip().unwrap(),
         nodes,
@@ -245,10 +247,6 @@ pub fn kill_entry_and_spend_and_verify_rest(
     .unwrap();
     assert!(cluster_nodes.len() >= nodes);
     let client = new_tpu_quic_client(entry_point_info, connection_cache.clone()).unwrap();
-
-    // sleep long enough to make sure we are in epoch 3
-    let first_two_epoch_slots = MINIMUM_SLOTS_PER_EPOCH * (3 + 1);
-
     for ingress_node in &cluster_nodes {
         client
             .rpc_client()
@@ -256,22 +254,22 @@ pub fn kill_entry_and_spend_and_verify_rest(
             .unwrap_or_else(|err| panic!("Node {} has no balance: {}", ingress_node.pubkey(), err));
     }
 
-    info!("sleeping for 2 leader fortnights");
-    sleep(Duration::from_millis(slot_millis * first_two_epoch_slots));
-    info!("done sleeping for first 2 warmup epochs");
+    // Kill the entry point node and wait for it to die.
     info!("killing entry point: {}", entry_point_info.pubkey());
     entry_point_validator_exit.write().unwrap().exit();
-    info!("sleeping for some time");
-    sleep(Duration::from_millis(
-        slot_millis * NUM_CONSECUTIVE_LEADER_SLOTS,
-    ));
-    info!("done sleeping for 2 fortnights");
+    info!("sleeping for some time to let entry point exit and partitions to resolve...");
+    sleep(Duration::from_millis(slot_millis * MINIMUM_SLOTS_PER_EPOCH));
+    info!("done sleeping");
+
+    // Ensure all other nodes are still alive and able to ingest and confirm
+    // transactions.
     for ingress_node in &cluster_nodes {
         if ingress_node.pubkey() == entry_point_info.pubkey() {
             info!("ingress_node.id == entry_point_info.id, continuing...");
             continue;
         }
 
+        // Ensure the current ingress node is still funded.
         let client = new_tpu_quic_client(ingress_node, connection_cache.clone()).unwrap();
         let balance = client
             .rpc_client()
@@ -284,12 +282,16 @@ pub fn kill_entry_and_spend_and_verify_rest(
 
         let mut result = Ok(());
         let mut retries = 0;
+
+        // Retry sending a transaction to the current ingress node until it is
+        // observed by the entire cluster or we exhaust all retries.
         loop {
             retries += 1;
             if retries > 5 {
                 result.unwrap();
             }
 
+            // Send a simple transfer transaction to the current ingress node.
             let random_keypair = Keypair::new();
             let (blockhash, _) = client
                 .rpc_client()
@@ -301,7 +303,6 @@ pub fn kill_entry_and_spend_and_verify_rest(
                 1,
                 blockhash,
             );
-
             let confs = VOTE_THRESHOLD_DEPTH + 1;
             let sig = {
                 let sig = LocalCluster::send_transaction_with_retries(
@@ -320,6 +321,9 @@ pub fn kill_entry_and_spend_and_verify_rest(
                     Ok(sig) => sig,
                 }
             };
+
+            // Ensure all non-entry point nodes are able to confirm the
+            // transaction.
             info!("poll_all_nodes_for_signature()");
             match poll_all_nodes_for_signature(
                 entry_point_info,
