@@ -1730,11 +1730,13 @@ impl Bank {
         bank.rebuild_skipped_rewrites();
 
         let mut calculate_accounts_lt_hash_duration = None;
-        if bank.is_accounts_lt_hash_enabled() {
+        if let Some(accounts_lt_hash) = fields.accounts_lt_hash {
+            *bank.accounts_lt_hash.get_mut().unwrap() = accounts_lt_hash;
+        } else {
             // Use the accounts lt hash from the snapshot, if present, otherwise calculate it.
             // When there is a feature gate for the accounts lt hash, if the feature is enabled
             // then it will be *required* that the snapshot contains an accounts lt hash.
-            let accounts_lt_hash = fields.accounts_lt_hash.unwrap_or_else(|| {
+            if bank.is_accounts_lt_hash_enabled() {
                 info!("Calculating the accounts lt hash...");
                 let (ancestors, slot) = if bank.is_frozen() {
                     // Loading from a snapshot necessarily means this slot was rooted, and thus
@@ -1762,11 +1764,10 @@ impl Bank {
                             .calculate_accounts_lt_hash_at_startup_from_index(&ancestors, slot)
                     })
                 });
-                info!("Calculating the accounts lt hash... Done in {duration:?}");
                 calculate_accounts_lt_hash_duration = Some(duration);
-                accounts_lt_hash
-            });
-            *bank.accounts_lt_hash.get_mut().unwrap() = accounts_lt_hash;
+                *bank.accounts_lt_hash.get_mut().unwrap() = accounts_lt_hash;
+                info!("Calculating the accounts lt hash... Done in {duration:?}");
+            }
         }
 
         // Sanity assertions between bank snapshot and genesis config

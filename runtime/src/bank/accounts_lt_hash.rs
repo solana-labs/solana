@@ -316,7 +316,7 @@ mod tests {
         },
         std::{cmp, collections::HashMap, ops::RangeFull, str::FromStr as _, sync::Arc},
         tempfile::TempDir,
-        test_case::test_case,
+        test_case::{test_case, test_matrix},
     };
 
     /// What features should be enabled?
@@ -326,6 +326,15 @@ mod tests {
         None,
         /// Enable all features
         All,
+    }
+
+    /// Should the experimental accumulator hash cli arg be enabled?
+    #[derive(Debug, Copy, Clone, Eq, PartialEq)]
+    enum Cli {
+        /// Do not enable the cli arg
+        Off,
+        /// Enable the cli arg
+        On,
     }
 
     /// Creates a genesis config with `features` enabled
@@ -812,9 +821,11 @@ mod tests {
         );
     }
 
-    #[test_case(Features::None; "no features")]
-    #[test_case(Features::All; "all features")]
-    fn test_verify_accounts_lt_hash_at_startup(features: Features) {
+    #[test_matrix(
+        [Features::None, Features::All],
+        [Cli::Off, Cli::On]
+    )]
+    fn test_verify_accounts_lt_hash_at_startup(features: Features, verify_cli: Cli) {
         let (genesis_config, mint_keypair) = genesis_config_with(features);
         let (mut bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
         bank.rc
@@ -869,7 +880,10 @@ mod tests {
         .unwrap();
         let (_accounts_tempdir, accounts_dir) = snapshot_utils::create_tmp_accounts_dir_for_tests();
         let accounts_db_config = AccountsDbConfig {
-            enable_experimental_accumulator_hash: true,
+            enable_experimental_accumulator_hash: match verify_cli {
+                Cli::Off => false,
+                Cli::On => true,
+            },
             ..ACCOUNTS_DB_CONFIG_FOR_TESTING
         };
         let (roundtrip_bank, _) = snapshot_bank_utils::bank_from_snapshot_archives(

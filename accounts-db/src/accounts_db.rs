@@ -6677,8 +6677,6 @@ impl AccountsDb {
         ancestors: &Ancestors,
         startup_slot: Slot,
     ) -> AccountsLtHash {
-        debug_assert!(self.is_experimental_accumulator_hash_enabled());
-
         // This impl iterates over all the index bins in parallel, and computes the lt hash
         // sequentially per bin.  Then afterwards reduces to a single lt hash.
         // This implementation is quite fast.  Runtime is about 150 seconds on mnb as of 10/2/2024.
@@ -6744,8 +6742,6 @@ impl AccountsDb {
         storages: &[Arc<AccountStorageEntry>],
         duplicates_lt_hash: &DuplicatesLtHash,
     ) -> AccountsLtHash {
-        debug_assert!(self.is_experimental_accumulator_hash_enabled());
-
         let mut lt_hash = storages
             .par_iter()
             .fold(LtHash::identity, |mut accum, storage| {
