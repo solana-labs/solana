@@ -4,9 +4,8 @@
 use {
     async_trait::async_trait, core::iter::repeat,
     solana_connection_cache::nonblocking::client_connection::ClientConnection,
-    solana_sdk::transport::Result as TransportResult,
-    solana_streamer::nonblocking::sendmmsg::batch_send, std::net::SocketAddr,
-    tokio::net::UdpSocket,
+    solana_streamer::nonblocking::sendmmsg::batch_send, solana_transaction_error::TransportResult,
+    std::net::SocketAddr, tokio::net::UdpSocket,
 };
 
 pub struct UdpClientConnection {
@@ -47,7 +46,7 @@ impl ClientConnection for UdpClientConnection {
 mod tests {
     use {
         super::*,
-        solana_sdk::packet::{Packet, PACKET_DATA_SIZE},
+        solana_packet::{Packet, PACKET_DATA_SIZE},
         solana_streamer::nonblocking::recvmmsg::recv_mmsg,
         std::net::{IpAddr, Ipv4Addr},
         tokio::net::UdpSocket,

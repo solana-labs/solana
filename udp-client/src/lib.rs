@@ -15,7 +15,7 @@ use {
         },
         connection_cache_stats::ConnectionCacheStats,
     },
-    solana_sdk::signature::Keypair,
+    solana_keypair::Keypair,
     std::{
         net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
         sync::Arc,

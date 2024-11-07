@@ -9069,9 +9069,11 @@ version = "2.2.0"
 dependencies = [
  "async-trait",
  "solana-connection-cache",
+ "solana-keypair",
  "solana-net-utils",
- "solana-sdk",
+ "solana-packet",
  "solana-streamer",
+ "solana-transaction-error",
  "thiserror",
  "tokio",
 ]
