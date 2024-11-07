@@ -37,8 +37,7 @@ env:
 
 jobs:
   check:
-    # if: github.repository == 'anza-xyz/agave'
-    if: false
+    if: github.repository == 'anza-xyz/agave'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -62,7 +61,7 @@ jobs:
           cargo check
 
   test:
-    if: false
+    if: github.repository == 'anza-xyz/agave'
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -125,7 +124,7 @@ jobs:
           done
 
   cargo-test-sbf:
-    if: false
+    if: github.repository == 'anza-xyz/agave'
     runs-on: ubuntu-latest
     strategy:
       matrix:
