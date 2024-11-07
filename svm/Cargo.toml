@@ -80,6 +80,7 @@ solana-svm = { path = ".", features = ["dev-context-only-utils"] }
 solana-svm-conformance = { workspace = true }
 solana-transaction-status = { workspace = true }
 solana-version = { workspace = true }
+solana_rbpf = { workspace = true }
 spl-token-2022 = { workspace = true, features = ["no-entrypoint"] }
 test-case = { workspace = true }
 tokio = { workspace = true, features = ["full"] }

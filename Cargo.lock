@@ -8714,6 +8714,7 @@ dependencies = [
  "solana-type-overrides",
  "solana-version",
  "solana-vote",
+ "solana_rbpf",
  "spl-token-2022",
  "test-case",
  "thiserror",
