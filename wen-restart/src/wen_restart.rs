@@ -1814,8 +1814,10 @@ mod tests {
                 .unwrap()
                 .get(my_heaviest_fork_slot)
             {
-                my_heaviest_fork_bankhash = bank.hash();
-                break;
+                if bank.is_frozen() {
+                    my_heaviest_fork_bankhash = bank.hash();
+                    break;
+                }
             }
             sleep(Duration::from_millis(100));
         }
