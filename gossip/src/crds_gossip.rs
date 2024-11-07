@@ -140,7 +140,7 @@ impl CrdsGossip {
         let entries = chunks.enumerate().map(|(k, chunk)| {
             let index = (offset + k as DuplicateShredIndex) % MAX_DUPLICATE_SHREDS;
             let data = CrdsData::DuplicateShred(index, chunk);
-            CrdsValue::new_signed(data, keypair)
+            CrdsValue::new(data, keypair)
         });
         let now = timestamp();
         for entry in entries {

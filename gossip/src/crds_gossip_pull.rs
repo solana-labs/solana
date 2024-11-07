@@ -1483,13 +1483,13 @@ pub(crate) mod tests {
             node
         };
         {
-            let caller = CrdsValue::new_signed(CrdsData::ContactInfo(node.clone()), &keypair);
+            let caller = CrdsValue::new(CrdsData::ContactInfo(node.clone()), &keypair);
             assert_eq!(get_max_bloom_filter_bytes(&caller), 1175);
             verify_get_max_bloom_filter_bytes(&mut rng, &caller, num_items);
         }
         let node = LegacyContactInfo::try_from(&node).unwrap();
         {
-            let caller = CrdsValue::new_signed(CrdsData::LegacyContactInfo(node), &keypair);
+            let caller = CrdsValue::new(CrdsData::LegacyContactInfo(node), &keypair);
             assert_eq!(get_max_bloom_filter_bytes(&caller), 1136);
             verify_get_max_bloom_filter_bytes(&mut rng, &caller, num_items);
         }
@@ -1501,13 +1501,13 @@ pub(crate) mod tests {
             node
         };
         {
-            let caller = CrdsValue::new_signed(CrdsData::ContactInfo(node.clone()), &keypair);
+            let caller = CrdsValue::new(CrdsData::ContactInfo(node.clone()), &keypair);
             assert_eq!(get_max_bloom_filter_bytes(&caller), 1165);
             verify_get_max_bloom_filter_bytes(&mut rng, &caller, num_items);
         }
         let node = LegacyContactInfo::try_from(&node).unwrap();
         {
-            let caller = CrdsValue::new_signed(CrdsData::LegacyContactInfo(node), &keypair);
+            let caller = CrdsValue::new(CrdsData::LegacyContactInfo(node), &keypair);
             assert_eq!(get_max_bloom_filter_bytes(&caller), 992);
             verify_get_max_bloom_filter_bytes(&mut rng, &caller, num_items);
         }

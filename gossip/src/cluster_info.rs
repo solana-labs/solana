@@ -292,7 +292,7 @@ impl ClusterInfo {
             CrdsData::ContactInfo(node),
         ]
         .into_iter()
-        .map(|entry| CrdsValue::new_signed(entry, &self.keypair()))
+        .map(|entry| CrdsValue::new(entry, &self.keypair()))
         .collect();
         let mut gossip_crds = self.gossip.crds.write().unwrap();
         for entry in entries {
@@ -439,7 +439,7 @@ impl ClusterInfo {
         self.my_contact_info.write().unwrap().hot_swap_pubkey(id);
 
         self.refresh_my_gossip_contact_info();
-        self.push_message(CrdsValue::new_signed(
+        self.push_message(CrdsValue::new(
             CrdsData::Version(Version::new(self.id())),
             &self.keypair(),
         ));
@@ -653,7 +653,7 @@ impl ClusterInfo {
         };
         if min > last {
             let now = timestamp();
-            let entry = CrdsValue::new_signed(
+            let entry = CrdsValue::new(
                 CrdsData::LowestSlot(0, LowestSlot::new(self_pubkey, min, now)),
                 &self.keypair(),
             );
@@ -715,7 +715,7 @@ impl ClusterInfo {
             update = &update[n..];
             if n > 0 {
                 let epoch_slots = CrdsData::EpochSlots(ix, slots);
-                let entry = CrdsValue::new_signed(epoch_slots, &keypair);
+                let entry = CrdsValue::new(epoch_slots, &keypair);
                 entries.push(entry);
             }
             epoch_slot_index += 1;
@@ -743,7 +743,7 @@ impl ClusterInfo {
             last_vote_bankhash,
             self.my_shred_version(),
         )?;
-        self.push_message(CrdsValue::new_signed(
+        self.push_message(CrdsValue::new(
             CrdsData::RestartLastVotedForkSlots(last_voted_fork_slots),
             &self.keypair(),
         ));
@@ -764,7 +764,7 @@ impl ClusterInfo {
             observed_stake,
             shred_version: self.my_shred_version(),
         };
-        self.push_message(CrdsValue::new_signed(
+        self.push_message(CrdsValue::new(
             CrdsData::RestartHeaviestFork(restart_heaviest_fork),
             &self.keypair(),
         ));
@@ -800,7 +800,7 @@ impl ClusterInfo {
             incremental,
             wallclock: timestamp(),
         });
-        self.push_message(CrdsValue::new_signed(message, &self.keypair()));
+        self.push_message(CrdsValue::new(message, &self.keypair()));
 
         Ok(())
     }
@@ -811,7 +811,7 @@ impl ClusterInfo {
         let now = timestamp();
         let vote = Vote::new(self_pubkey, vote, now).unwrap();
         let vote = CrdsData::Vote(vote_index, vote);
-        let vote = CrdsValue::new_signed(vote, &self.keypair());
+        let vote = CrdsValue::new(vote, &self.keypair());
         let mut gossip_crds = self.gossip.crds.write().unwrap();
         if let Err(err) = gossip_crds.insert(vote, now, GossipRoute::LocalMessage) {
             error!("push_vote failed: {:?}", err);
@@ -1214,7 +1214,7 @@ impl ClusterInfo {
             CrdsData::NodeInstance(instance),
         ]
         .into_iter()
-        .map(|entry| CrdsValue::new_signed(entry, &keypair))
+        .map(|entry| CrdsValue::new(entry, &keypair))
         .collect();
         let mut gossip_crds = self.gossip.crds.write().unwrap();
         for entry in entries {
@@ -1284,7 +1284,7 @@ impl ClusterInfo {
         Vec<(SocketAddr, Protocol)>, // Pull requests
     ) {
         let now = timestamp();
-        let self_info = CrdsValue::new_signed(
+        let self_info = CrdsValue::new(
             CrdsData::ContactInfo(self.my_contact_info()),
             &self.keypair(),
         );
@@ -1568,7 +1568,7 @@ impl ClusterInfo {
                     ),
                 ];
                 for value in crds_data {
-                    let value = CrdsValue::new_signed(value, &self.keypair());
+                    let value = CrdsValue::new(value, &self.keypair());
                     self.push_message(value);
                 }
                 let mut generate_pull_requests = true;
@@ -4113,7 +4113,7 @@ mod tests {
             let mut rand_ci = ContactInfo::new_rand(&mut rng, Some(keypair.pubkey()));
             rand_ci.set_shred_version(shred_version);
             rand_ci.set_wallclock(timestamp());
-            CrdsValue::new_signed(CrdsData::ContactInfo(rand_ci), &keypair)
+            CrdsValue::new(CrdsData::ContactInfo(rand_ci), &keypair)
         })
         .take(NO_ENTRIES)
         .collect();

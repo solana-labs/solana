@@ -1466,8 +1466,8 @@ mod tests {
         )
         .unwrap();
         let entries = vec![
-            CrdsValue::new_signed(CrdsData::ContactInfo(node.clone()), node_keypair),
-            CrdsValue::new_signed(CrdsData::RestartLastVotedForkSlots(slots), node_keypair),
+            CrdsValue::new(CrdsData::ContactInfo(node.clone()), node_keypair),
+            CrdsValue::new(CrdsData::RestartLastVotedForkSlots(slots), node_keypair),
         ];
         {
             let mut gossip_crds = cluster_info.gossip.crds.write().unwrap();
@@ -1502,7 +1502,7 @@ mod tests {
             .write()
             .unwrap()
             .insert(
-                CrdsValue::new_signed(CrdsData::RestartHeaviestFork(heaviest_fork), node_keypair),
+                CrdsValue::new(CrdsData::RestartHeaviestFork(heaviest_fork), node_keypair),
                 /*now=*/ 0,
                 GossipRoute::LocalMessage
             )

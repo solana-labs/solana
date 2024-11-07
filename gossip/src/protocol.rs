@@ -384,7 +384,7 @@ pub(crate) mod tests {
         for _ in 0..256 {
             let accounts_hash = AccountsHashes::new_rand(&mut rng, None);
             let crds_value =
-                CrdsValue::new_signed(CrdsData::AccountsHashes(accounts_hash), &Keypair::new());
+                CrdsValue::new(CrdsData::AccountsHashes(accounts_hash), &Keypair::new());
             let message = Protocol::PushMessage(Pubkey::new_unique(), vec![crds_value]);
             let socket = new_rand_socket_addr(&mut rng);
             assert!(Packet::from_data(Some(&socket), message).is_ok());
@@ -397,7 +397,7 @@ pub(crate) mod tests {
         for _ in 0..256 {
             let accounts_hash = AccountsHashes::new_rand(&mut rng, None);
             let crds_value =
-                CrdsValue::new_signed(CrdsData::AccountsHashes(accounts_hash), &Keypair::new());
+                CrdsValue::new(CrdsData::AccountsHashes(accounts_hash), &Keypair::new());
             let response = Protocol::PullResponse(Pubkey::new_unique(), vec![crds_value]);
             let socket = new_rand_socket_addr(&mut rng);
             assert!(Packet::from_data(Some(&socket), response).is_ok());
@@ -413,8 +413,7 @@ pub(crate) mod tests {
             incremental: vec![(Slot::default(), Hash::default()); MAX_INCREMENTAL_SNAPSHOT_HASHES],
             wallclock: timestamp(),
         };
-        let crds_value =
-            CrdsValue::new_signed(CrdsData::SnapshotHashes(snapshot_hashes), &Keypair::new());
+        let crds_value = CrdsValue::new(CrdsData::SnapshotHashes(snapshot_hashes), &Keypair::new());
         let message = Protocol::PushMessage(Pubkey::new_unique(), vec![crds_value]);
         let socket = new_rand_socket_addr(&mut rng);
         assert!(Packet::from_data(Some(&socket), message).is_ok());
@@ -429,8 +428,7 @@ pub(crate) mod tests {
             incremental: vec![(Slot::default(), Hash::default()); MAX_INCREMENTAL_SNAPSHOT_HASHES],
             wallclock: timestamp(),
         };
-        let crds_value =
-            CrdsValue::new_signed(CrdsData::SnapshotHashes(snapshot_hashes), &Keypair::new());
+        let crds_value = CrdsValue::new(CrdsData::SnapshotHashes(snapshot_hashes), &Keypair::new());
         let response = Protocol::PullResponse(Pubkey::new_unique(), vec![crds_value]);
         let socket = new_rand_socket_addr(&mut rng);
         assert!(Packet::from_data(Some(&socket), response).is_ok());
@@ -499,7 +497,7 @@ pub(crate) mod tests {
         assert!(chunks.len() > 1);
         for chunk in chunks {
             let data = CrdsData::DuplicateShred(MAX_DUPLICATE_SHREDS - 1, chunk);
-            let value = CrdsValue::new_signed(data, &keypair);
+            let value = CrdsValue::new(data, &keypair);
             let pull_response = Protocol::PullResponse(keypair.pubkey(), vec![value.clone()]);
             assert!(bincode::serialized_size(&pull_response).unwrap() < PACKET_DATA_SIZE as u64);
             let push_message = Protocol::PushMessage(keypair.pubkey(), vec![value.clone()]);
@@ -663,7 +661,7 @@ pub(crate) mod tests {
             0, // wallclock
         )
         .unwrap();
-        let vote = CrdsValue::new_signed(CrdsData::Vote(1, vote), &Keypair::new());
+        let vote = CrdsValue::new(CrdsData::Vote(1, vote), &Keypair::new());
         assert!(bincode::serialized_size(&vote).unwrap() <= PUSH_MESSAGE_MAX_PAYLOAD_SIZE as u64);
     }
 

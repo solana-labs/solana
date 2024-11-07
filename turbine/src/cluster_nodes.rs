@@ -554,11 +554,12 @@ pub fn make_test_cluster<R: Rng>(
     let cluster_info = ClusterInfo::new(this_node, keypair, SocketAddrSpace::Unspecified);
     {
         let now = timestamp();
+        let keypair = Keypair::new();
         let mut gossip_crds = cluster_info.gossip.crds.write().unwrap();
         // First node is pushed to crds table by ClusterInfo constructor.
         for node in nodes.iter().skip(1) {
             let node = CrdsData::ContactInfo(node.clone());
-            let node = CrdsValue::new_unsigned(node);
+            let node = CrdsValue::new(node, &keypair);
             assert_eq!(
                 gossip_crds.insert(node, now, GossipRoute::LocalMessage),
                 Ok(())

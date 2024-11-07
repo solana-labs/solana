@@ -284,8 +284,7 @@ mod test {
             shred_version,
         )
         .unwrap();
-        let value =
-            CrdsValue::new_signed(CrdsData::RestartLastVotedForkSlots(slots.clone()), &keypair);
+        let value = CrdsValue::new(CrdsData::RestartLastVotedForkSlots(slots.clone()), &keypair);
         assert_eq!(value.sanitize(), Ok(()));
         let label = value.label();
         assert_eq!(

@@ -681,7 +681,7 @@ pub fn submit_vote_to_cluster_gossip(
     );
 
     cluster_info::push_messages_to_peer(
-        vec![CrdsValue::new_signed(
+        vec![CrdsValue::new(
             CrdsData::Vote(
                 0,
                 crds_data::Vote::new(node_keypair.pubkey(), vote_tx, timestamp()).unwrap(),
