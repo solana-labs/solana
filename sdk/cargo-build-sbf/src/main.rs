@@ -6,7 +6,7 @@ use {
     log::*,
     regex::Regex,
     solana_file_download::download_file,
-    solana_sdk::signature::{write_keypair_file, Keypair},
+    solana_keypair::{write_keypair_file, Keypair},
     std::{
         borrow::Cow,
         collections::{HashMap, HashSet},

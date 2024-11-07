@@ -19,15 +19,14 @@ regex = { workspace = true }
 reqwest = { workspace = true, features = ["blocking", "rustls-tls"] }
 semver = { workspace = true }
 solana-file-download = { workspace = true }
+solana-keypair = { workspace = true }
 solana-logger = { workspace = true }
-solana-sdk = { workspace = true }
 tar = { workspace = true }
 
 [dev-dependencies]
 assert_cmd = { workspace = true }
 predicates = { workspace = true }
 serial_test = { workspace = true }
-solana-sdk = { workspace = true, features = ["dev-context-only-utils"] }
 
 [features]
 program = []

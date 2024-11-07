@@ -6291,8 +6291,8 @@ dependencies = [
  "semver 1.0.23",
  "serial_test",
  "solana-file-download",
+ "solana-keypair",
  "solana-logger",
- "solana-sdk",
  "tar",
 ]
 
