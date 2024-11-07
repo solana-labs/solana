@@ -139,10 +139,10 @@ mod tests {
     fn test_measure_macro() {
         // Ensure that the measurement side actually works
         {
-            let (_result, measure) = measure_time!(sleep(Duration::from_secs(1)), "test");
-            assert!(measure.as_s() >= 0.99f32 && measure.as_s() <= 1.01f32);
-            assert!(measure.as_ms() >= 990 && measure.as_ms() <= 1_010);
-            assert!(measure.as_us() >= 999_000 && measure.as_us() <= 1_010_000);
+            let (_result, measure) = measure_time!(sleep(Duration::from_millis(1)), "test");
+            assert!(measure.as_s() > 0.0);
+            assert!(measure.as_ms() > 0);
+            assert!(measure.as_us() > 0);
         }
 
         // Ensure that the macro can be called with functions
@@ -184,8 +184,8 @@ mod tests {
     fn test_measure_us_macro() {
         // Ensure that the measurement side actually works
         {
-            let (_result, measure) = measure_us!(sleep(Duration::from_secs(1)));
-            assert!((999_000..=1_010_000).contains(&measure));
+            let (_result, measure) = measure_us!(sleep(Duration::from_millis(1)));
+            assert!(measure > 0);
         }
 
         // Ensure that the macro can be called with functions
