@@ -1,6 +1,6 @@
 use {
     solana_metrics::MovingStat,
-    solana_sdk::transport::Result as TransportResult,
+    solana_transaction_error::TransportResult,
     std::{net::SocketAddr, sync::atomic::AtomicU64},
 };
 

@@ -5287,9 +5287,11 @@ dependencies = [
  "log",
  "rand 0.8.5",
  "rayon",
+ "solana-keypair",
  "solana-measure",
  "solana-metrics",
- "solana-sdk",
+ "solana-time-utils",
+ "solana-transaction-error",
  "thiserror",
  "tokio",
 ]

@@ -8,8 +8,9 @@ use {
     indexmap::map::IndexMap,
     log::*,
     rand::{thread_rng, Rng},
+    solana_keypair::Keypair,
     solana_measure::measure::Measure,
-    solana_sdk::{signature::Keypair, timing::AtomicInterval},
+    solana_time_utils::AtomicInterval,
     std::{
         net::SocketAddr,
         sync::{atomic::Ordering, Arc, RwLock},
@@ -513,7 +514,7 @@ mod tests {
         async_trait::async_trait,
         rand::{Rng, SeedableRng},
         rand_chacha::ChaChaRng,
-        solana_sdk::transport::Result as TransportResult,
+        solana_transaction_error::TransportResult,
         std::{
             net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
             sync::Arc,
