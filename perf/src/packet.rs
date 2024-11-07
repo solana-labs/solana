@@ -90,9 +90,11 @@ impl PacketBatch {
                     // break the payload into smaller messages, and here any errors
                     // should be propagated.
                     error!("Couldn't write to packet {:?}. Data skipped.", e);
+                    packet.meta_mut().set_discard(true);
                 }
             } else {
                 trace!("Dropping packet, as destination is unknown");
+                packet.meta_mut().set_discard(true);
             }
         }
         batch
