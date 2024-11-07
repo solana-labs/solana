@@ -14,7 +14,10 @@ use {
         clock::{DEFAULT_MS_PER_SLOT, MAX_PROCESSING_AGE, NUM_CONSECUTIVE_LEADER_SLOTS},
         timing::timestamp,
     },
-    std::net::SocketAddr,
+    std::{
+        net::SocketAddr,
+        sync::{atomic::Ordering, Arc},
+    },
     tokio::{
         sync::mpsc,
         time::{sleep, Duration},
@@ -72,7 +75,7 @@ pub(crate) struct ConnectionWorker {
     connection: ConnectionState,
     skip_check_transaction_age: bool,
     max_reconnect_attempts: usize,
-    send_txs_stats: SendTransactionStats,
+    send_txs_stats: Arc<SendTransactionStats>,
     cancel: CancellationToken,
 }
 
@@ -93,6 +96,7 @@ impl ConnectionWorker {
         transactions_receiver: mpsc::Receiver<TransactionBatch>,
         skip_check_transaction_age: bool,
         max_reconnect_attempts: usize,
+        send_txs_stats: Arc<SendTransactionStats>,
     ) -> (Self, CancellationToken) {
         let cancel = CancellationToken::new();
 
@@ -103,7 +107,7 @@ impl ConnectionWorker {
             connection: ConnectionState::NotSetup,
             skip_check_transaction_age,
             max_reconnect_attempts,
-            send_txs_stats: SendTransactionStats::default(),
+            send_txs_stats,
             cancel: cancel.clone(),
         };
 
@@ -155,11 +159,6 @@ impl ConnectionWorker {
         }
     }
 
-    /// Retrieves the statistics for transactions sent by this worker.
-    pub fn transaction_stats(&self) -> &SendTransactionStats {
-        &self.send_txs_stats
-    }
-
     /// Sends a batch of transactions using the provided `connection`.
     ///
     /// Each transaction in the batch is sent over the QUIC streams one at the
@@ -183,11 +182,12 @@ impl ConnectionWorker {
 
             if let Err(error) = result {
                 trace!("Failed to send transaction over stream with error: {error}.");
-                record_error(error, &mut self.send_txs_stats);
+                record_error(error, &self.send_txs_stats);
                 self.connection = ConnectionState::Retry(0);
             } else {
-                self.send_txs_stats.successfully_sent =
-                    self.send_txs_stats.successfully_sent.saturating_add(1);
+                self.send_txs_stats
+                    .successfully_sent
+                    .fetch_add(1, Ordering::Relaxed);
             }
         }
         measure_send.stop();
@@ -221,14 +221,14 @@ impl ConnectionWorker {
                     }
                     Err(err) => {
                         warn!("Connection error {}: {}", self.peer, err);
-                        record_error(err.into(), &mut self.send_txs_stats);
+                        record_error(err.into(), &self.send_txs_stats);
                         self.connection =
                             ConnectionState::Retry(max_retries_attempt.saturating_add(1));
                     }
                 }
             }
             Err(connecting_error) => {
-                record_error(connecting_error.clone().into(), &mut self.send_txs_stats);
+                record_error(connecting_error.clone().into(), &self.send_txs_stats);
                 match connecting_error {
                     ConnectError::EndpointStopping => {
                         debug!("Endpoint stopping, exit connection worker.");

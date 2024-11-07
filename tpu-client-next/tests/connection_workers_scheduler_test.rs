@@ -16,10 +16,11 @@ use {
         streamer::StakedNodes,
     },
     solana_tpu_client_next::{
-        connection_workers_scheduler::ConnectionWorkersSchedulerConfig,
-        leader_updater::create_leader_updater, transaction_batch::TransactionBatch,
-        ConnectionWorkersScheduler, ConnectionWorkersSchedulerError, SendTransactionStats,
-        SendTransactionStatsPerAddr,
+        connection_workers_scheduler::{ConnectionWorkersSchedulerConfig, Fanout},
+        leader_updater::create_leader_updater,
+        send_transaction_stats::SendTransactionStatsNonAtomic,
+        transaction_batch::TransactionBatch,
+        ConnectionWorkersScheduler, ConnectionWorkersSchedulerError, SendTransactionStatsPerAddr,
     },
     std::{
         collections::HashMap,
@@ -46,9 +47,17 @@ fn test_config(validator_identity: Option<Keypair>) -> ConnectionWorkersSchedule
         stake_identity: validator_identity,
         num_connections: 1,
         skip_check_transaction_age: false,
-        worker_channel_size: 2,
+        // At the moment we have only one strategy to send transactions: we try
+        // to put to worker channel transaction batch and in case of failure
+        // just drop it. This requires to use large channels here. In the
+        // future, we are planning to add an option to send with backpressure at
+        // the speed of fastest leader.
+        worker_channel_size: 100,
         max_reconnect_attempts: 4,
-        lookahead_slots: 1,
+        leaders_fanout: Fanout {
+            send: 1,
+            connect: 1,
+        },
     }
 }
 
@@ -89,7 +98,7 @@ async fn join_scheduler(
     scheduler_handle: JoinHandle<
         Result<SendTransactionStatsPerAddr, ConnectionWorkersSchedulerError>,
     >,
-) -> SendTransactionStats {
+) -> SendTransactionStatsNonAtomic {
     let stats_per_ip = scheduler_handle
         .await
         .unwrap()
@@ -97,7 +106,7 @@ async fn join_scheduler(
     stats_per_ip
         .get(&IpAddr::from_str("127.0.0.1").unwrap())
         .expect("setup_connection_worker_scheduler() connected to a leader at 127.0.0.1")
-        .clone()
+        .to_non_atomic()
 }
 
 // Specify the pessimistic time to finish generation and result checks.
@@ -239,7 +248,7 @@ async fn test_basic_transactions_sending() {
     let localhost_stats = join_scheduler(scheduler_handle).await;
     assert_eq!(
         localhost_stats,
-        SendTransactionStats {
+        SendTransactionStatsNonAtomic {
             successfully_sent: expected_num_txs as u64,
             ..Default::default()
         }
@@ -436,7 +445,7 @@ async fn test_staked_connection() {
     let localhost_stats = join_scheduler(scheduler_handle).await;
     assert_eq!(
         localhost_stats,
-        SendTransactionStats {
+        SendTransactionStatsNonAtomic {
             successfully_sent: expected_num_txs as u64,
             ..Default::default()
         }
@@ -483,7 +492,7 @@ async fn test_connection_throttling() {
     let localhost_stats = join_scheduler(scheduler_handle).await;
     assert_eq!(
         localhost_stats,
-        SendTransactionStats {
+        SendTransactionStatsNonAtomic {
             successfully_sent: expected_num_txs as u64,
             ..Default::default()
         }
@@ -524,13 +533,14 @@ async fn test_no_host() {
     tx_sender_shutdown.await;
 
     // While attempting to establish a connection with a nonexistent host, we fill the worker's
-    // channel. Transactions from this channel will never be sent and will eventually be dropped
-    // without increasing the `SendTransactionStats` counters.
+    // channel.
     let stats = scheduler_handle
         .await
         .expect("Scheduler should stop successfully")
         .expect("Scheduler execution was successful");
-    assert_eq!(stats, HashMap::new());
+    let stats = stats.get(&server_ip).unwrap().to_non_atomic();
+    // `5` because `config.max_reconnect_attempts` is 4
+    assert_eq!(stats.connect_error_invalid_remote_address, 5);
 }
 
 // Check that when the client is rate-limited by server, we update counters
@@ -586,7 +596,7 @@ async fn test_rate_limiting() {
     // do the shutdown.  If we increase the time we wait in `count_received_packets_for`, we would
     // start seeing a `connection_error_timed_out` incremented to 1.  Potentially, we may want to
     // accept both 0 and 1 as valid values for it.
-    assert_eq!(localhost_stats, SendTransactionStats::default());
+    assert_eq!(localhost_stats, SendTransactionStatsNonAtomic::default());
 
     // Stop the server.
     exit.store(true, Ordering::Relaxed);
@@ -663,7 +673,7 @@ async fn test_rate_limiting_establish_connection() {
     // All the rest of the error counters should be 0.
     localhost_stats.connection_error_timed_out = 0;
     localhost_stats.successfully_sent = 0;
-    assert_eq!(localhost_stats, SendTransactionStats::default());
+    assert_eq!(localhost_stats, SendTransactionStatsNonAtomic::default());
 
     // Stop the server.
     exit.store(true, Ordering::Relaxed);
