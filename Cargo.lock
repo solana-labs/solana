@@ -8654,7 +8654,6 @@ dependencies = [
  "serde_json",
  "shuttle",
  "solana-account-decoder",
- "solana-accounts-db",
  "solana-bpf-loader-program",
  "solana-client",
  "solana-compute-budget",
