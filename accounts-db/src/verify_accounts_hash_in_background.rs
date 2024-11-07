@@ -1,22 +1,16 @@
 //! at startup, verify accounts hash in the background
-use {
-    crate::waitable_condvar::WaitableCondvar,
-    std::{
-        sync::{
-            atomic::{AtomicBool, Ordering},
-            Arc, Mutex,
-        },
-        thread::JoinHandle,
-        time::Duration,
+use std::{
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
     },
+    thread::JoinHandle,
 };
 
 #[derive(Debug)]
 pub struct VerifyAccountsHashInBackground {
     /// true when verification has completed or never had to run in background
     pub verified: Arc<AtomicBool>,
-    /// enable waiting for verification to become complete
-    complete: Arc<WaitableCondvar>,
     /// thread doing verification
     thread: Mutex<Option<JoinHandle<bool>>>,
     /// set when background thread has completed
@@ -27,7 +21,6 @@ impl Default for VerifyAccountsHashInBackground {
     fn default() -> Self {
         // initialize, expecting possible background verification to be started
         Self {
-            complete: Arc::default(),
             // with default initialization, 'verified' is false
             verified: Arc::new(AtomicBool::new(false)),
             // no thread to start with
@@ -47,7 +40,6 @@ impl VerifyAccountsHashInBackground {
 
     /// notify that the bg process has completed
     pub fn background_finished(&self) {
-        self.complete.notify_all();
         self.background_completed.store(true, Ordering::Release);
     }
 
@@ -58,8 +50,8 @@ impl VerifyAccountsHashInBackground {
         self.verified.store(true, Ordering::Release);
     }
 
-    /// block until bg process is complete
-    pub fn wait_for_complete(&self) {
+    /// join background thread. `panic` if verification failed. Otherwise, mark verification complete.
+    pub fn join_background_thread(&self) {
         // just now completing
         let mut lock = self.thread.lock().unwrap();
         if lock.is_none() {
@@ -81,14 +73,11 @@ impl VerifyAccountsHashInBackground {
             // already completed
             return true;
         }
-        if self.complete.wait_timeout(Duration::default())
-            && !self.background_completed.load(Ordering::Acquire)
-        {
-            // timed out, so not complete
+        if !self.background_completed.load(Ordering::Acquire) {
             false
         } else {
-            // Did not time out, so thread finished. Join it.
-            self.wait_for_complete();
+            // background thread has completed, so join the thread and panic if verify fails.
+            self.join_background_thread();
             true
         }
     }
@@ -134,7 +123,7 @@ pub mod tests {
         solana_logger::setup();
         let verify = Arc::new(VerifyAccountsHashInBackground::default());
         start_thread_and_return(&verify, true, || {});
-        verify.wait_for_complete();
+        verify.join_background_thread();
         assert!(verify.check_complete());
     }
 
@@ -143,7 +132,7 @@ pub mod tests {
     fn test_panic() {
         let verify = Arc::new(VerifyAccountsHashInBackground::default());
         start_thread_and_return(&verify, false, || {});
-        verify.wait_for_complete();
+        verify.join_background_thread();
         assert!(!verify.check_complete());
     }
 
@@ -159,7 +148,7 @@ pub mod tests {
         });
         assert!(!verify.check_complete());
         finish.store(true, Ordering::Relaxed);
-        verify.wait_for_complete();
+        verify.join_background_thread();
         assert!(verify.check_complete());
     }
 }

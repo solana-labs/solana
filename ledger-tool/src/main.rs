@@ -2101,7 +2101,7 @@ fn main() {
                         .accounts
                         .accounts_db
                         .verify_accounts_hash_in_bg
-                        .wait_for_complete();
+                        .join_background_thread();
 
                     let child_bank_required = rent_burn_percentage.is_ok()
                         || hashes_per_tick.is_some()

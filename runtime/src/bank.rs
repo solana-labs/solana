@@ -5642,7 +5642,7 @@ impl Bank {
         accounts
             .accounts_db
             .verify_accounts_hash_in_bg
-            .wait_for_complete();
+            .join_background_thread();
 
         let slot = self.slot();
 
@@ -5969,7 +5969,7 @@ impl Bank {
             .accounts
             .accounts_db
             .verify_accounts_hash_in_bg
-            .wait_for_complete();
+            .join_background_thread();
         self.rc
             .accounts
             .accounts_db
@@ -7200,7 +7200,7 @@ impl Bank {
             .accounts
             .accounts_db
             .verify_accounts_hash_in_bg
-            .wait_for_complete()
+            .join_background_thread()
     }
 
     pub fn get_sysvar_cache_for_tests(&self) -> SysvarCache {
