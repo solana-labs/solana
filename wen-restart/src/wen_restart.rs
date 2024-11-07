@@ -1817,8 +1817,11 @@ mod tests {
                 .unwrap()
                 .get(my_heaviest_fork_slot)
             {
-                my_heaviest_fork_bankhash = bank.hash();
-                break;
+                // When deciding the local heaviest fork, we will freeze the bank.
+                if bank.is_frozen() {
+                    my_heaviest_fork_bankhash = bank.hash();
+                    break;
+                }
             }
             sleep(Duration::from_millis(100));
         }
