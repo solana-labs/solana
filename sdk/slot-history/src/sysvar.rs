@@ -1,3 +1,4 @@
-use {crate::SlotHistory, solana_sysvar_id::declare_sysvar_id};
+pub use solana_sdk_ids::sysvar::slot_history::{check_id, id, ID};
+use {crate::SlotHistory, solana_sysvar_id::impl_sysvar_id};
 
-declare_sysvar_id!("SysvarS1otHistory11111111111111111111111111", SlotHistory);
+impl_sysvar_id!(SlotHistory);

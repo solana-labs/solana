@@ -1,3 +1,4 @@
-use {crate::EpochRewards, solana_sysvar_id::declare_sysvar_id};
+pub use solana_sdk_ids::sysvar::epoch_rewards::{check_id, id, ID};
+use {crate::EpochRewards, solana_sysvar_id::impl_sysvar_id};
 
-declare_sysvar_id!("SysvarEpochRewards1111111111111111111111111", EpochRewards);
+impl_sysvar_id!(EpochRewards);

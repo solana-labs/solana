@@ -12,12 +12,13 @@ edition = { workspace = true }
 [dependencies]
 serde = { workspace = true, optional = true }
 serde_derive = { workspace = true, optional = true }
+solana-sdk-ids = { workspace = true, optional = true }
 solana-sdk-macro = { workspace = true }
 solana-sysvar-id = { workspace = true, optional = true }
 
 [features]
 serde = ["dep:serde", "dep:serde_derive"]
-sysvar = ["dep:solana-sysvar-id"]
+sysvar = ["dep:solana-sdk-ids", "dep:solana-sysvar-id"]
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

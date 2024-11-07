@@ -15,6 +15,7 @@ serde_derive = { workspace = true, optional = true }
 solana-frozen-abi = { workspace = true, optional = true }
 solana-frozen-abi-macro = { workspace = true, optional = true }
 solana-hash = { workspace = true, default-features = false }
+solana-sdk-ids = { workspace = true }
 solana-sdk-macro = { workspace = true }
 solana-sysvar-id = { workspace = true, optional = true }
 

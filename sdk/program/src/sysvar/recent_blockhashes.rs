@@ -18,9 +18,10 @@
 
 #![allow(deprecated)]
 #![allow(clippy::arithmetic_side_effects)]
+pub use solana_sdk_ids::sysvar::recent_blockhashes::{check_id, id, ID};
 use {
     crate::{fee_calculator::FeeCalculator, hash::Hash, sysvar::Sysvar},
-    solana_sysvar_id::declare_deprecated_sysvar_id,
+    solana_sysvar_id::impl_sysvar_id,
     std::{cmp::Ordering, collections::BinaryHeap, iter::FromIterator, ops::Deref},
 };
 
@@ -30,10 +31,7 @@ use {
 )]
 pub const MAX_ENTRIES: usize = 150;
 
-declare_deprecated_sysvar_id!(
-    "SysvarRecentB1ockHashes11111111111111111111",
-    RecentBlockhashes
-);
+impl_sysvar_id!(RecentBlockhashes);
 
 #[deprecated(
     since = "1.9.0",

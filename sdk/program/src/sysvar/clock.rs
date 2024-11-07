@@ -127,9 +127,9 @@
 //! ```
 
 use crate::{impl_sysvar_get, program_error::ProgramError, sysvar::Sysvar};
-pub use solana_clock::{
-    sysvar::{check_id, id, ID},
-    Clock,
+pub use {
+    solana_clock::Clock,
+    solana_sdk_ids::sysvar::clock::{check_id, id, ID},
 };
 
 impl Sysvar for Clock {

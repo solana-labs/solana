@@ -21,7 +21,6 @@
 
 use {
     lazy_static::lazy_static,
-    solana_clock::{Epoch, Slot},
     solana_epoch_schedule::EpochSchedule,
     solana_hash::Hash,
     solana_pubkey::Pubkey,
@@ -1132,7 +1131,7 @@ lazy_static! {
 #[cfg_attr(feature = "frozen-abi", derive(solana_frozen_abi_macro::AbiExample))]
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct FeatureSet {
-    pub active: HashMap<Pubkey, Slot>,
+    pub active: HashMap<Pubkey, u64>,
     pub inactive: HashSet<Pubkey>,
 }
 impl Default for FeatureSet {
@@ -1149,7 +1148,7 @@ impl FeatureSet {
         self.active.contains_key(feature_id)
     }
 
-    pub fn activated_slot(&self, feature_id: &Pubkey) -> Option<Slot> {
+    pub fn activated_slot(&self, feature_id: &Pubkey) -> Option<u64> {
         self.active.get(feature_id).copied()
     }
 
@@ -1181,7 +1180,7 @@ impl FeatureSet {
     }
 
     /// Activate a feature
-    pub fn activate(&mut self, feature_id: &Pubkey, slot: Slot) {
+    pub fn activate(&mut self, feature_id: &Pubkey, slot: u64) {
         self.inactive.remove(feature_id);
         self.active.insert(*feature_id, slot);
     }
@@ -1192,7 +1191,7 @@ impl FeatureSet {
         self.inactive.insert(*feature_id);
     }
 
-    pub fn new_warmup_cooldown_rate_epoch(&self, epoch_schedule: &EpochSchedule) -> Option<Epoch> {
+    pub fn new_warmup_cooldown_rate_epoch(&self, epoch_schedule: &EpochSchedule) -> Option<u64> {
         self.activated_slot(&reduce_stake_warmup_cooldown::id())
             .map(|slot| epoch_schedule.get_epoch(slot))
     }

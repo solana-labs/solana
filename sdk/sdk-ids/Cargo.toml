@@ -1,7 +1,7 @@
 [package]
-name = "solana-sysvar-id"
-description = "Definition for the sysvar id trait and associated macros."
-documentation = "https://docs.rs/solana-sysvar-id"
+name = "solana-sdk-ids"
+description = "Solana SDK IDs"
+documentation = "https://docs.rs/solana-sdk-ids"
 version = { workspace = true }
 authors = { workspace = true }
 repository = { workspace = true }
@@ -11,12 +11,9 @@ edition = { workspace = true }
 
 [dependencies]
 solana-pubkey = { workspace = true, default-features = false }
-solana-sdk-ids = { workspace = true }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
-all-features = true
-rustdoc-args = ["--cfg=docsrs"]
 
 [lints]
 workspace = true

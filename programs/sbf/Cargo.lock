@@ -5233,6 +5233,7 @@ version = "2.2.0"
 dependencies = [
  "serde",
  "serde_derive",
+ "solana-sdk-ids",
  "solana-sdk-macro",
  "solana-sysvar-id",
 ]
@@ -5478,6 +5479,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "solana-hash",
+ "solana-sdk-ids",
  "solana-sdk-macro",
  "solana-sysvar-id",
 ]
@@ -5488,6 +5490,7 @@ version = "2.2.0"
 dependencies = [
  "serde",
  "serde_derive",
+ "solana-sdk-ids",
  "solana-sdk-macro",
  "solana-sysvar-id",
 ]
@@ -5519,7 +5522,6 @@ name = "solana-feature-set"
 version = "2.2.0"
 dependencies = [
  "lazy_static",
- "solana-clock",
  "solana-epoch-schedule",
  "solana-hash",
  "solana-pubkey",
@@ -5719,6 +5721,7 @@ version = "2.2.0"
 dependencies = [
  "serde",
  "serde_derive",
+ "solana-sdk-ids",
  "solana-sdk-macro",
  "solana-sysvar-id",
 ]
@@ -6050,6 +6053,7 @@ dependencies = [
  "solana-pubkey",
  "solana-rent",
  "solana-sanitize",
+ "solana-sdk-ids",
  "solana-sdk-macro",
  "solana-secp256k1-recover",
  "solana-serde-varint",
@@ -6274,8 +6278,19 @@ version = "2.2.0"
 dependencies = [
  "serde",
  "serde_derive",
+ "solana-sdk-ids",
  "solana-sdk-macro",
  "solana-sysvar-id",
+]
+
+[[package]]
+name = "solana-reserved-account-keys"
+version = "2.2.0"
+dependencies = [
+ "lazy_static",
+ "solana-feature-set",
+ "solana-pubkey",
+ "solana-sdk-ids",
 ]
 
 [[package]]
@@ -7043,8 +7058,10 @@ dependencies = [
  "solana-program",
  "solana-program-memory",
  "solana-pubkey",
+ "solana-reserved-account-keys",
  "solana-reward-info",
  "solana-sanitize",
+ "solana-sdk-ids",
  "solana-sdk-macro",
  "solana-secp256k1-recover",
  "solana-seed-derivable",
@@ -7057,6 +7074,13 @@ dependencies = [
  "solana-transaction-error",
  "thiserror",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "solana-sdk-ids"
+version = "2.2.0"
+dependencies = [
+ "solana-pubkey",
 ]
 
 [[package]]
@@ -7178,6 +7202,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "solana-hash",
+ "solana-sdk-ids",
  "solana-sysvar-id",
 ]
 
@@ -7188,6 +7213,7 @@ dependencies = [
  "bv",
  "serde",
  "serde_derive",
+ "solana-sdk-ids",
  "solana-sysvar-id",
 ]
 
@@ -7359,6 +7385,7 @@ name = "solana-sysvar-id"
 version = "2.2.0"
 dependencies = [
  "solana-pubkey",
+ "solana-sdk-ids",
 ]
 
 [[package]]
@@ -7697,6 +7724,7 @@ dependencies = [
  "solana-instruction",
  "solana-pubkey",
  "solana-sdk",
+ "solana-sdk-ids",
  "subtle",
  "thiserror",
  "wasm-bindgen",
@@ -7743,6 +7771,7 @@ dependencies = [
  "solana-instruction",
  "solana-pubkey",
  "solana-sdk",
+ "solana-sdk-ids",
  "subtle",
  "thiserror",
  "zeroize",

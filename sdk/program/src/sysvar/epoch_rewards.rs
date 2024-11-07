@@ -160,9 +160,9 @@
 //! ```
 
 use crate::{impl_sysvar_get, program_error::ProgramError, sysvar::Sysvar};
-pub use solana_epoch_rewards::{
-    sysvar::{check_id, id, ID},
-    EpochRewards,
+pub use {
+    solana_epoch_rewards::EpochRewards,
+    solana_sdk_ids::sysvar::epoch_rewards::{check_id, id, ID},
 };
 
 impl Sysvar for EpochRewards {

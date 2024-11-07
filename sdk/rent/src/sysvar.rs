@@ -1,3 +1,4 @@
-use {crate::Rent, solana_sysvar_id::declare_sysvar_id};
+pub use solana_sdk_ids::sysvar::rent::{check_id, id, ID};
+use {crate::Rent, solana_sysvar_id::impl_sysvar_id};
 
-declare_sysvar_id!("SysvarRent111111111111111111111111111111111", Rent);
+impl_sysvar_id!(Rent);

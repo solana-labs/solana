@@ -1,7 +1,7 @@
 [package]
-name = "solana-feature-set"
-description = "Solana runtime features."
-documentation = "https://docs.rs/solana-feature-set"
+name = "solana-reserved-account-keys"
+description = "Reserved Solana account keys"
+documentation = "https://docs.rs/solana-reserved-account-keys"
 version = { workspace = true }
 authors = { workspace = true }
 repository = { workspace = true }
@@ -11,25 +11,26 @@ edition = { workspace = true }
 
 [dependencies]
 lazy_static = { workspace = true }
-solana-epoch-schedule = { workspace = true }
+solana-feature-set = { workspace = true }
 solana-frozen-abi = { workspace = true, optional = true, features = [
     "frozen-abi",
 ] }
 solana-frozen-abi-macro = { workspace = true, optional = true, features = [
     "frozen-abi",
 ] }
-solana-hash = { workspace = true }
-solana-pubkey = { workspace = true }
-solana-sha256-hasher = { workspace = true }
+solana-pubkey = { workspace = true, default-features = false }
+solana-sdk-ids = { workspace = true }
+
+[dev-dependencies]
+solana-program = { path = "../program" }
 
 [features]
-frozen-abi = [
-    "dep:solana-frozen-abi",
-    "dep:solana-frozen-abi-macro",
-]
+frozen-abi = ["dep:solana-frozen-abi", "dep:solana-frozen-abi-macro"]
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
+all-features = true
+rustdoc-args = ["--cfg=docsrs"]
 
 [lints]
 workspace = true

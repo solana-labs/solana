@@ -126,9 +126,9 @@
 //! # Ok::<(), anyhow::Error>(())
 //! ```
 use crate::{impl_sysvar_get, program_error::ProgramError, sysvar::Sysvar};
-pub use solana_epoch_schedule::{
-    sysvar::{check_id, id, ID},
-    EpochSchedule,
+pub use {
+    solana_epoch_schedule::EpochSchedule,
+    solana_sdk_ids::sysvar::epoch_schedule::{check_id, id, ID},
 };
 
 impl Sysvar for EpochSchedule {

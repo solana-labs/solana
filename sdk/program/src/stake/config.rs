@@ -7,9 +7,8 @@
 )]
 pub use super::state::{DEFAULT_SLASH_PENALTY, DEFAULT_WARMUP_COOLDOWN_RATE};
 use serde_derive::{Deserialize, Serialize};
-
 // stake config ID
-crate::declare_deprecated_id!("StakeConfig11111111111111111111111111111111");
+pub use solana_sdk_ids::stake::config::{check_id, id, ID};
 
 #[deprecated(
     since = "1.16.7",

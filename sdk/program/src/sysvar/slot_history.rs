@@ -50,10 +50,8 @@
 use crate::sysvar::Sysvar;
 pub use {
     crate::{account_info::AccountInfo, program_error::ProgramError},
-    solana_slot_history::{
-        sysvar::{check_id, id, ID},
-        SlotHistory,
-    },
+    solana_sdk_ids::sysvar::slot_history::{check_id, id, ID},
+    solana_slot_history::SlotHistory,
 };
 
 impl Sysvar for SlotHistory {

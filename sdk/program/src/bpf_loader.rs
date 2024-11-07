@@ -20,5 +20,4 @@
 //! [`bpf_loader_deprecated`]: crate::bpf_loader_deprecated
 //! [`entrypoint_deprecated`]: mod@crate::entrypoint_deprecated
 //! [ubpfl]: crate::bpf_loader_upgradeable
-
-crate::declare_id!("BPFLoader2111111111111111111111111111111111");
+pub use solana_sdk_ids::bpf_loader::{check_id, id, ID};

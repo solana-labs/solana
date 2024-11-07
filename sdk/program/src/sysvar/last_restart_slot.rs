@@ -40,9 +40,9 @@
 //!
 
 use crate::{impl_sysvar_get, program_error::ProgramError, sysvar::Sysvar};
-pub use solana_last_restart_slot::{
-    sysvar::{check_id, id, ID},
-    LastRestartSlot,
+pub use {
+    solana_last_restart_slot::LastRestartSlot,
+    solana_sdk_ids::sysvar::last_restart_slot::{check_id, id, ID},
 };
 
 impl Sysvar for LastRestartSlot {

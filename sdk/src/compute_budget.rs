@@ -2,13 +2,12 @@
 
 #![cfg(feature = "full")]
 
+pub use solana_sdk_ids::compute_budget::{check_id, id, ID};
 #[cfg(feature = "borsh")]
 use {
     crate::instruction::Instruction,
     borsh::{BorshDeserialize, BorshSerialize},
 };
-
-crate::declare_id!("ComputeBudget111111111111111111111111111111");
 
 /// Compute Budget Instructions
 #[cfg_attr(feature = "frozen-abi", derive(AbiExample, AbiEnumVisitor))]

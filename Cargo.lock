@@ -6515,6 +6515,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "solana-clock",
+ "solana-sdk-ids",
  "solana-sdk-macro",
  "solana-sysvar-id",
  "static_assertions",
@@ -6843,6 +6844,7 @@ dependencies = [
  "solana-frozen-abi",
  "solana-frozen-abi-macro",
  "solana-hash",
+ "solana-sdk-ids",
  "solana-sdk-macro",
  "solana-sysvar-id",
 ]
@@ -6857,6 +6859,7 @@ dependencies = [
  "solana-epoch-schedule",
  "solana-frozen-abi",
  "solana-frozen-abi-macro",
+ "solana-sdk-ids",
  "solana-sdk-macro",
  "solana-sysvar-id",
  "static_assertions",
@@ -6889,7 +6892,6 @@ name = "solana-feature-set"
 version = "2.2.0"
 dependencies = [
  "lazy_static",
- "solana-clock",
  "solana-epoch-schedule",
  "solana-frozen-abi",
  "solana-frozen-abi-macro",
@@ -7189,6 +7191,7 @@ version = "2.2.0"
 dependencies = [
  "serde",
  "serde_derive",
+ "solana-sdk-ids",
  "solana-sdk-macro",
  "solana-sysvar-id",
 ]
@@ -7699,6 +7702,7 @@ dependencies = [
  "solana-pubkey",
  "solana-rent",
  "solana-sanitize",
+ "solana-sdk-ids",
  "solana-sdk-macro",
  "solana-secp256k1-recover",
  "solana-serde-varint",
@@ -7949,9 +7953,23 @@ dependencies = [
  "solana-clock",
  "solana-frozen-abi",
  "solana-frozen-abi-macro",
+ "solana-sdk-ids",
  "solana-sdk-macro",
  "solana-sysvar-id",
  "static_assertions",
+]
+
+[[package]]
+name = "solana-reserved-account-keys"
+version = "2.2.0"
+dependencies = [
+ "lazy_static",
+ "solana-feature-set",
+ "solana-frozen-abi",
+ "solana-frozen-abi-macro",
+ "solana-program",
+ "solana-pubkey",
+ "solana-sdk-ids",
 ]
 
 [[package]]
@@ -8307,9 +8325,11 @@ dependencies = [
  "solana-program",
  "solana-program-memory",
  "solana-pubkey",
+ "solana-reserved-account-keys",
  "solana-reward-info",
  "solana-sanitize",
  "solana-sdk",
+ "solana-sdk-ids",
  "solana-sdk-macro",
  "solana-secp256k1-recover",
  "solana-seed-derivable",
@@ -8324,6 +8344,13 @@ dependencies = [
  "thiserror",
  "tiny-bip39",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "solana-sdk-ids"
+version = "2.2.0"
+dependencies = [
+ "solana-pubkey",
 ]
 
 [[package]]
@@ -8467,6 +8494,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "solana-hash",
+ "solana-sdk-ids",
  "solana-sha256-hasher",
  "solana-sysvar-id",
 ]
@@ -8478,6 +8506,7 @@ dependencies = [
  "bv",
  "serde",
  "serde_derive",
+ "solana-sdk-ids",
  "solana-sysvar-id",
 ]
 
@@ -8757,6 +8786,7 @@ name = "solana-sysvar-id"
 version = "2.2.0"
 dependencies = [
  "solana-pubkey",
+ "solana-sdk-ids",
 ]
 
 [[package]]
@@ -9256,6 +9286,7 @@ dependencies = [
  "solana-instruction",
  "solana-pubkey",
  "solana-sdk",
+ "solana-sdk-ids",
  "subtle",
  "thiserror",
  "tiny-bip39",
@@ -9317,6 +9348,7 @@ dependencies = [
  "solana-instruction",
  "solana-pubkey",
  "solana-sdk",
+ "solana-sdk-ids",
  "subtle",
  "thiserror",
  "tiny-bip39",

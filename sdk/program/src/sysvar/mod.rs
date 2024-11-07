@@ -83,11 +83,12 @@
 
 use crate::{account_info::AccountInfo, program_error::ProgramError, pubkey::Pubkey};
 #[deprecated(since = "2.1.0", note = "Use `solana-sysvar-id` crate instead")]
-pub use solana_sysvar_id::{
-    check_id, declare_deprecated_sysvar_id, declare_sysvar_id, id, SysvarId, ID,
-};
+pub use solana_sysvar_id::{declare_deprecated_sysvar_id, declare_sysvar_id, SysvarId};
 #[allow(deprecated)]
-pub use sysvar_ids::ALL_IDS;
+pub use {
+    solana_sdk_ids::sysvar::{check_id, id, ID},
+    sysvar_ids::ALL_IDS,
+};
 
 pub mod clock;
 pub mod epoch_rewards;

@@ -127,9 +127,9 @@
 //! # Ok::<(), anyhow::Error>(())
 //! ```
 use crate::{impl_sysvar_get, program_error::ProgramError, sysvar::Sysvar};
-pub use solana_rent::{
-    sysvar::{check_id, id, ID},
-    Rent,
+pub use {
+    solana_rent::Rent,
+    solana_sdk_ids::sysvar::rent::{check_id, id, ID},
 };
 
 impl Sysvar for Rent {

@@ -1,6 +1,4 @@
-use {crate::LastRestartSlot, solana_sysvar_id::declare_sysvar_id};
+pub use solana_sdk_ids::sysvar::last_restart_slot::{check_id, id, ID};
+use {crate::LastRestartSlot, solana_sysvar_id::impl_sysvar_id};
 
-declare_sysvar_id!(
-    "SysvarLastRestartS1ot1111111111111111111111",
-    LastRestartSlot
-);
+impl_sysvar_id!(LastRestartSlot);

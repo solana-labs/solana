@@ -1,8 +1,8 @@
 //! This sysvar is deprecated and unused.
+pub use solana_sdk_ids::sysvar::rewards::{check_id, id, ID};
+use {crate::sysvar::Sysvar, solana_sysvar_id::impl_sysvar_id};
 
-use {crate::sysvar::Sysvar, solana_sysvar_id::declare_sysvar_id};
-
-declare_sysvar_id!("SysvarRewards111111111111111111111111111111", Rewards);
+impl_sysvar_id!(Rewards);
 
 #[repr(C)]
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq)]

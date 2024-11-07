@@ -21,8 +21,7 @@ use crate::{
     pubkey::Pubkey,
     system_instruction, sysvar,
 };
-
-crate::declare_id!("BPFLoaderUpgradeab1e11111111111111111111111");
+pub use solana_sdk_ids::bpf_loader_upgradeable::{check_id, id, ID};
 
 /// Upgradeable loader account states
 #[cfg_attr(feature = "frozen-abi", derive(AbiExample))]

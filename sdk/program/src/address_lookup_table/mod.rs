@@ -7,7 +7,7 @@ pub mod instruction;
 pub mod state;
 
 pub mod program {
-    crate::declare_id!("AddressLookupTab1e1111111111111111111111111");
+    pub use solana_sdk_ids::address_lookup_table::{check_id, id, ID};
 }
 
 /// The definition of address lookup table accounts.

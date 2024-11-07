@@ -1,3 +1,4 @@
-use {crate::Clock, solana_sysvar_id::declare_sysvar_id};
+pub use solana_sdk_ids::sysvar::clock::{check_id, id, ID};
+use {crate::Clock, solana_sysvar_id::impl_sysvar_id};
 
-declare_sysvar_id!("SysvarC1ock11111111111111111111111111111111", Clock);
+impl_sysvar_id!(Clock);

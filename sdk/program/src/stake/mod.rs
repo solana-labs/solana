@@ -10,7 +10,7 @@ pub mod state;
 pub mod tools;
 
 pub mod program {
-    crate::declare_id!("Stake11111111111111111111111111111111111111");
+    pub use solana_sdk_ids::stake::{check_id, id, ID};
 }
 
 /// The minimum number of epochs before stake account that is delegated to a delinquent vote

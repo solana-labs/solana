@@ -1,3 +1,4 @@
-use {crate::SlotHashes, solana_sysvar_id::declare_sysvar_id};
+pub use solana_sdk_ids::sysvar::slot_hashes::{check_id, id, ID};
+use {crate::SlotHashes, solana_sysvar_id::impl_sysvar_id};
 
-declare_sysvar_id!("SysvarS1otHashes111111111111111111111111111", SlotHashes);
+impl_sysvar_id!(SlotHashes);

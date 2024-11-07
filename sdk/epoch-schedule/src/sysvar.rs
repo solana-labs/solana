@@ -1,3 +1,4 @@
-use {crate::EpochSchedule, solana_sysvar_id::declare_sysvar_id};
+pub use solana_sdk_ids::sysvar::epoch_schedule::{check_id, id, ID};
+use {crate::EpochSchedule, solana_sysvar_id::impl_sysvar_id};
 
-declare_sysvar_id!("SysvarEpochSchedu1e111111111111111111111111", EpochSchedule);
+impl_sysvar_id!(EpochSchedule);

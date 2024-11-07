@@ -60,10 +60,8 @@ use {
 const U64_SIZE: usize = std::mem::size_of::<u64>();
 
 pub use {
-    solana_slot_hashes::{
-        sysvar::{check_id, id, ID},
-        SlotHashes,
-    },
+    solana_sdk_ids::sysvar::slot_hashes::{check_id, id, ID},
+    solana_slot_hashes::SlotHashes,
     solana_sysvar_id::SysvarId,
 };
 

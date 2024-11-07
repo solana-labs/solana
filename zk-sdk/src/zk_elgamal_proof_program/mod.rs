@@ -13,4 +13,4 @@ pub mod proof_data;
 pub mod state;
 
 // Program Id of the ZK ElGamal Proof program
-solana_pubkey::declare_id!("ZkE1Gama1Proof11111111111111111111111111111");
+pub use solana_sdk_ids::zk_elgamal_proof_program::{check_id, id, ID};

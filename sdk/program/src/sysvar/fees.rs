@@ -20,15 +20,16 @@
 
 #![allow(deprecated)]
 
+pub use solana_sdk_ids::sysvar::fees::{check_id, id, ID};
 use {
     crate::{
         fee_calculator::FeeCalculator, impl_sysvar_get, program_error::ProgramError, sysvar::Sysvar,
     },
     solana_sdk_macro::CloneZeroed,
-    solana_sysvar_id::declare_deprecated_sysvar_id,
+    solana_sysvar_id::impl_deprecated_sysvar_id,
 };
 
-declare_deprecated_sysvar_id!("SysvarFees111111111111111111111111111111111", Fees);
+impl_deprecated_sysvar_id!(Fees);
 
 /// Transaction fees.
 #[deprecated(
