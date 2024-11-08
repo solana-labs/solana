@@ -64,6 +64,7 @@ pub struct TpuSockets {
     pub broadcast: Vec<UdpSocket>,
     pub transactions_quic: Vec<UdpSocket>,
     pub transactions_forwards_quic: Vec<UdpSocket>,
+    pub vote_quic: Vec<UdpSocket>,
 }
 
 pub struct Tpu {
@@ -78,6 +79,7 @@ pub struct Tpu {
     tpu_entry_notifier: Option<TpuEntryNotifier>,
     staked_nodes_updater_service: StakedNodesUpdaterService,
     tracer_thread_hdl: TracerThread,
+    tpu_vote_quic_t: thread::JoinHandle<()>,
 }
 
 impl Tpu {
@@ -126,6 +128,7 @@ impl Tpu {
             broadcast: broadcast_sockets,
             transactions_quic: transactions_quic_sockets,
             transactions_forwards_quic: transactions_forwards_quic_sockets,
+            vote_quic: tpu_vote_quic_sockets,
         } = sockets;
 
         let (packet_sender, packet_receiver) = unbounded();
@@ -155,6 +158,32 @@ impl Tpu {
 
         let (non_vote_sender, non_vote_receiver) = banking_tracer.create_channel_non_vote();
 
+        // Streamer for Votes:
+        let SpawnServerResult {
+            endpoints: _,
+            thread: tpu_vote_quic_t,
+            key_updater: vote_streamer_key_updater,
+        } = spawn_server_multi(
+            "solQuicTVo",
+            "quic_streamer_tpu_vote",
+            tpu_vote_quic_sockets,
+            keypair,
+            vote_packet_sender.clone(),
+            exit.clone(),
+            staked_nodes.clone(),
+            QuicServerParams {
+                max_connections_per_peer: 1,
+                max_connections_per_ipaddr_per_min: tpu_max_connections_per_ipaddr_per_minute,
+                coalesce: tpu_coalesce,
+                max_staked_connections: MAX_STAKED_CONNECTIONS
+                    .saturating_add(MAX_UNSTAKED_CONNECTIONS),
+                max_unstaked_connections: 0,
+                ..QuicServerParams::default()
+            },
+        )
+        .unwrap();
+
+        // Streamer for TPU
         let SpawnServerResult {
             endpoints: _,
             thread: tpu_quic_t,
@@ -176,6 +205,7 @@ impl Tpu {
         )
         .unwrap();
 
+        // Streamer for TPU forward
         let SpawnServerResult {
             endpoints: _,
             thread: tpu_forwards_quic_t,
@@ -289,8 +319,9 @@ impl Tpu {
                 tpu_entry_notifier,
                 staked_nodes_updater_service,
                 tracer_thread_hdl,
+                tpu_vote_quic_t,
             },
-            vec![key_updater, forwards_key_updater],
+            vec![key_updater, forwards_key_updater, vote_streamer_key_updater],
         )
     }
 
@@ -304,6 +335,7 @@ impl Tpu {
             self.staked_nodes_updater_service.join(),
             self.tpu_quic_t.join(),
             self.tpu_forwards_quic_t.join(),
+            self.tpu_vote_quic_t.join(),
         ];
         let broadcast_result = self.broadcast_stage.join();
         for result in results {

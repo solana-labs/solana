@@ -2585,6 +2585,7 @@ pub struct Sockets {
     pub ancestor_hashes_requests_quic: UdpSocket,
     pub tpu_quic: Vec<UdpSocket>,
     pub tpu_forwards_quic: Vec<UdpSocket>,
+    pub tpu_vote_quic: Vec<UdpSocket>,
 }
 
 pub struct NodeConfig {
@@ -2647,13 +2648,19 @@ impl Node {
                 localhost_ip_addr,
                 port_range,
                 QUIC_PORT_OFFSET,
-                udp_config,
+                udp_config.clone(),
                 quic_config.clone(),
             )
             .unwrap();
         let tpu_forwards_quic =
-            bind_more_with_config(tpu_forwards_quic, num_quic_endpoints, quic_config).unwrap();
+            bind_more_with_config(tpu_forwards_quic, num_quic_endpoints, quic_config.clone())
+                .unwrap();
         let tpu_vote = UdpSocket::bind(&localhost_bind_addr).unwrap();
+        let tpu_vote_quic = UdpSocket::bind(&localhost_bind_addr).unwrap();
+
+        let tpu_vote_quic =
+            bind_more_with_config(tpu_vote_quic, num_quic_endpoints, quic_config).unwrap();
+
         let repair = UdpSocket::bind(&localhost_bind_addr).unwrap();
         let repair_quic = UdpSocket::bind(&localhost_bind_addr).unwrap();
         let rpc_port = find_available_port_in_range(localhost_ip_addr, port_range).unwrap();
@@ -2690,6 +2697,11 @@ impl Node {
             "TPU-forwards"
         );
         set_socket!(set_tpu_vote, tpu_vote.local_addr().unwrap(), "TPU-vote");
+        set_socket!(
+            set_tpu_vote_quic,
+            tpu_vote_quic[0].local_addr().unwrap(),
+            "TPU-vote QUIC"
+        );
         set_socket!(set_rpc, rpc_addr, "RPC");
         set_socket!(set_rpc_pubsub, rpc_pubsub_addr, "RPC-pubsub");
         set_socket!(
@@ -2722,6 +2734,7 @@ impl Node {
                 ancestor_hashes_requests_quic,
                 tpu_quic,
                 tpu_forwards_quic,
+                tpu_vote_quic,
             },
         }
     }
@@ -2776,7 +2789,7 @@ impl Node {
                 quic_config.clone(),
             )
             .unwrap();
-        let tpu_quic =
+        let tpu_quic: Vec<UdpSocket> =
             bind_more_with_config(tpu_quic, DEFAULT_QUIC_ENDPOINTS, quic_config.clone()).unwrap();
         let ((tpu_forwards_port, tpu_forwards), (_tpu_forwards_quic_port, tpu_forwards_quic)) =
             bind_two_in_range_with_offset_and_config(
@@ -2787,9 +2800,17 @@ impl Node {
                 quic_config.clone(),
             )
             .unwrap();
-        let tpu_forwards_quic =
-            bind_more_with_config(tpu_forwards_quic, DEFAULT_QUIC_ENDPOINTS, quic_config).unwrap();
+        let tpu_forwards_quic = bind_more_with_config(
+            tpu_forwards_quic,
+            DEFAULT_QUIC_ENDPOINTS,
+            quic_config.clone(),
+        )
+        .unwrap();
         let (tpu_vote_port, tpu_vote) = Self::bind(bind_ip_addr, port_range);
+        let (tpu_vote_quic_port, tpu_vote_quic) = Self::bind(bind_ip_addr, port_range);
+        let tpu_vote_quic: Vec<UdpSocket> =
+            bind_more_with_config(tpu_vote_quic, DEFAULT_QUIC_ENDPOINTS, quic_config).unwrap();
+
         let (_, retransmit_socket) = Self::bind(bind_ip_addr, port_range);
         let (_, repair) = Self::bind(bind_ip_addr, port_range);
         let (_, repair_quic) = Self::bind(bind_ip_addr, port_range);
@@ -2830,6 +2851,8 @@ impl Node {
             serve_repair_quic_port,
             "serve-repair QUIC"
         );
+        set_socket!(set_tpu_vote_quic, tpu_vote_quic_port, "TPU-vote QUIC");
+
         trace!("new ContactInfo: {:?}", info);
 
         Node {
@@ -2852,6 +2875,7 @@ impl Node {
                 ancestor_hashes_requests_quic,
                 tpu_quic,
                 tpu_forwards_quic,
+                tpu_vote_quic,
             },
         }
     }
@@ -2907,6 +2931,12 @@ impl Node {
         let (tpu_vote_port, tpu_vote_sockets) =
             multi_bind_in_range(bind_ip_addr, port_range, 1).expect("tpu_vote multi_bind");
 
+        let (tpu_vote_quic_port, tpu_vote_quic) = Self::bind(bind_ip_addr, port_range);
+
+        let tpu_vote_quic =
+            bind_more_with_config(tpu_vote_quic, num_quic_endpoints.get(), quic_config.clone())
+                .unwrap();
+
         let (_, retransmit_sockets) =
             multi_bind_in_range(bind_ip_addr, port_range, 8).expect("retransmit multi_bind");
 
@@ -2940,6 +2970,8 @@ impl Node {
         info.set_serve_repair((addr, serve_repair_port)).unwrap();
         info.set_serve_repair_quic((addr, serve_repair_quic_port))
             .unwrap();
+        info.set_tpu_vote_quic((addr, tpu_vote_quic_port)).unwrap();
+
         trace!("new ContactInfo: {:?}", info);
 
         Node {
@@ -2962,6 +2994,7 @@ impl Node {
                 ancestor_hashes_requests_quic,
                 tpu_quic,
                 tpu_forwards_quic,
+                tpu_vote_quic,
             },
         }
     }

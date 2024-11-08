@@ -1460,6 +1460,7 @@ impl Validator {
                 broadcast: node.sockets.broadcast,
                 transactions_quic: node.sockets.tpu_quic,
                 transactions_forwards_quic: node.sockets.tpu_forwards_quic,
+                vote_quic: node.sockets.tpu_vote_quic,
             },
             &rpc_subscriptions,
             transaction_status_sender,
