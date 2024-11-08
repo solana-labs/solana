@@ -2,18 +2,10 @@ use {
     crate::{
         bytes::read_byte,
         result::{Result, TransactionViewError},
+        transaction_version::TransactionVersion,
     },
     solana_sdk::message::MESSAGE_VERSION_PREFIX,
 };
-
-/// A byte that represents the version of the transaction.
-#[derive(Copy, Clone, Debug, Default)]
-#[repr(u8)]
-pub enum TransactionVersion {
-    #[default]
-    Legacy = u8::MAX,
-    V0 = 0,
-}
 
 /// Metadata for accessing message header fields in a transaction view.
 #[derive(Debug)]

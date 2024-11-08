@@ -14,4 +14,5 @@ mod signature_frame;
 pub mod static_account_keys_frame;
 pub mod transaction_data;
 mod transaction_frame;
+pub mod transaction_version;
 pub mod transaction_view;

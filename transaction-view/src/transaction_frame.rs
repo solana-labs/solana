@@ -3,10 +3,11 @@ use {
         address_table_lookup_frame::{AddressTableLookupFrame, AddressTableLookupIterator},
         bytes::advance_offset_for_type,
         instructions_frame::{InstructionsFrame, InstructionsIterator},
-        message_header_frame::{MessageHeaderFrame, TransactionVersion},
+        message_header_frame::MessageHeaderFrame,
         result::{Result, TransactionViewError},
         signature_frame::SignatureFrame,
         static_account_keys_frame::StaticAccountKeysFrame,
+        transaction_version::TransactionVersion,
     },
     solana_sdk::{hash::Hash, pubkey::Pubkey, signature::Signature},
 };

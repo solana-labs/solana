@@ -1,9 +1,9 @@
 use {
     crate::{
         address_table_lookup_frame::AddressTableLookupIterator,
-        instructions_frame::InstructionsIterator, message_header_frame::TransactionVersion,
-        result::Result, sanitize::sanitize, transaction_data::TransactionData,
-        transaction_frame::TransactionFrame,
+        instructions_frame::InstructionsIterator, result::Result, sanitize::sanitize,
+        transaction_data::TransactionData, transaction_frame::TransactionFrame,
+        transaction_version::TransactionVersion,
     },
     core::fmt::{Debug, Formatter},
     solana_sdk::{hash::Hash, pubkey::Pubkey, signature::Signature},
