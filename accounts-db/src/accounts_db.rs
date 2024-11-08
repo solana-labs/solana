@@ -9009,6 +9009,14 @@ impl AccountsDb {
 
         self.accounts_index.log_secondary_indexes();
 
+        // The duplicates lt hash must be Some if should_calculate_duplicates_lt_hash is true.
+        // But, if there were no duplicates, then we'd never set outer_duplicates_lt_hash to Some!
+        // So do one last check here to ensure outer_duplicates_lt_hash is Some if we're supposed
+        // to calculate the duplicates lt hash.
+        if should_calculate_duplicates_lt_hash && outer_duplicates_lt_hash.is_none() {
+            outer_duplicates_lt_hash = Some(Box::new(DuplicatesLtHash::default()));
+        }
+
         IndexGenerationInfo {
             accounts_data_len: accounts_data_len.load(Ordering::Relaxed),
             rent_paying_accounts_by_partition: rent_paying_accounts_by_partition
