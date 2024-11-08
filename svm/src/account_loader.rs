@@ -428,6 +428,8 @@ fn load_transaction_account<CB: TransactionProcessingCallback>(
     loaded_programs: &ProgramCacheForTxBatch,
 ) -> Result<(LoadedTransactionAccount, bool)> {
     let mut account_found = true;
+    let disable_account_loader_special_case =
+        feature_set.is_active(&feature_set::disable_account_loader_special_case::id());
     let is_instruction_account = u8::try_from(account_index)
         .map(|i| instruction_accounts.contains(&&i))
         .unwrap_or(false);
@@ -448,9 +450,10 @@ fn load_transaction_account<CB: TransactionProcessingCallback>(
             account: account_override.clone(),
             rent_collected: 0,
         }
-    } else if let Some(program) = (!is_instruction_account && !is_writable)
-        .then_some(())
-        .and_then(|_| loaded_programs.find(account_key))
+    } else if let Some(program) =
+        (!disable_account_loader_special_case && !is_instruction_account && !is_writable)
+            .then_some(())
+            .and_then(|_| loaded_programs.find(account_key))
     {
         // Optimization to skip loading of accounts which are only used as
         // programs in top-level instructions and not passed as instruction accounts.

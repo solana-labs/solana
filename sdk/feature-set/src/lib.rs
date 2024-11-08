@@ -876,6 +876,10 @@ pub mod lift_cpi_caller_restriction {
     solana_pubkey::declare_id!("HcW8ZjBezYYgvcbxNJwqv1t484Y2556qJsfNDWvJGZRH");
 }
 
+pub mod disable_account_loader_special_case {
+    solana_pubkey::declare_id!("EQUMpNFr7Nacb1sva56xn1aLfBxppEoSBH8RRVdkcD1x");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -1090,6 +1094,7 @@ lazy_static! {
         (reenable_sbpf_v1_execution::id(), "Re-enables execution of SBPFv1 programs"),
         (remove_accounts_executable_flag_checks::id(), "Remove checks of accounts is_executable flag SIMD-0162"),
         (lift_cpi_caller_restriction::id(), "Lift the restriction in CPI that the caller must have the callee as an instruction account #2202"),
+        (disable_account_loader_special_case::id(), "Disable account loader special case #3513"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
