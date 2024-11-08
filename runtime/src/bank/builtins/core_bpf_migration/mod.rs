@@ -201,10 +201,10 @@ impl Bank {
                 &mut program_cache_for_tx_batch,
                 EnvironmentConfig::new(
                     Hash::default(),
+                    0,
                     None,
                     None,
                     self.feature_set.clone(),
-                    0,
                     &sysvar_cache,
                 ),
                 None,

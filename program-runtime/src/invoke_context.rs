@@ -150,27 +150,27 @@ impl BpfAllocator {
 
 pub struct EnvironmentConfig<'a> {
     pub blockhash: Hash,
+    pub blockhash_lamports_per_signature: u64,
     epoch_total_stake: Option<u64>,
     epoch_vote_accounts: Option<&'a VoteAccountsHashMap>,
     pub feature_set: Arc<FeatureSet>,
-    pub lamports_per_signature: u64,
     sysvar_cache: &'a SysvarCache,
 }
 impl<'a> EnvironmentConfig<'a> {
     pub fn new(
         blockhash: Hash,
+        blockhash_lamports_per_signature: u64,
         epoch_total_stake: Option<u64>,
         epoch_vote_accounts: Option<&'a VoteAccountsHashMap>,
         feature_set: Arc<FeatureSet>,
-        lamports_per_signature: u64,
         sysvar_cache: &'a SysvarCache,
     ) -> Self {
         Self {
             blockhash,
+            blockhash_lamports_per_signature,
             epoch_total_stake,
             epoch_vote_accounts,
             feature_set,
-            lamports_per_signature,
             sysvar_cache,
         }
     }
@@ -764,10 +764,10 @@ macro_rules! with_mock_invoke_context {
         });
         let environment_config = EnvironmentConfig::new(
             Hash::default(),
+            0,
             None,
             None,
             Arc::new(FeatureSet::all_enabled()),
-            0,
             &sysvar_cache,
         );
         let mut program_cache_for_tx_batch = ProgramCacheForTxBatch::default();

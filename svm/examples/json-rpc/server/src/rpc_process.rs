@@ -546,11 +546,11 @@ impl JsonRpcRequestProcessor {
         let (blockhash, lamports_per_signature) = self.last_blockhash_and_lamports_per_signature();
         let processing_environment = TransactionProcessingEnvironment {
             blockhash,
+            blockhash_lamports_per_signature: lamports_per_signature,
             epoch_total_stake: self.epoch_total_stake(Epoch::default()),
             epoch_vote_accounts: self.epoch_vote_accounts(Epoch::default()),
             feature_set: Arc::clone(&bank.feature_set),
-            fee_structure: None,
-            lamports_per_signature,
+            fee_lamports_per_signature: lamports_per_signature,
             rent_collector: None,
         };
 

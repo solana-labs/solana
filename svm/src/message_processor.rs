@@ -257,10 +257,10 @@ mod tests {
         let sysvar_cache = SysvarCache::default();
         let environment_config = EnvironmentConfig::new(
             Hash::default(),
+            0,
             None,
             None,
             Arc::new(FeatureSet::all_enabled()),
-            0,
             &sysvar_cache,
         );
         let mut invoke_context = InvokeContext::new(
@@ -311,10 +311,10 @@ mod tests {
         ));
         let environment_config = EnvironmentConfig::new(
             Hash::default(),
+            0,
             None,
             None,
             Arc::new(FeatureSet::all_enabled()),
-            0,
             &sysvar_cache,
         );
         let mut invoke_context = InvokeContext::new(
@@ -355,10 +355,10 @@ mod tests {
         ));
         let environment_config = EnvironmentConfig::new(
             Hash::default(),
+            0,
             None,
             None,
             Arc::new(FeatureSet::all_enabled()),
-            0,
             &sysvar_cache,
         );
         let mut invoke_context = InvokeContext::new(
@@ -490,10 +490,10 @@ mod tests {
         let sysvar_cache = SysvarCache::default();
         let environment_config = EnvironmentConfig::new(
             Hash::default(),
+            0,
             None,
             None,
             Arc::new(FeatureSet::all_enabled()),
-            0,
             &sysvar_cache,
         );
         let mut invoke_context = InvokeContext::new(
@@ -529,10 +529,10 @@ mod tests {
         ));
         let environment_config = EnvironmentConfig::new(
             Hash::default(),
+            0,
             None,
             None,
             Arc::new(FeatureSet::all_enabled()),
-            0,
             &sysvar_cache,
         );
         let mut invoke_context = InvokeContext::new(
@@ -565,10 +565,10 @@ mod tests {
         ));
         let environment_config = EnvironmentConfig::new(
             Hash::default(),
+            0,
             None,
             None,
             Arc::new(FeatureSet::all_enabled()),
-            0,
             &sysvar_cache,
         );
         let mut invoke_context = InvokeContext::new(
@@ -662,10 +662,10 @@ mod tests {
         );
         let environment_config = EnvironmentConfig::new(
             Hash::default(),
+            0,
             None,
             None,
             Arc::new(FeatureSet::all_enabled()),
-            0,
             &sysvar_cache,
         );
         let mut invoke_context = InvokeContext::new(

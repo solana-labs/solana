@@ -117,7 +117,6 @@ impl PayTubeChannel {
         let compute_budget = ComputeBudget::default();
         let feature_set = FeatureSet::all_enabled();
         let fee_structure = FeeStructure::default();
-        let lamports_per_signature = fee_structure.lamports_per_signature;
         let rent_collector = RentCollector::default();
 
         // PayTube loader/callback implementation.
@@ -148,11 +147,11 @@ impl PayTubeChannel {
         // Again, these can be configurable or hoisted from the cluster.
         let processing_environment = TransactionProcessingEnvironment {
             blockhash: Hash::default(),
+            blockhash_lamports_per_signature: fee_structure.lamports_per_signature,
             epoch_total_stake: None,
             epoch_vote_accounts: None,
             feature_set: Arc::new(feature_set),
-            fee_structure: Some(&fee_structure),
-            lamports_per_signature,
+            fee_lamports_per_signature: fee_structure.lamports_per_signature,
             rent_collector: Some(&rent_collector),
         };
 
@@ -177,7 +176,10 @@ impl PayTubeChannel {
         let results = processor.load_and_execute_sanitized_transactions(
             &account_loader,
             &svm_transactions,
-            get_transaction_check_results(svm_transactions.len(), lamports_per_signature),
+            get_transaction_check_results(
+                svm_transactions.len(),
+                fee_structure.lamports_per_signature,
+            ),
             &processing_environment,
             &processing_config,
         );

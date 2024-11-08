@@ -305,7 +305,7 @@ fn run_fixture(fixture: InstrFixture, filename: OsString, execute_as_instr: bool
         transaction_check,
         &TransactionProcessingEnvironment {
             blockhash,
-            lamports_per_signature,
+            blockhash_lamports_per_signature: lamports_per_signature,
             ..Default::default()
         },
         &processor_config,
@@ -452,10 +452,10 @@ fn execute_fixture_as_instr(
     let sysvar_cache = &batch_processor.sysvar_cache();
     let env_config = EnvironmentConfig::new(
         Hash::default(),
+        0,
         None,
         None,
         mock_bank.feature_set.clone(),
-        0,
         sysvar_cache,
     );
 

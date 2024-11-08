@@ -112,7 +112,8 @@ impl SvmTestEnvironment<'_> {
         let processing_environment = TransactionProcessingEnvironment {
             blockhash: LAST_BLOCKHASH,
             feature_set: feature_set.into(),
-            lamports_per_signature: LAMPORTS_PER_SIGNATURE,
+            blockhash_lamports_per_signature: LAMPORTS_PER_SIGNATURE,
+            fee_lamports_per_signature: LAMPORTS_PER_SIGNATURE,
             ..TransactionProcessingEnvironment::default()
         };
 
