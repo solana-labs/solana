@@ -48,7 +48,7 @@ name = "solana_svm"
 assert_matches = { workspace = true }
 base64 = { workspace = true }
 bincode = { workspace = true }
-borsh = { version = "1.5.1", features = ["derive"] }
+borsh = { version = "1.5.2", features = ["derive"] }
 bs58 = { workspace = true }
 clap = { workspace = true }
 crossbeam-channel = { workspace = true }
