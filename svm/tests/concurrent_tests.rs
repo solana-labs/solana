@@ -16,6 +16,7 @@ use {
     solana_program_runtime::loaded_programs::ProgramCacheEntryType,
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
+        bpf_loader_upgradeable,
         hash::Hash,
         instruction::AccountMeta,
         pubkey::Pubkey,
@@ -44,16 +45,17 @@ fn program_cache_execution(threads: usize) {
     let fork_graph = Arc::new(RwLock::new(MockForkGraph {}));
     batch_processor.program_cache.write().unwrap().fork_graph = Some(Arc::downgrade(&fork_graph));
 
+    const LOADER: Pubkey = bpf_loader_upgradeable::id();
     let programs = vec![
         deploy_program("hello-solana".to_string(), 0, &mut mock_bank),
         deploy_program("simple-transfer".to_string(), 0, &mut mock_bank),
         deploy_program("clock-sysvar".to_string(), 0, &mut mock_bank),
     ];
 
-    let account_maps: HashMap<Pubkey, u64> = programs
+    let account_maps: HashMap<Pubkey, (&Pubkey, u64)> = programs
         .iter()
         .enumerate()
-        .map(|(idx, key)| (*key, idx as u64))
+        .map(|(idx, key)| (*key, (&LOADER, idx as u64)))
         .collect();
 
     let ths: Vec<_> = (0..threads)
