@@ -2415,6 +2415,7 @@ mod tests {
         let program2_size = std::mem::size_of::<UpgradeableLoaderState>() as u32;
         let mut program2_account = AccountSharedData::default();
         program2_account.set_owner(loader_v3);
+        program2_account.set_lamports(LAMPORTS_PER_SOL);
         program2_account.set_executable(true);
         program2_account.set_data(vec![0; program2_size as usize]);
         program2_account
@@ -2425,6 +2426,7 @@ mod tests {
         mock_bank.accounts_map.insert(program2, program2_account);
         let mut programdata2_account = AccountSharedData::default();
         programdata2_account.set_owner(loader_v3);
+        programdata2_account.set_lamports(LAMPORTS_PER_SOL);
         programdata2_account.set_data(vec![0; program2_size as usize]);
         programdata2_account
             .set_state(&UpgradeableLoaderState::ProgramData {
@@ -2677,23 +2679,16 @@ mod tests {
                 program2_size + upgradeable_loader_size + fee_payer_size,
             );
 
-            // programdata as readonly instruction account double-counts it
+            // programdata as instruction account double-counts it
             let ixns = vec![Instruction::new_with_bytes(
                 program2,
                 &[],
                 vec![account_meta(programdata2, false)],
             )];
-            let factor = if ixns[0].accounts[0].is_writable {
-                1
-            } else {
-                2
-            };
+
             test_data_size(
                 ixns,
-                program2_size
-                    + programdata2_size * factor
-                    + upgradeable_loader_size
-                    + fee_payer_size,
+                program2_size + programdata2_size * 2 + upgradeable_loader_size + fee_payer_size,
             );
 
             // both as instruction accounts, for completeness
@@ -2705,17 +2700,9 @@ mod tests {
                     account_meta(programdata2, false),
                 ],
             )];
-            let factor = if ixns[0].accounts[0].is_writable {
-                0
-            } else {
-                1
-            };
             test_data_size(
                 ixns,
-                program2_size
-                    + programdata2_size * factor
-                    + upgradeable_loader_size
-                    + fee_payer_size,
+                program2_size + programdata2_size + upgradeable_loader_size + fee_payer_size,
             );
 
             // writable program bypasses the cache
