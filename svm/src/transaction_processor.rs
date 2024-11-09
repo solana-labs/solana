@@ -34,7 +34,11 @@ use {
         invoke_context::{EnvironmentConfig, InvokeContext},
         loaded_programs::{
             ForkGraph, ProgramCache, ProgramCacheEntry, ProgramCacheForTxBatch,
-            ProgramCacheMatchCriteria,
+            ProgramCacheMatchCriteria, ProgramRuntimeEnvironment,
+        },
+        solana_rbpf::{
+            program::{BuiltinProgram, FunctionRegistry},
+            vm::Config as VmConfig,
         },
         sysvar_cache::SysvarCache,
     },
@@ -62,6 +66,7 @@ use {
         collections::{hash_map::Entry, HashMap, HashSet},
         fmt::{Debug, Formatter},
         rc::Rc,
+        sync::Weak,
     },
 };
 
@@ -227,6 +232,34 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         }
     }
 
+    /// Create a new `TransactionBatchProcessor`.
+    ///
+    /// The created processor's program cache is initialized with the provided
+    /// fork graph and loaders. If any loaders are omitted, a default "empty"
+    /// loader (no syscalls) will be used.
+    ///
+    /// The cache will still not contain any builtin programs. It's advisable to
+    /// call `add_builtin` to add the required builtins before using the processor.
+    pub fn new(
+        slot: Slot,
+        epoch: Epoch,
+        fork_graph: Weak<RwLock<FG>>,
+        program_runtime_environment_v1: Option<ProgramRuntimeEnvironment>,
+        program_runtime_environment_v2: Option<ProgramRuntimeEnvironment>,
+    ) -> Self {
+        let processor = Self::new_uninitialized(slot, epoch);
+        {
+            let mut program_cache = processor.program_cache.write().unwrap();
+            program_cache.set_fork_graph(fork_graph);
+            processor.configure_program_runtime_environments_inner(
+                &mut program_cache,
+                program_runtime_environment_v1,
+                program_runtime_environment_v2,
+            );
+        }
+        processor
+    }
+
     /// Create a new `TransactionBatchProcessor` from the current instance, but
     /// with the provided slot and epoch.
     ///
@@ -241,6 +274,41 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
             program_cache: self.program_cache.clone(),
             builtin_program_ids: RwLock::new(self.builtin_program_ids.read().unwrap().clone()),
         }
+    }
+
+    fn configure_program_runtime_environments_inner(
+        &self,
+        program_cache: &mut ProgramCache<FG>,
+        program_runtime_environment_v1: Option<ProgramRuntimeEnvironment>,
+        program_runtime_environment_v2: Option<ProgramRuntimeEnvironment>,
+    ) {
+        let empty_loader = || {
+            Arc::new(BuiltinProgram::new_loader(
+                VmConfig::default(),
+                FunctionRegistry::default(),
+            ))
+        };
+
+        program_cache.latest_root_slot = self.slot;
+        program_cache.latest_root_epoch = self.epoch;
+        program_cache.environments.program_runtime_v1 =
+            program_runtime_environment_v1.unwrap_or(empty_loader());
+        program_cache.environments.program_runtime_v2 =
+            program_runtime_environment_v2.unwrap_or(empty_loader());
+    }
+
+    /// Configures the program runtime environments (loaders) in the
+    /// transaction processor's program cache.
+    pub fn configure_program_runtime_environments(
+        &self,
+        program_runtime_environment_v1: Option<ProgramRuntimeEnvironment>,
+        program_runtime_environment_v2: Option<ProgramRuntimeEnvironment>,
+    ) {
+        self.configure_program_runtime_environments_inner(
+            &mut self.program_cache.write().unwrap(),
+            program_runtime_environment_v1,
+            program_runtime_environment_v2,
+        );
     }
 
     /// Returns the current environments depending on the given epoch
@@ -1396,10 +1464,9 @@ mod tests {
     #[should_panic = "called load_program_with_pubkey() with nonexistent account"]
     fn test_replenish_program_cache_with_nonexistent_accounts() {
         let mock_bank = MockBankCallback::default();
-        let batch_processor = TransactionBatchProcessor::<TestForkGraph>::default();
         let fork_graph = Arc::new(RwLock::new(TestForkGraph {}));
-        batch_processor.program_cache.write().unwrap().fork_graph =
-            Some(Arc::downgrade(&fork_graph));
+        let batch_processor =
+            TransactionBatchProcessor::new(0, 0, Arc::downgrade(&fork_graph), None, None);
         let key = Pubkey::new_unique();
         let owner = Pubkey::new_unique();
 
@@ -1412,10 +1479,9 @@ mod tests {
     #[test]
     fn test_replenish_program_cache() {
         let mock_bank = MockBankCallback::default();
-        let batch_processor = TransactionBatchProcessor::<TestForkGraph>::default();
         let fork_graph = Arc::new(RwLock::new(TestForkGraph {}));
-        batch_processor.program_cache.write().unwrap().fork_graph =
-            Some(Arc::downgrade(&fork_graph));
+        let batch_processor =
+            TransactionBatchProcessor::new(0, 0, Arc::downgrade(&fork_graph), None, None);
         let key = Pubkey::new_unique();
         let owner = Pubkey::new_unique();
 
@@ -1901,10 +1967,9 @@ mod tests {
     #[test]
     fn test_add_builtin() {
         let mock_bank = MockBankCallback::default();
-        let batch_processor = TransactionBatchProcessor::<TestForkGraph>::default();
         let fork_graph = Arc::new(RwLock::new(TestForkGraph {}));
-        batch_processor.program_cache.write().unwrap().fork_graph =
-            Some(Arc::downgrade(&fork_graph));
+        let batch_processor =
+            TransactionBatchProcessor::new(0, 0, Arc::downgrade(&fork_graph), None, None);
 
         let key = Pubkey::new_unique();
         let name = "a_builtin_name";

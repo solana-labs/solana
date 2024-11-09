@@ -41,9 +41,9 @@ mod transaction_builder;
 
 fn program_cache_execution(threads: usize) {
     let mut mock_bank = MockBankCallback::default();
-    let batch_processor = TransactionBatchProcessor::<MockForkGraph>::new_uninitialized(5, 5);
     let fork_graph = Arc::new(RwLock::new(MockForkGraph {}));
-    batch_processor.program_cache.write().unwrap().fork_graph = Some(Arc::downgrade(&fork_graph));
+    let batch_processor =
+        TransactionBatchProcessor::new(5, 5, Arc::downgrade(&fork_graph), None, None);
 
     const LOADER: Pubkey = bpf_loader_upgradeable::id();
     let programs = vec![

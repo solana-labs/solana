@@ -11,11 +11,7 @@ use {
     solana_log_collector::LogCollector,
     solana_program_runtime::{
         invoke_context::{EnvironmentConfig, InvokeContext},
-        loaded_programs::{ProgramCacheEntry, ProgramCacheForTxBatch, ProgramRuntimeEnvironments},
-        solana_rbpf::{
-            program::{BuiltinProgram, FunctionRegistry},
-            vm::Config,
-        },
+        loaded_programs::{ProgramCacheEntry, ProgramCacheForTxBatch},
     },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
@@ -244,20 +240,15 @@ fn run_fixture(fixture: InstrFixture, filename: OsString, execute_as_instr: bool
         create_program_runtime_environment_v1(&feature_set, &compute_budget, false, false).unwrap();
 
     mock_bank.override_feature_set(feature_set);
-    let batch_processor = TransactionBatchProcessor::<MockForkGraph>::new_uninitialized(42, 2);
 
     let fork_graph = Arc::new(RwLock::new(MockForkGraph {}));
-    {
-        let mut program_cache = batch_processor.program_cache.write().unwrap();
-        program_cache.environments = ProgramRuntimeEnvironments {
-            program_runtime_v1: Arc::new(v1_environment),
-            program_runtime_v2: Arc::new(BuiltinProgram::new_loader(
-                Config::default(),
-                FunctionRegistry::default(),
-            )),
-        };
-        program_cache.fork_graph = Some(Arc::downgrade(&fork_graph.clone()));
-    }
+    let batch_processor = TransactionBatchProcessor::new(
+        42,
+        2,
+        Arc::downgrade(&fork_graph),
+        Some(Arc::new(v1_environment)),
+        None,
+    );
 
     batch_processor.fill_missing_sysvar_cache_entries(&mock_bank);
     register_builtins(&batch_processor, &mock_bank);
