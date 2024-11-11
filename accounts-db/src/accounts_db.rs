@@ -7428,6 +7428,21 @@ impl AccountsDb {
         Ok(())
     }
 
+    /// Returns all of the accounts' pubkeys for a given slot
+    pub fn get_pubkeys_for_slot(&self, slot: Slot) -> Vec<Pubkey> {
+        let scan_result = self.scan_account_storage(
+            slot,
+            |loaded_account| Some(*loaded_account.pubkey()),
+            |accum: &DashSet<_>, loaded_account, _data| {
+                accum.insert(*loaded_account.pubkey());
+            },
+            ScanAccountStorageData::NoData,
+        );
+        match scan_result {
+            ScanStorageResult::Cached(cached_result) => cached_result,
+            ScanStorageResult::Stored(stored_result) => stored_result.into_iter().collect(),
+        }
+    }
     /// helper to return
     /// 1. pubkey, hash pairs for the slot
     /// 2. us spent scanning

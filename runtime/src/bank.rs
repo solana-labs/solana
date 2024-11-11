@@ -59,7 +59,7 @@ use {
         transaction_batch::{OwnedOrBorrowed, TransactionBatch},
         verify_precompiles::verify_precompiles,
     },
-    accounts_lt_hash::InitialStateOfAccount,
+    accounts_lt_hash::CacheValue as AccountsLtHashCacheValue,
     ahash::AHashMap,
     byteorder::{ByteOrder, LittleEndian},
     dashmap::{DashMap, DashSet},
@@ -933,7 +933,10 @@ pub struct Bank {
     ///
     /// The accounts lt hash needs both the initial and final state of each
     /// account that was modified in this slot.  Cache the initial state here.
-    cache_for_accounts_lt_hash: RwLock<AHashMap<Pubkey, InitialStateOfAccount>>,
+    ///
+    /// Note: The initial state must be strictly from an ancestor,
+    /// and not an intermediate state within this slot.
+    cache_for_accounts_lt_hash: RwLock<AHashMap<Pubkey, AccountsLtHashCacheValue>>,
 
     /// The unique identifier for the corresponding block for this bank.
     /// None for banks that have not yet completed replay or for leader banks as we cannot populate block_id
@@ -1381,12 +1384,40 @@ impl Bank {
         let (_, fill_sysvar_cache_time_us) = measure_us!(new
             .transaction_processor
             .fill_missing_sysvar_cache_entries(&new));
-        time.stop();
 
+        let (num_accounts_modified_this_slot, populate_cache_for_accounts_lt_hash_us) = new
+            .is_accounts_lt_hash_enabled()
+            .then(|| {
+                measure_us!({
+                    // The cache for accounts lt hash needs to be made aware of accounts modified
+                    // before transaction processing begins.  Otherwise we may calculate the wrong
+                    // accounts lt hash due to having the wrong initial state of the account.  The
+                    // lt hash cache's initial state must always be from an ancestor, and cannot be
+                    // an intermediate state within this Bank's slot.  If the lt hash cache has the
+                    // wrong initial account state, we'll mix out the wrong lt hash value, and thus
+                    // have the wrong overall accounts lt hash, and diverge.
+                    let accounts_modified_this_slot =
+                        new.rc.accounts.accounts_db.get_pubkeys_for_slot(slot);
+                    let num_accounts_modified_this_slot = accounts_modified_this_slot.len();
+                    let cache_for_accounts_lt_hash =
+                        new.cache_for_accounts_lt_hash.get_mut().unwrap();
+                    cache_for_accounts_lt_hash.reserve(num_accounts_modified_this_slot);
+                    for pubkey in accounts_modified_this_slot {
+                        cache_for_accounts_lt_hash
+                            .entry(pubkey)
+                            .or_insert(AccountsLtHashCacheValue::BankNew);
+                    }
+                    num_accounts_modified_this_slot
+                })
+            })
+            .unzip();
+
+        time.stop();
         report_new_bank_metrics(
             slot,
             parent.slot(),
             new.block_height,
+            num_accounts_modified_this_slot,
             NewBankTimings {
                 bank_rc_creation_time_us,
                 total_elapsed_time_us: time.as_us(),
@@ -1406,6 +1437,7 @@ impl Bank {
                 cache_preparation_time_us,
                 update_sysvars_time_us,
                 fill_sysvar_cache_time_us,
+                populate_cache_for_accounts_lt_hash_us,
             },
         );
 
