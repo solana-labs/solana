@@ -153,6 +153,13 @@ pub fn accounts_db_args<'a, 'b>() -> Box<[Arg<'a, 'b>]> {
             .takes_value(true)
             .help("The number of ancient storages the ancient slot combining should converge to.")
             .hidden(hidden_unless_forced()),
+        Arg::with_name("accounts_db_hash_calculation_pubkey_bins")
+            .long("accounts-db-hash-calculation-pubkey-bins")
+            .value_name("USIZE")
+            .validator(is_parsable::<usize>)
+            .takes_value(true)
+            .help("The number of pubkey bins used for accounts hash calculation.")
+            .hidden(hidden_unless_forced()),
     ]
     .into_boxed_slice()
 }
@@ -370,6 +377,12 @@ pub fn get_accounts_db_config(
         )
         .ok(),
         max_ancient_storages: value_t!(arg_matches, "accounts_db_max_ancient_storages", usize).ok(),
+        hash_calculation_pubkey_bins: value_t!(
+            arg_matches,
+            "accounts_db_hash_calculation_pubkey_bins",
+            usize
+        )
+        .ok(),
         exhaustively_verify_refcounts: arg_matches.is_present("accounts_db_verify_refcounts"),
         skip_initial_hash_calc: arg_matches.is_present("accounts_db_skip_initial_hash_calculation"),
         test_partitioned_epoch_rewards,

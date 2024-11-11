@@ -127,7 +127,7 @@ const DEFAULT_NUM_DIRS: u32 = 4;
 
 // When calculating hashes, it is helpful to break the pubkeys found into bins based on the pubkey value.
 // More bins means smaller vectors to sort, copy, etc.
-pub const PUBKEY_BINS_FOR_CALCULATING_HASHES: usize = 65536;
+pub const DEFAULT_HASH_CALCULATION_PUBKEY_BINS: usize = 65536;
 
 // Without chunks, we end up with 1 output vec for each outer snapshot storage.
 // This results in too many vectors to be efficient.
@@ -514,6 +514,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
     num_clean_threads: None,
     num_foreground_threads: None,
     num_hash_threads: None,
+    hash_calculation_pubkey_bins: None,
 };
 pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS),
@@ -538,6 +539,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig
     num_clean_threads: None,
     num_foreground_threads: None,
     num_hash_threads: None,
+    hash_calculation_pubkey_bins: None,
 };
 
 pub type BinnedHashData = Vec<Vec<CalculateHashIntermediate>>;
@@ -651,6 +653,7 @@ pub struct AccountsDbConfig {
     pub ancient_append_vec_offset: Option<i64>,
     pub ancient_storage_ideal_size: Option<u64>,
     pub max_ancient_storages: Option<usize>,
+    pub hash_calculation_pubkey_bins: Option<usize>,
     pub test_skip_rewrites_but_include_in_bank_hash: bool,
     pub skip_initial_hash_calc: bool,
     pub exhaustively_verify_refcounts: bool,
@@ -1474,6 +1477,9 @@ pub struct AccountsDb {
     /// true iff we want to skip the initial hash calculation on startup
     pub skip_initial_hash_calc: bool,
 
+    /// The number of pubkey bins used for accounts hash calculation
+    pub hash_calculation_pubkey_bins: usize,
+
     pub storage: AccountStorage,
 
     /// from AccountsDbConfig
@@ -2011,6 +2017,9 @@ impl AccountsDb {
             max_ancient_storages: accounts_db_config
                 .max_ancient_storages
                 .unwrap_or(DEFAULT_MAX_ANCIENT_STORAGES),
+            hash_calculation_pubkey_bins: accounts_db_config
+                .hash_calculation_pubkey_bins
+                .unwrap_or(DEFAULT_HASH_CALCULATION_PUBKEY_BINS),
             account_indexes: accounts_db_config.account_indexes.unwrap_or_default(),
             shrink_ratio: accounts_db_config.shrink_ratio,
             accounts_update_notifier,
@@ -7258,7 +7267,7 @@ impl AccountsDb {
 
             let bounds = Range {
                 start: 0,
-                end: PUBKEY_BINS_FOR_CALCULATING_HASHES,
+                end: self.hash_calculation_pubkey_bins,
             };
 
             let accounts_hasher = AccountsHasher {
@@ -7272,7 +7281,7 @@ impl AccountsDb {
                 &cache_hash_data,
                 storages,
                 &mut stats,
-                PUBKEY_BINS_FOR_CALCULATING_HASHES,
+                self.hash_calculation_pubkey_bins,
                 &bounds,
                 config,
             );
@@ -7297,8 +7306,11 @@ impl AccountsDb {
                 .collect::<Vec<_>>();
 
             // turn raw data into merkle tree hashes and sum of lamports
-            let (accounts_hash, capitalization) =
-                accounts_hasher.rest_of_hash_calculation(&cache_hash_intermediates, &mut stats);
+            let (accounts_hash, capitalization) = accounts_hasher.rest_of_hash_calculation(
+                &cache_hash_intermediates,
+                self.hash_calculation_pubkey_bins,
+                &mut stats,
+            );
             let accounts_hash = match kind {
                 CalcAccountsHashKind::Full => AccountsHashKind::Full(AccountsHash(accounts_hash)),
                 CalcAccountsHashKind::Incremental => {

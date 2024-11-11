@@ -1349,6 +1349,12 @@ pub fn main() {
         )
         .ok(),
         max_ancient_storages: value_t!(matches, "accounts_db_max_ancient_storages", usize).ok(),
+        hash_calculation_pubkey_bins: value_t!(
+            matches,
+            "accounts_db_hash_calculation_pubkey_bins",
+            usize
+        )
+        .ok(),
         exhaustively_verify_refcounts: matches.is_present("accounts_db_verify_refcounts"),
         create_ancient_storage,
         test_partitioned_epoch_rewards,
