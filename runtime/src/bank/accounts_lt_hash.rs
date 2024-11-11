@@ -82,7 +82,7 @@ impl Bank {
             self.rc
                 .accounts
                 .accounts_db
-                .get_pubkey_hash_account_for_slot(slot)
+                .get_pubkey_account_for_slot(slot)
         });
         let num_accounts_total = accounts_curr.len();
 
@@ -118,10 +118,7 @@ impl Bank {
                 .fold_chunks(
                     CHUNK_SIZE,
                     || (LtHash::identity(), Stats::default()),
-                    |mut accum, elem| {
-                        let pubkey = &elem.pubkey;
-                        let curr_account = &elem.account;
-
+                    |mut accum, (pubkey, curr_account)| {
                         // load the initial state of the account
                         let (initial_state_of_account, measure_load) = meas_dur!({
                             match cache_for_accounts_lt_hash.get(pubkey) {

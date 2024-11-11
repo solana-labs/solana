@@ -7453,6 +7453,27 @@ impl AccountsDb {
     }
 
     /// Return all of the accounts for a given slot
+    pub fn get_pubkey_account_for_slot(&self, slot: Slot) -> Vec<(Pubkey, AccountSharedData)> {
+        let scan_result = self.scan_account_storage(
+            slot,
+            |loaded_account| {
+                // Cache only has one version per key, don't need to worry about versioning
+                Some((*loaded_account.pubkey(), loaded_account.take_account()))
+            },
+            |accum: &DashMap<_, _>, loaded_account, _data| {
+                // Storage may have duplicates so only keep the latest version for each key
+                accum.insert(*loaded_account.pubkey(), loaded_account.take_account());
+            },
+            ScanAccountStorageData::NoData,
+        );
+
+        match scan_result {
+            ScanStorageResult::Cached(cached_result) => cached_result,
+            ScanStorageResult::Stored(stored_result) => stored_result.into_iter().collect(),
+        }
+    }
+
+    /// Return all of the accounts for a given slot
     pub fn get_pubkey_hash_account_for_slot(&self, slot: Slot) -> Vec<PubkeyHashAccount> {
         type ScanResult =
             ScanStorageResult<PubkeyHashAccount, DashMap<Pubkey, (AccountHash, AccountSharedData)>>;
