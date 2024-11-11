@@ -189,6 +189,7 @@ pub struct HashStats {
     pub scan_time_total_us: u64,
     pub zeros_time_total_us: u64,
     pub hash_time_total_us: u64,
+    pub drop_hash_files_us: u64,
     pub sort_time_total_us: u64,
     pub hash_total: usize,
     pub num_snapshot_storage: usize,
@@ -245,6 +246,7 @@ impl HashStats {
             ("accounts_scan_us", self.scan_time_total_us, i64),
             ("eliminate_zeros_us", self.zeros_time_total_us, i64),
             ("hash_us", self.hash_time_total_us, i64),
+            ("drop_hash_files_us", self.drop_hash_files_us, i64),
             ("sort_us", self.sort_time_total_us, i64),
             ("hash_total", self.hash_total, i64),
             ("storage_sort_us", self.storage_sort_us, i64),
@@ -1232,6 +1234,9 @@ impl<'a> AccountsHasher<'a> {
         );
         hash_time.stop();
         stats.hash_time_total_us += hash_time.as_us();
+
+        let (_, drop_us) = measure_us!(drop(cumulative));
+        stats.drop_hash_files_us += drop_us;
         (hash, total_lamports)
     }
 }
