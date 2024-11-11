@@ -2,7 +2,7 @@ use {
     super::{Bank, BankStatusCache},
     solana_accounts_db::blockhash_queue::BlockhashQueue,
     solana_perf::perf_libs,
-    solana_runtime_transaction::runtime_transaction::RuntimeTransaction,
+    solana_runtime_transaction::transaction_with_meta::TransactionWithMeta,
     solana_sdk::{
         account::AccountSharedData,
         account_utils::StateMut,
@@ -18,7 +18,7 @@ use {
         },
         nonce_account,
         pubkey::Pubkey,
-        transaction::{Result as TransactionResult, SanitizedTransaction, TransactionError},
+        transaction::{Result as TransactionResult, TransactionError},
     },
     solana_svm::{
         account_loader::{CheckedTransactionDetails, TransactionCheckResult},
@@ -32,7 +32,7 @@ impl Bank {
     /// Checks a batch of sanitized transactions again bank for age and status
     pub fn check_transactions_with_forwarding_delay(
         &self,
-        transactions: &[RuntimeTransaction<SanitizedTransaction>],
+        transactions: &[impl TransactionWithMeta],
         filter: &[TransactionResult<()>],
         forward_transactions_to_leader_at_slot_offset: u64,
     ) -> Vec<TransactionCheckResult> {
@@ -59,9 +59,9 @@ impl Bank {
         )
     }
 
-    pub fn check_transactions(
+    pub fn check_transactions<Tx: TransactionWithMeta>(
         &self,
-        sanitized_txs: &[impl core::borrow::Borrow<RuntimeTransaction<SanitizedTransaction>>],
+        sanitized_txs: &[impl core::borrow::Borrow<Tx>],
         lock_results: &[TransactionResult<()>],
         max_age: usize,
         error_counters: &mut TransactionErrorMetrics,
@@ -70,9 +70,9 @@ impl Bank {
         self.check_status_cache(sanitized_txs, lock_results, error_counters)
     }
 
-    fn check_age(
+    fn check_age<Tx: TransactionWithMeta>(
         &self,
-        sanitized_txs: &[impl core::borrow::Borrow<RuntimeTransaction<SanitizedTransaction>>],
+        sanitized_txs: &[impl core::borrow::Borrow<Tx>],
         lock_results: &[TransactionResult<()>],
         max_age: usize,
         error_counters: &mut TransactionErrorMetrics,
@@ -104,14 +104,14 @@ impl Bank {
 
     fn check_transaction_age(
         &self,
-        tx: &SanitizedTransaction,
+        tx: &impl SVMMessage,
         max_age: usize,
         next_durable_nonce: &DurableNonce,
         hash_queue: &BlockhashQueue,
         next_lamports_per_signature: u64,
         error_counters: &mut TransactionErrorMetrics,
     ) -> TransactionCheckResult {
-        let recent_blockhash = tx.message().recent_blockhash();
+        let recent_blockhash = tx.recent_blockhash();
         if let Some(hash_info) = hash_queue.get_hash_info_if_valid(recent_blockhash, max_age) {
             Ok(CheckedTransactionDetails {
                 nonce: None,
@@ -119,7 +119,7 @@ impl Bank {
             })
         } else if let Some((nonce, previous_lamports_per_signature)) = self
             .check_load_and_advance_message_nonce_account(
-                tx.message(),
+                tx,
                 next_durable_nonce,
                 next_lamports_per_signature,
             )
@@ -183,9 +183,9 @@ impl Bank {
         Some((*nonce_address, nonce_account, nonce_data))
     }
 
-    fn check_status_cache(
+    fn check_status_cache<Tx: TransactionWithMeta>(
         &self,
-        sanitized_txs: &[impl core::borrow::Borrow<RuntimeTransaction<SanitizedTransaction>>],
+        sanitized_txs: &[impl core::borrow::Borrow<Tx>],
         lock_results: Vec<TransactionCheckResult>,
         error_counters: &mut TransactionErrorMetrics,
     ) -> Vec<TransactionCheckResult> {
@@ -211,11 +211,11 @@ impl Bank {
 
     fn is_transaction_already_processed(
         &self,
-        sanitized_tx: &SanitizedTransaction,
+        sanitized_tx: &impl TransactionWithMeta,
         status_cache: &BankStatusCache,
     ) -> bool {
         let key = sanitized_tx.message_hash();
-        let transaction_blockhash = sanitized_tx.message().recent_blockhash();
+        let transaction_blockhash = sanitized_tx.recent_blockhash();
         status_cache
             .get_status(key, transaction_blockhash, &self.ancestors)
             .is_some()

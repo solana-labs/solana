@@ -39,7 +39,7 @@ use {
         vote_sender_types::ReplayVoteSender,
     },
     solana_runtime_transaction::{
-        runtime_transaction::RuntimeTransaction, svm_transaction_adapter::SVMTransactionAdapter,
+        runtime_transaction::RuntimeTransaction, transaction_with_meta::TransactionWithMeta,
     },
     solana_sdk::{
         clock::{Slot, MAX_PROCESSING_AGE},
@@ -57,7 +57,7 @@ use {
         transaction_commit_result::{TransactionCommitResult, TransactionCommitResultExtensions},
         transaction_processor::ExecutionRecordingConfig,
     },
-    solana_svm_transaction::svm_message::SVMMessage,
+    solana_svm_transaction::{svm_message::SVMMessage, svm_transaction::SVMTransaction},
     solana_timings::{report_execute_timings, ExecuteTimingType, ExecuteTimings},
     solana_transaction_status::token_balances::TransactionTokenBalancesSet,
     solana_vote::vote_account::VoteAccountsHashMap,
@@ -94,7 +94,7 @@ pub struct LockedTransactionsWithIndexes<Tx: SVMMessage> {
 }
 
 struct ReplayEntry {
-    entry: EntryType,
+    entry: EntryType<RuntimeTransaction<SanitizedTransaction>>,
     starting_index: usize,
 }
 
@@ -109,7 +109,7 @@ fn first_err(results: &[Result<()>]) -> Result<()> {
 
 // Includes transaction signature for unit-testing
 fn get_first_error(
-    batch: &TransactionBatch<SanitizedTransaction>,
+    batch: &TransactionBatch<impl SVMTransaction>,
     commit_results: &[TransactionCommitResult],
 ) -> Option<(Result<()>, Signature)> {
     let mut first_err = None;
@@ -144,7 +144,7 @@ fn create_thread_pool(num_threads: usize) -> ThreadPool {
 }
 
 pub fn execute_batch(
-    batch: &TransactionBatchWithIndexes<SanitizedTransaction>,
+    batch: &TransactionBatchWithIndexes<impl TransactionWithMeta>,
     bank: &Arc<Bank>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
@@ -240,7 +240,7 @@ pub fn execute_batch(
 fn check_block_cost_limits(
     bank: &Bank,
     commit_results: &[TransactionCommitResult],
-    sanitized_transactions: &[RuntimeTransaction<SanitizedTransaction>],
+    sanitized_transactions: &[impl TransactionWithMeta],
 ) -> Result<()> {
     assert_eq!(sanitized_transactions.len(), commit_results.len());
 
@@ -297,7 +297,7 @@ impl ExecuteBatchesInternalMetrics {
 fn execute_batches_internal(
     bank: &Arc<Bank>,
     replay_tx_thread_pool: &ThreadPool,
-    batches: &[TransactionBatchWithIndexes<SanitizedTransaction>],
+    batches: &[TransactionBatchWithIndexes<RuntimeTransaction<SanitizedTransaction>>],
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     log_messages_bytes_limit: Option<usize>,
@@ -455,10 +455,10 @@ fn schedule_batches_for_execution(
     first_err
 }
 
-fn rebatch_transactions<'a, Tx: SVMMessage>(
+fn rebatch_transactions<'a, Tx: TransactionWithMeta>(
     lock_results: &'a [Result<()>],
     bank: &'a Arc<Bank>,
-    sanitized_txs: &'a [RuntimeTransaction<Tx>],
+    sanitized_txs: &'a [Tx],
     range: Range<usize>,
     transaction_indexes: &'a [usize],
 ) -> TransactionBatchWithIndexes<'a, 'a, Tx> {
@@ -525,7 +525,7 @@ fn rebatch_and_execute_batches(
 
     let target_batch_count = get_thread_count() as u64;
 
-    let mut tx_batches: Vec<TransactionBatchWithIndexes<SanitizedTransaction>> = vec![];
+    let mut tx_batches = vec![];
     let rebatched_txs = if total_cost > target_batch_count.saturating_mul(minimal_tx_cost) {
         let target_batch_cost = total_cost / target_batch_count;
         let mut batch_cost: u64 = 0;

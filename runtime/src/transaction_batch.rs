@@ -1,7 +1,6 @@
 use {
-    crate::bank::Bank, core::ops::Deref,
-    solana_runtime_transaction::runtime_transaction::RuntimeTransaction,
-    solana_sdk::transaction::Result, solana_svm_transaction::svm_message::SVMMessage,
+    crate::bank::Bank, core::ops::Deref, solana_sdk::transaction::Result,
+    solana_svm_transaction::svm_message::SVMMessage,
 };
 
 pub enum OwnedOrBorrowed<'a, T> {
@@ -24,7 +23,7 @@ impl<T> Deref for OwnedOrBorrowed<'_, T> {
 pub struct TransactionBatch<'a, 'b, Tx: SVMMessage> {
     lock_results: Vec<Result<()>>,
     bank: &'a Bank,
-    sanitized_txs: OwnedOrBorrowed<'b, RuntimeTransaction<Tx>>,
+    sanitized_txs: OwnedOrBorrowed<'b, Tx>,
     needs_unlock: bool,
 }
 
@@ -32,7 +31,7 @@ impl<'a, 'b, Tx: SVMMessage> TransactionBatch<'a, 'b, Tx> {
     pub fn new(
         lock_results: Vec<Result<()>>,
         bank: &'a Bank,
-        sanitized_txs: OwnedOrBorrowed<'b, RuntimeTransaction<Tx>>,
+        sanitized_txs: OwnedOrBorrowed<'b, Tx>,
     ) -> Self {
         assert_eq!(lock_results.len(), sanitized_txs.len());
         Self {
@@ -47,7 +46,7 @@ impl<'a, 'b, Tx: SVMMessage> TransactionBatch<'a, 'b, Tx> {
         &self.lock_results
     }
 
-    pub fn sanitized_transactions(&self) -> &[RuntimeTransaction<Tx>] {
+    pub fn sanitized_transactions(&self) -> &[Tx] {
         &self.sanitized_txs
     }
 
@@ -116,6 +115,7 @@ mod tests {
     use {
         super::*,
         crate::genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo},
+        solana_runtime_transaction::runtime_transaction::RuntimeTransaction,
         solana_sdk::{
             signature::Keypair,
             system_transaction,

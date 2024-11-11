@@ -6,10 +6,10 @@
 use {
     crate::{block_cost_limits::*, transaction_cost::TransactionCost},
     solana_metrics::datapoint_info,
+    solana_runtime_transaction::transaction_with_meta::TransactionWithMeta,
     solana_sdk::{
         clock::Slot, pubkey::Pubkey, saturating_add_assign, transaction::TransactionError,
     },
-    solana_svm_transaction::svm_message::SVMMessage,
     std::{cmp::Ordering, collections::HashMap},
 };
 
@@ -160,7 +160,7 @@ impl CostTracker {
 
     pub fn try_add(
         &mut self,
-        tx_cost: &TransactionCost<impl SVMMessage>,
+        tx_cost: &TransactionCost<impl TransactionWithMeta>,
     ) -> Result<UpdatedCosts, CostTrackerError> {
         self.would_fit(tx_cost)?;
         let updated_costliest_account_cost = self.add_transaction_cost(tx_cost);
@@ -172,7 +172,7 @@ impl CostTracker {
 
     pub fn update_execution_cost(
         &mut self,
-        estimated_tx_cost: &TransactionCost<impl SVMMessage>,
+        estimated_tx_cost: &TransactionCost<impl TransactionWithMeta>,
         actual_execution_units: u64,
         actual_loaded_accounts_data_size_cost: u64,
     ) {
@@ -198,7 +198,7 @@ impl CostTracker {
         }
     }
 
-    pub fn remove(&mut self, tx_cost: &TransactionCost<impl SVMMessage>) {
+    pub fn remove(&mut self, tx_cost: &TransactionCost<impl TransactionWithMeta>) {
         self.remove_transaction_cost(tx_cost);
     }
 
@@ -269,7 +269,7 @@ impl CostTracker {
 
     fn would_fit(
         &self,
-        tx_cost: &TransactionCost<impl SVMMessage>,
+        tx_cost: &TransactionCost<impl TransactionWithMeta>,
     ) -> Result<(), CostTrackerError> {
         let cost: u64 = tx_cost.sum();
 
@@ -316,7 +316,7 @@ impl CostTracker {
     }
 
     // Returns the highest account cost for all write-lock accounts `TransactionCost` updated
-    fn add_transaction_cost(&mut self, tx_cost: &TransactionCost<impl SVMMessage>) -> u64 {
+    fn add_transaction_cost(&mut self, tx_cost: &TransactionCost<impl TransactionWithMeta>) -> u64 {
         saturating_add_assign!(
             self.allocated_accounts_data_size,
             tx_cost.allocated_accounts_data_size()
@@ -337,7 +337,7 @@ impl CostTracker {
         self.add_transaction_execution_cost(tx_cost, tx_cost.sum())
     }
 
-    fn remove_transaction_cost(&mut self, tx_cost: &TransactionCost<impl SVMMessage>) {
+    fn remove_transaction_cost(&mut self, tx_cost: &TransactionCost<impl TransactionWithMeta>) {
         let cost = tx_cost.sum();
         self.sub_transaction_execution_cost(tx_cost, cost);
         self.allocated_accounts_data_size = self
@@ -359,7 +359,7 @@ impl CostTracker {
     /// Return the costliest account cost that were updated by `TransactionCost`
     fn add_transaction_execution_cost(
         &mut self,
-        tx_cost: &TransactionCost<impl SVMMessage>,
+        tx_cost: &TransactionCost<impl TransactionWithMeta>,
         adjustment: u64,
     ) -> u64 {
         let mut costliest_account_cost = 0;
@@ -382,7 +382,7 @@ impl CostTracker {
     /// Subtract extra execution units from cost_tracker
     fn sub_transaction_execution_cost(
         &mut self,
-        tx_cost: &TransactionCost<impl SVMMessage>,
+        tx_cost: &TransactionCost<impl TransactionWithMeta>,
         adjustment: u64,
     ) {
         for account_key in tx_cost.writable_accounts() {
@@ -412,7 +412,6 @@ mod tests {
     use {
         super::*,
         crate::transaction_cost::{WritableKeysTransaction, *},
-        solana_runtime_transaction::runtime_transaction::RuntimeTransaction,
         solana_sdk::signature::{Keypair, Signer},
         std::cmp,
     };
@@ -435,16 +434,14 @@ mod tests {
         Keypair::new()
     }
 
-    fn build_simple_transaction(
-        mint_keypair: &Keypair,
-    ) -> RuntimeTransaction<WritableKeysTransaction> {
-        RuntimeTransaction::new_for_tests(WritableKeysTransaction(vec![mint_keypair.pubkey()]))
+    fn build_simple_transaction(mint_keypair: &Keypair) -> WritableKeysTransaction {
+        WritableKeysTransaction(vec![mint_keypair.pubkey()])
     }
 
     fn simple_usage_cost_details(
-        transaction: &RuntimeTransaction<WritableKeysTransaction>,
+        transaction: &WritableKeysTransaction,
         programs_execution_cost: u64,
-    ) -> UsageCostDetails<RuntimeTransaction<WritableKeysTransaction>> {
+    ) -> UsageCostDetails<WritableKeysTransaction> {
         UsageCostDetails {
             transaction,
             signature_cost: 0,
@@ -457,7 +454,7 @@ mod tests {
     }
 
     fn simple_transaction_cost(
-        transaction: &RuntimeTransaction<WritableKeysTransaction>,
+        transaction: &WritableKeysTransaction,
         programs_execution_cost: u64,
     ) -> TransactionCost<WritableKeysTransaction> {
         TransactionCost::Transaction(simple_usage_cost_details(
@@ -467,7 +464,7 @@ mod tests {
     }
 
     fn simple_vote_transaction_cost(
-        transaction: &RuntimeTransaction<WritableKeysTransaction>,
+        transaction: &WritableKeysTransaction,
     ) -> TransactionCost<WritableKeysTransaction> {
         TransactionCost::SimpleVote { transaction }
     }
@@ -754,9 +751,7 @@ mod tests {
         // | acct3 | $cost |
         // and block_cost = $cost
         {
-            let transaction = RuntimeTransaction::new_for_tests(WritableKeysTransaction(vec![
-                acct1, acct2, acct3,
-            ]));
+            let transaction = WritableKeysTransaction(vec![acct1, acct2, acct3]);
             let tx_cost = simple_transaction_cost(&transaction, cost);
             assert!(testee.try_add(&tx_cost).is_ok());
             let (_costliest_account, costliest_account_cost) = testee.find_costliest_account();
@@ -771,8 +766,7 @@ mod tests {
         // | acct3 | $cost |
         // and block_cost = $cost * 2
         {
-            let transaction =
-                RuntimeTransaction::new_for_tests(WritableKeysTransaction(vec![acct2]));
+            let transaction = WritableKeysTransaction(vec![acct2]);
             let tx_cost = simple_transaction_cost(&transaction, cost);
             assert!(testee.try_add(&tx_cost).is_ok());
             let (costliest_account, costliest_account_cost) = testee.find_costliest_account();
@@ -789,8 +783,7 @@ mod tests {
         // | acct3 | $cost |
         // and block_cost = $cost * 2
         {
-            let transaction =
-                RuntimeTransaction::new_for_tests(WritableKeysTransaction(vec![acct1, acct2]));
+            let transaction = WritableKeysTransaction(vec![acct1, acct2]);
             let tx_cost = simple_transaction_cost(&transaction, cost);
             assert!(testee.try_add(&tx_cost).is_err());
             let (costliest_account, costliest_account_cost) = testee.find_costliest_account();
@@ -811,8 +804,7 @@ mod tests {
         let block_max = account_max * 3; // for three accts
 
         let mut testee = CostTracker::new(account_max, block_max, block_max);
-        let transaction =
-            RuntimeTransaction::new_for_tests(WritableKeysTransaction(vec![acct1, acct2, acct3]));
+        let transaction = WritableKeysTransaction(vec![acct1, acct2, acct3]);
         let tx_cost = simple_transaction_cost(&transaction, cost);
         let mut expected_block_cost = tx_cost.sum();
         let expected_tx_count = 1;
@@ -894,11 +886,11 @@ mod tests {
         let estimated_programs_execution_cost = 100;
         let estimated_loaded_accounts_data_size_cost = 200;
         let number_writeble_accounts = 3;
-        let transaction = RuntimeTransaction::new_for_tests(WritableKeysTransaction(
+        let transaction = WritableKeysTransaction(
             std::iter::repeat_with(Pubkey::new_unique)
                 .take(number_writeble_accounts)
                 .collect(),
-        ));
+        );
 
         let mut usage_cost =
             simple_usage_cost_details(&transaction, estimated_programs_execution_cost);
@@ -961,8 +953,7 @@ mod tests {
         let mut cost_tracker = CostTracker::default();
 
         let cost = 100u64;
-        let transaction =
-            RuntimeTransaction::new_for_tests(WritableKeysTransaction(vec![Pubkey::new_unique()]));
+        let transaction = WritableKeysTransaction(vec![Pubkey::new_unique()]);
         let tx_cost = simple_transaction_cost(&transaction, cost);
         cost_tracker.add_transaction_cost(&tx_cost);
         // assert cost_tracker is reverted to default

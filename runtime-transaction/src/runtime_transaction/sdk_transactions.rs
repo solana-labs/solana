@@ -3,7 +3,9 @@ use {
     crate::{
         signature_details::get_precompile_signature_details,
         transaction_meta::{StaticMeta, TransactionMeta},
+        transaction_with_meta::TransactionWithMeta,
     },
+    core::borrow::Borrow,
     solana_pubkey::Pubkey,
     solana_sdk::{
         message::{AddressLoader, TransactionSignatureDetails},
@@ -118,6 +120,18 @@ impl RuntimeTransaction<SanitizedTransaction> {
 
     fn load_dynamic_metadata(&mut self) -> Result<()> {
         Ok(())
+    }
+}
+
+impl TransactionWithMeta for RuntimeTransaction<SanitizedTransaction> {
+    #[inline]
+    fn as_sanitized_transaction(&self) -> impl Borrow<SanitizedTransaction> {
+        &self.transaction
+    }
+
+    #[inline]
+    fn to_versioned_transaction(&self) -> VersionedTransaction {
+        self.transaction.to_versioned_transaction()
     }
 }
 

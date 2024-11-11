@@ -22,6 +22,7 @@ solana-frozen-abi-macro = { workspace = true, optional = true, features = [
     "frozen-abi",
 ] }
 solana-sdk = { workspace = true }
+solana-svm-transaction = { workspace = true }
 thiserror = { workspace = true }
 
 [lib]

@@ -1,10 +1,7 @@
 use {
     crate::block_cost_limits,
-    solana_runtime_transaction::{
-        runtime_transaction::RuntimeTransaction, transaction_meta::StaticMeta,
-    },
+    solana_runtime_transaction::transaction_with_meta::TransactionWithMeta,
     solana_sdk::pubkey::Pubkey,
-    solana_svm_transaction::svm_message::SVMMessage,
 };
 
 /// TransactionCost is used to represent resources required to process
@@ -18,14 +15,12 @@ use {
 const SIMPLE_VOTE_USAGE_COST: u64 = 3428;
 
 #[derive(Debug)]
-pub enum TransactionCost<'a, Tx: SVMMessage> {
-    SimpleVote {
-        transaction: &'a RuntimeTransaction<Tx>,
-    },
-    Transaction(UsageCostDetails<'a, RuntimeTransaction<Tx>>),
+pub enum TransactionCost<'a, Tx: TransactionWithMeta> {
+    SimpleVote { transaction: &'a Tx },
+    Transaction(UsageCostDetails<'a, Tx>),
 }
 
-impl<'a, Tx: SVMMessage> TransactionCost<'a, Tx> {
+impl<'a, Tx: TransactionWithMeta> TransactionCost<'a, Tx> {
     pub fn sum(&self) -> u64 {
         #![allow(clippy::assertions_on_constants)]
         match self {
@@ -139,7 +134,7 @@ impl<'a, Tx: SVMMessage> TransactionCost<'a, Tx> {
 
 // costs are stored in number of 'compute unit's
 #[derive(Debug)]
-pub struct UsageCostDetails<'a, Tx: SVMMessage> {
+pub struct UsageCostDetails<'a, Tx: TransactionWithMeta> {
     pub transaction: &'a Tx,
     pub signature_cost: u64,
     pub write_lock_cost: u64,
@@ -149,7 +144,7 @@ pub struct UsageCostDetails<'a, Tx: SVMMessage> {
     pub allocated_accounts_data_size: u64,
 }
 
-impl<'a, Tx: SVMMessage> UsageCostDetails<'a, Tx> {
+impl<'a, Tx: TransactionWithMeta> UsageCostDetails<'a, Tx> {
     pub fn sum(&self) -> u64 {
         self.signature_cost
             .saturating_add(self.write_lock_cost)
@@ -164,7 +159,7 @@ impl<'a, Tx: SVMMessage> UsageCostDetails<'a, Tx> {
 pub struct WritableKeysTransaction(pub Vec<Pubkey>);
 
 #[cfg(feature = "dev-context-only-utils")]
-impl SVMMessage for WritableKeysTransaction {
+impl solana_svm_transaction::svm_message::SVMMessage for WritableKeysTransaction {
     fn num_total_signatures(&self) -> u64 {
         unimplemented!("WritableKeysTransaction::num_total_signatures")
     }
@@ -223,6 +218,55 @@ impl SVMMessage for WritableKeysTransaction {
         Item = solana_svm_transaction::message_address_table_lookup::SVMMessageAddressTableLookup,
     > {
         core::iter::empty()
+    }
+}
+
+#[cfg(feature = "dev-context-only-utils")]
+impl solana_svm_transaction::svm_transaction::SVMTransaction for WritableKeysTransaction {
+    fn signature(&self) -> &solana_sdk::signature::Signature {
+        unimplemented!("WritableKeysTransaction::signature")
+    }
+
+    fn signatures(&self) -> &[solana_sdk::signature::Signature] {
+        unimplemented!("WritableKeysTransaction::signatures")
+    }
+}
+
+#[cfg(feature = "dev-context-only-utils")]
+impl solana_runtime_transaction::transaction_meta::StaticMeta for WritableKeysTransaction {
+    fn message_hash(&self) -> &solana_sdk::hash::Hash {
+        unimplemented!("WritableKeysTransaction::message_hash")
+    }
+
+    fn is_simple_vote_transaction(&self) -> bool {
+        unimplemented!("WritableKeysTransaction::is_simple_vote_transaction")
+    }
+
+    fn signature_details(&self) -> &solana_sdk::message::TransactionSignatureDetails {
+        const DUMMY: solana_sdk::message::TransactionSignatureDetails =
+            solana_sdk::message::TransactionSignatureDetails::new(0, 0, 0);
+        &DUMMY
+    }
+
+    fn compute_budget_limits(
+        &self,
+        _feature_set: &solana_feature_set::FeatureSet,
+    ) -> solana_sdk::transaction::Result<
+        solana_compute_budget::compute_budget_limits::ComputeBudgetLimits,
+    > {
+        unimplemented!("WritableKeysTransaction::compute_budget_limits")
+    }
+}
+
+#[cfg(feature = "dev-context-only-utils")]
+impl TransactionWithMeta for WritableKeysTransaction {
+    #[allow(refining_impl_trait)]
+    fn as_sanitized_transaction(&self) -> solana_sdk::transaction::SanitizedTransaction {
+        unimplemented!("WritableKeysTransaction::as_sanitized_transaction");
+    }
+
+    fn to_versioned_transaction(&self) -> solana_sdk::transaction::VersionedTransaction {
+        unimplemented!("WritableKeysTransaction::to_versioned_transaction")
     }
 }
 

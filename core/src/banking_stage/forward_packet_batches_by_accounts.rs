@@ -8,8 +8,7 @@ use {
     },
     solana_feature_set::FeatureSet,
     solana_perf::packet::Packet,
-    solana_runtime_transaction::runtime_transaction::RuntimeTransaction,
-    solana_svm_transaction::svm_message::SVMMessage,
+    solana_runtime_transaction::transaction_with_meta::TransactionWithMeta,
     std::sync::Arc,
 };
 
@@ -106,7 +105,7 @@ impl ForwardPacketBatchesByAccounts {
 
     pub fn try_add_packet(
         &mut self,
-        sanitized_transaction: &RuntimeTransaction<impl SVMMessage>,
+        sanitized_transaction: &impl TransactionWithMeta,
         immutable_packet: Arc<ImmutableDeserializedPacket>,
         feature_set: &FeatureSet,
     ) -> bool {
@@ -147,7 +146,7 @@ impl ForwardPacketBatchesByAccounts {
     // put into batch #3 to satisfy all batch limits.
     fn get_batch_index_by_updated_costs(
         &self,
-        tx_cost: &TransactionCost<impl SVMMessage>,
+        tx_cost: &TransactionCost<impl TransactionWithMeta>,
         updated_costs: &UpdatedCosts,
     ) -> usize {
         let Some(batch_index_by_block_limit) =
@@ -174,6 +173,7 @@ mod tests {
         lazy_static::lazy_static,
         solana_cost_model::transaction_cost::{UsageCostDetails, WritableKeysTransaction},
         solana_feature_set::FeatureSet,
+        solana_runtime_transaction::runtime_transaction::RuntimeTransaction,
         solana_sdk::{
             compute_budget::ComputeBudgetInstruction,
             message::Message,
@@ -217,8 +217,7 @@ mod tests {
 
     fn zero_transaction_cost() -> TransactionCost<'static, WritableKeysTransaction> {
         lazy_static! {
-            static ref DUMMY_TRANSACTION: RuntimeTransaction<WritableKeysTransaction> =
-                RuntimeTransaction::new_for_tests(WritableKeysTransaction(vec![]));
+            static ref DUMMY_TRANSACTION: WritableKeysTransaction = WritableKeysTransaction(vec![]);
         };
 
         TransactionCost::Transaction(UsageCostDetails {
@@ -377,8 +376,7 @@ mod tests {
                 ForwardPacketBatchesByAccounts::new_with_default_batch_limits();
             forward_packet_batches_by_accounts.batch_vote_limit = test_cost + 1;
 
-            let dummy_transaction =
-                RuntimeTransaction::new_for_tests(WritableKeysTransaction(vec![]));
+            let dummy_transaction = WritableKeysTransaction(vec![]);
             let transaction_cost = TransactionCost::SimpleVote {
                 transaction: &dummy_transaction,
             };

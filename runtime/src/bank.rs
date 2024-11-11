@@ -107,8 +107,7 @@ use {
     },
     solana_runtime_transaction::{
         instructions_processor::process_compute_budget_instructions,
-        runtime_transaction::RuntimeTransaction, svm_transaction_adapter::SVMTransactionAdapter,
-        transaction_meta::StaticMeta,
+        runtime_transaction::RuntimeTransaction, transaction_with_meta::TransactionWithMeta,
     },
     solana_sdk::{
         account::{
@@ -179,7 +178,7 @@ use {
             TransactionProcessingConfig, TransactionProcessingEnvironment,
         },
     },
-    solana_svm_transaction::{svm_message::SVMMessage, svm_transaction::SVMTransaction},
+    solana_svm_transaction::svm_message::SVMMessage,
     solana_timings::{ExecuteTimingType, ExecuteTimings},
     solana_vote::vote_account::{VoteAccount, VoteAccountsHashMap},
     solana_vote_program::vote_state::VoteState,
@@ -3295,7 +3294,7 @@ impl Bank {
 
     fn update_transaction_statuses(
         &self,
-        sanitized_txs: &[RuntimeTransaction<SanitizedTransaction>],
+        sanitized_txs: &[impl TransactionWithMeta],
         processing_results: &[TransactionProcessingResult],
     ) {
         let mut status_cache = self.status_cache.write().unwrap();
@@ -3453,7 +3452,7 @@ impl Bank {
     pub fn prepare_entry_batch(
         &self,
         txs: Vec<VersionedTransaction>,
-    ) -> Result<TransactionBatch<SanitizedTransaction>> {
+    ) -> Result<TransactionBatch<RuntimeTransaction<SanitizedTransaction>>> {
         let sanitized_txs = txs
             .into_iter()
             .map(|tx| {
@@ -3489,7 +3488,7 @@ impl Bank {
     /// Prepare a locked transaction batch from a list of sanitized transactions.
     pub fn prepare_sanitized_batch<'a, 'b, Tx: SVMMessage>(
         &'a self,
-        txs: &'b [RuntimeTransaction<Tx>],
+        txs: &'b [Tx],
     ) -> TransactionBatch<'a, 'b, Tx> {
         TransactionBatch::new(
             self.try_lock_accounts(txs),
@@ -3502,7 +3501,7 @@ impl Bank {
     /// limited packing status
     pub fn prepare_sanitized_batch_with_results<'a, 'b, Tx: SVMMessage>(
         &'a self,
-        transactions: &'b [RuntimeTransaction<Tx>],
+        transactions: &'b [Tx],
         transaction_results: impl Iterator<Item = Result<()>>,
     ) -> TransactionBatch<'a, 'b, Tx> {
         // this lock_results could be: Ok, AccountInUse, WouldExceedBlockMaxLimit or WouldExceedAccountMaxLimit
@@ -3518,7 +3517,7 @@ impl Bank {
     /// Prepare a transaction batch from a single transaction without locking accounts
     pub fn prepare_unlocked_batch_from_single_tx<'a, Tx: SVMMessage>(
         &'a self,
-        transaction: &'a RuntimeTransaction<Tx>,
+        transaction: &'a Tx,
     ) -> TransactionBatch<'a, 'a, Tx> {
         let tx_account_lock_limit = self.get_transaction_account_lock_limit();
         let lock_result = validate_account_locks(transaction.account_keys(), tx_account_lock_limit);
@@ -3534,7 +3533,7 @@ impl Bank {
     /// Run transactions against a frozen bank without committing the results
     pub fn simulate_transaction(
         &self,
-        transaction: &RuntimeTransaction<SanitizedTransaction>,
+        transaction: &impl TransactionWithMeta,
         enable_cpi_recording: bool,
     ) -> TransactionSimulationResult {
         assert!(self.is_frozen(), "simulation bank must be frozen");
@@ -3546,10 +3545,10 @@ impl Bank {
     /// is frozen, enabling use in single-Bank test frameworks
     pub fn simulate_transaction_unchecked(
         &self,
-        transaction: &RuntimeTransaction<SanitizedTransaction>,
+        transaction: &impl TransactionWithMeta,
         enable_cpi_recording: bool,
     ) -> TransactionSimulationResult {
-        let account_keys = transaction.message().account_keys();
+        let account_keys = transaction.account_keys();
         let number_of_accounts = account_keys.len();
         let account_overrides = self.get_account_overrides_for_simulation(&account_keys);
         let batch = self.prepare_unlocked_batch_from_single_tx(transaction);
@@ -3693,7 +3692,7 @@ impl Bank {
 
     pub fn load_and_execute_transactions(
         &self,
-        batch: &TransactionBatch<SanitizedTransaction>,
+        batch: &TransactionBatch<impl TransactionWithMeta>,
         max_age: usize,
         timings: &mut ExecuteTimings,
         error_counters: &mut TransactionErrorMetrics,
@@ -3752,7 +3751,7 @@ impl Bank {
             .zip(sanitized_txs)
         {
             if let Some(debug_keys) = &self.transaction_debug_keys {
-                for key in tx.message().account_keys().iter() {
+                for key in tx.account_keys().iter() {
                     if debug_keys.contains(key) {
                         let result = processing_result.flattened_result();
                         info!("slot: {} result: {:?} tx: {:?}", self.slot, result, tx);
@@ -3766,7 +3765,7 @@ impl Bank {
                 // is processed, otherwise a mismatched count between banking
                 // and replay could occur
                 processed_counts.signature_count +=
-                    u64::from(tx.message().header().num_required_signatures);
+                    tx.signature_details().num_transaction_signatures();
                 processed_counts.processed_transactions_count += 1;
 
                 if !tx.is_simple_vote_transaction() {
@@ -3795,7 +3794,7 @@ impl Bank {
 
     fn collect_logs(
         &self,
-        transactions: &[RuntimeTransaction<SanitizedTransaction>],
+        transactions: &[impl TransactionWithMeta],
         processing_results: &[TransactionProcessingResult],
     ) {
         let transaction_log_collector_config =
@@ -3838,7 +3837,7 @@ impl Bank {
 
     fn collect_transaction_logs(
         transaction_log_collector_config: &TransactionLogCollectorConfig,
-        transaction: &SanitizedTransaction,
+        transaction: &impl TransactionWithMeta,
         execution_details: &TransactionExecutionDetails,
     ) -> Option<(TransactionLogInfo, Vec<Pubkey>)> {
         // Skip log collection if no log messages were recorded
@@ -3849,7 +3848,7 @@ impl Bank {
             .mentioned_addresses
             .is_empty()
         {
-            for key in transaction.message().account_keys().iter() {
+            for key in transaction.account_keys().iter() {
                 if transaction_log_collector_config
                     .mentioned_addresses
                     .contains(key)
@@ -3987,7 +3986,7 @@ impl Bank {
 
     pub fn commit_transactions(
         &self,
-        sanitized_txs: &[RuntimeTransaction<SanitizedTransaction>],
+        sanitized_txs: &[impl TransactionWithMeta],
         processing_results: Vec<TransactionProcessingResult>,
         processed_counts: &ProcessedTransactionCounts,
         timings: &mut ExecuteTimings,
@@ -4840,7 +4839,7 @@ impl Bank {
     #[must_use]
     pub fn load_execute_and_commit_transactions(
         &self,
-        batch: &TransactionBatch<SanitizedTransaction>,
+        batch: &TransactionBatch<impl TransactionWithMeta>,
         max_age: usize,
         collect_balances: bool,
         recording_config: ExecutionRecordingConfig,
@@ -4948,7 +4947,7 @@ impl Bank {
     #[must_use]
     fn process_transaction_batch(
         &self,
-        batch: &TransactionBatch<SanitizedTransaction>,
+        batch: &TransactionBatch<impl TransactionWithMeta>,
     ) -> Vec<Result<()>> {
         self.load_execute_and_commit_transactions(
             batch,
@@ -6296,7 +6295,7 @@ impl Bank {
     /// a bank-level cache of vote accounts and stake delegation info
     fn update_stakes_cache(
         &self,
-        txs: &[RuntimeTransaction<SanitizedTransaction>],
+        txs: &[impl SVMMessage],
         processing_results: &[TransactionProcessingResult],
     ) {
         debug_assert_eq!(txs.len(), processing_results.len());
@@ -7132,7 +7131,7 @@ impl Bank {
     pub fn prepare_batch_for_tests(
         &self,
         txs: Vec<Transaction>,
-    ) -> TransactionBatch<SanitizedTransaction> {
+    ) -> TransactionBatch<RuntimeTransaction<SanitizedTransaction>> {
         let transaction_account_lock_limit = self.get_transaction_account_lock_limit();
         let sanitized_txs = txs
             .into_iter()

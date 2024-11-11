@@ -12,9 +12,7 @@ use {
         DEFAULT_HEAP_COST, DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT, MAX_COMPUTE_UNIT_LIMIT,
     },
     solana_feature_set::{self as feature_set, FeatureSet},
-    solana_runtime_transaction::{
-        runtime_transaction::RuntimeTransaction, transaction_meta::StaticMeta,
-    },
+    solana_runtime_transaction::transaction_with_meta::TransactionWithMeta,
     solana_sdk::{
         borsh1::try_from_slice_unchecked,
         compute_budget::{self, ComputeBudgetInstruction},
@@ -41,8 +39,8 @@ enum SystemProgramAccountAllocation {
 }
 
 impl CostModel {
-    pub fn calculate_cost<'a, Tx: SVMMessage>(
-        transaction: &'a RuntimeTransaction<Tx>,
+    pub fn calculate_cost<'a, Tx: TransactionWithMeta>(
+        transaction: &'a Tx,
         feature_set: &FeatureSet,
     ) -> TransactionCost<'a, Tx> {
         if transaction.is_simple_vote_transaction() {
@@ -71,8 +69,8 @@ impl CostModel {
 
     // Calculate executed transaction CU cost, with actual execution and loaded accounts size
     // costs.
-    pub fn calculate_cost_for_executed_transaction<'a, Tx: SVMMessage>(
-        transaction: &'a RuntimeTransaction<Tx>,
+    pub fn calculate_cost_for_executed_transaction<'a, Tx: TransactionWithMeta>(
+        transaction: &'a Tx,
         actual_programs_execution_cost: u64,
         actual_loaded_accounts_data_size_bytes: u32,
         feature_set: &FeatureSet,
@@ -108,10 +106,7 @@ impl CostModel {
     }
 
     /// Returns signature details and the total signature cost
-    fn get_signature_cost(
-        transaction: &RuntimeTransaction<impl SVMMessage>,
-        feature_set: &FeatureSet,
-    ) -> u64 {
+    fn get_signature_cost(transaction: &impl TransactionWithMeta, feature_set: &FeatureSet) -> u64 {
         let signatures_count_detail = transaction.signature_details();
 
         let ed25519_verify_cost =
@@ -157,7 +152,7 @@ impl CostModel {
 
     /// Return (programs_execution_cost, loaded_accounts_data_size_cost, data_bytes_cost)
     fn get_transaction_cost(
-        transaction: &RuntimeTransaction<impl SVMMessage>,
+        transaction: &impl TransactionWithMeta,
         feature_set: &FeatureSet,
     ) -> (u64, u64, u64) {
         let mut programs_execution_costs = 0u64;
@@ -319,6 +314,7 @@ mod tests {
         super::*,
         itertools::Itertools,
         log::debug,
+        solana_runtime_transaction::runtime_transaction::RuntimeTransaction,
         solana_sdk::{
             compute_budget::{self, ComputeBudgetInstruction},
             fee::ACCOUNT_DATA_COST_PAGE_SIZE,

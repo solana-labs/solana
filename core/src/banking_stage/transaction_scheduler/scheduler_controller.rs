@@ -30,7 +30,7 @@ use {
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_runtime_transaction::{
         instructions_processor::process_compute_budget_instructions,
-        runtime_transaction::RuntimeTransaction,
+        runtime_transaction::RuntimeTransaction, transaction_with_meta::TransactionWithMeta,
     },
     solana_sdk::{
         self,
@@ -225,23 +225,27 @@ impl<T: LikeClusterInfo> SchedulerController<T> {
         Ok(())
     }
 
-    fn pre_graph_filter(
-        transactions: &[&RuntimeTransaction<SanitizedTransaction>],
+    fn pre_graph_filter<Tx: TransactionWithMeta>(
+        transactions: &[&Tx],
         results: &mut [bool],
         bank: &Bank,
         max_age: usize,
     ) {
         let lock_results = vec![Ok(()); transactions.len()];
         let mut error_counters = TransactionErrorMetrics::default();
-        let check_results =
-            bank.check_transactions(transactions, &lock_results, max_age, &mut error_counters);
+        let check_results = bank.check_transactions::<Tx>(
+            transactions,
+            &lock_results,
+            max_age,
+            &mut error_counters,
+        );
 
         let fee_check_results: Vec<_> = check_results
             .into_iter()
             .zip(transactions)
             .map(|(result, tx)| {
                 result?; // if there's already error do nothing
-                Consumer::check_fee_payer_unlocked(bank, tx.message(), &mut error_counters)
+                Consumer::check_fee_payer_unlocked(bank, *tx, &mut error_counters)
             })
             .collect();
 
@@ -395,12 +399,13 @@ impl<T: LikeClusterInfo> SchedulerController<T> {
                 })
                 .collect();
 
-            let check_results = bank.check_transactions(
-                &sanitized_txs,
-                &lock_results,
-                MAX_PROCESSING_AGE,
-                &mut error_counters,
-            );
+            let check_results = bank
+                .check_transactions::<RuntimeTransaction<SanitizedTransaction>>(
+                    &sanitized_txs,
+                    &lock_results,
+                    MAX_PROCESSING_AGE,
+                    &mut error_counters,
+                );
 
             for (result, id) in check_results.into_iter().zip(chunk.iter()) {
                 if result.is_err() {

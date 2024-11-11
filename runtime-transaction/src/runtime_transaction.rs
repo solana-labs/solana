@@ -69,23 +69,6 @@ impl<T> Deref for RuntimeTransaction<T> {
     }
 }
 
-#[cfg(feature = "dev-context-only-utils")]
-impl<Tx: SVMMessage> RuntimeTransaction<Tx> {
-    /// Create simply wrapped transaction with a `TransactionMeta` for testing.
-    /// The `TransactionMeta` is default initialized.
-    pub fn new_for_tests(transaction: Tx) -> Self {
-        Self {
-            transaction,
-            meta: TransactionMeta {
-                message_hash: Hash::default(),
-                is_simple_vote_transaction: false,
-                signature_details: TransactionSignatureDetails::new(0, 0, 0),
-                compute_budget_instruction_details: ComputeBudgetInstructionDetails::default(),
-            },
-        }
-    }
-}
-
 impl<T: SVMMessage> SVMMessage for RuntimeTransaction<T> {
     // override to access from the cached meta instead of re-calculating
     fn num_total_signatures(&self) -> u64 {

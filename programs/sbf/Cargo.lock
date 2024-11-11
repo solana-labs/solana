@@ -7643,6 +7643,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "solana-sdk",
+ "solana-svm-transaction",
  "thiserror",
 ]
 

@@ -4,14 +4,11 @@ use {
     log::*,
     solana_accounts_db::account_locks::validate_account_locks,
     solana_measure::measure_us,
-    solana_runtime_transaction::{
-        runtime_transaction::RuntimeTransaction, transaction_meta::StaticMeta,
-    },
+    solana_runtime_transaction::transaction_with_meta::TransactionWithMeta,
     solana_sdk::{
         clock::{BankId, Slot},
         pubkey::Pubkey,
     },
-    solana_svm_transaction::svm_message::SVMMessage,
     std::{
         collections::{BTreeMap, HashMap},
         sync::{
@@ -196,10 +193,10 @@ impl PrioritizationFeeCache {
     /// Update with a list of non-vote transactions' compute_budget_details and account_locks; Only
     /// transactions have both valid compute_budget_details and account_locks will be used to update
     /// fee_cache asynchronously.
-    pub fn update<'a, Tx: SVMMessage + 'a>(
+    pub fn update<'a, Tx: TransactionWithMeta + 'a>(
         &self,
         bank: &Bank,
-        txs: impl Iterator<Item = &'a RuntimeTransaction<Tx>>,
+        txs: impl Iterator<Item = &'a Tx>,
     ) {
         let (_, send_updates_us) = measure_us!({
             for sanitized_transaction in txs {
@@ -430,6 +427,7 @@ mod tests {
             bank_forks::BankForks,
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
         },
+        solana_runtime_transaction::runtime_transaction::RuntimeTransaction,
         solana_sdk::{
             compute_budget::ComputeBudgetInstruction,
             message::Message,

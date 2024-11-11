@@ -1,28 +1,24 @@
 use {
     crate::vote_transaction::VoteTransaction,
     solana_sdk::{
-        hash::Hash,
-        program_utils::limited_deserialize,
-        pubkey::Pubkey,
-        signature::Signature,
-        transaction::{SanitizedTransaction, Transaction},
-        vote::instruction::VoteInstruction,
+        hash::Hash, program_utils::limited_deserialize, pubkey::Pubkey, signature::Signature,
+        transaction::Transaction, vote::instruction::VoteInstruction,
     },
+    solana_svm_transaction::svm_transaction::SVMTransaction,
 };
 
 pub type ParsedVote = (Pubkey, VoteTransaction, Option<Hash>, Signature);
 
 // Used for locally forwarding processed vote transactions to consensus
-pub fn parse_sanitized_vote_transaction(tx: &SanitizedTransaction) -> Option<ParsedVote> {
+pub fn parse_sanitized_vote_transaction(tx: &impl SVMTransaction) -> Option<ParsedVote> {
     // Check first instruction for a vote
-    let message = tx.message();
-    let (program_id, first_instruction) = message.program_instructions_iter().next()?;
+    let (program_id, first_instruction) = tx.program_instructions_iter().next()?;
     if !solana_sdk::vote::program::check_id(program_id) {
         return None;
     }
     let first_account = usize::from(*first_instruction.accounts.first()?);
-    let key = message.account_keys().get(first_account)?;
-    let (vote, switch_proof_hash) = parse_vote_instruction_data(&first_instruction.data)?;
+    let key = tx.account_keys().get(first_account)?;
+    let (vote, switch_proof_hash) = parse_vote_instruction_data(first_instruction.data)?;
     let signature = tx.signatures().first().cloned().unwrap_or_default();
     Some((*key, vote, switch_proof_hash, signature))
 }
