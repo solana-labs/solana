@@ -1068,18 +1068,6 @@ impl ClusterInfo {
             .get::<&ContactInfo>(*pubkey)
             .map(ContactInfo::version)
             .cloned()
-            .or_else(|| {
-                gossip_crds
-                    .get::<&Version>(*pubkey)
-                    .map(|entry| entry.version.clone())
-                    .or_else(|| {
-                        gossip_crds
-                            .get::<&crds_data::LegacyVersion>(*pubkey)
-                            .map(|entry| entry.version.clone())
-                            .map(solana_version::LegacyVersion2::from)
-                    })
-                    .map(solana_version::Version::from)
-            })
     }
 
     fn check_socket_addr_space<E>(&self, addr: &Result<SocketAddr, E>) -> bool {

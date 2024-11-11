@@ -374,7 +374,7 @@ impl<'de> Deserialize<'de> for Vote {
 pub(crate) struct LegacyVersion {
     from: Pubkey,
     wallclock: u64,
-    pub(crate) version: solana_version::LegacyVersion1,
+    version: solana_version::LegacyVersion1,
 }
 
 impl Sanitize for LegacyVersion {
@@ -390,7 +390,7 @@ impl Sanitize for LegacyVersion {
 pub(crate) struct Version {
     from: Pubkey,
     wallclock: u64,
-    pub(crate) version: solana_version::LegacyVersion2,
+    version: solana_version::LegacyVersion2,
 }
 
 impl Sanitize for Version {

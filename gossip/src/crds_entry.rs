@@ -2,7 +2,7 @@ use {
     crate::{
         contact_info::ContactInfo,
         crds::VersionedCrdsValue,
-        crds_data::{CrdsData, LegacyVersion, LowestSlot, SnapshotHashes, Version},
+        crds_data::{CrdsData, LowestSlot, SnapshotHashes},
         crds_value::{CrdsValue, CrdsValueLabel},
     },
     indexmap::IndexMap,
@@ -52,9 +52,7 @@ impl_crds_entry!(VersionedCrdsValue, |entry| entry);
 
 // Lookup by Pubkey.
 impl_crds_entry!(ContactInfo, CrdsData::ContactInfo(node), node);
-impl_crds_entry!(LegacyVersion, CrdsData::LegacyVersion(version), version);
 impl_crds_entry!(LowestSlot, CrdsData::LowestSlot(_, slot), slot);
-impl_crds_entry!(Version, CrdsData::Version(version), version);
 impl_crds_entry!(
     SnapshotHashes,
     CrdsData::SnapshotHashes(snapshot_hashes),
@@ -106,10 +104,6 @@ mod tests {
                 }
                 CrdsData::LowestSlot(_, slot) => {
                     assert_eq!(crds.get::<&LowestSlot>(key), Some(slot))
-                }
-                CrdsData::Version(version) => assert_eq!(crds.get::<&Version>(key), Some(version)),
-                CrdsData::LegacyVersion(version) => {
-                    assert_eq!(crds.get::<&LegacyVersion>(key), Some(version))
                 }
                 CrdsData::SnapshotHashes(hash) => {
                     assert_eq!(crds.get::<&SnapshotHashes>(key), Some(hash))
