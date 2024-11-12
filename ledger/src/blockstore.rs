@@ -233,29 +233,31 @@ pub struct BlockstoreSignals {
 pub struct Blockstore {
     ledger_path: PathBuf,
     db: Arc<Database>,
-    meta_cf: LedgerColumn<cf::SlotMeta>,
+    // Column families
+    address_signatures_cf: LedgerColumn<cf::AddressSignatures>,
+    bank_hash_cf: LedgerColumn<cf::BankHash>,
+    block_height_cf: LedgerColumn<cf::BlockHeight>,
+    blocktime_cf: LedgerColumn<cf::Blocktime>,
+    code_shred_cf: LedgerColumn<cf::ShredCode>,
+    data_shred_cf: LedgerColumn<cf::ShredData>,
     dead_slots_cf: LedgerColumn<cf::DeadSlots>,
     duplicate_slots_cf: LedgerColumn<cf::DuplicateSlots>,
-    roots_cf: LedgerColumn<cf::Root>,
     erasure_meta_cf: LedgerColumn<cf::ErasureMeta>,
-    orphans_cf: LedgerColumn<cf::Orphans>,
     index_cf: LedgerColumn<cf::Index>,
-    data_shred_cf: LedgerColumn<cf::ShredData>,
-    code_shred_cf: LedgerColumn<cf::ShredCode>,
-    transaction_status_cf: LedgerColumn<cf::TransactionStatus>,
-    address_signatures_cf: LedgerColumn<cf::AddressSignatures>,
-    transaction_memos_cf: LedgerColumn<cf::TransactionMemos>,
-    transaction_status_index_cf: LedgerColumn<cf::TransactionStatusIndex>,
-    highest_primary_index_slot: RwLock<Option<Slot>>,
-    rewards_cf: LedgerColumn<cf::Rewards>,
-    blocktime_cf: LedgerColumn<cf::Blocktime>,
-    perf_samples_cf: LedgerColumn<cf::PerfSamples>,
-    block_height_cf: LedgerColumn<cf::BlockHeight>,
-    program_costs_cf: LedgerColumn<cf::ProgramCosts>,
-    bank_hash_cf: LedgerColumn<cf::BankHash>,
-    optimistic_slots_cf: LedgerColumn<cf::OptimisticSlots>,
-    max_root: AtomicU64,
     merkle_root_meta_cf: LedgerColumn<cf::MerkleRootMeta>,
+    meta_cf: LedgerColumn<cf::SlotMeta>,
+    optimistic_slots_cf: LedgerColumn<cf::OptimisticSlots>,
+    orphans_cf: LedgerColumn<cf::Orphans>,
+    perf_samples_cf: LedgerColumn<cf::PerfSamples>,
+    program_costs_cf: LedgerColumn<cf::ProgramCosts>,
+    rewards_cf: LedgerColumn<cf::Rewards>,
+    roots_cf: LedgerColumn<cf::Root>,
+    transaction_memos_cf: LedgerColumn<cf::TransactionMemos>,
+    transaction_status_cf: LedgerColumn<cf::TransactionStatus>,
+    transaction_status_index_cf: LedgerColumn<cf::TransactionStatusIndex>,
+
+    highest_primary_index_slot: RwLock<Option<Slot>>,
+    max_root: AtomicU64,
     insert_shreds_lock: Mutex<()>,
     new_shreds_signals: Mutex<Vec<Sender<bool>>>,
     completed_slots_senders: Mutex<Vec<CompletedSlotsSender>>,
@@ -344,27 +346,27 @@ impl Blockstore {
         info!("Opening blockstore at {:?}", blockstore_path);
         let db = Database::open(&blockstore_path, options)?;
 
-        let meta_cf = db.column();
+        let address_signatures_cf = db.column();
+        let bank_hash_cf = db.column();
+        let block_height_cf = db.column();
+        let blocktime_cf = db.column();
+        let code_shred_cf = db.column();
+        let data_shred_cf = db.column();
         let dead_slots_cf = db.column();
         let duplicate_slots_cf = db.column();
-        let roots_cf = db.column();
         let erasure_meta_cf = db.column();
-        let orphans_cf = db.column();
         let index_cf = db.column();
-        let data_shred_cf = db.column();
-        let code_shred_cf = db.column();
-        let transaction_status_cf = db.column();
-        let address_signatures_cf = db.column();
-        let transaction_memos_cf = db.column();
-        let transaction_status_index_cf = db.column();
-        let rewards_cf = db.column();
-        let blocktime_cf = db.column();
-        let perf_samples_cf = db.column();
-        let block_height_cf = db.column();
-        let program_costs_cf = db.column();
-        let bank_hash_cf = db.column();
-        let optimistic_slots_cf = db.column();
         let merkle_root_meta_cf = db.column();
+        let meta_cf = db.column();
+        let optimistic_slots_cf = db.column();
+        let orphans_cf = db.column();
+        let perf_samples_cf = db.column();
+        let program_costs_cf = db.column();
+        let rewards_cf = db.column();
+        let roots_cf = db.column();
+        let transaction_memos_cf = db.column();
+        let transaction_status_cf = db.column();
+        let transaction_status_index_cf = db.column();
 
         let db = Arc::new(db);
 
@@ -381,28 +383,28 @@ impl Blockstore {
         let blockstore = Blockstore {
             ledger_path: ledger_path.to_path_buf(),
             db,
-            meta_cf,
+            address_signatures_cf,
+            bank_hash_cf,
+            block_height_cf,
+            blocktime_cf,
+            code_shred_cf,
+            data_shred_cf,
             dead_slots_cf,
             duplicate_slots_cf,
-            roots_cf,
             erasure_meta_cf,
-            orphans_cf,
             index_cf,
-            data_shred_cf,
-            code_shred_cf,
-            transaction_status_cf,
-            address_signatures_cf,
+            merkle_root_meta_cf,
+            meta_cf,
+            optimistic_slots_cf,
+            orphans_cf,
+            perf_samples_cf,
+            program_costs_cf,
+            rewards_cf,
+            roots_cf,
             transaction_memos_cf,
+            transaction_status_cf,
             transaction_status_index_cf,
             highest_primary_index_slot: RwLock::<Option<Slot>>::default(),
-            rewards_cf,
-            blocktime_cf,
-            perf_samples_cf,
-            block_height_cf,
-            program_costs_cf,
-            bank_hash_cf,
-            optimistic_slots_cf,
-            merkle_root_meta_cf,
             new_shreds_signals: Mutex::default(),
             completed_slots_senders: Mutex::default(),
             shred_timing_point_sender: None,
