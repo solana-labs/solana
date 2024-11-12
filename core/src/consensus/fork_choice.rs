@@ -95,7 +95,7 @@ fn last_vote_able_to_land(
     my_latest_landed_vote_slot >= last_voted_slot
     // 2. Already voting at the tip
             || last_voted_slot >= heaviest_bank_on_same_voted_fork.slot()
-    // 3. Last vote is withink slot hashes, regular refresh is enough
+    // 3. Last vote is within slot hashes, regular refresh is enough
             || heaviest_bank_on_same_voted_fork
         .is_in_slot_hashes_history(&last_voted_slot)
 }
@@ -123,7 +123,7 @@ fn recheck_fork_decision_failed_switch_threshold(
         return SwitchForkDecision::SameFork;
     }
 
-    // If we can't switch, then reset to the the next votable bank on the same
+    // If we can't switch, then reset to the next votable bank on the same
     // fork as our last vote, but don't vote.
 
     // We don't just reset to the heaviest fork when switch threshold fails because
@@ -409,7 +409,7 @@ fn can_vote_on_candidate_bank(
 /// longer being valid to vote on, it's possible that a validator will not
 /// be able to reset away from the invalid fork that they last voted on. To
 /// resolve this scenario, validators need to wait until they can create a
-/// switch proof for another fork or until the invalid fork is be marked
+/// switch proof for another fork or until the invalid fork is marked
 /// valid again if it was confirmed by the cluster.
 /// Until this is resolved, leaders will build each of their
 /// blocks from the last reset bank on the invalid fork.

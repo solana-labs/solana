@@ -523,7 +523,7 @@ pub(crate) fn generate_snapshot(
     };
     // In very rare cases it's possible that the local root is not on the heaviest fork, so the
     // validator generated snapshot for slots > local root. If the cluster agreed upon restart
-    // slot my_heaviest_fork_slot is less than the the current highest full_snapshot_slot, that means the
+    // slot my_heaviest_fork_slot is less than the current highest full_snapshot_slot, that means the
     // locally rooted full_snapshot_slot will be rolled back. this requires human inspection。
     //
     // In even rarer cases, the selected slot might be the latest full snapshot slot. We could

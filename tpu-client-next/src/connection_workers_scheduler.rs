@@ -174,7 +174,7 @@ impl ConnectionWorkersScheduler {
                     }
                     Err(err) => {
                         warn!("Connection to {new_leader} was closed, worker error: {err}");
-                        // If we has failed to send batch, it will be dropped.
+                        // If we have failed to send batch, it will be dropped.
                     }
                 }
             }
@@ -234,7 +234,7 @@ impl ConnectionWorkersScheduler {
 /// Splits `leaders` into two slices based on the `fanout` configuration:
 /// * the first slice contains the leaders to which transactions will be sent,
 /// * the second vector contains the leaders, used to warm up connections. This
-///   slice includes the the first set.
+///   slice includes the first set.
 fn split_leaders<'leaders>(
     leaders: &'leaders [SocketAddr],
     fanout: &Fanout,

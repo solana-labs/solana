@@ -6,7 +6,7 @@
 //! used carefully to ensure proper security. Read this documentation and
 //! accompanying links thoroughly._
 //!
-//! The secp26k1 native program peforms flexible verification of [secp256k1]
+//! The secp26k1 native program performs flexible verification of [secp256k1]
 //! ECDSA signatures, as used by Ethereum. It can verify up to 255 signatures on
 //! up to 255 messages, with those signatures, messages, and their public keys
 //! arbitrarily distributed across the instruction data of any instructions in
@@ -41,14 +41,14 @@
 //! [EIP-712]: https://eips.ethereum.org/EIPS/eip-712
 //!
 //! The [`new_secp256k1_instruction`] function is suitable for building a
-//! secp256k1 program instruction for basic use cases were a single message must
+//! secp256k1 program instruction for basic use cases where a single message must
 //! be signed by a known secret key. For other uses cases, including many
 //! Ethereum-integration use cases, construction of the secp256k1 instruction
 //! must be done manually.
 //!
 //! # How to use this program
 //!
-//! Transactions that uses the secp256k1 native program will typically include
+//! Transactions that use the secp256k1 native program will typically include
 //! at least two instructions: one for the secp256k1 program to verify the
 //! signatures, and one for a custom program that will check that the secp256k1
 //! instruction data matches what the program expects (using
@@ -67,7 +67,7 @@
 //! - In the client:
 //!   - Sign the [`keccak`]-hashed messages with a secp256k1 ECDSA library,
 //!     like the [`libsecp256k1`] crate.
-//!   - Build any custom instruction data that contain signature, message, or
+//!   - Build any custom instruction data that contains signature, message, or
 //!     Ethereum address data that will be used by the secp256k1 instruction.
 //!   - Build the secp256k1 program instruction data, specifying the number of
 //!     signatures to verify, the instruction indexes within the transaction,
@@ -98,7 +98,7 @@
 //! Many steps must be done manually.
 //!
 //! The `solana_program` crate provides no APIs to assist in interpreting
-//! the the secp256k1 instruction data. It must be done manually.
+//! the secp256k1 instruction data. It must be done manually.
 //!
 //! The secp256k1 program is implemented with the [`libsecp256k1`] crate,
 //! which clients may also want to use.
@@ -464,7 +464,7 @@
 //!
 //! ## Example: Verifying multiple signatures in one instruction
 //!
-//! This examples demonstrates manually creating a secp256k1 instruction
+//! This example demonstrates manually creating a secp256k1 instruction
 //! containing many signatures, and a Solana program that parses them all. This
 //! example on its own has no practical purpose. It simply demonstrates advanced
 //! use of the secp256k1 program.
@@ -911,7 +911,7 @@ pub fn construct_eth_pubkey(
 
 /// Verifies the signatures specified in the secp256k1 instruction data.
 ///
-/// This is same the verification routine executed by the runtime's secp256k1 native program,
+/// This is the same as the verification routine executed by the runtime's secp256k1 native program,
 /// and is primarily of use to the runtime.
 ///
 /// `data` is the secp256k1 program's instruction data. `instruction_datas` is

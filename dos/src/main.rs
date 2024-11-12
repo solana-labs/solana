@@ -306,7 +306,7 @@ fn create_sender_thread(
                             stats_count += len;
                             total_count += len;
                             if iterations != 0 && total_count >= iterations {
-                                info!("All transactions has been sent");
+                                info!("All transactions have been sent");
                                 // dropping receiver to signal generator threads to stop
                                 drop(tx_receiver);
                                 break;
@@ -360,7 +360,7 @@ fn create_generator_thread<T: 'static + TpsClient + Send + Sync>(
     // and hence this choice of n provides large enough number of permutations
     let mut keypairs_flat: Vec<Keypair> = Vec::new();
     // 1000 is arbitrary number. In case of permutation_size > 1,
-    // this guaranties large enough set of unique permutations
+    // this guarantees large enough set of unique permutations
     let permutation_size = get_permutation_size(
         transaction_params.num_signatures.as_ref(),
         transaction_params.num_instructions.as_ref(),

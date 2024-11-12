@@ -21,7 +21,7 @@ communication.
 ### Deprecation Process
 
 1. In any `PATCH` or `MINOR` release, a feature, API, endpoint, etc. could be marked as deprecated.
-2. According to code upgrade difficulty, some features will be remain deprecated for a few release
+2. According to code upgrade difficulty, some features will remain deprecated for a few release
    cycles.
 3. In a future `MAJOR` release, deprecated features will be removed in an incompatible way.
 

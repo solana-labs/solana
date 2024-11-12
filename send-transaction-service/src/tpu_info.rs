@@ -6,7 +6,7 @@ use {
 pub trait TpuInfo {
     fn refresh_recent_peers(&mut self);
     fn get_leader_tpus(&self, max_count: u64, protocol: Protocol) -> Vec<&SocketAddr>;
-    /// In addition to the the tpu address, also return the leader slot
+    /// In addition to the tpu address, also return the leader slot
     fn get_leader_tpus_with_slots(
         &self,
         max_count: u64,

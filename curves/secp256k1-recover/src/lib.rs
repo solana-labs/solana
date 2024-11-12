@@ -137,7 +137,7 @@ solana_define_syscall::define_syscall!(fn sol_secp256k1_recover(hash: *const u8,
 /// # Hashing messages
 ///
 /// In ECDSA signing and key recovery the signed "message" is always a
-/// crytographic hash, not the original message itself. If not a cryptographic
+/// cryptographic hash, not the original message itself. If not a cryptographic
 /// hash, then an adversary can craft signatures that recover to arbitrary
 /// public keys. This means the caller of this function generally must hash the
 /// original message themselves and not rely on another party to provide the
@@ -228,7 +228,7 @@ solana_define_syscall::define_syscall!(fn sol_secp256k1_recover(hash: *const u8,
 /// lengths of `hash` and `signature` beforehand.
 ///
 /// When run on-chain this function will not directly validate the lengths of
-/// `hash` and `signature`. It will assume they are the the correct lengths and
+/// `hash` and `signature`. It will assume they are the correct lengths and
 /// pass their pointers to the runtime, which will interpret them as 32-byte and
 /// 64-byte buffers. If the provided slices are too short, the runtime will read
 /// invalid data and attempt to interpret it, most likely returning an error,
@@ -239,7 +239,7 @@ solana_define_syscall::define_syscall!(fn sol_secp256k1_recover(hash: *const u8,
 ///
 /// # Examples
 ///
-/// This example demonstrates recovering a public key and using it to very a
+/// This example demonstrates recovering a public key and using it to verify a
 /// signature with the `secp256k1_recover` syscall. It has three parts: a Solana
 /// program, an RPC client to call the program, and common definitions shared
 /// between the two.

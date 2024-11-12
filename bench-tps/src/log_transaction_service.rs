@@ -226,7 +226,7 @@ impl LogTransactionService {
                 tx_log_writer,
                 block_log_writer,
             );
-            // if last_time is some, it means that the there is at least one valid block
+            // if last_time is some, it means that there is at least one valid block
             if block_time.is_some() {
                 last_block_time = block_time;
             }
@@ -317,7 +317,7 @@ impl LogTransactionService {
     }
 
     /// Remove from map all the signatures which we haven't processed before and they are
-    /// older than the the timestamp of the last processed block plus max blockhash age.
+    /// older than the timestamp of the last processed block plus max blockhash age.
     fn clean_transaction_map(
         tx_log_writer: &mut TransactionLogWriter,
         signature_to_tx_info: &mut MapSignatureToTxInfo,

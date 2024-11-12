@@ -1,5 +1,5 @@
 //! Defines traits for blocking (synchronous) and non-blocking (asynchronous)
-//! communication with a Solana server as well a a trait that encompasses both.
+//! communication with a Solana server as well as a trait that encompasses both.
 //!
 //! //! Synchronous implementations are expected to create transactions, sign them, and send
 //! them with multiple retries, updating blockhashes and resigning as-needed.

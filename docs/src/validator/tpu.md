@@ -25,7 +25,7 @@ second(PPS) and applied the limit to the connection based on the stake.
 Higher stakes offers better bandwidth. If the transfer rate is exceeded,
 the server can drop the stream with the error code (15 -- STREAM_STOP_CODE_THROTTLING).
 The client is expected to do some sort of exponential back off in retrying the
-transactionswhen running into this situation.
+transactions when running into this situation.
 
 * sigverify stage: deduplicates packets and applies some load-shedding
 to remove excessive packets before then filtering packets with invalid
