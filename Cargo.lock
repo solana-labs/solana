@@ -7916,6 +7916,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-quic-definitions"
+version = "2.2.0"
+dependencies = [
+ "solana-keypair",
+]
+
+[[package]]
 name = "solana-rayon-threadlimit"
 version = "2.2.0"
 dependencies = [
@@ -8324,6 +8331,7 @@ dependencies = [
  "solana-program",
  "solana-program-memory",
  "solana-pubkey",
+ "solana-quic-definitions",
  "solana-reserved-account-keys",
  "solana-reward-info",
  "solana-sanitize",

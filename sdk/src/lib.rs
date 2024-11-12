@@ -85,7 +85,6 @@ pub mod poh_config;
 pub mod precompiles;
 pub mod program_utils;
 pub mod pubkey;
-pub mod quic;
 pub mod rent_collector;
 pub mod rent_debits;
 #[deprecated(since = "2.2.0", note = "Use `solana-reward-info` crate instead")]
@@ -148,6 +147,9 @@ pub use solana_program_memory as program_memory;
 /// assert_eq!(ID, my_id);
 /// ```
 pub use solana_pubkey::pubkey;
+#[cfg(feature = "full")]
+#[deprecated(since = "2.2.0", note = "Use `solana-quic-definitions` crate instead")]
+pub use solana_quic_definitions as quic;
 #[cfg(feature = "full")]
 #[deprecated(
     since = "2.2.0",

@@ -37,6 +37,7 @@ full = [
     "dep:solana-keypair",
     "dep:solana-precompile-error",
     "dep:solana-presigner",
+    "dep:solana-quic-definitions",
     "dep:solana-seed-derivable",
     "dep:solana-seed-phrase",
     "dep:solana-signer",
@@ -116,6 +117,7 @@ solana-presigner = { workspace = true, optional = true }
 solana-program = { workspace = true }
 solana-program-memory = { workspace = true }
 solana-pubkey = { workspace = true, default-features = false, features = ["std"] }
+solana-quic-definitions = { workspace = true, optional = true }
 solana-reserved-account-keys = { workspace = true }
 solana-reward-info = { workspace = true, features = ["serde"] }
 solana-sanitize = { workspace = true }
