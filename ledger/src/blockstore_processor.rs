@@ -2323,6 +2323,7 @@ pub mod tests {
         solana_entry::entry::{create_ticks, next_entry, next_entry_mut},
         solana_program_runtime::declare_process_instruction,
         solana_runtime::{
+            bank::bank_hash_details::SlotDetails,
             genesis_utils::{
                 self, create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs,
             },
@@ -3514,8 +3515,7 @@ pub mod tests {
         let entry = next_entry(&bank.last_blockhash(), 1, vec![tx]);
         let result = process_entries_for_tests_without_scheduler(&bank, vec![entry]);
         bank.freeze();
-        let blockhash_ok = bank.last_blockhash();
-        let bankhash_ok = bank.hash();
+        let ok_bank_details = SlotDetails::new_from_bank(&bank, true).unwrap();
         assert!(result.is_ok());
 
         declare_process_instruction!(MockBuiltinErr, 1, |invoke_context| {
@@ -3534,7 +3534,8 @@ pub mod tests {
                 .clone())
         });
 
-        let mut bankhash_err = None;
+        // Store details to compare against subsequent iterations
+        let mut err_bank_details = None;
 
         (0..get_instruction_errors().len()).for_each(|err| {
             let (bank, _bank_forks) = Bank::new_with_mockup_builtin_for_tests(
@@ -3558,13 +3559,34 @@ pub mod tests {
             let bank = Arc::new(bank);
             let _result = process_entries_for_tests_without_scheduler(&bank, vec![entry]);
             bank.freeze();
+            let bank_details = SlotDetails::new_from_bank(&bank, true).unwrap();
 
-            assert_eq!(blockhash_ok, bank.last_blockhash());
-            assert!(bankhash_ok != bank.hash());
-            if let Some(bankhash) = bankhash_err {
-                assert_eq!(bankhash, bank.hash());
+            // Transaction success/failure should not affect block hash ...
+            assert_eq!(
+                ok_bank_details
+                    .bank_hash_components
+                    .as_ref()
+                    .unwrap()
+                    .last_blockhash,
+                bank_details
+                    .bank_hash_components
+                    .as_ref()
+                    .unwrap()
+                    .last_blockhash
+            );
+            // ... but should affect bank hash
+            assert_ne!(ok_bank_details, bank_details);
+            // Different types of transaction failure should not affect bank hash
+            if let Some(prev_bank_details) = &err_bank_details {
+                assert_eq!(
+                    *prev_bank_details,
+                    bank_details,
+                    "bank hash mismatched for tx error: {:?}",
+                    get_instruction_errors()[err]
+                );
+            } else {
+                err_bank_details = Some(bank_details);
             }
-            bankhash_err = Some(bank.hash());
         });
     }
 
