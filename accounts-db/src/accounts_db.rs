@@ -8961,9 +8961,9 @@ impl AccountsDb {
 
                 let zero_lamport_pubkeys_to_visit =
                     std::mem::take(&mut *zero_lamport_pubkeys.lock().unwrap());
-                let (num_zero_lamport_single_refs, visit_zero_lamports_us) = measure_us!(
-                    self.visit_zero_pubkeys_during_startup(&zero_lamport_pubkeys_to_visit)
-                );
+                let (num_zero_lamport_single_refs, visit_zero_lamports_us) =
+                    measure_us!(self
+                        .visit_zero_lamport_pubkeys_during_startup(&zero_lamport_pubkeys_to_visit));
                 timings.visit_zero_lamports_us = visit_zero_lamports_us;
                 timings.num_zero_lamport_single_refs = num_zero_lamport_single_refs;
 
@@ -9099,7 +9099,7 @@ impl AccountsDb {
     /// Visit zero lamport pubkeys and populate zero_lamport_single_ref info on
     /// storage.
     /// Returns the number of zero lamport single ref accounts found.
-    fn visit_zero_pubkeys_during_startup(&self, pubkeys: &HashSet<Pubkey>) -> u64 {
+    fn visit_zero_lamport_pubkeys_during_startup(&self, pubkeys: &HashSet<Pubkey>) -> u64 {
         let mut count = 0;
         self.accounts_index.scan(
             pubkeys.iter(),
