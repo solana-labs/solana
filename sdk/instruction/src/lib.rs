@@ -105,6 +105,11 @@ pub struct Instruction {
 /// is fixed. This must not diverge from the regular non-wasm Instruction struct.
 #[cfg(all(feature = "std", target_arch = "wasm32"))]
 #[wasm_bindgen::prelude::wasm_bindgen]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Instruction {
     #[wasm_bindgen(skip)]
     pub program_id: Pubkey,
