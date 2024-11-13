@@ -25,13 +25,10 @@ use {
     crate::encryption::discrete_log::DiscreteLog,
     sha3::Digest,
     solana_derivation_path::DerivationPath,
-    solana_sdk::{
-        signature::Signature,
-        signer::{
-            keypair::generate_seed_from_seed_phrase_and_passphrase, EncodableKey, EncodableKeypair,
-            SeedDerivable, Signer, SignerError,
-        },
-    },
+    solana_seed_derivable::SeedDerivable,
+    solana_seed_phrase::generate_seed_from_seed_phrase_and_passphrase,
+    solana_signature::Signature,
+    solana_signer::{EncodableKey, EncodableKeypair, Signer, SignerError},
     std::{
         error,
         io::{Read, Write},
@@ -838,7 +835,9 @@ mod tests {
         super::*,
         crate::encryption::pedersen::Pedersen,
         bip39::{Language, Mnemonic, MnemonicType, Seed},
-        solana_sdk::{pubkey::Pubkey, signature::Keypair, signer::null_signer::NullSigner},
+        solana_keypair::Keypair,
+        solana_pubkey::Pubkey,
+        solana_signer::null_signer::NullSigner,
         std::fs::{self, File},
     };
 

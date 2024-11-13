@@ -22,6 +22,7 @@ solana-sdk-ids = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
+solana-keypair = { workspace = true }
 tiny-bip39 = { workspace = true }
 
 [target.'cfg(not(target_os = "solana"))'.dependencies]
@@ -36,9 +37,15 @@ serde_derive = { workspace = true }
 serde_json = { workspace = true }
 sha3 = { workspace = true }
 solana-derivation-path = { workspace = true }
-solana-sdk = { workspace = true }
+solana-seed-derivable = { workspace = true }
+solana-seed-phrase = { workspace = true }
+solana-signature = { workspace = true }
+solana-signer = { workspace = true }
 subtle = { workspace = true }
 zeroize = { workspace = true, features = ["zeroize_derive"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+solana-pubkey = { workspace = true, features = ["bytemuck"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 js-sys = { workspace = true }

@@ -143,7 +143,8 @@ mod test {
         crate::{
             encryption::pod::elgamal::PodElGamalPubkey, sigma_proofs::pod::PodPubkeyValidityProof,
         },
-        solana_sdk::{pubkey::Pubkey, signature::Keypair},
+        solana_keypair::Keypair,
+        solana_pubkey::Pubkey,
         std::str::FromStr,
     };
 
