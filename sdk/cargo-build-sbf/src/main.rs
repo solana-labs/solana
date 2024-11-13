@@ -135,12 +135,31 @@ pub fn is_version_string(arg: &str) -> Result<(), String> {
     Err("a version string may start with 'v' and contains major and minor version numbers separated by a dot, e.g. v1.32 or 1.32".to_string())
 }
 
+fn home_dir() -> PathBuf {
+    PathBuf::from(
+        #[cfg_attr(not(windows), allow(clippy::unnecessary_lazy_evaluations))]
+        env::var_os("HOME")
+            .or_else(|| {
+                #[cfg(windows)]
+                {
+                    debug!("Could not read env variable 'HOME', falling back to 'USERPROFILE'");
+                    env::var_os("USERPROFILE")
+                }
+
+                #[cfg(not(windows))]
+                {
+                    None
+                }
+            })
+            .unwrap_or_else(|| {
+                error!("Can't get home directory path");
+                exit(1);
+            }),
+    )
+}
+
 fn find_installed_platform_tools() -> Vec<String> {
-    let home_dir = PathBuf::from(env::var("HOME").unwrap_or_else(|err| {
-        error!("Can't get home directory path: {}", err);
-        exit(1);
-    }));
-    let solana = home_dir.join(".cache").join("solana");
+    let solana = home_dir().join(".cache").join("solana");
     let package = "platform-tools";
     std::fs::read_dir(solana)
         .unwrap()
@@ -242,11 +261,7 @@ fn validate_platform_tools_version(requested_version: &str, builtin_version: &st
 }
 
 fn make_platform_tools_path_for_version(package: &str, version: &str) -> PathBuf {
-    let home_dir = PathBuf::from(env::var("HOME").unwrap_or_else(|err| {
-        error!("Can't get home directory path: {}", err);
-        exit(1);
-    }));
-    home_dir
+    home_dir()
         .join(".cache")
         .join("solana")
         .join(version)
