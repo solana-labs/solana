@@ -1740,7 +1740,7 @@ fn test_rent_eager_collect_rent_in_partition(should_collect_rent: bool) {
     );
 }
 
-fn new_from_parent_next_epoch(
+pub(in crate::bank) fn new_from_parent_next_epoch(
     parent: Arc<Bank>,
     bank_forks: &RwLock<BankForks>,
     epochs: Epoch,
@@ -3431,20 +3431,17 @@ fn test_bank_parent_account_spend() {
 #[test_case(false; "accounts lt hash disabled")]
 #[test_case(true; "accounts lt hash enabled")]
 fn test_bank_hash_internal_state(is_accounts_lt_hash_enabled: bool) {
-    let (genesis_config, mint_keypair) =
+    let (mut genesis_config, mint_keypair) =
         create_genesis_config_no_tx_fee_no_rent(sol_to_lamports(1.));
+    if !is_accounts_lt_hash_enabled {
+        // Disable the accounts lt hash feature by removing its account from genesis.
+        genesis_config
+            .accounts
+            .remove(&feature_set::accounts_lt_hash::id())
+            .unwrap();
+    }
     let (bank0, _bank_forks0) = Bank::new_with_bank_forks_for_tests(&genesis_config);
     let (bank1, bank_forks1) = Bank::new_with_bank_forks_for_tests(&genesis_config);
-    bank0
-        .rc
-        .accounts
-        .accounts_db
-        .set_is_experimental_accumulator_hash_enabled(is_accounts_lt_hash_enabled);
-    bank1
-        .rc
-        .accounts
-        .accounts_db
-        .set_is_experimental_accumulator_hash_enabled(is_accounts_lt_hash_enabled);
     assert_eq!(
         bank0.is_accounts_lt_hash_enabled(),
         is_accounts_lt_hash_enabled,
@@ -3485,14 +3482,16 @@ fn test_bank_hash_internal_state(is_accounts_lt_hash_enabled: bool) {
 #[test_case(true; "accounts lt hash enabled")]
 fn test_bank_hash_internal_state_verify(is_accounts_lt_hash_enabled: bool) {
     for pass in 0..4 {
-        let (genesis_config, mint_keypair) =
+        let (mut genesis_config, mint_keypair) =
             create_genesis_config_no_tx_fee_no_rent(sol_to_lamports(1.));
+        if !is_accounts_lt_hash_enabled {
+            // Disable the accounts lt hash feature by removing its account from genesis.
+            genesis_config
+                .accounts
+                .remove(&feature_set::accounts_lt_hash::id())
+                .unwrap();
+        }
         let (bank0, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
-        bank0
-            .rc
-            .accounts
-            .accounts_db
-            .set_is_experimental_accumulator_hash_enabled(is_accounts_lt_hash_enabled);
         assert_eq!(
             bank0.is_accounts_lt_hash_enabled(),
             is_accounts_lt_hash_enabled,

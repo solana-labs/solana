@@ -4,6 +4,7 @@ use {
     crate::bank::Bank,
     solana_sdk::{
         clock::{Epoch, Slot},
+        feature_set,
         vote::state::MAX_LOCKOUT_HISTORY,
     },
 };
@@ -11,6 +12,14 @@ use {
 /// Is the EAH enabled this Epoch?
 #[must_use]
 pub fn is_enabled_this_epoch(bank: &Bank) -> bool {
+    // If the accounts lt hash feature is enabled, then the EAH is disabled.
+    if bank
+        .feature_set
+        .is_active(&feature_set::accounts_lt_hash::id())
+    {
+        return false;
+    }
+
     // The EAH calculation "start" is based on when a bank is *rooted*, and "stop" is based on when a
     // bank is *frozen*.  Banks are rooted after exceeding the maximum lockout, so there is a delay
     // of at least `maximum lockout` number of slots the EAH calculation must take into

@@ -1511,9 +1511,9 @@ impl Bank {
             .build()
             .expect("new rayon threadpool"));
 
-        let (_, apply_feature_activations_time_us) = measure_us!(
+        let (_, apply_feature_activations_time_us) = measure_us!(thread_pool.install(|| {
             self.apply_feature_activations(ApplyFeatureActivationsCaller::NewFromParent, false)
-        );
+        }));
 
         // Add new entry to stakes.stake_history, set appropriate epoch and
         // update vote accounts with warmed up stakes before saving a
@@ -1772,8 +1772,13 @@ impl Bank {
             *bank.accounts_lt_hash.get_mut().unwrap() = accounts_lt_hash;
         } else {
             // Use the accounts lt hash from the snapshot, if present, otherwise calculate it.
-            // When there is a feature gate for the accounts lt hash, if the feature is enabled
-            // then it will be *required* that the snapshot contains an accounts lt hash.
+            // When the feature gate is enabled, the snapshot *must* contain an accounts lt hash.
+            assert!(
+                !bank
+                    .feature_set
+                    .is_active(&feature_set::accounts_lt_hash::id()),
+                "snapshot must have an accounts lt hash if the feature is enabled",
+            );
             if bank.is_accounts_lt_hash_enabled() {
                 info!("Calculating the accounts lt hash...");
                 let (ancestors, slot) = if bank.is_frozen() {
@@ -5533,9 +5538,21 @@ impl Bank {
             self.last_blockhash().as_ref(),
         ]);
 
-        let epoch_accounts_hash = self.wait_get_epoch_accounts_hash();
-        if let Some(epoch_accounts_hash) = epoch_accounts_hash {
-            hash = hashv(&[hash.as_ref(), epoch_accounts_hash.as_ref().as_ref()]);
+        let accounts_hash_info = if self
+            .feature_set
+            .is_active(&feature_set::accounts_lt_hash::id())
+        {
+            let accounts_lt_hash = &*self.accounts_lt_hash.lock().unwrap();
+            let lt_hash_bytes = bytemuck::must_cast_slice(&accounts_lt_hash.0 .0);
+            hash = hashv(&[hash.as_ref(), lt_hash_bytes]);
+            let checksum = accounts_lt_hash.0.checksum();
+            Some(format!(", accounts_lt_hash checksum: {checksum}"))
+        } else {
+            let epoch_accounts_hash = self.wait_get_epoch_accounts_hash();
+            epoch_accounts_hash.map(|epoch_accounts_hash| {
+                hash = hashv(&[hash.as_ref(), epoch_accounts_hash.as_ref().as_ref()]);
+                format!(", epoch_accounts_hash: {:?}", epoch_accounts_hash.as_ref())
+            })
         };
 
         let buf = self
@@ -5587,22 +5604,12 @@ impl Bank {
             ("accounts_delta_hash_us", accounts_delta_hash_us, i64),
         );
         info!(
-            "bank frozen: {slot} hash: {hash} accounts_delta: {} signature_count: {} last_blockhash: {} capitalization: {}{}, stats: {bank_hash_stats:?}{}",
+            "bank frozen: {slot} hash: {hash} accounts_delta: {} signature_count: {} last_blockhash: {} capitalization: {}{}, stats: {bank_hash_stats:?}",
             accounts_delta_hash.0,
             self.signature_count(),
             self.last_blockhash(),
             self.capitalization(),
-            if let Some(epoch_accounts_hash) = epoch_accounts_hash {
-                format!(", epoch_accounts_hash: {:?}", epoch_accounts_hash.as_ref())
-            } else {
-                "".to_string()
-            },
-            if self.is_accounts_lt_hash_enabled() {
-                let checksum = self.accounts_lt_hash.lock().unwrap().0.checksum();
-                format!(", accounts_lt_hash checksum: {checksum}")
-            } else {
-                String::new()
-            },
+            accounts_hash_info.unwrap_or_default(),
         );
         hash
     }
@@ -6715,6 +6722,47 @@ impl Bank {
 
         if new_feature_activations.contains(&feature_set::update_hashes_per_tick6::id()) {
             self.apply_updated_hashes_per_tick(UPDATED_HASHES_PER_TICK6);
+        }
+
+        if new_feature_activations.contains(&feature_set::accounts_lt_hash::id()) {
+            // Activating the accounts lt hash feature means we need to have an accounts lt hash
+            // value at the end of this if-block.  If the cli arg has been used, that means we
+            // already have an accounts lt hash and do not need to recalculate it.
+            if self
+                .rc
+                .accounts
+                .accounts_db
+                .is_experimental_accumulator_hash_enabled()
+            {
+                // We already have an accounts lt hash value, so no need to recalculate it.
+                // Nothing else to do here.
+            } else {
+                info!(
+                    "Calculating the accounts lt hash as part of feature activation; \
+                    this may take some time...",
+                );
+                // We must calculate the accounts lt hash now as part of feature activation.
+                // Note, this bank is *not* frozen yet, which means it will later call
+                // `update_accounts_lt_hash()`.  Therefore, we calculate the accounts lt hash based
+                // on *our parent*, not us!
+                let parent_ancestors = {
+                    let mut ancestors = self.ancestors.clone();
+                    ancestors.remove(&self.slot());
+                    ancestors
+                };
+                let parent_slot = self.parent_slot;
+                let (parent_accounts_lt_hash, duration) = meas_dur!({
+                    self.rc
+                        .accounts
+                        .accounts_db
+                        .calculate_accounts_lt_hash_at_startup_from_index(
+                            &parent_ancestors,
+                            parent_slot,
+                        )
+                });
+                *self.accounts_lt_hash.get_mut().unwrap() = parent_accounts_lt_hash;
+                info!("Calculating the accounts lt hash completed in {duration:?}");
+            }
         }
     }
 
