@@ -1,3 +1,4 @@
+#![allow(unused)]
 #[allow(deprecated)]
 use solana_sdk::sysvar::recent_blockhashes::{Entry as BlockhashesEntry, RecentBlockhashes};
 use {
@@ -9,9 +10,7 @@ use {
     solana_feature_set::FeatureSet,
     solana_program_runtime::{
         invoke_context::InvokeContext,
-        loaded_programs::{
-            BlockRelation, ForkGraph, ProgramCache, ProgramCacheEntry, ProgramRuntimeEnvironments,
-        },
+        loaded_programs::{BlockRelation, ForkGraph, ProgramCacheEntry},
         solana_rbpf::{
             program::{BuiltinFunction, BuiltinProgram, FunctionRegistry},
             vm::Config,
@@ -115,9 +114,51 @@ impl MockBankCallback {
     pub fn override_feature_set(&mut self, new_set: FeatureSet) {
         self.feature_set = Arc::new(new_set)
     }
+
+    pub fn configure_sysvars(&self) {
+        // We must fill in the sysvar cache entries
+
+        // clock contents are important because we use them for a sysvar loading test
+        let clock = Clock {
+            slot: EXECUTION_SLOT,
+            epoch_start_timestamp: WALLCLOCK_TIME.saturating_sub(10) as UnixTimestamp,
+            epoch: EXECUTION_EPOCH,
+            leader_schedule_epoch: EXECUTION_EPOCH,
+            unix_timestamp: WALLCLOCK_TIME as UnixTimestamp,
+        };
+
+        let mut account_data = AccountSharedData::default();
+        account_data.set_data(bincode::serialize(&clock).unwrap());
+        self.account_shared_data
+            .write()
+            .unwrap()
+            .insert(Clock::id(), account_data);
+
+        // default rent is fine
+        let rent = Rent::default();
+
+        let mut account_data = AccountSharedData::default();
+        account_data.set_data(bincode::serialize(&rent).unwrap());
+        self.account_shared_data
+            .write()
+            .unwrap()
+            .insert(Rent::id(), account_data);
+
+        // SystemInstruction::AdvanceNonceAccount asserts RecentBlockhashes is non-empty
+        // but then just gets the blockhash from InvokeContext. so the sysvar doesnt need real entries
+        #[allow(deprecated)]
+        let recent_blockhashes = vec![BlockhashesEntry::default()];
+
+        let mut account_data = AccountSharedData::default();
+        account_data.set_data(bincode::serialize(&recent_blockhashes).unwrap());
+        #[allow(deprecated)]
+        self.account_shared_data
+            .write()
+            .unwrap()
+            .insert(RecentBlockhashes::id(), account_data);
+    }
 }
 
-#[allow(unused)]
 fn load_program(name: String) -> Vec<u8> {
     // Loading the program file
     let mut dir = env::current_dir().unwrap();
@@ -133,22 +174,18 @@ fn load_program(name: String) -> Vec<u8> {
     buffer
 }
 
-#[allow(unused)]
 pub fn program_address(program_name: &str) -> Pubkey {
     Pubkey::create_with_seed(&Pubkey::default(), program_name, &Pubkey::default()).unwrap()
 }
 
-#[allow(unused)]
 pub fn program_data_size(program_name: &str) -> usize {
     load_program(program_name.to_string()).len()
 }
 
-#[allow(unused)]
 pub fn deploy_program(name: String, deployment_slot: Slot, mock_bank: &MockBankCallback) -> Pubkey {
     deploy_program_with_upgrade_authority(name, deployment_slot, mock_bank, None)
 }
 
-#[allow(unused)]
 pub fn deploy_program_with_upgrade_authority(
     name: String,
     deployment_slot: Slot,
@@ -204,69 +241,6 @@ pub fn deploy_program_with_upgrade_authority(
     program_account
 }
 
-#[allow(unused)]
-pub fn create_executable_environment(
-    fork_graph: Arc<RwLock<MockForkGraph>>,
-    mock_bank: &MockBankCallback,
-    program_cache: &mut ProgramCache<MockForkGraph>,
-) {
-    program_cache.environments = ProgramRuntimeEnvironments {
-        program_runtime_v1: Arc::new(create_custom_environment()),
-        // We are not using program runtime v2
-        program_runtime_v2: Arc::new(BuiltinProgram::new_loader(
-            Config::default(),
-            FunctionRegistry::default(),
-        )),
-    };
-
-    program_cache.fork_graph = Some(Arc::downgrade(&fork_graph));
-
-    // We must fill in the sysvar cache entries
-
-    // clock contents are important because we use them for a sysvar loading test
-    let clock = Clock {
-        slot: EXECUTION_SLOT,
-        epoch_start_timestamp: WALLCLOCK_TIME.saturating_sub(10) as UnixTimestamp,
-        epoch: EXECUTION_EPOCH,
-        leader_schedule_epoch: EXECUTION_EPOCH,
-        unix_timestamp: WALLCLOCK_TIME as UnixTimestamp,
-    };
-
-    let mut account_data = AccountSharedData::default();
-    account_data.set_data(bincode::serialize(&clock).unwrap());
-    mock_bank
-        .account_shared_data
-        .write()
-        .unwrap()
-        .insert(Clock::id(), account_data);
-
-    // default rent is fine
-    let rent = Rent::default();
-
-    let mut account_data = AccountSharedData::default();
-    account_data.set_data(bincode::serialize(&rent).unwrap());
-    mock_bank
-        .account_shared_data
-        .write()
-        .unwrap()
-        .insert(Rent::id(), account_data);
-
-    // SystemInstruction::AdvanceNonceAccount asserts RecentBlockhashes is non-empty
-    // but then just gets the blockhash from InvokeContext. so the sysvar doesnt need real entries
-    #[allow(deprecated)]
-    let recent_blockhashes = vec![BlockhashesEntry::default()];
-
-    let mut account_data = AccountSharedData::default();
-    account_data.set_data(bincode::serialize(&recent_blockhashes).unwrap());
-    #[allow(deprecated)]
-    mock_bank
-        .account_shared_data
-        .write()
-        .unwrap()
-        .insert(RecentBlockhashes::id(), account_data);
-}
-
-#[allow(unused)]
 pub fn register_builtins(
     mock_bank: &MockBankCallback,
     batch_processor: &TransactionBatchProcessor<MockForkGraph>,
@@ -314,8 +288,7 @@ pub fn register_builtins(
     );
 }
 
-#[allow(unused)]
-fn create_custom_environment<'a>() -> BuiltinProgram<InvokeContext<'a>> {
+pub fn create_custom_loader<'a>() -> BuiltinProgram<InvokeContext<'a>> {
     let compute_budget = ComputeBudget::default();
     let vm_config = Config {
         max_call_depth: compute_budget.max_call_depth,

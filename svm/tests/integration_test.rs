@@ -3,7 +3,7 @@
 
 use {
     crate::mock_bank::{
-        create_executable_environment, deploy_program_with_upgrade_authority, program_address,
+        create_custom_loader, deploy_program_with_upgrade_authority, program_address,
         register_builtins, MockBankCallback, MockForkGraph, EXECUTION_EPOCH, EXECUTION_SLOT,
         WALLCLOCK_TIME,
     },
@@ -78,20 +78,17 @@ impl SvmTestEnvironment<'_> {
                 .insert(*pubkey, account.clone());
         }
 
-        let batch_processor = TransactionBatchProcessor::<MockForkGraph>::new_uninitialized(
+        let fork_graph = Arc::new(RwLock::new(MockForkGraph {}));
+        let batch_processor = TransactionBatchProcessor::new(
             EXECUTION_SLOT,
             EXECUTION_EPOCH,
-        );
-
-        let fork_graph = Arc::new(RwLock::new(MockForkGraph {}));
-
-        create_executable_environment(
-            fork_graph.clone(),
-            &mock_bank,
-            &mut batch_processor.program_cache.write().unwrap(),
+            Arc::downgrade(&fork_graph),
+            Some(Arc::new(create_custom_loader())),
+            None, // We are not using program runtime v2.
         );
 
         // The sysvars must be put in the cache
+        mock_bank.configure_sysvars();
         batch_processor.fill_missing_sysvar_cache_entries(&mock_bank);
         register_builtins(&mock_bank, &batch_processor);
 

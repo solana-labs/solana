@@ -2,9 +2,7 @@
 
 use {
     crate::{
-        mock_bank::{
-            create_executable_environment, deploy_program, register_builtins, MockForkGraph,
-        },
+        mock_bank::{create_custom_loader, deploy_program, register_builtins, MockForkGraph},
         transaction_builder::SanitizedTransactionBuilder,
     },
     assert_matches::assert_matches,
@@ -128,16 +126,16 @@ fn test_program_cache_with_exhaustive_scheduler() {
 // correctly.
 fn svm_concurrent() {
     let mock_bank = Arc::new(MockBankCallback::default());
-    let batch_processor =
-        Arc::new(TransactionBatchProcessor::<MockForkGraph>::new_uninitialized(5, 2));
     let fork_graph = Arc::new(RwLock::new(MockForkGraph {}));
+    let batch_processor = Arc::new(TransactionBatchProcessor::new(
+        5,
+        2,
+        Arc::downgrade(&fork_graph),
+        Some(Arc::new(create_custom_loader())),
+        None, // We are not using program runtime v2.
+    ));
 
-    create_executable_environment(
-        fork_graph.clone(),
-        &mock_bank,
-        &mut batch_processor.program_cache.write().unwrap(),
-    );
-
+    mock_bank.configure_sysvars();
     batch_processor.fill_missing_sysvar_cache_entries(&*mock_bank);
     register_builtins(&mock_bank, &batch_processor);
 
