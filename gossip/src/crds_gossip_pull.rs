@@ -30,7 +30,7 @@ use {
     rayon::{prelude::*, ThreadPool},
     solana_bloom::bloom::{Bloom, ConcurrentBloom},
     solana_sdk::{
-        hash::{hash, Hash},
+        hash::Hash,
         native_token::LAMPORTS_PER_SOL,
         packet::PACKET_DATA_SIZE,
         pubkey::Pubkey,
@@ -349,7 +349,7 @@ impl CrdsGossipPull {
         let failed_inserts = responses
             .into_iter()
             .filter_map(upsert)
-            .map(|resp| hash(&bincode::serialize(&resp).unwrap()))
+            .map(|resp| *resp.hash())
             .collect();
         (active_values, expired_values, failed_inserts)
     }
@@ -427,7 +427,7 @@ impl CrdsGossipPull {
         thread_pool.install(|| {
             crds.par_values()
                 .with_min_len(PAR_MIN_LENGTH)
-                .map(|v| v.value_hash)
+                .map(|v| *v.value.hash())
                 .chain(crds.purged().with_min_len(PAR_MIN_LENGTH))
                 .chain(
                     failed_inserts
@@ -472,13 +472,13 @@ impl CrdsGossipPull {
             }
             let caller_wallclock = caller_wallclock.checked_add(jitter).unwrap_or(0);
             let pred = |entry: &&VersionedCrdsValue| {
-                debug_assert!(filter.test_mask(&entry.value_hash));
+                debug_assert!(filter.test_mask(entry.value.hash()));
                 // Skip values that are too new.
                 if entry.value.wallclock() > caller_wallclock {
                     total_skipped.fetch_add(1, Ordering::Relaxed);
                     false
                 } else {
-                    !filter.filter_contains(&entry.value_hash)
+                    !filter.filter_contains(entry.value.hash())
                 }
             };
             let out: Vec<_> = crds
@@ -811,7 +811,11 @@ pub(crate) mod tests {
         assert_eq!(filters.len(), MIN_NUM_BLOOM_FILTERS.max(4));
         let crds = crds.read().unwrap();
         let purged: Vec<_> = thread_pool.install(|| crds.purged().collect());
-        let hash_values: Vec<_> = crds.values().map(|v| v.value_hash).chain(purged).collect();
+        let hash_values: Vec<_> = crds
+            .values()
+            .map(|v| *v.value.hash())
+            .chain(purged)
+            .collect();
         // CrdsValue::new_rand may generate exact same value twice in which
         // case its hash-value is not added to purged values.
         assert!(
@@ -1246,10 +1250,7 @@ pub(crate) mod tests {
         node_crds
             .insert(old.clone(), 0, GossipRoute::LocalMessage)
             .unwrap();
-        let value_hash = {
-            let entry: &VersionedCrdsValue = node_crds.get(&old.label()).unwrap();
-            entry.value_hash
-        };
+        let value_hash = *node_crds.get::<&CrdsValue>(&old.label()).unwrap().hash();
         //verify self is valid
         assert_eq!(
             node_crds.get::<&CrdsValue>(&node_label).unwrap().label(),

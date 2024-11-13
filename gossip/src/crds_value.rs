@@ -7,8 +7,10 @@ use {
     },
     bincode::serialize,
     rand::Rng,
+    serde::de::{Deserialize, Deserializer},
     solana_sanitize::{Sanitize, SanitizeError},
     solana_sdk::{
+        hash::Hash,
         pubkey::Pubkey,
         signature::{Keypair, Signable, Signature, Signer},
     },
@@ -17,10 +19,12 @@ use {
 
 /// CrdsValue that is replicated across the cluster
 #[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
 pub struct CrdsValue {
     signature: Signature,
     data: CrdsData,
+    #[serde(skip_serializing)]
+    hash: Hash, // Sha256 hash of [signature, data].
 }
 
 impl Sanitize for CrdsValue {
@@ -98,14 +102,23 @@ impl CrdsValue {
     pub fn new(data: CrdsData, keypair: &Keypair) -> Self {
         let bincode_serialized_data = bincode::serialize(&data).unwrap();
         let signature = keypair.sign_message(&bincode_serialized_data);
-        Self { signature, data }
+        let hash = solana_sdk::hash::hashv(&[signature.as_ref(), &bincode_serialized_data]);
+        Self {
+            signature,
+            data,
+            hash,
+        }
     }
 
     #[cfg(test)]
     pub(crate) fn new_unsigned(data: CrdsData) -> Self {
+        let bincode_serialized_data = bincode::serialize(&data).unwrap();
+        let signature = Signature::default();
+        let hash = solana_sdk::hash::hashv(&[signature.as_ref(), &bincode_serialized_data]);
         Self {
-            signature: Signature::default(),
+            signature,
             data,
+            hash,
         }
     }
 
@@ -132,6 +145,11 @@ impl CrdsValue {
     #[inline]
     pub(crate) fn data(&self) -> &CrdsData {
         &self.data
+    }
+
+    #[inline]
+    pub(crate) fn hash(&self) -> &Hash {
+        &self.hash
     }
 
     /// Totally unsecure unverifiable wallclock of the node that generated this message
@@ -191,6 +209,29 @@ impl CrdsValue {
     /// should be pushed to the receiving node.
     pub(crate) fn should_force_push(&self, peer: &Pubkey) -> bool {
         matches!(self.data, CrdsData::NodeInstance(_)) && &self.pubkey() == peer
+    }
+}
+
+// Manual implementation of Deserialize for CrdsValue in order to populate
+// CrdsValue.hash which is skipped in serialization.
+impl<'de> Deserialize<'de> for CrdsValue {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct CrdsValue {
+            signature: Signature,
+            data: CrdsData,
+        }
+        let CrdsValue { signature, data } = CrdsValue::deserialize(deserializer)?;
+        let bincode_serialized_data = bincode::serialize(&data).unwrap();
+        let hash = solana_sdk::hash::hashv(&[signature.as_ref(), &bincode_serialized_data]);
+        Ok(Self {
+            signature,
+            data,
+            hash,
+        })
     }
 }
 

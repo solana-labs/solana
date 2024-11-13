@@ -25,12 +25,12 @@ impl CrdsShards {
     }
 
     pub fn insert(&mut self, index: usize, value: &VersionedCrdsValue) -> bool {
-        let hash = CrdsFilter::hash_as_u64(&value.value_hash);
+        let hash = CrdsFilter::hash_as_u64(value.value.hash());
         self.shard_mut(hash).insert(index, hash).is_none()
     }
 
     pub fn remove(&mut self, index: usize, value: &VersionedCrdsValue) -> bool {
-        let hash = CrdsFilter::hash_as_u64(&value.value_hash);
+        let hash = CrdsFilter::hash_as_u64(value.value.hash());
         self.shard_mut(hash).swap_remove(&index).is_some()
     }
 
@@ -94,7 +94,7 @@ impl CrdsShards {
         assert_eq!(indices, (0..crds.len()).collect::<Vec<_>>());
         for (shard_index, shard) in self.shards.iter().enumerate() {
             for (&index, &hash) in shard {
-                assert_eq!(hash, CrdsFilter::hash_as_u64(&crds[index].value_hash));
+                assert_eq!(hash, CrdsFilter::hash_as_u64(crds[index].value.hash()));
                 assert_eq!(
                     shard_index as u64,
                     hash.checked_shr(64 - self.shard_bits).unwrap_or(0)
@@ -155,7 +155,7 @@ mod test {
     // Returns true if the first mask_bits most significant bits of hash is the
     // same as the given bit mask.
     fn check_mask(value: &VersionedCrdsValue, mask: u64, mask_bits: u32) -> bool {
-        let hash = CrdsFilter::hash_as_u64(&value.value_hash);
+        let hash = CrdsFilter::hash_as_u64(value.value.hash());
         let ones = (!0u64).checked_shr(mask_bits).unwrap_or(0u64);
         (hash | ones) == (mask | ones)
     }
@@ -217,7 +217,7 @@ mod test {
         }
         // Existing hash values.
         for (index, value) in values.iter().enumerate() {
-            let mask = CrdsFilter::hash_as_u64(&value.value_hash);
+            let mask = CrdsFilter::hash_as_u64(value.value.hash());
             let hits: Vec<_> = shards.find(mask, 64).collect();
             assert_eq!(hits, vec![index]);
         }

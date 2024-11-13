@@ -35,19 +35,13 @@ use {
         crds_value::{CrdsValue, CrdsValueLabel},
     },
     assert_matches::debug_assert_matches,
-    bincode::serialize,
     indexmap::{
         map::{rayon::ParValues, Entry, IndexMap},
         set::IndexSet,
     },
     lru::LruCache,
     rayon::{prelude::*, ThreadPool},
-    solana_sdk::{
-        clock::Slot,
-        hash::{hash, Hash},
-        pubkey::Pubkey,
-        signature::Signature,
-    },
+    solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey, signature::Signature},
     std::{
         cmp::Ordering,
         collections::{hash_map, BTreeMap, HashMap, VecDeque},
@@ -131,8 +125,6 @@ pub struct VersionedCrdsValue {
     pub value: CrdsValue,
     /// local time when updated
     pub(crate) local_timestamp: u64,
-    /// value hash
-    pub(crate) value_hash: Hash,
     /// None -> value upserted by GossipRoute::{LocalMessage,PullRequest}
     /// Some(0) -> value upserted by GossipRoute::PullResponse
     /// Some(k) if k > 0 -> value upserted by GossipRoute::PushMessage w/ k - 1 push duplicates
@@ -156,7 +148,6 @@ impl Cursor {
 
 impl VersionedCrdsValue {
     fn new(value: CrdsValue, cursor: Cursor, local_timestamp: u64, route: GossipRoute) -> Self {
-        let value_hash = hash(&serialize(&value).unwrap());
         let num_push_recv = match route {
             GossipRoute::LocalMessage => None,
             GossipRoute::PullRequest => None,
@@ -168,7 +159,6 @@ impl VersionedCrdsValue {
             ordinal: cursor.ordinal(),
             value,
             local_timestamp,
-            value_hash,
             num_push_recv,
         }
     }
@@ -223,10 +213,7 @@ fn overrides(value: &CrdsValue, other: &VersionedCrdsValue) -> bool {
         // Ties should be broken in a deterministic way across the cluster.
         // For backward compatibility this is done by comparing hash of
         // serialized values.
-        Ordering::Equal => {
-            let value_hash = hash(&serialize(&value).unwrap());
-            other.value_hash < value_hash
-        }
+        Ordering::Equal => other.value.hash() < value.hash(),
     }
 }
 
@@ -310,7 +297,7 @@ impl Crds {
                 // does not need to be updated.
                 debug_assert_eq!(entry.get().value.pubkey(), pubkey);
                 self.cursor.consume(value.ordinal);
-                self.purged.push_back((entry.get().value_hash, now));
+                self.purged.push_back((*entry.get().value.hash(), now));
                 entry.insert(value);
                 Ok(())
             }
@@ -323,8 +310,8 @@ impl Crds {
                 );
                 // Identify if the message is outdated (as opposed to
                 // duplicate) by comparing value hashes.
-                if entry.get().value_hash != value.value_hash {
-                    self.purged.push_back((value.value_hash, now));
+                if entry.get().value.hash() != value.value.hash() {
+                    self.purged.push_back((*value.value.hash(), now));
                     Err(CrdsError::InsertFailed)
                 } else if matches!(route, GossipRoute::PushMessage(_)) {
                     let entry = entry.get_mut();
@@ -560,7 +547,7 @@ impl Crds {
         let Some((index, _ /*label*/, value)) = self.table.swap_remove_full(key) else {
             return;
         };
-        self.purged.push_back((value.value_hash, now));
+        self.purged.push_back((*value.value.hash(), now));
         self.shards.remove(index, &value);
         match value.value.data() {
             CrdsData::ContactInfo(_) => {
@@ -837,7 +824,7 @@ mod tests {
             &Pubkey::default(),
             0,
         )));
-        let value_hash = hash(&serialize(&original).unwrap());
+        let value_hash = *original.hash();
         assert_matches!(crds.insert(original, 0, GossipRoute::LocalMessage), Ok(()));
         let val = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
             &Pubkey::default(),
@@ -857,7 +844,7 @@ mod tests {
             &Pubkey::default(),
             0,
         )));
-        let val1_hash = hash(&serialize(&val1).unwrap());
+        let val1_hash = *val1.hash();
         assert_eq!(
             crds.insert(val1.clone(), 0, GossipRoute::LocalMessage),
             Ok(())
@@ -912,7 +899,7 @@ mod tests {
         let other = NodeInstance::new(&mut rng, pubkey, now - 1);
         let other = other.with_wallclock(now + 1);
         let other = make_crds_value(other);
-        let value_hash = hash(&serialize(&other).unwrap());
+        let value_hash = *other.hash();
         assert_eq!(
             crds.insert(other, now, GossipRoute::LocalMessage),
             Err(CrdsError::InsertFailed)
@@ -924,7 +911,7 @@ mod tests {
         for _ in 0..100 {
             let other = NodeInstance::new(&mut rng, pubkey, now);
             let other = make_crds_value(other);
-            let value_hash = hash(&serialize(&other).unwrap());
+            let value_hash = *other.hash();
             match crds.insert(other, now, GossipRoute::LocalMessage) {
                 Ok(()) => num_overrides += 1,
                 Err(CrdsError::InsertFailed) => {
@@ -1433,7 +1420,7 @@ mod tests {
             let purged: HashSet<_> = crds.purged.iter().map(|(hash, _)| hash).copied().collect();
             values
                 .into_iter()
-                .filter(|v| purged.contains(&v.value_hash))
+                .filter(|v| purged.contains(v.value.hash()))
                 .collect()
         };
         assert_eq!(purged.len() + crds.table.len(), num_values);
@@ -1515,10 +1502,10 @@ mod tests {
 
         assert_eq!(v1.value.label(), v2.value.label());
         assert_eq!(v1.value.wallclock(), v2.value.wallclock());
-        assert_ne!(v1.value_hash, v2.value_hash);
+        assert_ne!(v1.value.hash(), v2.value.hash());
         assert!(v1 != v2);
         assert!(!(v1 == v2));
-        if v1.value_hash > v2.value_hash {
+        if v1.value.hash() > v2.value.hash() {
             assert!(overrides(&v1.value, &v2));
             assert!(!overrides(&v2.value, &v1));
         } else {
