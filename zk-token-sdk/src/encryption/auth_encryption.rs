@@ -7,13 +7,10 @@ use {
     base64::{prelude::BASE64_STANDARD, Engine},
     sha3::{Digest, Sha3_512},
     solana_derivation_path::DerivationPath,
-    solana_sdk::{
-        signature::Signature,
-        signer::{
-            keypair::generate_seed_from_seed_phrase_and_passphrase, EncodableKey, SeedDerivable,
-            Signer, SignerError,
-        },
-    },
+    solana_seed_derivable::SeedDerivable,
+    solana_seed_phrase::generate_seed_from_seed_phrase_and_passphrase,
+    solana_signature::Signature,
+    solana_signer::{EncodableKey, Signer, SignerError},
     std::{
         convert::TryInto,
         error, fmt,
@@ -267,8 +264,8 @@ impl fmt::Display for AeCiphertext {
 #[cfg(test)]
 mod tests {
     use {
-        super::*,
-        solana_sdk::{pubkey::Pubkey, signature::Keypair, signer::null_signer::NullSigner},
+        super::*, solana_keypair::Keypair, solana_pubkey::Pubkey,
+        solana_signer::null_signer::NullSigner,
     };
 
     #[test]
