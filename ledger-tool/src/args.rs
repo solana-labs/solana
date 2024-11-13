@@ -126,8 +126,7 @@ pub fn accounts_db_args<'a, 'b>() -> Box<[Arg<'a, 'b>]> {
             .value_name("METHOD")
             .takes_value(true)
             .possible_values(&["mmap", "file"])
-            .help("Access account storage using this method")
-            .hidden(hidden_unless_forced()),
+            .help("Access account storages using this method"),
         Arg::with_name("accounts_db_experimental_accumulator_hash")
             .long("accounts-db-experimental-accumulator-hash")
             .help("Enables the experimental accumulator hash")

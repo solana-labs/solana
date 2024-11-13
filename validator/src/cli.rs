@@ -1358,8 +1358,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .value_name("METHOD")
                 .takes_value(true)
                 .possible_values(&["mmap", "file"])
-                .help("Access account storage using this method")
-                .hidden(hidden_unless_forced()),
+                .help("Access account storages using this method")
         )
         .arg(
             Arg::with_name("accounts_db_ancient_append_vecs")

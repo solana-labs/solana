@@ -17,6 +17,7 @@ Release channels have their own copy of this changelog:
 * Changes
   * CLI:
     * Add global `--skip-preflight` option for skipping preflight checks on all transactions sent through RPC. This flag, along with `--use-rpc`, can improve success rate with program deployments using the public RPC nodes.
+  * Unhide `--accounts-db-access-storages-method` for agave-validator and agave-ledger-tool
 
 ## [2.1.0]
 * Breaking:
