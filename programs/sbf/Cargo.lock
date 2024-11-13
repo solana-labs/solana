@@ -5238,6 +5238,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-cluster-type"
+version = "2.2.0"
+dependencies = [
+ "serde",
+ "serde_derive",
+ "solana-hash",
+]
+
+[[package]]
 name = "solana-commitment-config"
 version = "2.2.0"
 dependencies = [
@@ -7049,6 +7058,7 @@ dependencies = [
  "siphasher",
  "solana-account",
  "solana-bn254",
+ "solana-cluster-type",
  "solana-commitment-config",
  "solana-decode-error",
  "solana-derivation-path",

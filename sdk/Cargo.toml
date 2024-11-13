@@ -34,6 +34,7 @@ full = [
     "solana-commitment-config",
     "digest",
     "solana-pubkey/rand",
+    "dep:solana-cluster-type",
     "dep:solana-keypair",
     "dep:solana-precompile-error",
     "dep:solana-presigner",
@@ -51,6 +52,7 @@ frozen-abi = [
     "solana-feature-set/frozen-abi",
     "solana-fee-structure/frozen-abi",
     "solana-account/frozen-abi",
+    "solana-cluster-type/frozen-abi",
     "solana-inflation/frozen-abi",
     "solana-program/frozen-abi",
     "solana-reward-info/frozen-abi",
@@ -96,6 +98,9 @@ sha3 = { workspace = true, optional = true }
 siphasher = { workspace = true }
 solana-account = { workspace = true, features = ["bincode"] }
 solana-bn254 = { workspace = true }
+solana-cluster-type = { workspace = true, features = [
+    "serde",
+], optional = true }
 solana-commitment-config = { workspace = true, optional = true, features = ["serde"] }
 solana-decode-error = { workspace = true }
 solana-derivation-path = { workspace = true }
