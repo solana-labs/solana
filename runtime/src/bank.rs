@@ -59,7 +59,7 @@ use {
         transaction_batch::{OwnedOrBorrowed, TransactionBatch},
         verify_precompiles::verify_precompiles,
     },
-    accounts_lt_hash::CacheValue as AccountsLtHashCacheValue,
+    accounts_lt_hash::{CacheValue as AccountsLtHashCacheValue, Stats as AccountsLtHashStats},
     ahash::AHashMap,
     byteorder::{ByteOrder, LittleEndian},
     dashmap::{DashMap, DashSet},
@@ -588,6 +588,7 @@ impl PartialEq for Bank {
             transaction_account_lock_limit: _,
             fee_structure: _,
             cache_for_accounts_lt_hash: _,
+            stats_for_accounts_lt_hash: _,
             block_id,
             // Ignore new fields explicitly if they do not impact PartialEq.
             // Adding ".." will remove compile-time checks that if a new field
@@ -938,6 +939,9 @@ pub struct Bank {
     /// and not an intermediate state within this slot.
     cache_for_accounts_lt_hash: RwLock<AHashMap<Pubkey, AccountsLtHashCacheValue>>,
 
+    /// Stats related to the accounts lt hash
+    stats_for_accounts_lt_hash: AccountsLtHashStats,
+
     /// The unique identifier for the corresponding block for this bank.
     /// None for banks that have not yet completed replay or for leader banks as we cannot populate block_id
     /// until bankless leader. Can be computed directly from shreds without needing to execute transactions.
@@ -1074,6 +1078,7 @@ impl Bank {
             hash_overrides: Arc::new(Mutex::new(HashOverrides::default())),
             accounts_lt_hash: Mutex::new(AccountsLtHash(LtHash::identity())),
             cache_for_accounts_lt_hash: RwLock::new(AHashMap::new()),
+            stats_for_accounts_lt_hash: AccountsLtHashStats::default(),
             block_id: RwLock::new(None),
         };
 
@@ -1329,6 +1334,7 @@ impl Bank {
             hash_overrides: parent.hash_overrides.clone(),
             accounts_lt_hash: Mutex::new(parent.accounts_lt_hash.lock().unwrap().clone()),
             cache_for_accounts_lt_hash: RwLock::new(AHashMap::new()),
+            stats_for_accounts_lt_hash: AccountsLtHashStats::default(),
             block_id: RwLock::new(None),
         };
 
@@ -1739,6 +1745,7 @@ impl Bank {
             hash_overrides: Arc::new(Mutex::new(HashOverrides::default())),
             accounts_lt_hash: Mutex::new(AccountsLtHash(LtHash([0xBAD1; LtHash::NUM_ELEMENTS]))),
             cache_for_accounts_lt_hash: RwLock::new(AHashMap::new()),
+            stats_for_accounts_lt_hash: AccountsLtHashStats::default(),
             block_id: RwLock::new(None),
         };
 
