@@ -6190,6 +6190,41 @@ impl Bank {
         base: Option<(Slot, /*capitalization*/ u64)>,
         duplicates_lt_hash: Option<Box<DuplicatesLtHash>>,
     ) -> bool {
+        // If we verify the accounts using the lattice-based hash *and* with storages (as opposed
+        // to the index), then we rely on the DuplicatesLtHash as given by generate_index().  Since
+        // the duplicates are based on a specific set of storages, we must use the exact same
+        // storages to do the lattice-based accounts verification.  This means we must wait to
+        // clean/shrink until *after* we've gotten Arcs to the storages (this prevents their
+        // untimely removal).  Simply, we call `verify_accounts_hash()` before we call `clean` or
+        // `shrink`.
+        let (verified_accounts, verify_accounts_time_us) = measure_us!({
+            let should_verify_accounts = !self.rc.accounts.accounts_db.skip_initial_hash_calc;
+            if should_verify_accounts {
+                info!("Verifying accounts...");
+                let verified = self.verify_accounts_hash(
+                    base,
+                    VerifyAccountsHashConfig {
+                        test_hash_calculation,
+                        ignore_mismatch: false,
+                        require_rooted_bank: false,
+                        run_in_background: true,
+                        store_hash_raw_data_for_debug: false,
+                    },
+                    duplicates_lt_hash,
+                );
+                info!("Verifying accounts... In background.");
+                verified
+            } else {
+                info!("Verifying accounts... Skipped.");
+                self.rc
+                    .accounts
+                    .accounts_db
+                    .verify_accounts_hash_in_bg
+                    .verification_complete();
+                true
+            }
+        });
+
         let (_, clean_time_us) = measure_us!({
             let should_clean = force_clean || (!skip_shrink && self.slot() > 0);
             if should_clean {
@@ -6222,34 +6257,6 @@ impl Bank {
                 info!("Shrinking... Done.");
             } else {
                 info!("Shrinking... Skipped.");
-            }
-        });
-
-        let (verified_accounts, verify_accounts_time_us) = measure_us!({
-            let should_verify_accounts = !self.rc.accounts.accounts_db.skip_initial_hash_calc;
-            if should_verify_accounts {
-                info!("Verifying accounts...");
-                let verified = self.verify_accounts_hash(
-                    base,
-                    VerifyAccountsHashConfig {
-                        test_hash_calculation,
-                        ignore_mismatch: false,
-                        require_rooted_bank: false,
-                        run_in_background: true,
-                        store_hash_raw_data_for_debug: false,
-                    },
-                    duplicates_lt_hash,
-                );
-                info!("Verifying accounts... In background.");
-                verified
-            } else {
-                info!("Verifying accounts... Skipped.");
-                self.rc
-                    .accounts
-                    .accounts_db
-                    .verify_accounts_hash_in_bg
-                    .verification_complete();
-                true
             }
         });
 
