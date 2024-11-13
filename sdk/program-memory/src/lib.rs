@@ -5,11 +5,9 @@
 
 #[cfg(target_os = "solana")]
 pub mod syscalls {
-    use solana_define_syscall::define_syscall;
-    define_syscall!(fn sol_memcpy_(dst: *mut u8, src: *const u8, n: u64));
-    define_syscall!(fn sol_memmove_(dst: *mut u8, src: *const u8, n: u64));
-    define_syscall!(fn sol_memcmp_(s1: *const u8, s2: *const u8, n: u64, result: *mut i32));
-    define_syscall!(fn sol_memset_(s: *mut u8, c: u8, n: u64));
+    pub use solana_define_syscall::definitions::{
+        sol_memcmp_, sol_memcpy_, sol_memmove_, sol_memset_,
+    };
 }
 
 /// Check that two regions do not overlap.

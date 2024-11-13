@@ -1,8 +1,6 @@
 #![no_std]
 #[cfg(any(feature = "sha2", not(target_os = "solana")))]
 use sha2::{Digest, Sha256};
-#[cfg(target_os = "solana")]
-use solana_define_syscall::define_syscall;
 use solana_hash::Hash;
 
 #[cfg(any(feature = "sha2", not(target_os = "solana")))]
@@ -28,7 +26,7 @@ impl Hasher {
 }
 
 #[cfg(target_os = "solana")]
-define_syscall!(fn sol_sha256(vals: *const u8, val_len: u64, hash_result: *mut u8) -> u64);
+pub use solana_define_syscall::definitions::sol_sha256;
 
 /// Return a Sha256 hash for the given data.
 pub fn hashv(vals: &[&[u8]]) -> Hash {

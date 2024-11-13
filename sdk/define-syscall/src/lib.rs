@@ -1,3 +1,5 @@
+pub mod definitions;
+
 #[cfg(target_feature = "static-syscalls")]
 #[macro_export]
 macro_rules! define_syscall {

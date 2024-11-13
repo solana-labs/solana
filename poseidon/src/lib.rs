@@ -170,7 +170,7 @@ impl PoseidonHash {
 }
 
 #[cfg(target_os = "solana")]
-solana_define_syscall::define_syscall!(fn sol_poseidon(parameters: u64, endianness: u64, vals: *const u8, val_len: u64, hash_result: *mut u8) -> u64);
+pub use solana_define_syscall::definitions::sol_poseidon;
 
 /// Return a Poseidon hash for the given data with the given elliptic curve and
 /// endianness.
