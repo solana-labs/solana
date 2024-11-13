@@ -22,7 +22,7 @@ use {
         borrow::Borrow,
         convert::TryInto,
         io::{Seek, SeekFrom, Write},
-        path::PathBuf,
+        path::{Path, PathBuf},
         sync::{
             atomic::{AtomicU64, AtomicUsize, Ordering},
             Arc,
@@ -61,18 +61,103 @@ impl MmapAccountHashesFile {
 
 /// 1 file containing account hashes sorted by pubkey
 struct AccountHashesFile {
-    /// # hashes and an open file that will be deleted on drop. None if there are zero hashes to represent, and thus, no file.
+    /// The mmap hash file created in the temp directory, which will be deleted on drop.
     writer: Option<MmapAccountHashesFile>,
-    /// The directory where temporary cache files are put
-    dir_for_temp_cache_files: PathBuf,
-    /// # bytes allocated
-    capacity: usize,
 }
 
 impl AccountHashesFile {
+    /// create a new AccountHashesFile
+    fn new(num_hashes: usize, dir_for_temp_cache_files: impl AsRef<Path>) -> Self {
+        if num_hashes == 0 {
+            return Self { writer: None };
+        }
+
+        let capacity = num_hashes * std::mem::size_of::<Hash>();
+        let get_file = || -> Result<_, std::io::Error> {
+            let mut data = tempfile_in(&dir_for_temp_cache_files).unwrap_or_else(|err| {
+                panic!(
+                    "Unable to create file within {}: {err}",
+                    dir_for_temp_cache_files.as_ref().display(),
+                )
+            });
+
+            // Theoretical performance optimization: write a zero to the end of
+            // the file so that we won't have to resize it later, which may be
+            // expensive.
+            assert!(capacity > 0);
+            data.seek(SeekFrom::Start((capacity - 1) as u64))?;
+            data.write_all(&[0])?;
+            data.rewind()?;
+            data.flush()?;
+            Ok(data)
+        };
+
+        // Retry 5 times to allocate the AccountHashesFile. The memory might be fragmented and
+        // causes memory allocation failure. Therefore, let's retry after failure. Hoping that the
+        // kernel has the chance to defrag the memory between the retries, and retries succeed.
+        let mut num_retries = 0;
+        let data = loop {
+            num_retries += 1;
+
+            match get_file() {
+                Ok(data) => {
+                    break data;
+                }
+                Err(err) => {
+                    info!(
+                        "Unable to create account hashes file within {}: {}, retry counter {}",
+                        dir_for_temp_cache_files.as_ref().display(),
+                        err,
+                        num_retries
+                    );
+
+                    if num_retries > 5 {
+                        panic!(
+                            "Unable to create account hashes file within {}: after {} retries",
+                            dir_for_temp_cache_files.as_ref().display(),
+                            num_retries
+                        );
+                    }
+                    datapoint_info!(
+                        "retry_account_hashes_file_allocation",
+                        ("retry", num_retries, i64)
+                    );
+                    thread::sleep(time::Duration::from_millis(num_retries * 100));
+                }
+            }
+        };
+
+        //UNSAFE: Required to create a Mmap
+        let map = unsafe { MmapMut::map_mut(&data) };
+        let map = map.unwrap_or_else(|e| {
+            error!(
+                "Failed to map the data file (size: {}): {}.\n
+                    Please increase sysctl vm.max_map_count or equivalent for your platform.",
+                capacity, e
+            );
+            std::process::exit(1);
+        });
+
+        let writer = MmapAccountHashesFile {
+            mmap: map,
+            count: 0,
+        };
+
+        AccountHashesFile {
+            writer: Some(writer),
+        }
+    }
+
     /// return a mmap reader that can be accessed  by slice
+    /// The reader will be None if there are no hashes in the file. And this function should only be called once after all writes are done.
+    /// After calling this function, the writer will be None. No more writes are allowed.
     fn get_reader(&mut self) -> Option<MmapAccountHashesFile> {
-        std::mem::take(&mut self.writer)
+        let mmap = self.writer.take();
+        if mmap.is_some() && mmap.as_ref().unwrap().count > 0 {
+            mmap
+        } else {
+            None
+        }
     }
 
     /// # hashes stored in this file
@@ -84,81 +169,8 @@ impl AccountHashesFile {
     }
 
     /// write 'hash' to the file
-    /// If the file isn't open, create it first.
     fn write(&mut self, hash: &Hash) {
-        if self.writer.is_none() {
-            // we have hashes to write but no file yet, so create a file that will auto-delete on drop
-
-            let get_file = || -> Result<_, std::io::Error> {
-                let mut data = tempfile_in(&self.dir_for_temp_cache_files).unwrap_or_else(|err| {
-                    panic!(
-                        "Unable to create file within {}: {err}",
-                        self.dir_for_temp_cache_files.display()
-                    )
-                });
-
-                // Theoretical performance optimization: write a zero to the end of
-                // the file so that we won't have to resize it later, which may be
-                // expensive.
-                assert!(self.capacity > 0);
-                data.seek(SeekFrom::Start((self.capacity - 1) as u64))?;
-                data.write_all(&[0])?;
-                data.rewind()?;
-                data.flush()?;
-                Ok(data)
-            };
-
-            // Retry 5 times to allocate the AccountHashesFile. The memory might be fragmented and
-            // causes memory allocation failure. Therefore, let's retry after failure. Hoping that the
-            // kernel has the chance to defrag the memory between the retries, and retries succeed.
-            let mut num_retries = 0;
-            let data = loop {
-                num_retries += 1;
-
-                match get_file() {
-                    Ok(data) => {
-                        break data;
-                    }
-                    Err(err) => {
-                        info!(
-                            "Unable to create account hashes file within {}: {}, retry counter {}",
-                            self.dir_for_temp_cache_files.display(),
-                            err,
-                            num_retries
-                        );
-
-                        if num_retries > 5 {
-                            panic!(
-                                "Unable to create account hashes file within {}: after {} retries",
-                                self.dir_for_temp_cache_files.display(),
-                                num_retries
-                            );
-                        }
-                        datapoint_info!(
-                            "retry_account_hashes_file_allocation",
-                            ("retry", num_retries, i64)
-                        );
-                        thread::sleep(time::Duration::from_millis(num_retries * 100));
-                    }
-                }
-            };
-
-            //UNSAFE: Required to create a Mmap
-            let map = unsafe { MmapMut::map_mut(&data) };
-            let map = map.unwrap_or_else(|e| {
-                error!(
-                    "Failed to map the data file (size: {}): {}.\n
-                        Please increase sysctl vm.max_map_count or equivalent for your platform.",
-                    self.capacity, e
-                );
-                std::process::exit(1);
-            });
-
-            self.writer = Some(MmapAccountHashesFile {
-                mmap: map,
-                count: 0,
-            });
-        }
+        debug_assert!(self.writer.is_some());
         self.writer.as_mut().unwrap().write(hash);
     }
 }
@@ -1156,11 +1168,8 @@ impl<'a> AccountsHasher<'a> {
             stats,
         );
 
-        let mut hashes = AccountHashesFile {
-            writer: None,
-            dir_for_temp_cache_files: self.dir_for_temp_cache_files.clone(),
-            capacity: max_inclusive_num_pubkeys * std::mem::size_of::<Hash>(),
-        };
+        let mut hashes =
+            AccountHashesFile::new(max_inclusive_num_pubkeys, &self.dir_for_temp_cache_files);
 
         let mut overall_sum: u64 = 0;
 
@@ -1376,16 +1385,6 @@ mod tests {
         }
     }
 
-    impl AccountHashesFile {
-        fn new(dir_for_temp_cache_files: PathBuf) -> Self {
-            Self {
-                writer: None,
-                dir_for_temp_cache_files,
-                capacity: 1024, /* default 1k for tests */
-            }
-        }
-    }
-
     impl CumulativeOffsets {
         fn from_raw_2d<T>(raw: &[Vec<Vec<T>>]) -> Self {
             let mut total_count: usize = 0;
@@ -1471,19 +1470,19 @@ mod tests {
     fn test_account_hashes_file() {
         let dir_for_temp_cache_files = tempdir().unwrap();
         // 0 hashes
-        let mut file = AccountHashesFile::new(dir_for_temp_cache_files.path().to_path_buf());
+        let mut file = AccountHashesFile::new(0, dir_for_temp_cache_files.path());
         assert!(file.get_reader().is_none());
         let hashes = (0..2).map(|i| Hash::new(&[i; 32])).collect::<Vec<_>>();
 
         // 1 hash
+        let mut file = AccountHashesFile::new(1, dir_for_temp_cache_files.path());
         file.write(&hashes[0]);
         let reader = file.get_reader().unwrap();
         assert_eq!(&[hashes[0]][..], reader.read(0));
         assert!(reader.read(1).is_empty());
 
         // multiple hashes
-        let mut file = AccountHashesFile::new(dir_for_temp_cache_files.path().to_path_buf());
-        assert!(file.get_reader().is_none());
+        let mut file = AccountHashesFile::new(hashes.len(), dir_for_temp_cache_files.path());
         hashes.iter().for_each(|hash| file.write(hash));
         let reader = file.get_reader().unwrap();
         (0..2).for_each(|i| assert_eq!(&hashes[i..], reader.read(i)));
@@ -1499,15 +1498,15 @@ mod tests {
             let mut combined = Vec::default();
 
             // 0 hashes
-            let file0 = AccountHashesFile::new(dir_for_temp_cache_files.path().to_path_buf());
+            let file0 = AccountHashesFile::new(0, dir_for_temp_cache_files.path());
 
             // 1 hash
-            let mut file1 = AccountHashesFile::new(dir_for_temp_cache_files.path().to_path_buf());
+            let mut file1 = AccountHashesFile::new(1, dir_for_temp_cache_files.path());
             file1.write(&hashes[0]);
             combined.push(hashes[0]);
 
             // multiple hashes
-            let mut file2 = AccountHashesFile::new(dir_for_temp_cache_files.path().to_path_buf());
+            let mut file2 = AccountHashesFile::new(hashes.len(), dir_for_temp_cache_files.path());
             hashes.iter().for_each(|hash| {
                 file2.write(hash);
                 combined.push(*hash);
@@ -1520,9 +1519,9 @@ mod tests {
                 vec![
                     file0,
                     file1,
-                    AccountHashesFile::new(dir_for_temp_cache_files.path().to_path_buf()),
+                    AccountHashesFile::new(0, dir_for_temp_cache_files.path()),
                     file2,
-                    AccountHashesFile::new(dir_for_temp_cache_files.path().to_path_buf()),
+                    AccountHashesFile::new(0, dir_for_temp_cache_files.path()),
                 ]
             } else if permutation == 2 {
                 vec![file1, file2]
@@ -1532,8 +1531,8 @@ mod tests {
                 combined.push(one);
                 vec![
                     file2,
-                    AccountHashesFile::new(dir_for_temp_cache_files.path().to_path_buf()),
-                    AccountHashesFile::new(dir_for_temp_cache_files.path().to_path_buf()),
+                    AccountHashesFile::new(0, dir_for_temp_cache_files.path()),
+                    AccountHashesFile::new(0, dir_for_temp_cache_files.path()),
                     file1,
                 ]
             };
