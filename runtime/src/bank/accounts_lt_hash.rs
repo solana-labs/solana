@@ -42,6 +42,19 @@ impl Bank {
         let delta_lt_hash = self.calculate_delta_lt_hash();
         let mut accounts_lt_hash = self.accounts_lt_hash.lock().unwrap();
         accounts_lt_hash.0.mix_in(&delta_lt_hash);
+
+        // If the feature gate is not yet active, log the lt hash checksums for debug/testing
+        if !self
+            .feature_set
+            .is_active(&feature_set::accounts_lt_hash::id())
+        {
+            log::info!(
+                "updated accounts lattice hash for slot {}, delta_lt_hash checksum: {}, accounts_lt_hash checksum: {}",
+                self.slot(),
+                delta_lt_hash.checksum(),
+                accounts_lt_hash.0.checksum(),
+            );
+        }
     }
 
     /// Calculates the lt hash *of only this slot*
