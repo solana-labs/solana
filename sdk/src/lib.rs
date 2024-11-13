@@ -64,7 +64,6 @@ pub use solana_signer::signers;
 pub mod client;
 pub mod compute_budget;
 pub mod deserialize_utils;
-pub mod ed25519_instruction;
 pub mod entrypoint;
 pub mod entrypoint_deprecated;
 pub mod epoch_info;
@@ -120,6 +119,12 @@ pub use solana_bn254 as alt_bn128;
 pub use solana_decode_error as decode_error;
 #[deprecated(since = "2.1.0", note = "Use `solana-derivation-path` crate instead")]
 pub use solana_derivation_path as derivation_path;
+#[cfg(feature = "full")]
+#[deprecated(
+    since = "2.2.0",
+    note = "Use `solana-ed25519-instructions` crate instead"
+)]
+pub use solana_ed25519_instructions as ed25519_instruction;
 #[deprecated(since = "2.1.0", note = "Use `solana-feature-set` crate instead")]
 pub use solana_feature_set as feature_set;
 #[deprecated(since = "2.2.0", note = "Use `solana-fee-structure` crate instead")]

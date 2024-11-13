@@ -35,6 +35,7 @@ full = [
     "digest",
     "solana-pubkey/rand",
     "dep:solana-cluster-type",
+    "dep:solana-ed25519-instructions",
     "dep:solana-keypair",
     "dep:solana-precompile-error",
     "dep:solana-presigner",
@@ -104,6 +105,7 @@ solana-cluster-type = { workspace = true, features = [
 solana-commitment-config = { workspace = true, optional = true, features = ["serde"] }
 solana-decode-error = { workspace = true }
 solana-derivation-path = { workspace = true }
+solana-ed25519-instructions = { workspace = true, optional = true }
 solana-feature-set = { workspace = true }
 solana-fee-structure = { workspace = true, features = ["serde"] }
 solana-frozen-abi = { workspace = true, optional = true, features = [

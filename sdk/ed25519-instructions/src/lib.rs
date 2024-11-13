@@ -2,8 +2,6 @@
 //!
 //! [np]: https://docs.solanalabs.com/runtime/programs#ed25519-program
 
-#![cfg(feature = "full")]
-
 use {
     bytemuck::bytes_of,
     bytemuck_derive::{Pod, Zeroable},
@@ -79,7 +77,7 @@ pub fn new_ed25519_instruction(keypair: &ed25519_dalek::Keypair, message: &[u8])
     instruction_data.extend_from_slice(message);
 
     Instruction {
-        program_id: solana_sdk::ed25519_program::id(),
+        program_id: solana_sdk_ids::ed25519_program::id(),
         accounts: vec![],
         data: instruction_data,
     }
@@ -190,15 +188,13 @@ fn get_data_slice<'a>(
 pub mod test {
     use {
         super::*,
-        crate::{
-            ed25519_instruction::new_ed25519_instruction,
-            hash::Hash,
-            signature::{Keypair, Signer},
-            transaction::Transaction,
-        },
         hex,
         rand0_7::{thread_rng, Rng},
         solana_feature_set::FeatureSet,
+        solana_hash::Hash,
+        solana_keypair::Keypair,
+        solana_sdk::transaction::Transaction,
+        solana_signer::Signer,
     };
 
     pub fn new_ed25519_instruction_raw(
@@ -249,7 +245,7 @@ pub mod test {
         instruction_data.extend_from_slice(message);
 
         Instruction {
-            program_id: solana_sdk::ed25519_program::id(),
+            program_id: solana_sdk_ids::ed25519_program::id(),
             accounts: vec![],
             data: instruction_data,
         }

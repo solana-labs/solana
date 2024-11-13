@@ -1,0 +1,34 @@
+[package]
+name = "solana-ed25519-instructions"
+description = "Instructions for the Solana ed25519 native program"
+documentation = "https://docs.rs/solana-ed25519-instructions"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+bytemuck = { workspace = true }
+bytemuck_derive = { workspace = true }
+ed25519-dalek = { workspace = true }
+solana-feature-set = { workspace = true }
+solana-instruction = { workspace = true, features = ["std"] }
+solana-precompile-error = { workspace = true }
+solana-sdk-ids = { workspace = true }
+
+[dev-dependencies]
+hex = { workspace = true }
+rand0-7 = { workspace = true }
+solana-hash = { workspace = true }
+solana-keypair = { workspace = true }
+solana-logger = { workspace = true }
+solana-sdk = { path = ".." }
+solana-signer = { workspace = true }
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[lints]
+workspace = true

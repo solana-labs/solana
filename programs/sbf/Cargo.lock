@@ -5460,6 +5460,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-ed25519-instructions"
+version = "2.2.0"
+dependencies = [
+ "bytemuck",
+ "bytemuck_derive",
+ "ed25519-dalek",
+ "solana-feature-set",
+ "solana-instruction",
+ "solana-precompile-error",
+ "solana-sdk-ids",
+]
+
+[[package]]
 name = "solana-entry"
 version = "2.2.0"
 dependencies = [
@@ -7062,6 +7075,7 @@ dependencies = [
  "solana-commitment-config",
  "solana-decode-error",
  "solana-derivation-path",
+ "solana-ed25519-instructions",
  "solana-feature-set",
  "solana-fee-structure",
  "solana-inflation",
