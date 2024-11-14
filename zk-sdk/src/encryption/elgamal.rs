@@ -20,24 +20,10 @@ use wasm_bindgen::prelude::*;
 // types and functions exported for wasm targets in all of its dependencies
 // (https://github.com/rustwasm/wasm-bindgen/issues/3759). We specifically exclude some of the
 // dependencies that will cause unnecessary bloat to the wasm binary.
-#[cfg(not(target_arch = "wasm32"))]
-use {
-    crate::encryption::discrete_log::DiscreteLog,
-    sha3::Digest,
-    solana_derivation_path::DerivationPath,
-    solana_seed_derivable::SeedDerivable,
-    solana_seed_phrase::generate_seed_from_seed_phrase_and_passphrase,
-    solana_signature::Signature,
-    solana_signer::{EncodableKey, EncodableKeypair, Signer, SignerError},
-    std::{
-        error,
-        io::{Read, Write},
-        path::Path,
-    },
-};
 use {
     crate::{
         encryption::{
+            discrete_log::DiscreteLog,
             pedersen::{Pedersen, PedersenCommitment, PedersenOpening, G, H},
             DECRYPT_HANDLE_LEN, ELGAMAL_CIPHERTEXT_LEN, ELGAMAL_KEYPAIR_LEN, ELGAMAL_PUBKEY_LEN,
             ELGAMAL_SECRET_KEY_LEN, PEDERSEN_COMMITMENT_LEN,
@@ -57,6 +43,20 @@ use {
     std::{convert::TryInto, fmt},
     subtle::{Choice, ConstantTimeEq},
     zeroize::Zeroize,
+};
+#[cfg(not(target_arch = "wasm32"))]
+use {
+    sha3::Digest,
+    solana_derivation_path::DerivationPath,
+    solana_seed_derivable::SeedDerivable,
+    solana_seed_phrase::generate_seed_from_seed_phrase_and_passphrase,
+    solana_signature::Signature,
+    solana_signer::{EncodableKey, EncodableKeypair, Signer, SignerError},
+    std::{
+        error,
+        io::{Read, Write},
+        path::Path,
+    },
 };
 
 /// Algorithm handle for the twisted ElGamal encryption scheme
@@ -123,7 +123,6 @@ impl ElGamal {
     ///
     /// The output of this function is of type `DiscreteLog`. To recover, the originally encrypted
     /// amount, use `DiscreteLog::decode`.
-    #[cfg(not(target_arch = "wasm32"))]
     fn decrypt(secret: &ElGamalSecretKey, ciphertext: &ElGamalCiphertext) -> DiscreteLog {
         DiscreteLog::new(
             *G,
@@ -136,7 +135,6 @@ impl ElGamal {
     ///
     /// If the originally encrypted amount is not a positive 32-bit number, then the function
     /// returns `None`.
-    #[cfg(not(target_arch = "wasm32"))]
     fn decrypt_u32(secret: &ElGamalSecretKey, ciphertext: &ElGamalCiphertext) -> Option<u64> {
         let discrete_log_instance = Self::decrypt(secret, ciphertext);
         discrete_log_instance.decode_u32()
@@ -464,6 +462,19 @@ impl ElGamalSecretKey {
     pub fn as_bytes(&self) -> &[u8; ELGAMAL_SECRET_KEY_LEN] {
         self.0.as_bytes()
     }
+
+    /// Decrypts a ciphertext using the ElGamal secret key.
+    ///
+    /// The output of this function is of type `DiscreteLog`. To recover, the originally encrypted
+    /// message, use `DiscreteLog::decode`.
+    pub fn decrypt(&self, ciphertext: &ElGamalCiphertext) -> DiscreteLog {
+        ElGamal::decrypt(self, ciphertext)
+    }
+
+    /// Decrypts a ciphertext using the ElGamal secret key interpretting the message as type `u32`.
+    pub fn decrypt_u32(&self, ciphertext: &ElGamalCiphertext) -> Option<u64> {
+        ElGamal::decrypt_u32(self, ciphertext)
+    }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -513,19 +524,6 @@ impl ElGamalSecretKey {
         let result = hasher.finalize();
 
         result.to_vec()
-    }
-
-    /// Decrypts a ciphertext using the ElGamal secret key.
-    ///
-    /// The output of this function is of type `DiscreteLog`. To recover, the originally encrypted
-    /// message, use `DiscreteLog::decode`.
-    pub fn decrypt(&self, ciphertext: &ElGamalCiphertext) -> DiscreteLog {
-        ElGamal::decrypt(self, ciphertext)
-    }
-
-    /// Decrypts a ciphertext using the ElGamal secret key interpretting the message as type `u32`.
-    pub fn decrypt_u32(&self, ciphertext: &ElGamalCiphertext) -> Option<u64> {
-        ElGamal::decrypt_u32(self, ciphertext)
     }
 }
 
@@ -663,7 +661,6 @@ impl ElGamalCiphertext {
     ///
     /// The output of this function is of type `DiscreteLog`. To recover, the originally encrypted
     /// amount, use `DiscreteLog::decode`.
-    #[cfg(not(target_arch = "wasm32"))]
     pub fn decrypt(&self, secret: &ElGamalSecretKey) -> DiscreteLog {
         ElGamal::decrypt(secret, self)
     }
@@ -673,7 +670,6 @@ impl ElGamalCiphertext {
     ///
     /// If the originally encrypted amount is not a positive 32-bit number, then the function
     /// returns `None`.
-    #[cfg(not(target_arch = "wasm32"))]
     pub fn decrypt_u32(&self, secret: &ElGamalSecretKey) -> Option<u64> {
         ElGamal::decrypt_u32(secret, self)
     }

@@ -25,7 +25,6 @@ pub mod pod;
 mod range_proof;
 mod sigma_proofs;
 mod transcript;
-#[cfg(not(target_arch = "wasm32"))]
 pub mod zk_elgamal_proof_program;
 
 /// Byte length of a compressed Ristretto point or scalar in Curve255519

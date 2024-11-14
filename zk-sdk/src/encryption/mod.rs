@@ -17,7 +17,7 @@ use crate::{RISTRETTO_POINT_LEN, SCALAR_LEN};
 pub(crate) mod macros;
 #[cfg(not(target_os = "solana"))]
 pub mod auth_encryption;
-#[cfg(all(not(target_os = "solana"), not(target_arch = "wasm32")))]
+#[cfg(not(target_os = "solana"))]
 pub mod discrete_log;
 #[cfg(not(target_os = "solana"))]
 pub mod elgamal;

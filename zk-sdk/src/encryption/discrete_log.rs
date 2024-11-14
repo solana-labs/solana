@@ -146,6 +146,7 @@ impl DiscreteLog {
     /// Solves the discrete log problem under the assumption that the solution
     /// is a positive 32-bit number.
     pub fn decode_u32(self) -> Option<u64> {
+        #[allow(unused_variables)]
         if let Some(num_threads) = self.num_threads {
             #[cfg(not(target_arch = "wasm32"))]
             {
