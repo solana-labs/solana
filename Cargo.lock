@@ -6817,7 +6817,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-ed25519-instructions"
+name = "solana-ed25519-program"
 version = "2.2.0"
 dependencies = [
  "bytemuck",
@@ -8359,7 +8359,7 @@ dependencies = [
  "solana-commitment-config",
  "solana-decode-error",
  "solana-derivation-path",
- "solana-ed25519-instructions",
+ "solana-ed25519-program",
  "solana-feature-set",
  "solana-fee-structure",
  "solana-frozen-abi",

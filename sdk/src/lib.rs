@@ -119,11 +119,8 @@ pub use solana_decode_error as decode_error;
 #[deprecated(since = "2.1.0", note = "Use `solana-derivation-path` crate instead")]
 pub use solana_derivation_path as derivation_path;
 #[cfg(feature = "full")]
-#[deprecated(
-    since = "2.2.0",
-    note = "Use `solana-ed25519-instructions` crate instead"
-)]
-pub use solana_ed25519_instructions as ed25519_instruction;
+#[deprecated(since = "2.2.0", note = "Use `solana-ed25519-program` crate instead")]
+pub use solana_ed25519_program as ed25519_instruction;
 #[deprecated(since = "2.1.0", note = "Use `solana-feature-set` crate instead")]
 pub use solana_feature_set as feature_set;
 #[deprecated(since = "2.2.0", note = "Use `solana-fee-structure` crate instead")]
