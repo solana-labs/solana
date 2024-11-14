@@ -259,20 +259,13 @@ impl AccountsCache {
     }
 
     pub fn cached_frozen_slots(&self) -> Vec<Slot> {
-        let mut slots: Vec<_> = self
-            .cache
+        self.cache
             .iter()
             .filter_map(|item| {
                 let (slot, slot_cache) = item.pair();
-                if slot_cache.is_frozen() {
-                    Some(*slot)
-                } else {
-                    None
-                }
+                slot_cache.is_frozen().then_some(*slot)
             })
-            .collect();
-        slots.sort_unstable();
-        slots
+            .collect()
     }
 
     pub fn contains(&self, slot: Slot) -> bool {

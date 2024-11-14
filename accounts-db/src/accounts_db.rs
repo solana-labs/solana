@@ -6172,7 +6172,8 @@ impl AccountsDb {
         let mut unflushable_unrooted_slot_count = 0;
         let max_flushed_root = self.accounts_cache.fetch_max_flush_root();
         if self.should_aggressively_flush_cache() {
-            let old_slots = self.accounts_cache.cached_frozen_slots();
+            let mut old_slots = self.accounts_cache.cached_frozen_slots();
+            old_slots.sort_unstable();
             excess_slot_count = old_slots.len();
             let mut flush_stats = FlushStats::default();
             old_slots.into_iter().for_each(|old_slot| {
