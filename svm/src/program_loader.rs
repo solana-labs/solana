@@ -191,18 +191,14 @@ pub fn load_program_with_pubkey<CB: TransactionProcessingCallback>(
                     &loader_v4::id(),
                     program_account.data().len(),
                     slot,
-                    environments.program_runtime_v2.clone(),
+                    environments.program_runtime_v1.clone(),
                     reload,
                 )
             })
             .map_err(|_| (slot, ProgramCacheEntryOwner::LoaderV4)),
     }
     .unwrap_or_else(|(slot, owner)| {
-        let env = if let ProgramCacheEntryOwner::LoaderV4 = &owner {
-            environments.program_runtime_v2.clone()
-        } else {
-            environments.program_runtime_v1.clone()
-        };
+        let env = environments.program_runtime_v1.clone();
         ProgramCacheEntry::new_tombstone(
             slot,
             owner,

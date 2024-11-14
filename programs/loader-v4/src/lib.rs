@@ -1,13 +1,10 @@
 use {
-    solana_bpf_loader_program::execute,
+    solana_bpf_loader_program::{deploy_program, deploy_program_internal, execute},
     solana_log_collector::{ic_logger_msg, LogCollector},
     solana_measure::measure::Measure,
     solana_program_runtime::{
         invoke_context::InvokeContext,
-        loaded_programs::{
-            LoadProgramMetrics, ProgramCacheEntry, ProgramCacheEntryOwner, ProgramCacheEntryType,
-            DELAY_VISIBILITY_SLOT_OFFSET,
-        },
+        loaded_programs::{ProgramCacheEntry, ProgramCacheEntryOwner, ProgramCacheEntryType},
     },
     solana_rbpf::{declare_builtin_function, memory_region::MemoryMapping},
     solana_sdk::{
@@ -263,36 +260,15 @@ pub fn process_instruction_deploy(
         .get_data()
         .get(LoaderV4State::program_data_offset()..)
         .ok_or(InstructionError::AccountDataTooSmall)?;
-
-    let deployment_slot = state.slot;
-    let effective_slot = deployment_slot.saturating_add(DELAY_VISIBILITY_SLOT_OFFSET);
-
-    let environments = invoke_context
-        .get_environments_for_slot(effective_slot)
-        .map_err(|err| {
-            // This will never fail since the epoch schedule is already configured.
-            ic_logger_msg!(log_collector, "Failed to get runtime environment {}", err);
-            InstructionError::InvalidArgument
-        })?;
-
-    let mut load_program_metrics = LoadProgramMetrics {
-        program_id: buffer.get_key().to_string(),
-        ..LoadProgramMetrics::default()
-    };
-    let executor = ProgramCacheEntry::new(
+    deploy_program!(
+        invoke_context,
+        program.get_key(),
         &loader_v4::id(),
-        environments.program_runtime_v1.clone(),
-        deployment_slot,
-        effective_slot,
-        programdata,
         buffer.get_data().len(),
-        &mut load_program_metrics,
-    )
-    .map_err(|err| {
-        ic_logger_msg!(log_collector, "{}", err);
-        InstructionError::InvalidAccountData
-    })?;
-    load_program_metrics.submit_datapoint(&mut invoke_context.timings);
+        programdata,
+        current_slot,
+    );
+
     if let Some(mut source_program) = source_program {
         let rent = invoke_context.get_sysvar_cache().get_rent()?;
         let required_lamports = rent.minimum_balance(source_program.get_data().len());
@@ -305,23 +281,6 @@ pub fn process_instruction_deploy(
     let state = get_state_mut(program.get_data_mut()?)?;
     state.slot = current_slot;
     state.status = LoaderV4Status::Deployed;
-
-    if let Some(old_entry) = invoke_context
-        .program_cache_for_tx_batch
-        .find(program.get_key())
-    {
-        executor.tx_usage_counter.store(
-            old_entry.tx_usage_counter.load(Ordering::Relaxed),
-            Ordering::Relaxed,
-        );
-        executor.ix_usage_counter.store(
-            old_entry.ix_usage_counter.load(Ordering::Relaxed),
-            Ordering::Relaxed,
-        );
-    }
-    invoke_context
-        .program_cache_for_tx_batch
-        .store_modified_entry(*program.get_key(), Arc::new(executor));
     Ok(())
 }
 
@@ -488,11 +447,6 @@ pub fn process_instruction_inner(
         .map_err(|err| Box::new(err) as Box<dyn std::error::Error>)
     } else {
         let program = instruction_context.try_borrow_last_program_account(transaction_context)?;
-        let state = get_state(program.get_data())?;
-        if matches!(state.status, LoaderV4Status::Retracted) {
-            ic_logger_msg!(log_collector, "Program is retracted");
-            return Err(Box::new(InstructionError::UnsupportedProgramId));
-        }
         let mut get_or_create_executor_time = Measure::start("get_or_create_executor_time");
         let loaded_program = invoke_context
             .program_cache_for_tx_batch
@@ -1590,16 +1544,17 @@ mod tests {
             &[0, 1, 2, 3],
             transaction_accounts.clone(),
             &[(1, false, true)],
-            Err(InstructionError::AccountDataTooSmall),
+            Err(InstructionError::UnsupportedProgramId),
         );
 
         // Error: Program is not deployed
+        // This is only checked in integration with load_program_accounts() in the SVM
         process_instruction(
             vec![3],
             &[0, 1, 2, 3],
             transaction_accounts.clone(),
             &[(1, false, true)],
-            Err(InstructionError::UnsupportedProgramId),
+            Ok(()),
         );
 
         // Error: Program fails verification
