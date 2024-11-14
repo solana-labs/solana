@@ -21,6 +21,7 @@ solana-type-overrides = { workspace = true }
 
 [dev-dependencies]
 assert_matches = { workspace = true }
+criterion = { workspace = true }
 solana-compute-budget = { workspace = true }
 solana-feature-set = { workspace = true }
 solana-logger = { workspace = true }
@@ -28,6 +29,10 @@ solana-logger = { workspace = true }
 [lib]
 crate-type = ["lib"]
 name = "solana_system_program"
+
+[[bench]]
+name = "system"
+harness = false
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
