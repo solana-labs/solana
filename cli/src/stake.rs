@@ -4127,7 +4127,7 @@ mod tests {
         let offline_string = offline_pubkey.to_string();
         let offline_sig = offline.sign_message(&[3u8]);
         let offline_signer = format!("{offline_pubkey}={offline_sig}");
-        let nonce_hash = Hash::new(&[4u8; 32]);
+        let nonce_hash = Hash::new_from_array([4u8; 32]);
         let nonce_hash_string = nonce_hash.to_string();
         let test_create_stake_account2 = test_commands.clone().get_matches_from(vec![
             "test",
@@ -4984,7 +4984,7 @@ mod tests {
         let stake_auth_string = stake_auth_pubkey.to_string();
         let stake_sig = stake_auth.sign_message(&[0u8]);
         let stake_signer = format!("{stake_auth_pubkey}={stake_sig}");
-        let nonce_hash = Hash::new(&[4u8; 32]);
+        let nonce_hash = Hash::new_from_array([4u8; 32]);
         let nonce_hash_string = nonce_hash.to_string();
 
         let test_split_stake_account = test_commands.clone().get_matches_from(vec![

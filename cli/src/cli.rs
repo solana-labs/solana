@@ -2563,7 +2563,7 @@ mod tests {
         );
 
         //Test Transfer Subcommand, offline sign
-        let blockhash = Hash::new(&[1u8; 32]);
+        let blockhash = Hash::new_from_array([1u8; 32]);
         let blockhash_string = blockhash.to_string();
         let test_transfer = test_commands.clone().get_matches_from(vec![
             "test",

@@ -110,7 +110,7 @@ mod tests {
             .collect::<Vec<_>>();
 
         let stake_rewards_bucket =
-            hash_rewards_into_partitions(stake_rewards, &Hash::new(&[1; 32]), 10);
+            hash_rewards_into_partitions(stake_rewards, &Hash::new_from_array([1; 32]), 10);
 
         bank.set_epoch_reward_status_active(
             bank.block_height() + REWARD_CALCULATION_NUM_BLOCKS,

@@ -111,7 +111,7 @@ mod tests {
                     // create hash with visibly recognizable ordering
                     let mut h = [0; HASH_BYTES];
                     h[HASH_BYTES - 1] = i as u8;
-                    Hash::new(&h)
+                    Hash::new_from_array(h)
                 })
             })
             .collect();

@@ -684,8 +684,8 @@ pub(crate) mod tests {
 
     #[test]
     fn test_hash_as_u64() {
-        let arr: Vec<u8> = (0..HASH_BYTES).map(|i| i as u8 + 1).collect();
-        let hash = Hash::new(&arr);
+        let arr: [u8; HASH_BYTES] = std::array::from_fn(|i| i as u8 + 1);
+        let hash = Hash::new_from_array(arr);
         assert_eq!(CrdsFilter::hash_as_u64(&hash), 0x807060504030201);
     }
 

@@ -2456,7 +2456,7 @@ pub mod tests {
             rent_epoch: 0,
         };
         let offset = 3 * std::mem::size_of::<u64>();
-        let hash = AccountHash(Hash::new(&[2; 32]));
+        let hash = AccountHash(Hash::new_from_array([2; 32]));
         let stored_meta = StoredMeta {
             // global write version
             write_version_obsolete: 0,

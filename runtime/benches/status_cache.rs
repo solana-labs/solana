@@ -7,7 +7,7 @@ use {
     solana_accounts_db::ancestors::Ancestors,
     solana_runtime::{bank::BankStatusCache, status_cache::*},
     solana_sdk::{
-        hash::{hash, Hash},
+        hash::{hash, Hash, HASH_BYTES},
         signature::{Signature, SIGNATURE_BYTES},
     },
     test::Bencher,
@@ -19,7 +19,7 @@ fn bench_status_cache_serialize(bencher: &mut Bencher) {
     status_cache.add_root(0);
     status_cache.clear();
     for hash_index in 0..100 {
-        let blockhash = Hash::new(&vec![hash_index; std::mem::size_of::<Hash>()]);
+        let blockhash = Hash::new_from_array([hash_index; HASH_BYTES]);
         let mut id = blockhash;
         for _ in 0..100 {
             id = hash(id.as_ref());

@@ -276,7 +276,7 @@ mod test {
 
     #[test]
     fn test_parse_sysvars() {
-        let hash = Hash::new(&[1; 32]);
+        let hash = Hash::new_from_array([1; 32]);
 
         let clock_sysvar = create_account_for_test(&Clock::default());
         assert_eq!(

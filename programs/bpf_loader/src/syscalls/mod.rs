@@ -3518,7 +3518,7 @@ mod tests {
         let mut src_rewards = create_filled_type::<EpochRewards>(false);
         src_rewards.distribution_starting_block_height = 42;
         src_rewards.num_partitions = 2;
-        src_rewards.parent_blockhash = Hash::new(&[3; 32]);
+        src_rewards.parent_blockhash = Hash::new_from_array([3; 32]);
         src_rewards.total_points = 4;
         src_rewards.total_rewards = 100;
         src_rewards.distributed_rewards = 10;

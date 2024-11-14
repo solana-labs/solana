@@ -650,7 +650,7 @@ mod tests {
     #[test]
     fn test_process_faucet_request() {
         let to = solana_sdk::pubkey::new_rand();
-        let blockhash = Hash::new(to.as_ref());
+        let blockhash = Hash::new_from_array(to.to_bytes());
         let lamports = 50;
         let req = FaucetRequest::GetAirdrop {
             lamports,

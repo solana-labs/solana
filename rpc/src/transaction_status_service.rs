@@ -347,7 +347,7 @@ pub(crate) mod tests {
         let pubkey = Pubkey::new_unique();
 
         let mut nonce_account = nonce_account::create_account(1).into_inner();
-        let durable_nonce = DurableNonce::from_blockhash(&Hash::new(&[42u8; 32]));
+        let durable_nonce = DurableNonce::from_blockhash(&Hash::new_from_array([42u8; 32]));
         let data = nonce::state::Data::new(Pubkey::from([1u8; 32]), durable_nonce, 42);
         nonce_account
             .set_state(&nonce::state::Versions::new(nonce::State::Initialized(

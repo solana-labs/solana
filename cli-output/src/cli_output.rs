@@ -3272,7 +3272,7 @@ mod tests {
         ));
 
         let signers = vec![present.as_ref(), absent.as_ref(), bad.as_ref()];
-        let blockhash = Hash::new(&[7u8; 32]);
+        let blockhash = Hash::new_from_array([7u8; 32]);
         tx.try_partial_sign(&signers, blockhash).unwrap();
         let res = return_signers(&tx, &OutputFormat::JsonCompact).unwrap();
         let sign_only = parse_sign_only_reply_string(&res);

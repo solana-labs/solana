@@ -6,7 +6,7 @@
 use borsh::{BorshDeserialize, BorshSchema, BorshSerialize};
 use {
     solana_sanitize::Sanitize,
-    std::{convert::TryFrom, fmt, mem, str::FromStr},
+    std::{convert::TryFrom, fmt, str::FromStr},
     thiserror::Error,
 };
 
@@ -80,18 +80,19 @@ impl FromStr for Hash {
         if s.len() > MAX_BASE58_LEN {
             return Err(ParseHashError::WrongSize);
         }
-        let bytes = bs58::decode(s)
+        bs58::decode(s)
             .into_vec()
-            .map_err(|_| ParseHashError::Invalid)?;
-        if bytes.len() != mem::size_of::<Hash>() {
-            Err(ParseHashError::WrongSize)
-        } else {
-            Ok(Hash::new(&bytes))
-        }
+            .map_err(|_| ParseHashError::Invalid)
+            .and_then(|bytes| {
+                <[u8; HASH_BYTES]>::try_from(bytes)
+                    .map(Hash::new_from_array)
+                    .map_err(|_| ParseHashError::WrongSize)
+            })
     }
 }
 
 impl Hash {
+    #[deprecated(since = "2.2.0", note = "Use 'Hash::new_from_array' instead")]
     pub fn new(hash_slice: &[u8]) -> Self {
         Hash(<[u8; HASH_BYTES]>::try_from(hash_slice).unwrap())
     }
@@ -108,7 +109,7 @@ impl Hash {
         let mut b = [0u8; HASH_BYTES];
         let i = I.fetch_add(1);
         b[0..8].copy_from_slice(&i.to_le_bytes());
-        Self::new(&b)
+        Self::new_from_array(b)
     }
 
     pub fn to_bytes(self) -> [u8; HASH_BYTES] {

@@ -1472,7 +1472,9 @@ mod tests {
         // 0 hashes
         let mut file = AccountHashesFile::new(0, dir_for_temp_cache_files.path());
         assert!(file.get_reader().is_none());
-        let hashes = (0..2).map(|i| Hash::new(&[i; 32])).collect::<Vec<_>>();
+        let hashes = (0..2)
+            .map(|i| Hash::new_from_array([i; 32]))
+            .collect::<Vec<_>>();
 
         // 1 hash
         let mut file = AccountHashesFile::new(1, dir_for_temp_cache_files.path());
@@ -1493,7 +1495,9 @@ mod tests {
     fn test_cumulative_hashes_from_files() {
         let dir_for_temp_cache_files = tempdir().unwrap();
         (0..4).for_each(|permutation| {
-            let hashes = (0..2).map(|i| Hash::new(&[i + 1; 32])).collect::<Vec<_>>();
+            let hashes = (0..2)
+                .map(|i| Hash::new_from_array([i + 1; 32]))
+                .collect::<Vec<_>>();
 
             let mut combined = Vec::default();
 
@@ -1585,7 +1589,7 @@ mod tests {
         let mut account_maps = Vec::new();
 
         let pubkey = Pubkey::from([11u8; 32]);
-        let hash = AccountHash(Hash::new(&[1u8; 32]));
+        let hash = AccountHash(Hash::new_from_array([1u8; 32]));
         let val = CalculateHashIntermediate {
             hash,
             lamports: 88,
@@ -1595,7 +1599,7 @@ mod tests {
 
         // 2nd key - zero lamports, so will be removed
         let pubkey = Pubkey::from([12u8; 32]);
-        let hash = AccountHash(Hash::new(&[2u8; 32]));
+        let hash = AccountHash(Hash::new_from_array([2u8; 32]));
         let val = CalculateHashIntermediate {
             hash,
             lamports: 0,
@@ -1615,7 +1619,7 @@ mod tests {
 
         // 3rd key - with pubkey value before 1st key so it will be sorted first
         let pubkey = Pubkey::from([10u8; 32]);
-        let hash = AccountHash(Hash::new(&[2u8; 32]));
+        let hash = AccountHash(Hash::new_from_array([2u8; 32]));
         let val = CalculateHashIntermediate {
             hash,
             lamports: 20,
@@ -1633,7 +1637,7 @@ mod tests {
 
         // 3rd key - with later slot
         let pubkey = Pubkey::from([10u8; 32]);
-        let hash = AccountHash(Hash::new(&[99u8; 32]));
+        let hash = AccountHash(Hash::new_from_array([99u8; 32]));
         let val = CalculateHashIntermediate {
             hash,
             lamports: 30,
@@ -1729,7 +1733,7 @@ mod tests {
         let key_b = Pubkey::from([2u8; 32]);
         let key_c = Pubkey::from([3u8; 32]);
         const COUNT: usize = 6;
-        let hashes = (0..COUNT).map(|i| AccountHash(Hash::new(&[i as u8; 32])));
+        let hashes = (0..COUNT).map(|i| AccountHash(Hash::new_from_array([i as u8; 32])));
         // create this vector
         // abbbcc
         let keys = [key_a, key_b, key_b, key_b, key_c, key_c];
@@ -2392,7 +2396,8 @@ mod tests {
                 let mut input: Vec<_> = (0..count)
                     .map(|i| {
                         let key = Pubkey::from([(pass * iterations + count) as u8; 32]);
-                        let hash = Hash::new(&[(pass * iterations + count + i + 1) as u8; 32]);
+                        let hash =
+                            Hash::new_from_array([(pass * iterations + count + i + 1) as u8; 32]);
                         (key, hash)
                     })
                     .collect();
@@ -2436,12 +2441,12 @@ mod tests {
         let offset = 2;
         let input = vec![
             CalculateHashIntermediate {
-                hash: AccountHash(Hash::new(&[1u8; 32])),
+                hash: AccountHash(Hash::new_from_array([1u8; 32])),
                 lamports: u64::MAX - offset,
                 pubkey: Pubkey::new_unique(),
             },
             CalculateHashIntermediate {
-                hash: AccountHash(Hash::new(&[2u8; 32])),
+                hash: AccountHash(Hash::new_from_array([2u8; 32])),
                 lamports: offset + 1,
                 pubkey: Pubkey::new_unique(),
             },
@@ -2470,12 +2475,12 @@ mod tests {
         let offset = 2;
         let input = vec![
             vec![CalculateHashIntermediate {
-                hash: AccountHash(Hash::new(&[1u8; 32])),
+                hash: AccountHash(Hash::new_from_array([1u8; 32])),
                 lamports: u64::MAX - offset,
                 pubkey: Pubkey::new_unique(),
             }],
             vec![CalculateHashIntermediate {
-                hash: AccountHash(Hash::new(&[2u8; 32])),
+                hash: AccountHash(Hash::new_from_array([2u8; 32])),
                 lamports: offset + 1,
                 pubkey: Pubkey::new_unique(),
             }],

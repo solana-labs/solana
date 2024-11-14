@@ -747,7 +747,9 @@ impl EntrySlice for [Entry] {
                         .all(|(j, ref_entry)| {
                             let start = j * HASH_BYTES;
                             let end = start + HASH_BYTES;
-                            let hash = Hash::new(&chunk[start..end]);
+                            let hash = <[u8; HASH_BYTES]>::try_from(&chunk[start..end])
+                                .map(Hash::new_from_array)
+                                .unwrap();
                             compare_hashes(hash, ref_entry)
                         })
                 })

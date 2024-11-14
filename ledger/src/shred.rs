@@ -785,7 +785,11 @@ pub mod layout {
         .ok()?;
         shred
             .get(offset..offset + SIZE_OF_MERKLE_ROOT)
-            .map(Hash::new)
+            .map(|merkle_root| {
+                <[u8; SIZE_OF_MERKLE_ROOT]>::try_from(merkle_root)
+                    .map(Hash::new_from_array)
+                    .unwrap()
+            })
     }
 
     fn get_retransmitter_signature_offset(shred: &[u8]) -> Result<usize, Error> {
@@ -1404,19 +1408,19 @@ mod tests {
             0x5a, 0x5a, 0xa5, 0xa5, 0x5a, 0x5a, 0xa5, 0xa5, 0x5a, 0x5a, 0xa5, 0xa5, 0x5a, 0x5a,
             0xa5, 0xa5, 0x5a, 0x5a,
         ];
-        let version = shred_version::version_from_hash(&Hash::new(&hash));
+        let version = shred_version::version_from_hash(&Hash::new_from_array(hash));
         assert_eq!(version, 1);
         let hash = [
             0xa5u8, 0xa5, 0x5a, 0x5a, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0,
         ];
-        let version = shred_version::version_from_hash(&Hash::new(&hash));
+        let version = shred_version::version_from_hash(&Hash::new_from_array(hash));
         assert_eq!(version, 0xffff);
         let hash = [
             0xa5u8, 0xa5, 0x5a, 0x5a, 0xa5, 0xa5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
-        let version = shred_version::version_from_hash(&Hash::new(&hash));
+        let version = shred_version::version_from_hash(&Hash::new_from_array(hash));
         assert_eq!(version, 0x5a5b);
     }
 

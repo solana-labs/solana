@@ -126,6 +126,7 @@ impl FromStr for Hash {
 }
 
 impl Hash {
+    #[deprecated(since = "2.2.0", note = "Use 'Hash::new_from_array' instead")]
     pub fn new(hash_slice: &[u8]) -> Self {
         Hash(<[u8; HASH_BYTES]>::try_from(hash_slice).unwrap())
     }
@@ -142,7 +143,7 @@ impl Hash {
         let mut b = [0u8; HASH_BYTES];
         let i = I.fetch_add(1);
         b[0..8].copy_from_slice(&i.to_le_bytes());
-        Self::new(&b)
+        Self::new_from_array(b)
     }
 
     pub fn to_bytes(self) -> [u8; HASH_BYTES] {
@@ -164,7 +165,9 @@ impl Hash {
                 .parse::<Hash>()
                 .map_err(|x| JsValue::from(x.to_string()))
         } else if let Some(uint8_array) = value.dyn_ref::<Uint8Array>() {
-            Ok(Hash::new(&uint8_array.to_vec()))
+            <[u8; HASH_BYTES]>::try_from(uint8_array.to_vec())
+                .map(Hash::new_from_array)
+                .map_err(|err| format!("Invalid Hash value: {err:?}").into())
         } else if let Some(array) = value.dyn_ref::<Array>() {
             let mut bytes = vec![];
             let iterator = js_sys::try_iter(&array.values())?.expect("array to be iterable");
@@ -179,7 +182,9 @@ impl Hash {
                 }
                 return Err(format!("Invalid array argument: {:?}", x).into());
             }
-            Ok(Hash::new(&bytes))
+            <[u8; HASH_BYTES]>::try_from(bytes)
+                .map(Hash::new_from_array)
+                .map_err(|err| format!("Invalid Hash value: {err:?}").into())
         } else if value.is_undefined() {
             Ok(Hash::default())
         } else {

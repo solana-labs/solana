@@ -377,7 +377,11 @@ macro_rules! impl_merkle_shred {
             let offset = self.chained_merkle_root_offset()?;
             self.payload
                 .get(offset..offset + SIZE_OF_MERKLE_ROOT)
-                .map(Hash::new)
+                .map(|chained_merkle_root| {
+                    <[u8; SIZE_OF_MERKLE_ROOT]>::try_from(chained_merkle_root)
+                        .map(Hash::new_from_array)
+                        .unwrap()
+                })
                 .ok_or(Error::InvalidPayloadSize(self.payload.len()))
         }
 

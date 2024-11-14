@@ -344,7 +344,7 @@ mod tests {
             .get_blockhash(&rpc_client, CommitmentConfig::default())
             .is_err());
 
-        let durable_nonce = DurableNonce::from_blockhash(&Hash::new(&[2u8; 32]));
+        let durable_nonce = DurableNonce::from_blockhash(&Hash::new_from_array([2u8; 32]));
         let nonce_blockhash = *durable_nonce.as_hash();
         let nonce_fee_calc = FeeCalculator::new(4242);
         let data = nonce::state::Data {

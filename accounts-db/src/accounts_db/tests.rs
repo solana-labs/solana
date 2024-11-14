@@ -380,7 +380,7 @@ define_accounts_db_test!(test_maybe_unref_accounts_already_in_ancient, |db| {
         rent_epoch: 0,
     };
     let offset = 3 * std::mem::size_of::<u64>();
-    let hash = AccountHash(Hash::new(&[2; 32]));
+    let hash = AccountHash(Hash::new_from_array([2; 32]));
     let stored_meta = StoredMeta {
         // global write version
         write_version_obsolete: 0,
@@ -2465,7 +2465,10 @@ fn test_verify_accounts_hash() {
 
     db.set_accounts_hash(
         some_slot,
-        (AccountsHash(Hash::new(&[0xca; HASH_BYTES])), capitalization),
+        (
+            AccountsHash(Hash::new_from_array([0xca; HASH_BYTES])),
+            capitalization,
+        ),
     );
 
     assert_matches!(

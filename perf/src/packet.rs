@@ -259,7 +259,7 @@ mod tests {
     #[test]
     fn test_to_packet_batches() {
         let keypair = Keypair::new();
-        let hash = Hash::new(&[1; 32]);
+        let hash = Hash::new_from_array([1; 32]);
         let tx = system_transaction::transfer(&keypair, &keypair.pubkey(), 1, hash);
         let rv = to_packet_batches_for_tests(&[tx.clone(); 1]);
         assert_eq!(rv.len(), 1);
