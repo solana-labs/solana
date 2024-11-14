@@ -131,6 +131,7 @@ use {
     solana_vote_program::vote_state,
     solana_wen_restart::wen_restart::{wait_for_wen_restart, WenRestartConfig},
     std::{
+        borrow::Cow,
         collections::{HashMap, HashSet},
         net::SocketAddr,
         num::NonZeroUsize,
@@ -226,6 +227,7 @@ pub struct ValidatorConfig {
     pub rpc_config: JsonRpcConfig,
     /// Specifies which plugins to start up with
     pub on_start_geyser_plugin_config_files: Option<Vec<PathBuf>>,
+    pub geyser_plugin_always_enabled: bool,
     pub rpc_addrs: Option<(SocketAddr, SocketAddr)>, // (JsonRpc, JsonRpcPubSub)
     pub pubsub_config: PubSubConfig,
     pub snapshot_config: SnapshotConfig,
@@ -301,6 +303,7 @@ impl Default for ValidatorConfig {
             account_snapshot_paths: Vec::new(),
             rpc_config: JsonRpcConfig::default(),
             on_start_geyser_plugin_config_files: None,
+            geyser_plugin_always_enabled: false,
             rpc_addrs: None,
             pubsub_config: PubSubConfig::default(),
             snapshot_config: SnapshotConfig::new_load_only(),
@@ -562,8 +565,17 @@ impl Validator {
 
         let exit = Arc::new(AtomicBool::new(false));
 
+        let geyser_plugin_config_files = config
+            .on_start_geyser_plugin_config_files
+            .as_ref()
+            .map(Cow::Borrowed)
+            .or_else(|| {
+                config
+                    .geyser_plugin_always_enabled
+                    .then_some(Cow::Owned(vec![]))
+            });
         let geyser_plugin_service =
-            if let Some(geyser_plugin_config_files) = &config.on_start_geyser_plugin_config_files {
+            if let Some(geyser_plugin_config_files) = geyser_plugin_config_files {
                 let (confirmed_bank_sender, confirmed_bank_receiver) = unbounded();
                 bank_notification_senders.push(confirmed_bank_sender);
                 let rpc_to_plugin_manager_receiver_and_exit =
@@ -571,7 +583,8 @@ impl Validator {
                 Some(
                     GeyserPluginService::new_with_receiver(
                         confirmed_bank_receiver,
-                        geyser_plugin_config_files,
+                        config.geyser_plugin_always_enabled,
+                        geyser_plugin_config_files.as_ref(),
                         rpc_to_plugin_manager_receiver_and_exit,
                     )
                     .map_err(|err| {

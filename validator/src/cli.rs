@@ -1204,8 +1204,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
             Arg::with_name("geyser_plugin_always_enabled")
                 .long("geyser-plugin-always-enabled")
                 .value_name("BOOLEAN")
-                .takes_value(true)
-                .default_value("false")
+                .takes_value(false)
                 .help("Еnable Geyser interface even if no Geyser configs are specified."),
         )
         .arg(
