@@ -34,6 +34,11 @@ pub type PortRange = (u16, u16);
 pub const VALIDATOR_PORT_RANGE: PortRange = (8000, 10_000);
 pub const MINIMUM_VALIDATOR_PORT_RANGE_WIDTH: u16 = 17; // VALIDATOR_PORT_RANGE must be at least this wide
 
+#[cfg(not(any(windows, target_os = "ios")))]
+const DEFAULT_RECV_BUFFER_SIZE: usize = 64 * 1024 * 1024; // 64 MB - Doubled to 128MB by the kernel
+#[cfg(not(any(windows, target_os = "ios")))]
+const DEFAULT_SEND_BUFFER_SIZE: usize = 64 * 1024 * 1024; // 64 MB - Doubled to 128MB by the kernel
+
 pub(crate) const HEADER_LENGTH: usize = 4;
 pub(crate) const IP_ECHO_SERVER_RESPONSE_LENGTH: usize = HEADER_LENGTH + 23;
 
@@ -420,6 +425,10 @@ fn udp_socket_with_config(config: SocketConfig) -> io::Result<Socket> {
     let SocketConfig { reuseport } = config;
 
     let sock = Socket::new(Domain::IPV4, Type::DGRAM, None)?;
+
+    // Set recv and send buffer sizes to 128MB
+    sock.set_recv_buffer_size(DEFAULT_RECV_BUFFER_SIZE)?;
+    sock.set_send_buffer_size(DEFAULT_SEND_BUFFER_SIZE)?;
 
     if reuseport {
         setsockopt(&sock, ReusePort, &true).ok();
