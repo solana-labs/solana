@@ -194,7 +194,7 @@ mod target_arch {
         super::*,
         alt_bn128_compression_size::{G1, G1_COMPRESSED, G2, G2_COMPRESSED},
         prelude::*,
-        solana_program::syscalls,
+        solana_define_syscall::definitions as syscalls,
     };
 
     pub fn alt_bn128_g1_compress(

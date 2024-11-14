@@ -11,7 +11,7 @@ edition = { workspace = true }
 
 [dependencies]
 bytemuck = { workspace = true, features = ["derive"] }
-solana-program = { workspace = true }
+solana-define-syscall = { workspace = true }
 thiserror = { workspace = true }
 
 [target.'cfg(not(target_os = "solana"))'.dependencies]

@@ -305,7 +305,7 @@ mod target_arch {
 
 #[cfg(target_os = "solana")]
 mod target_arch {
-    use {super::*, solana_program::syscalls};
+    use {super::*, solana_define_syscall::definitions as syscalls};
 
     pub fn alt_bn128_addition(input: &[u8]) -> Result<Vec<u8>, AltBn128Error> {
         if input.len() > ALT_BN128_ADDITION_INPUT_LEN {

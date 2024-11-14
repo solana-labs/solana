@@ -5069,7 +5069,7 @@ dependencies = [
  "ark-ff",
  "ark-serialize",
  "bytemuck",
- "solana-program",
+ "solana-define-syscall",
  "thiserror",
 ]
 
@@ -5425,7 +5425,7 @@ dependencies = [
  "bytemuck",
  "bytemuck_derive",
  "curve25519-dalek 4.1.3",
- "solana-program",
+ "solana-define-syscall",
  "thiserror",
 ]
 
