@@ -133,6 +133,7 @@ solana-sdk-macro = { workspace = true }
 solana-secp256k1-recover = { workspace = true }
 solana-seed-derivable = { workspace = true, optional = true }
 solana-seed-phrase = { workspace = true, optional = true }
+solana-serde = { workspace = true }
 solana-serde-varint = { workspace = true }
 solana-short-vec = { workspace = true }
 solana-signature = { workspace = true, features = [

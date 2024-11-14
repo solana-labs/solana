@@ -149,6 +149,7 @@ members = [
     "sdk/sdk-ids",
     "sdk/seed-derivable",
     "sdk/seed-phrase",
+    "sdk/serde",
     "sdk/serde-varint",
     "sdk/serialize-utils",
     "sdk/sha256-hasher",
@@ -506,6 +507,7 @@ solana-reward-info = { path = "sdk/reward-info", version = "=2.2.0" }
 solana-sanitize = { path = "sdk/sanitize", version = "=2.2.0" }
 solana-seed-derivable = { path = "sdk/seed-derivable", version = "=2.2.0" }
 solana-seed-phrase = { path = "sdk/seed-phrase", version = "=2.2.0" }
+solana-serde = { path = "sdk/serde", version = "=2.2.0" }
 solana-serde-varint = { path = "sdk/serde-varint", version = "=2.2.0" }
 solana-serialize-utils = { path = "sdk/serialize-utils", version = "=2.2.0" }
 solana-sha256-hasher = { path = "sdk/sha256-hasher", version = "=2.2.0" }

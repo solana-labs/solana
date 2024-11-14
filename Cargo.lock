@@ -8379,6 +8379,7 @@ dependencies = [
  "solana-secp256k1-recover",
  "solana-seed-derivable",
  "solana-seed-phrase",
+ "solana-serde",
  "solana-serde-varint",
  "solana-short-vec",
  "solana-signature",
@@ -8459,6 +8460,15 @@ dependencies = [
  "solana-runtime",
  "solana-sdk",
  "solana-tpu-client",
+]
+
+[[package]]
+name = "solana-serde"
+version = "2.2.0"
+dependencies = [
+ "bincode",
+ "serde",
+ "serde_derive",
 ]
 
 [[package]]

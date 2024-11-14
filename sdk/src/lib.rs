@@ -63,7 +63,6 @@ pub use solana_program::{borsh, borsh0_10, borsh1};
 pub use solana_signer::signers;
 pub mod client;
 pub mod compute_budget;
-pub mod deserialize_utils;
 pub mod entrypoint;
 pub mod entrypoint_deprecated;
 pub mod epoch_info;
@@ -191,6 +190,8 @@ pub use solana_sdk_macro::declare_id;
 pub use solana_sdk_macro::pubkeys;
 #[deprecated(since = "2.1.0", note = "Use `solana-secp256k1-recover` crate instead")]
 pub use solana_secp256k1_recover as secp256k1_recover;
+#[deprecated(since = "2.2.0", note = "Use `solana-serde` crate instead")]
+pub use solana_serde as deserialize_utils;
 #[deprecated(since = "2.1.0", note = "Use `solana-serde-varint` crate instead")]
 pub use solana_serde_varint as serde_varint;
 #[deprecated(since = "2.1.0", note = "Use `solana-short-vec` crate instead")]
