@@ -15,17 +15,17 @@ use {
         client_connection::ClientStats, connection_cache_stats::ConnectionCacheStats,
         nonblocking::client_connection::ClientConnection,
     },
+    solana_keypair::Keypair,
     solana_measure::measure::Measure,
     solana_net_utils::VALIDATOR_PORT_RANGE,
-    solana_rpc_client_api::client_error::ErrorKind as ClientErrorKind,
-    solana_sdk::{
-        quic::{QUIC_CONNECTION_HANDSHAKE_TIMEOUT, QUIC_KEEP_ALIVE, QUIC_MAX_TIMEOUT},
-        signature::Keypair,
-        transport::Result as TransportResult,
+    solana_quic_definitions::{
+        QUIC_CONNECTION_HANDSHAKE_TIMEOUT, QUIC_KEEP_ALIVE, QUIC_MAX_TIMEOUT,
     },
+    solana_rpc_client_api::client_error::ErrorKind as ClientErrorKind,
     solana_streamer::{
         nonblocking::quic::ALPN_TPU_PROTOCOL_ID, tls_certificates::new_dummy_x509_certificate,
     },
+    solana_transaction_error::TransportResult,
     std::{
         net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
         sync::{atomic::Ordering, Arc},

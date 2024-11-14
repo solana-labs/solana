@@ -22,10 +22,9 @@ use {
         },
         connection_cache_stats::ConnectionCacheStats,
     },
-    solana_sdk::{
-        pubkey::Pubkey,
-        signature::{Keypair, Signer},
-    },
+    solana_keypair::Keypair,
+    solana_pubkey::Pubkey,
+    solana_signer::Signer,
     solana_streamer::{streamer::StakedNodes, tls_certificates::new_dummy_x509_certificate},
     std::{
         net::{IpAddr, SocketAddr},
