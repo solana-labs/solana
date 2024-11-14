@@ -1,5 +1,6 @@
 use super::*;
 
+pub(super) mod confidential_mint_burn;
 pub(super) mod confidential_transfer;
 pub(super) mod confidential_transfer_fee;
 pub(super) mod cpi_guard;

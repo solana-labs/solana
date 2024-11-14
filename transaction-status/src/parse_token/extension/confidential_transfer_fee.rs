@@ -1,9 +1,9 @@
 use {
     super::*,
-    solana_account_decoder::parse_token_extension::convert_confidential_transfer_fee_config,
     spl_token_2022::{
-        extension::confidential_transfer_fee::{instruction::*, ConfidentialTransferFeeConfig},
+        extension::confidential_transfer_fee::instruction::*,
         instruction::{decode_instruction_data, decode_instruction_type},
+        solana_zk_sdk::encryption::pod::elgamal::PodElGamalPubkey,
     },
 };
 
@@ -17,17 +17,18 @@ pub(in crate::parse_token) fn parse_confidential_transfer_fee_instruction(
     {
         ConfidentialTransferFeeInstruction::InitializeConfidentialTransferFeeConfig => {
             check_num_token_accounts(account_indexes, 1)?;
-            let confidential_transfer_mint: ConfidentialTransferFeeConfig =
+            let transfer_fee_config: InitializeConfidentialTransferFeeConfigData =
                 *decode_instruction_data(instruction_data).map_err(|_| {
                     ParseInstructionError::InstructionNotParsable(ParsableProgram::SplToken)
                 })?;
-            let confidential_transfer_mint =
-                convert_confidential_transfer_fee_config(confidential_transfer_mint);
             let mut value = json!({
                 "mint": account_keys[account_indexes[0] as usize].to_string(),
+                "withdrawWithheldAuthorityElGamalPubkey": Option::<PodElGamalPubkey>::from(transfer_fee_config.withdraw_withheld_authority_elgamal_pubkey).map(|k| k.to_string()),
             });
             let map = value.as_object_mut().unwrap();
-            map.append(json!(confidential_transfer_mint).as_object_mut().unwrap());
+            if let Some(authority) = Option::<Pubkey>::from(transfer_fee_config.authority) {
+                map.insert("authority".to_string(), json!(authority.to_string()));
+            }
             Ok(ParsedInstructionEnum {
                 instruction_type: "initializeConfidentialTransferFeeConfig".to_string(),
                 info: value,
@@ -43,14 +44,36 @@ pub(in crate::parse_token) fn parse_confidential_transfer_fee_instruction(
             let mut value = json!({
                 "mint": account_keys[account_indexes[0] as usize].to_string(),
                 "feeRecipient": account_keys[account_indexes[1] as usize].to_string(),
-                "instructionsSysvar": account_keys[account_indexes[2] as usize].to_string(),
                 "proofInstructionOffset": proof_instruction_offset,
-
+                "newDecryptableAvailableBalance": format!("{}", withdraw_withheld_data.new_decryptable_available_balance),
             });
             let map = value.as_object_mut().unwrap();
+            let offset = if proof_instruction_offset == 0 {
+                map.insert(
+                    "proofContextStateAccount".to_string(),
+                    json!(account_keys[account_indexes[2] as usize].to_string()),
+                );
+                3
+            } else {
+                map.insert(
+                    "instructionsSysvar".to_string(),
+                    json!(account_keys[account_indexes[2] as usize].to_string()),
+                );
+                // Assume that the extra account is a proof account and not a multisig
+                // signer. This might be wrong, but it's the best possible option.
+                if account_indexes.len() > 4 {
+                    map.insert(
+                        "recordAccount".to_string(),
+                        json!(account_keys[account_indexes[3] as usize].to_string()),
+                    );
+                    4
+                } else {
+                    3
+                }
+            };
             parse_signers(
                 map,
-                3,
+                offset,
                 account_keys,
                 account_indexes,
                 "withdrawWithheldAuthority",
@@ -72,21 +95,44 @@ pub(in crate::parse_token) fn parse_confidential_transfer_fee_instruction(
             let mut value = json!({
                 "mint": account_keys[account_indexes[0] as usize].to_string(),
                 "feeRecipient": account_keys[account_indexes[1] as usize].to_string(),
-                "instructionsSysvar": account_keys[account_indexes[2] as usize].to_string(),
                 "proofInstructionOffset": proof_instruction_offset,
+                "newDecryptableAvailableBalance": format!("{}", withdraw_withheld_data.new_decryptable_available_balance),
             });
             let map = value.as_object_mut().unwrap();
-            let mut source_accounts: Vec<String> = vec![];
             let first_source_account_index = account_indexes
                 .len()
                 .saturating_sub(num_token_accounts as usize);
+            let offset = if proof_instruction_offset == 0 {
+                map.insert(
+                    "proofContextStateAccount".to_string(),
+                    json!(account_keys[account_indexes[2] as usize].to_string()),
+                );
+                3
+            } else {
+                map.insert(
+                    "instructionsSysvar".to_string(),
+                    json!(account_keys[account_indexes[2] as usize].to_string()),
+                );
+                if first_source_account_index > 4 {
+                    // Assume that the extra account is a proof account and not a multisig
+                    // signer. This might be wrong, but it's the best possible option.
+                    map.insert(
+                        "proofAccount".to_string(),
+                        json!(account_keys[account_indexes[3] as usize].to_string()),
+                    );
+                    4
+                } else {
+                    3
+                }
+            };
+            let mut source_accounts: Vec<String> = vec![];
             for i in account_indexes[first_source_account_index..].iter() {
                 source_accounts.push(account_keys[*i as usize].to_string());
             }
             map.insert("sourceAccounts".to_string(), json!(source_accounts));
             parse_signers(
                 map,
-                3,
+                offset,
                 account_keys,
                 &account_indexes[..first_source_account_index],
                 "withdrawWithheldAuthority",

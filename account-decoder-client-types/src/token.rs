@@ -119,6 +119,7 @@ pub enum UiExtension {
     GroupMemberPointer(UiGroupMemberPointer),
     TokenGroup(UiTokenGroup),
     TokenGroupMember(UiTokenGroupMember),
+    ConfidentialMintBurn(UiConfidentialMintBurn),
     UnparseableExtension,
 }
 
@@ -127,7 +128,7 @@ pub enum UiExtension {
 pub struct UiTokenGroupMember {
     pub mint: String,
     pub group: String,
-    pub member_number: u32,
+    pub member_number: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -135,8 +136,8 @@ pub struct UiTokenGroupMember {
 pub struct UiTokenGroup {
     pub update_authority: Option<String>,
     pub mint: String,
-    pub size: u32,
-    pub max_size: u32,
+    pub size: u64,
+    pub max_size: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -286,6 +287,14 @@ pub struct UiTokenMetadata {
     pub symbol: String,
     pub uri: String,
     pub additional_metadata: Vec<(String, String)>,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UiConfidentialMintBurn {
+    pub confidential_supply: String,
+    pub decryptable_supply: String,
+    pub supply_elgamal_pubkey: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]

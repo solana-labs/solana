@@ -19,7 +19,7 @@ pub(in crate::parse_token) fn parse_token_group_instruction(
             } = group;
             let value = json!({
                 "group": account_keys[account_indexes[0] as usize].to_string(),
-                "maxSize": u32::from(*max_size),
+                "maxSize": u64::from(*max_size),
                 "mint": account_keys[account_indexes[1] as usize].to_string(),
                 "mintAuthority": account_keys[account_indexes[2] as usize].to_string(),
                 "updateAuthority": Option::<Pubkey>::from(*update_authority).map(|v| v.to_string())
@@ -34,7 +34,7 @@ pub(in crate::parse_token) fn parse_token_group_instruction(
             let UpdateGroupMaxSize { max_size } = update;
             let value = json!({
                 "group": account_keys[account_indexes[0] as usize].to_string(),
-                "maxSize": u32::from(*max_size),
+                "maxSize": u64::from(*max_size),
                 "updateAuthority": account_keys[account_indexes[1] as usize].to_string(),
             });
             Ok(ParsedInstructionEnum {

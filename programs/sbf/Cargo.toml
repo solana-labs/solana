@@ -67,7 +67,7 @@ solana-type-overrides = { path = "../../type-overrides", version = "=2.2.0" }
 solana-vote = { path = "../../vote", version = "=2.2.0" }
 solana-vote-program = { path = "../../programs/vote", version = "=2.2.0" }
 agave-validator = { path = "../../validator", version = "=2.2.0" }
-solana-zk-token-sdk = { path = "../../zk-token-sdk", version = "=2.2.0" }
+solana-zk-sdk = { path = "../../zk-sdk", version = "=2.2.0" }
 solana_rbpf = "=0.8.5"
 thiserror = "1.0"
 
@@ -240,5 +240,18 @@ members = [
 # There is a similar override in `../../Cargo.toml`.  Please keep both comments
 # and the overrides in sync.
 solana-curve25519 = { path = "../../curves/curve25519" }
+solana-account-info = { path = "../../sdk/account-info" }
+solana-borsh = { path = "../../sdk/borsh" }
+solana-cpi = { path = "../../sdk/cpi" }
+solana-decode-error = { path = "../../sdk/decode-error" }
+solana-hash = { path = "../../sdk/hash" }
+solana-instruction = { path = "../../sdk/instruction" }
+solana-msg = { path = "../../sdk/msg" }
 solana-program = { path = "../../sdk/program" }
-solana-zk-token-sdk = { path = "../../zk-token-sdk" }
+solana-program-entrypoint = { path = "../../sdk/program-entrypoint" }
+solana-program-error = { path = "../../sdk/program-error" }
+solana-program-option = { path = "../../sdk/program-option" }
+solana-program-pack = { path = "../../sdk/program-pack" }
+solana-pubkey = { path = "../../sdk/pubkey" }
+solana-sha256-hasher = { path = "../../sdk/sha256-hasher" }
+solana-zk-sdk = { path = "../../zk-sdk" }

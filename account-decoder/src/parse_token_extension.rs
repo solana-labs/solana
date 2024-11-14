@@ -1,5 +1,5 @@
 pub use solana_account_decoder_client_types::token::{
-    UiConfidentialTransferAccount, UiConfidentialTransferFeeAmount,
+    UiConfidentialMintBurn, UiConfidentialTransferAccount, UiConfidentialTransferFeeAmount,
     UiConfidentialTransferFeeConfig, UiConfidentialTransferMint, UiCpiGuard, UiDefaultAccountState,
     UiExtension, UiGroupMemberPointer, UiGroupPointer, UiInterestBearingConfig, UiMemoTransfer,
     UiMetadataPointer, UiMintCloseAuthority, UiPermanentDelegate, UiTokenGroup, UiTokenGroupMember,
@@ -12,7 +12,7 @@ use {
     spl_token_2022::{
         extension::{self, BaseState, BaseStateWithExtensions, ExtensionType, StateWithExtensions},
         solana_program::pubkey::Pubkey,
-        solana_zk_token_sdk::zk_token_elgamal::pod::ElGamalPubkey,
+        solana_zk_sdk::encryption::pod::elgamal::PodElGamalPubkey,
     },
     spl_token_group_interface::state::{TokenGroup, TokenGroupMember},
     spl_token_metadata_interface::state::TokenMetadata,
@@ -135,6 +135,12 @@ pub fn parse_extension<S: BaseState + Pack>(
             .get_extension::<TokenGroupMember>()
             .map(|&extension| UiExtension::TokenGroupMember(convert_token_group_member(extension)))
             .unwrap_or(UiExtension::UnparseableExtension),
+        ExtensionType::ConfidentialMintBurn => account
+            .get_extension::<extension::confidential_mint_burn::ConfidentialMintBurn>()
+            .map(|&extension| {
+                UiExtension::ConfidentialMintBurn(convert_confidential_mint_burn(extension))
+            })
+            .unwrap_or(UiExtension::UnparseableExtension),
     }
 }
 
@@ -232,7 +238,7 @@ pub fn convert_confidential_transfer_mint(
     confidential_transfer_mint: extension::confidential_transfer::ConfidentialTransferMint,
 ) -> UiConfidentialTransferMint {
     let authority: Option<Pubkey> = confidential_transfer_mint.authority.into();
-    let auditor_elgamal_pubkey: Option<ElGamalPubkey> =
+    let auditor_elgamal_pubkey: Option<PodElGamalPubkey> =
         confidential_transfer_mint.auditor_elgamal_pubkey.into();
     UiConfidentialTransferMint {
         authority: authority.map(|pubkey| pubkey.to_string()),
@@ -245,7 +251,7 @@ pub fn convert_confidential_transfer_fee_config(
     confidential_transfer_fee_config: extension::confidential_transfer_fee::ConfidentialTransferFeeConfig,
 ) -> UiConfidentialTransferFeeConfig {
     let authority: Option<Pubkey> = confidential_transfer_fee_config.authority.into();
-    let withdraw_withheld_authority_elgamal_pubkey: Option<ElGamalPubkey> =
+    let withdraw_withheld_authority_elgamal_pubkey: Option<PodElGamalPubkey> =
         confidential_transfer_fee_config
             .withdraw_withheld_authority_elgamal_pubkey
             .into();
@@ -377,5 +383,15 @@ fn convert_token_group_member(member: TokenGroupMember) -> UiTokenGroupMember {
         mint: member.mint.to_string(),
         group: member.group.to_string(),
         member_number: member.member_number.into(),
+    }
+}
+
+fn convert_confidential_mint_burn(
+    confidential_mint_burn: extension::confidential_mint_burn::ConfidentialMintBurn,
+) -> UiConfidentialMintBurn {
+    UiConfidentialMintBurn {
+        confidential_supply: confidential_mint_burn.confidential_supply.to_string(),
+        decryptable_supply: confidential_mint_burn.decryptable_supply.to_string(),
+        supply_elgamal_pubkey: confidential_mint_burn.supply_elgamal_pubkey.to_string(),
     }
 }

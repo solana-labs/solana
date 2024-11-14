@@ -564,14 +564,14 @@ solana-zk-sdk = { path = "zk-sdk", version = "=2.2.0" }
 solana-zk-token-proof-program = { path = "programs/zk-token-proof", version = "=2.2.0" }
 solana-zk-token-sdk = { path = "zk-token-sdk", version = "=2.2.0" }
 solana_rbpf = "=0.8.5"
-spl-associated-token-account = "=4.0.0"
-spl-instruction-padding = "0.2"
-spl-memo = "=5.0.0"
-spl-pod = "=0.3.0"
-spl-token = "=6.0.0"
-spl-token-2022 = "=4.0.0"
-spl-token-group-interface = "=0.3.0"
-spl-token-metadata-interface = "=0.4.0"
+spl-associated-token-account = "=6.0.0"
+spl-instruction-padding = "0.3"
+spl-memo = "=6.0.0"
+spl-pod = "=0.5.0"
+spl-token = "=7.0.0"
+spl-token-2022 = "=6.0.0"
+spl-token-group-interface = "=0.5.0"
+spl-token-metadata-interface = "=0.6.0"
 static_assertions = "1.1.0"
 stream-cancel = "0.8.2"
 strum = "0.24"
@@ -647,9 +647,21 @@ crossbeam-epoch = { git = "https://github.com/anza-xyz/crossbeam", rev = "fd279d
 # There is a similar override in `programs/sbf/Cargo.toml`.  Please keep both
 # comments and the overrides in sync.
 solana-curve25519 = { path = "curves/curve25519" }
+solana-account-info = { path = "sdk/account-info" }
+solana-borsh = { path = "sdk/borsh" }
+solana-cpi = { path = "sdk/cpi" }
+solana-decode-error = { path = "sdk/decode-error" }
+solana-hash = { path = "sdk/hash" }
+solana-instruction = { path = "sdk/instruction" }
+solana-msg = { path = "sdk/msg" }
 solana-program = { path = "sdk/program" }
+solana-program-entrypoint = { path = "sdk/program-entrypoint" }
+solana-program-error = { path = "sdk/program-error" }
+solana-program-option = { path = "sdk/program-option" }
+solana-program-pack = { path = "sdk/program-pack" }
+solana-pubkey = { path = "sdk/pubkey" }
+solana-sha256-hasher = { path = "sdk/sha256-hasher" }
 solana-zk-sdk = { path = "zk-sdk" }
-solana-zk-token-sdk = { path = "zk-token-sdk" }
 
 # curve25519-dalek uses the simd backend by default in v4 if possible,
 # which has very slow performance on some platforms with opt-level 0,
