@@ -935,11 +935,11 @@ impl Transaction {
         keypairs: &T,
         recent_blockhash: Hash,
     ) -> result::Result<(), SignerError> {
-        let positions = self.get_signing_keypair_positions(&keypairs.pubkeys())?;
-        if positions.iter().any(|pos| pos.is_none()) {
-            return Err(SignerError::KeypairPubkeyMismatch);
-        }
-        let positions: Vec<usize> = positions.iter().map(|pos| pos.unwrap()).collect();
+        let positions: Vec<usize> = self
+            .get_signing_keypair_positions(&keypairs.pubkeys())?
+            .into_iter()
+            .collect::<Option<_>>()
+            .ok_or(SignerError::KeypairPubkeyMismatch)?;
         self.try_partial_sign_unchecked(keypairs, positions, recent_blockhash)
     }
 
