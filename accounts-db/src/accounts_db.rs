@@ -514,7 +514,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
     num_clean_threads: None,
     num_foreground_threads: None,
     num_hash_threads: None,
-    hash_calculation_pubkey_bins: None,
+    hash_calculation_pubkey_bins: Some(4),
 };
 pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS),
