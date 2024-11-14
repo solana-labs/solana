@@ -1,7 +1,6 @@
 use {
     crate::metrics::submit_counter,
     log::*,
-    solana_sdk::timing,
     std::{
         env,
         sync::atomic::{AtomicU64, AtomicUsize, Ordering},
@@ -174,7 +173,7 @@ impl Counter {
             .compare_and_swap(0, Self::default_metrics_rate(), Ordering::Relaxed);
     }
     pub fn inc(&mut self, level: log::Level, events: usize) {
-        let now = timing::timestamp();
+        let now = solana_time_utils::timestamp();
         let counts = self.counts.fetch_add(events, Ordering::Relaxed);
         let times = self.times.fetch_add(1, Ordering::Relaxed);
         let lograte = self.lograte.load(Ordering::Relaxed);

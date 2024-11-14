@@ -15,7 +15,10 @@ gethostname = { workspace = true }
 lazy_static = { workspace = true }
 log = { workspace = true }
 reqwest = { workspace = true, features = ["blocking", "brotli", "deflate", "gzip", "rustls-tls", "json"] }
-solana-sdk = { workspace = true }
+solana-clock = { workspace = true }
+solana-cluster-type = { workspace = true }
+solana-sha256-hasher = { workspace = true }
+solana-time-utils = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]

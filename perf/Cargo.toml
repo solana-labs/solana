@@ -29,13 +29,13 @@ solana-frozen-abi-macro = { workspace = true, optional = true, features = [
 ] }
 solana-hash = { workspace = true }
 solana-metrics = { workspace = true }
-solana-packet = { workspace = true }
+solana-packet = { workspace = true, features = ["bincode"] }
 solana-program = { workspace = true, default-features = false }
 solana-pubkey = { workspace = true, default-features = false }
 solana-rayon-threadlimit = { workspace = true }
 solana-sdk = { workspace = true, optional = true }
 solana-short-vec = { workspace = true }
-solana-signature = { workspace = true }
+solana-signature = { workspace = true, features = ["verify"] }
 solana-time-utils = { workspace = true }
 solana-vote-program = { workspace = true, optional = true }
 

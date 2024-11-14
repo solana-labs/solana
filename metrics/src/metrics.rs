@@ -6,7 +6,8 @@ use {
     gethostname::gethostname,
     lazy_static::lazy_static,
     log::*,
-    solana_sdk::{genesis_config::ClusterType, hash::hash},
+    solana_cluster_type::ClusterType,
+    solana_sha256_hasher::hash,
     std::{
         cmp,
         collections::HashMap,
