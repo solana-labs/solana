@@ -13,9 +13,20 @@ edition = { workspace = true }
 chrono = { workspace = true, features = ["default"] }
 clap = "2.33.0"
 rpassword = { workspace = true }
+solana-clock = { workspace = true }
+solana-cluster-type = { workspace = true }
+solana-commitment-config = { workspace = true }
 solana-derivation-path = { workspace = true }
-solana-remote-wallet = { workspace = true }
-solana-sdk = { workspace = true }
+solana-hash = { workspace = true }
+solana-keypair = { workspace = true, features = ["seed-derivable"] }
+solana-native-token = { workspace = true }
+solana-presigner = { workspace = true }
+solana-program = { workspace = true }
+solana-pubkey = { workspace = true }
+solana-remote-wallet = { workspace = true, features = ["default"] }
+solana-seed-phrase = { workspace = true }
+solana-signature = { workspace = true }
+solana-signer = { workspace = true }
 thiserror = { workspace = true }
 tiny-bip39 = { workspace = true }
 uriparse = { workspace = true }
@@ -23,6 +34,7 @@ url = { workspace = true }
 
 [dev-dependencies]
 assert_matches = { workspace = true }
+solana-pubkey = { workspace = true, features = ["rand"] }
 tempfile = { workspace = true }
 
 [lib]

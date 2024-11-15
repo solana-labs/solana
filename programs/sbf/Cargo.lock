@@ -2142,6 +2142,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fed44880c466736ef9a5c5b5facefb5ed0785676d0c02d612db14e54f0d84286"
 
 [[package]]
+name = "hidapi"
+version = "2.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "03b876ecf37e86b359573c16c8366bc3eba52b689884a0fc42ba3f67203d2a8b"
+dependencies = [
+ "cc",
+ "cfg-if 1.0.0",
+ "libc",
+ "pkg-config",
+ "windows-sys 0.48.0",
+]
+
+[[package]]
 name = "histogram"
 version = "0.6.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5154,9 +5167,20 @@ dependencies = [
  "chrono",
  "clap",
  "rpassword",
+ "solana-clock",
+ "solana-cluster-type",
+ "solana-commitment-config",
  "solana-derivation-path",
+ "solana-hash",
+ "solana-keypair",
+ "solana-native-token",
+ "solana-presigner",
+ "solana-program",
+ "solana-pubkey",
  "solana-remote-wallet",
- "solana-sdk",
+ "solana-seed-phrase",
+ "solana-signature",
+ "solana-signer",
  "thiserror 1.0.69",
  "tiny-bip39",
  "uriparse",
@@ -6301,6 +6325,7 @@ version = "2.2.0"
 dependencies = [
  "console",
  "dialoguer",
+ "hidapi",
  "log",
  "num-derive",
  "num-traits",

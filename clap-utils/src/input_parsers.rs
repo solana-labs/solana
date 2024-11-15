@@ -5,15 +5,15 @@ use {
     },
     chrono::DateTime,
     clap::ArgMatches,
+    solana_clock::UnixTimestamp,
+    solana_cluster_type::ClusterType,
+    solana_commitment_config::CommitmentConfig,
+    solana_keypair::{read_keypair_file, Keypair},
+    solana_native_token::sol_to_lamports,
+    solana_pubkey::Pubkey,
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
-    solana_sdk::{
-        clock::UnixTimestamp,
-        commitment_config::CommitmentConfig,
-        genesis_config::ClusterType,
-        native_token::sol_to_lamports,
-        pubkey::Pubkey,
-        signature::{read_keypair_file, Keypair, Signature, Signer},
-    },
+    solana_signature::Signature,
+    solana_signer::Signer,
     std::{rc::Rc, str::FromStr},
 };
 
@@ -199,7 +199,7 @@ mod tests {
     use {
         super::*,
         clap::{App, Arg},
-        solana_sdk::signature::write_keypair_file,
+        solana_keypair::write_keypair_file,
         std::fs,
     };
 
@@ -228,8 +228,8 @@ mod tests {
         assert_eq!(values_of(&matches, "multiple"), Some(vec![50, 39]));
         assert_eq!(values_of::<u64>(&matches, "single"), None);
 
-        let pubkey0 = solana_sdk::pubkey::new_rand();
-        let pubkey1 = solana_sdk::pubkey::new_rand();
+        let pubkey0 = solana_pubkey::new_rand();
+        let pubkey1 = solana_pubkey::new_rand();
         let matches = app().get_matches_from(vec![
             "test",
             "--multiple",
@@ -249,7 +249,7 @@ mod tests {
         assert_eq!(value_of(&matches, "single"), Some(50));
         assert_eq!(value_of::<u64>(&matches, "multiple"), None);
 
-        let pubkey = solana_sdk::pubkey::new_rand();
+        let pubkey = solana_pubkey::new_rand();
         let matches = app().get_matches_from(vec!["test", "--single", &pubkey.to_string()]);
         assert_eq!(value_of(&matches, "single"), Some(pubkey));
     }
@@ -315,8 +315,8 @@ mod tests {
 
     #[test]
     fn test_pubkeys_sigs_of() {
-        let key1 = solana_sdk::pubkey::new_rand();
-        let key2 = solana_sdk::pubkey::new_rand();
+        let key1 = solana_pubkey::new_rand();
+        let key2 = solana_pubkey::new_rand();
         let sig1 = Keypair::new().sign_message(&[0u8]);
         let sig2 = Keypair::new().sign_message(&[1u8]);
         let signer1 = format!("{key1}={sig1}");
