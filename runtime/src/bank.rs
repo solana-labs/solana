@@ -1780,7 +1780,10 @@ impl Bank {
                 "snapshot must have an accounts lt hash if the feature is enabled",
             );
             if bank.is_accounts_lt_hash_enabled() {
-                info!("Calculating the accounts lt hash...");
+                info!(
+                    "Calculating the accounts lt hash for slot {}...",
+                    bank.slot(),
+                );
                 let (ancestors, slot) = if bank.is_frozen() {
                     // Loading from a snapshot necessarily means this slot was rooted, and thus
                     // the bank has been frozen.  So when calculating the accounts lt hash,
@@ -1809,7 +1812,12 @@ impl Bank {
                 });
                 calculate_accounts_lt_hash_duration = Some(duration);
                 *bank.accounts_lt_hash.get_mut().unwrap() = accounts_lt_hash;
-                info!("Calculating the accounts lt hash... Done in {duration:?}");
+                info!(
+                    "Calculating the accounts lt hash for slot {}... \
+                     Done in {duration:?}, accounts_lt_hash checksum: {}",
+                    bank.slot(),
+                    bank.accounts_lt_hash.get_mut().unwrap().0.checksum(),
+                );
             }
         }
 
@@ -6737,9 +6745,10 @@ impl Bank {
                 // We already have an accounts lt hash value, so no need to recalculate it.
                 // Nothing else to do here.
             } else {
+                let parent_slot = self.parent_slot;
                 info!(
-                    "Calculating the accounts lt hash as part of feature activation; \
-                    this may take some time...",
+                    "Calculating the accounts lt hash for slot {parent_slot} \
+                     as part of feature activation; this may take some time...",
                 );
                 // We must calculate the accounts lt hash now as part of feature activation.
                 // Note, this bank is *not* frozen yet, which means it will later call
@@ -6750,7 +6759,6 @@ impl Bank {
                     ancestors.remove(&self.slot());
                     ancestors
                 };
-                let parent_slot = self.parent_slot;
                 let (parent_accounts_lt_hash, duration) = meas_dur!({
                     self.rc
                         .accounts
@@ -6761,7 +6769,11 @@ impl Bank {
                         )
                 });
                 *self.accounts_lt_hash.get_mut().unwrap() = parent_accounts_lt_hash;
-                info!("Calculating the accounts lt hash completed in {duration:?}");
+                info!(
+                    "Calculating the accounts lt hash for slot {parent_slot} \
+                     completed in {duration:?}, accounts_lt_hash checksum: {}",
+                    self.accounts_lt_hash.get_mut().unwrap().0.checksum(),
+                );
             }
         }
     }
