@@ -2033,6 +2033,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d231dfb89cfffdbc30e7fc41579ed6066ad03abda9e567ccafae602b97ec5024"
 
 [[package]]
+name = "hidapi"
+version = "2.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "03b876ecf37e86b359573c16c8366bc3eba52b689884a0fc42ba3f67203d2a8b"
+dependencies = [
+ "cc",
+ "cfg-if 1.0.0",
+ "libc",
+ "pkg-config",
+ "windows-sys 0.48.0",
+]
+
+[[package]]
 name = "histogram"
 version = "0.6.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5006,9 +5019,20 @@ dependencies = [
  "chrono",
  "clap",
  "rpassword",
+ "solana-clock",
+ "solana-cluster-type",
+ "solana-commitment-config",
  "solana-derivation-path",
+ "solana-hash",
+ "solana-keypair",
+ "solana-native-token",
+ "solana-presigner",
+ "solana-program",
+ "solana-pubkey",
  "solana-remote-wallet",
- "solana-sdk",
+ "solana-seed-phrase",
+ "solana-signature",
+ "solana-signer",
  "thiserror 1.0.69",
  "tiny-bip39",
  "uriparse",
@@ -5709,7 +5733,10 @@ dependencies = [
  "lazy_static",
  "log",
  "reqwest",
- "solana-sdk",
+ "solana-clock",
+ "solana-cluster-type",
+ "solana-sha256-hasher",
+ "solana-time-utils",
  "thiserror 1.0.69",
 ]
 
@@ -6119,6 +6146,7 @@ version = "2.2.0"
 dependencies = [
  "console",
  "dialoguer",
+ "hidapi",
  "log",
  "num-derive",
  "num-traits",
@@ -6150,6 +6178,7 @@ dependencies = [
  "solana-feature-set",
  "solana-pubkey",
  "solana-sdk-ids",
+ "solana-secp256r1-program",
 ]
 
 [[package]]
@@ -6440,6 +6469,7 @@ dependencies = [
  "solana-sdk-ids",
  "solana-sdk-macro",
  "solana-secp256k1-recover",
+ "solana-secp256r1-program",
  "solana-seed-derivable",
  "solana-seed-phrase",
  "solana-serde",
@@ -6478,6 +6508,18 @@ dependencies = [
  "libsecp256k1",
  "solana-define-syscall",
  "thiserror 1.0.69",
+]
+
+[[package]]
+name = "solana-secp256r1-program"
+version = "2.2.0"
+dependencies = [
+ "bytemuck",
+ "openssl",
+ "solana-feature-set",
+ "solana-instruction",
+ "solana-precompile-error",
+ "solana-pubkey",
 ]
 
 [[package]]
@@ -6696,10 +6738,17 @@ dependencies = [
  "rustls 0.23.16",
  "smallvec",
  "socket2",
+ "solana-keypair",
  "solana-measure",
  "solana-metrics",
+ "solana-packet",
  "solana-perf",
- "solana-sdk",
+ "solana-pubkey",
+ "solana-quic-definitions",
+ "solana-signature",
+ "solana-signer",
+ "solana-time-utils",
+ "solana-transaction-error",
  "solana-transaction-metrics-tracker",
  "thiserror 1.0.69",
  "tokio",
