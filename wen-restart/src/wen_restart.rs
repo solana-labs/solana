@@ -458,9 +458,8 @@ fn check_slot_smaller_than_intended_snapshot_slot(
 
 // Given the agreed upon slot, add hard fork and rehash the corresponding bank, then
 // generate new snapshot. Generate incremental snapshot if possible, but generate full
-// snapshot if there is no full snapshot. When the new snapshot is ready, it removes any
-// incremental snapshot on the same slot, then moves the new snapshot into the
-// incremental snapshot directory.
+// snapshot if there is no full snapshot or snapshot generation is turned off (in this
+// case the incremental snasphot based on the full snapshot is incorrect).
 //
 // We don't use set_root() explicitly, because it may kick off snapshot requests, we
 // can't have multiple snapshot requests in progress. In bank_to_snapshot_archive()
@@ -507,9 +506,6 @@ pub(crate) fn generate_snapshot(
     // EAH calculation to finish. So if we trigger another EAH when generating snapshots
     // we won't hit a panic.
     let _ = new_root_bank.get_epoch_accounts_hash_to_serialize();
-    // Even though generating incremental snapshot is faster, it involves finding a full
-    // snapshot to use as base, so the logic is more complicated. For now we always generate
-    // an incremental snapshot.
     let mut directory = &snapshot_config.full_snapshot_archives_dir;
     // Calculate the full_snapshot_slot an incremental snapshot should depend on. If the
     // validator is configured not the generate snapshot, it will only have the initial
