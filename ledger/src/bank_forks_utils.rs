@@ -335,7 +335,8 @@ fn bank_forks_from_snapshot(
     // We must inform accounts-db of the latest full snapshot slot, which is used by the background
     // processes to handle zero lamport accounts.  Since we've now successfully loaded the bank
     // from snapshots, this is a good time to do that update.
-    // Note, this must only be set if we should generate snapshots.
+    // Note, this must only be set if we should generate snapshots, so that we correctly
+    // handle (i.e. purge) zero lamport accounts.
     if snapshot_config.should_generate_snapshots() {
         bank.rc
             .accounts
