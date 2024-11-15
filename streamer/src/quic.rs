@@ -18,12 +18,11 @@ use {
         server::danger::ClientCertVerified,
         DistinguishedName, KeyLogFile,
     },
+    solana_keypair::Keypair,
+    solana_packet::PACKET_DATA_SIZE,
     solana_perf::packet::PacketBatch,
-    solana_sdk::{
-        net::DEFAULT_TPU_COALESCE,
-        packet::PACKET_DATA_SIZE,
-        quic::{NotifyKeyUpdate, QUIC_MAX_TIMEOUT, QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS},
-        signature::Keypair,
+    solana_quic_definitions::{
+        NotifyKeyUpdate, QUIC_MAX_TIMEOUT, QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS,
     },
     std::{
         net::UdpSocket,
@@ -42,6 +41,8 @@ pub const MAX_UNSTAKED_CONNECTIONS: usize = 500;
 
 // This will be adjusted and parameterized in follow-on PRs.
 pub const DEFAULT_QUIC_ENDPOINTS: usize = 1;
+// inlined to avoid solana-sdk dep
+pub(crate) const DEFAULT_TPU_COALESCE: Duration = Duration::from_millis(5);
 
 #[derive(Debug)]
 pub struct SkipClientVerification(Arc<rustls::crypto::CryptoProvider>);
@@ -839,5 +840,10 @@ mod test {
         runtime.block_on(check_unstaked_node_connect_failure(server_address));
         exit.store(true, Ordering::Relaxed);
         t.join().unwrap();
+    }
+
+    #[test]
+    fn test_inline_tpu_coalesce() {
+        assert_eq!(DEFAULT_TPU_COALESCE, solana_sdk::net::DEFAULT_TPU_COALESCE);
     }
 }

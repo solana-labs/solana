@@ -31,10 +31,17 @@ rand = { workspace = true }
 rustls = { workspace = true }
 smallvec = { workspace = true }
 socket2 = { workspace = true }
+solana-keypair = { workspace = true }
 solana-measure = { workspace = true }
 solana-metrics = { workspace = true }
+solana-packet = { workspace = true }
 solana-perf = { workspace = true }
-solana-sdk = { workspace = true }
+solana-pubkey = { workspace = true }
+solana-quic-definitions = { workspace = true }
+solana-signature = { workspace = true }
+solana-signer = { workspace = true }
+solana-time-utils = { workspace = true }
+solana-transaction-error = { workspace = true }
 solana-transaction-metrics-tracker = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
@@ -44,6 +51,7 @@ x509-parser = { workspace = true }
 [dev-dependencies]
 assert_matches = { workspace = true }
 solana-logger = { workspace = true }
+solana-sdk = { workspace = true }
 solana-streamer = { path = ".", features = ["dev-context-only-utils"] }
 
 [features]

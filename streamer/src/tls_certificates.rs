@@ -1,5 +1,7 @@
 use {
-    solana_sdk::{pubkey::Pubkey, signature::Keypair, signer::Signer},
+    solana_keypair::Keypair,
+    solana_pubkey::Pubkey,
+    solana_signer::Signer,
     x509_parser::{prelude::*, public_key::PublicKey},
 };
 
@@ -113,7 +115,7 @@ pub fn get_pubkey_from_tls_certificate(
 
 #[cfg(test)]
 mod tests {
-    use {super::*, solana_sdk::signer::Signer};
+    use {super::*, solana_signer::Signer};
 
     #[test]
     fn test_generate_tls_certificate() {

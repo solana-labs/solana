@@ -23,20 +23,19 @@ use {
     quinn_proto::VarIntBoundsExceeded,
     rand::{thread_rng, Rng},
     smallvec::SmallVec,
+    solana_keypair::Keypair,
     solana_measure::measure::Measure,
+    solana_packet::{Meta, PACKET_DATA_SIZE},
     solana_perf::packet::{PacketBatch, PACKETS_PER_BATCH},
-    solana_sdk::{
-        packet::{Meta, PACKET_DATA_SIZE},
-        pubkey::Pubkey,
-        quic::{
-            QUIC_CONNECTION_HANDSHAKE_TIMEOUT, QUIC_MAX_STAKED_CONCURRENT_STREAMS,
-            QUIC_MAX_STAKED_RECEIVE_WINDOW_RATIO, QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS,
-            QUIC_MIN_STAKED_CONCURRENT_STREAMS, QUIC_MIN_STAKED_RECEIVE_WINDOW_RATIO,
-            QUIC_TOTAL_STAKED_CONCURRENT_STREAMS, QUIC_UNSTAKED_RECEIVE_WINDOW_RATIO,
-        },
-        signature::{Keypair, Signature},
-        timing,
+    solana_pubkey::Pubkey,
+    solana_quic_definitions::{
+        QUIC_CONNECTION_HANDSHAKE_TIMEOUT, QUIC_MAX_STAKED_CONCURRENT_STREAMS,
+        QUIC_MAX_STAKED_RECEIVE_WINDOW_RATIO, QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS,
+        QUIC_MIN_STAKED_CONCURRENT_STREAMS, QUIC_MIN_STAKED_RECEIVE_WINDOW_RATIO,
+        QUIC_TOTAL_STAKED_CONCURRENT_STREAMS, QUIC_UNSTAKED_RECEIVE_WINDOW_RATIO,
     },
+    solana_signature::Signature,
+    solana_time_utils as timing,
     solana_transaction_metrics_tracker::signature_if_should_track_packet,
     std::{
         array,
@@ -1522,18 +1521,22 @@ impl<'a> Future for EndpointAccept<'a> {
 pub mod test {
     use {
         super::*,
-        crate::nonblocking::{
-            quic::compute_max_allowed_uni_streams,
-            testing_utilities::{
-                get_client_config, make_client_endpoint, setup_quic_server, SpawnTestServerResult,
-                TestServerConfig,
+        crate::{
+            nonblocking::{
+                quic::compute_max_allowed_uni_streams,
+                testing_utilities::{
+                    get_client_config, make_client_endpoint, setup_quic_server,
+                    SpawnTestServerResult, TestServerConfig,
+                },
             },
+            quic::DEFAULT_TPU_COALESCE,
         },
         assert_matches::assert_matches,
         async_channel::unbounded as async_unbounded,
         crossbeam_channel::{unbounded, Receiver},
         quinn::{ApplicationClose, ConnectionError},
-        solana_sdk::{net::DEFAULT_TPU_COALESCE, signature::Keypair, signer::Signer},
+        solana_keypair::Keypair,
+        solana_signer::Signer,
         std::collections::HashMap,
         tokio::time::sleep,
     };

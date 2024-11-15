@@ -6,7 +6,10 @@ use {
         DEFAULT_WAIT_FOR_CHUNK_TIMEOUT,
     },
     crate::{
-        quic::{QuicServerParams, StreamerStats, MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS},
+        quic::{
+            QuicServerParams, StreamerStats, DEFAULT_TPU_COALESCE, MAX_STAKED_CONNECTIONS,
+            MAX_UNSTAKED_CONNECTIONS,
+        },
         streamer::StakedNodes,
         tls_certificates::new_dummy_x509_certificate,
     },
@@ -15,12 +18,9 @@ use {
         crypto::rustls::QuicClientConfig, ClientConfig, Connection, EndpointConfig, IdleTimeout,
         TokioRuntime, TransportConfig,
     },
+    solana_keypair::Keypair,
     solana_perf::packet::PacketBatch,
-    solana_sdk::{
-        net::DEFAULT_TPU_COALESCE,
-        quic::{QUIC_KEEP_ALIVE, QUIC_MAX_TIMEOUT},
-        signer::keypair::Keypair,
-    },
+    solana_quic_definitions::{QUIC_KEEP_ALIVE, QUIC_MAX_TIMEOUT},
     std::{
         net::{SocketAddr, UdpSocket},
         sync::{atomic::AtomicBool, Arc, RwLock},

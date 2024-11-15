@@ -61,7 +61,7 @@ mod tests {
             sendmmsg::SendPktsError,
         },
         assert_matches::assert_matches,
-        solana_sdk::packet::PACKET_DATA_SIZE,
+        solana_packet::PACKET_DATA_SIZE,
         std::{
             io::ErrorKind,
             net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
