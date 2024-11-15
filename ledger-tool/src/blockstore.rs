@@ -49,7 +49,7 @@ fn analyze_column<
     let mut val_hist = histogram::Histogram::new();
     let mut val_tot: u64 = 0;
     let mut row_hist = histogram::Histogram::new();
-    for (key, val) in db.iter::<C>(blockstore_db::IteratorMode::Start)? {
+    for (key, val) in db.column::<C>().iter(blockstore_db::IteratorMode::Start)? {
         // Key length is fixed, only need to calculate it once
         if key_len == 0 {
             key_len = C::key(key).len() as u64;

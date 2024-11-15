@@ -371,8 +371,8 @@ impl Blockstore {
         let db = Arc::new(db);
 
         // Get max root or 0 if it doesn't exist
-        let max_root = db
-            .iter::<cf::Root>(IteratorMode::End)?
+        let max_root = roots_cf
+            .iter(IteratorMode::End)?
             .next()
             .map(|(slot, _)| slot)
             .unwrap_or(0);
@@ -611,8 +611,8 @@ impl Blockstore {
         slot: Slot,
     ) -> Result<impl Iterator<Item = (Slot, SlotMeta)> + '_> {
         let meta_iter = self
-            .db
-            .iter::<cf::SlotMeta>(IteratorMode::From(slot, IteratorDirection::Forward))?;
+            .meta_cf
+            .iter(IteratorMode::From(slot, IteratorDirection::Forward))?;
         Ok(meta_iter.map(|(slot, slot_meta_bytes)| {
             (
                 slot,
@@ -639,7 +639,7 @@ impl Blockstore {
         slot: Slot,
         index: u64,
     ) -> Result<impl Iterator<Item = ((u64, u64), Box<[u8]>)> + '_> {
-        let slot_iterator = self.db.iter::<cf::ShredData>(IteratorMode::From(
+        let slot_iterator = self.data_shred_cf.iter(IteratorMode::From(
             (slot, index),
             IteratorDirection::Forward,
         ))?;
@@ -651,7 +651,7 @@ impl Blockstore {
         slot: Slot,
         index: u64,
     ) -> Result<impl Iterator<Item = ((u64, u64), Box<[u8]>)> + '_> {
-        let slot_iterator = self.db.iter::<cf::ShredCode>(IteratorMode::From(
+        let slot_iterator = self.code_shred_cf.iter(IteratorMode::From(
             (slot, index),
             IteratorDirection::Forward,
         ))?;
@@ -663,9 +663,7 @@ impl Blockstore {
         slot: Slot,
         direction: IteratorDirection,
     ) -> Result<impl Iterator<Item = Slot> + '_> {
-        let slot_iterator = self
-            .db
-            .iter::<cf::Root>(IteratorMode::From(slot, direction))?;
+        let slot_iterator = self.roots_cf.iter(IteratorMode::From(slot, direction))?;
         Ok(slot_iterator.map(move |(rooted_slot, _)| rooted_slot))
     }
 
@@ -683,7 +681,7 @@ impl Blockstore {
     pub fn reversed_optimistic_slots_iterator(
         &self,
     ) -> Result<impl Iterator<Item = (Slot, Hash, UnixTimestamp)> + '_> {
-        let iter = self.db.iter::<cf::OptimisticSlots>(IteratorMode::End)?;
+        let iter = self.optimistic_slots_cf.iter(IteratorMode::End)?;
         Ok(iter.map(|(slot, bytes)| {
             let meta: OptimisticSlotMetaVersioned = deserialize(&bytes).unwrap();
             (slot, meta.hash(), meta.timestamp())
@@ -3479,27 +3477,27 @@ impl Blockstore {
         // or `PerfSampleV2` encoding.  We expect `PerfSampleV1` to be a prefix of the
         // `PerfSampleV2` encoding (see [`perf_sample_v1_is_prefix_of_perf_sample_v2`]), so we try
         // them in order.
-        let samples = self
-            .db
-            .iter::<cf::PerfSamples>(IteratorMode::End)?
-            .take(num)
-            .map(|(slot, data)| {
-                deserialize::<PerfSampleV2>(&data)
-                    .map(|sample| (slot, sample.into()))
-                    .or_else(|err| {
-                        match &*err {
-                            bincode::ErrorKind::Io(io_err)
-                                if matches!(io_err.kind(), ErrorKind::UnexpectedEof) =>
-                            {
-                                // Not enough bytes to deserialize as `PerfSampleV2`.
+        let samples =
+            self.perf_samples_cf
+                .iter(IteratorMode::End)?
+                .take(num)
+                .map(|(slot, data)| {
+                    deserialize::<PerfSampleV2>(&data)
+                        .map(|sample| (slot, sample.into()))
+                        .or_else(|err| {
+                            match &*err {
+                                bincode::ErrorKind::Io(io_err)
+                                    if matches!(io_err.kind(), ErrorKind::UnexpectedEof) =>
+                                {
+                                    // Not enough bytes to deserialize as `PerfSampleV2`.
+                                }
+                                _ => return Err(err),
                             }
-                            _ => return Err(err),
-                        }
 
-                        deserialize::<PerfSampleV1>(&data).map(|sample| (slot, sample.into()))
-                    })
-                    .map_err(Into::into)
-            });
+                            deserialize::<PerfSampleV1>(&data).map(|sample| (slot, sample.into()))
+                        })
+                        .map_err(Into::into)
+                });
 
         samples.collect()
     }
@@ -3513,8 +3511,8 @@ impl Blockstore {
 
     pub fn read_program_costs(&self) -> Result<Vec<(Pubkey, u64)>> {
         Ok(self
-            .db
-            .iter::<cf::ProgramCosts>(IteratorMode::End)?
+            .program_costs_cf
+            .iter(IteratorMode::End)?
             .map(|(pubkey, data)| {
                 let program_cost: ProgramCost = deserialize(&data).unwrap();
                 (pubkey, program_cost.cost)
@@ -3905,7 +3903,7 @@ impl Blockstore {
     }
 
     pub fn is_root(&self, slot: Slot) -> bool {
-        matches!(self.db.get::<cf::Root>(slot), Ok(Some(true)))
+        matches!(self.roots_cf.get(slot), Ok(Some(true)))
     }
 
     /// Returns true if a slot is between the rooted slot bounds of the ledger, but has not itself
@@ -3917,7 +3915,7 @@ impl Blockstore {
             .ok()
             .and_then(|mut iter| iter.next())
             .unwrap_or_default();
-        match self.db.get::<cf::Root>(slot).ok().flatten() {
+        match self.roots_cf.get(slot).ok().flatten() {
             Some(_) => false,
             None => slot < self.max_root() && slot > lowest_root,
         }
@@ -4030,8 +4028,8 @@ impl Blockstore {
 
     pub fn is_dead(&self, slot: Slot) -> bool {
         matches!(
-            self.db
-                .get::<cf::DeadSlots>(slot)
+            self.dead_slots_cf
+                .get(slot)
                 .expect("fetch from DeadSlots column family failed"),
             Some(true)
         )
@@ -4051,8 +4049,8 @@ impl Blockstore {
 
     pub fn get_first_duplicate_proof(&self) -> Option<(Slot, DuplicateSlotProof)> {
         let mut iter = self
-            .db
-            .iter::<cf::DuplicateSlots>(IteratorMode::From(0, IteratorDirection::Forward))
+            .duplicate_slots_cf
+            .iter(IteratorMode::From(0, IteratorDirection::Forward))
             .unwrap();
         iter.next()
             .map(|(slot, proof_bytes)| (slot, deserialize(&proof_bytes).unwrap()))
@@ -4099,22 +4097,22 @@ impl Blockstore {
 
     pub fn orphans_iterator(&self, slot: Slot) -> Result<impl Iterator<Item = u64> + '_> {
         let orphans_iter = self
-            .db
-            .iter::<cf::Orphans>(IteratorMode::From(slot, IteratorDirection::Forward))?;
+            .orphans_cf
+            .iter(IteratorMode::From(slot, IteratorDirection::Forward))?;
         Ok(orphans_iter.map(|(slot, _)| slot))
     }
 
     pub fn dead_slots_iterator(&self, slot: Slot) -> Result<impl Iterator<Item = Slot> + '_> {
         let dead_slots_iterator = self
-            .db
-            .iter::<cf::DeadSlots>(IteratorMode::From(slot, IteratorDirection::Forward))?;
+            .dead_slots_cf
+            .iter(IteratorMode::From(slot, IteratorDirection::Forward))?;
         Ok(dead_slots_iterator.map(|(slot, _)| slot))
     }
 
     pub fn duplicate_slots_iterator(&self, slot: Slot) -> Result<impl Iterator<Item = Slot> + '_> {
         let duplicate_slots_iterator = self
-            .db
-            .iter::<cf::DuplicateSlots>(IteratorMode::From(slot, IteratorDirection::Forward))?;
+            .duplicate_slots_cf
+            .iter(IteratorMode::From(slot, IteratorDirection::Forward))?;
         Ok(duplicate_slots_iterator.map(|(slot, _)| slot))
     }
 
@@ -4168,8 +4166,8 @@ impl Blockstore {
     /// Returns the highest available slot in the blockstore
     pub fn highest_slot(&self) -> Result<Option<Slot>> {
         let highest_slot = self
-            .db
-            .iter::<cf::SlotMeta>(IteratorMode::End)?
+            .meta_cf
+            .iter(IteratorMode::End)?
             .next()
             .map(|(slot, _)| slot);
         Ok(highest_slot)
@@ -5166,85 +5164,85 @@ pub fn make_many_slot_entries(
 // test-only: check that all columns are either empty or start at `min_slot`
 pub fn test_all_empty_or_min(blockstore: &Blockstore, min_slot: Slot) {
     let condition_met = blockstore
-        .db
-        .iter::<cf::SlotMeta>(IteratorMode::Start)
+        .meta_cf
+        .iter(IteratorMode::Start)
         .unwrap()
         .next()
         .map(|(slot, _)| slot >= min_slot)
         .unwrap_or(true)
         & blockstore
-            .db
-            .iter::<cf::Root>(IteratorMode::Start)
+            .roots_cf
+            .iter(IteratorMode::Start)
             .unwrap()
             .next()
             .map(|(slot, _)| slot >= min_slot)
             .unwrap_or(true)
         & blockstore
-            .db
-            .iter::<cf::ShredData>(IteratorMode::Start)
+            .data_shred_cf
+            .iter(IteratorMode::Start)
             .unwrap()
             .next()
             .map(|((slot, _), _)| slot >= min_slot)
             .unwrap_or(true)
         & blockstore
-            .db
-            .iter::<cf::ShredCode>(IteratorMode::Start)
+            .code_shred_cf
+            .iter(IteratorMode::Start)
             .unwrap()
             .next()
             .map(|((slot, _), _)| slot >= min_slot)
             .unwrap_or(true)
         & blockstore
-            .db
-            .iter::<cf::DeadSlots>(IteratorMode::Start)
+            .dead_slots_cf
+            .iter(IteratorMode::Start)
             .unwrap()
             .next()
             .map(|(slot, _)| slot >= min_slot)
             .unwrap_or(true)
         & blockstore
-            .db
-            .iter::<cf::DuplicateSlots>(IteratorMode::Start)
+            .duplicate_slots_cf
+            .iter(IteratorMode::Start)
             .unwrap()
             .next()
             .map(|(slot, _)| slot >= min_slot)
             .unwrap_or(true)
         & blockstore
-            .db
-            .iter::<cf::ErasureMeta>(IteratorMode::Start)
+            .erasure_meta_cf
+            .iter(IteratorMode::Start)
             .unwrap()
             .next()
             .map(|((slot, _), _)| slot >= min_slot)
             .unwrap_or(true)
         & blockstore
-            .db
-            .iter::<cf::Orphans>(IteratorMode::Start)
+            .orphans_cf
+            .iter(IteratorMode::Start)
             .unwrap()
             .next()
             .map(|(slot, _)| slot >= min_slot)
             .unwrap_or(true)
         & blockstore
-            .db
-            .iter::<cf::Index>(IteratorMode::Start)
+            .index_cf
+            .iter(IteratorMode::Start)
             .unwrap()
             .next()
             .map(|(slot, _)| slot >= min_slot)
             .unwrap_or(true)
         & blockstore
-            .db
-            .iter::<cf::TransactionStatus>(IteratorMode::Start)
+            .transaction_status_cf
+            .iter(IteratorMode::Start)
             .unwrap()
             .next()
             .map(|((_, slot), _)| slot >= min_slot || slot == 0)
             .unwrap_or(true)
         & blockstore
-            .db
-            .iter::<cf::AddressSignatures>(IteratorMode::Start)
+            .address_signatures_cf
+            .iter(IteratorMode::Start)
             .unwrap()
             .next()
             .map(|((_, slot, _, _), _)| slot >= min_slot || slot == 0)
             .unwrap_or(true)
         & blockstore
-            .db
-            .iter::<cf::Rewards>(IteratorMode::Start)
+            .rewards_cf
+            .iter(IteratorMode::Start)
             .unwrap()
             .next()
             .map(|(slot, _)| slot >= min_slot)
