@@ -1,10 +1,7 @@
 use {
-    lazy_static::lazy_static,
-    log::*,
-    rand::Rng,
-    solana_perf::sigverify::PacketError,
-    solana_sdk::{packet::Packet, signature::SIGNATURE_BYTES},
-    solana_short_vec::decode_shortu16_len,
+    lazy_static::lazy_static, log::*, rand::Rng, solana_packet::Packet,
+    solana_perf::sigverify::PacketError, solana_short_vec::decode_shortu16_len,
+    solana_signature::SIGNATURE_BYTES,
 };
 
 // The mask is 12 bits long (1<<12 = 4096), it means the probability of matching
