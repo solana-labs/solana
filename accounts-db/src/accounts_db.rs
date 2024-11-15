@@ -1614,6 +1614,7 @@ pub struct AccountsDb {
     pub epoch_accounts_hash_manager: EpochAccountsHashManager,
 
     /// The latest full snapshot slot dictates how to handle zero lamport accounts
+    /// Note, this is None if we're told to *not* take snapshots
     latest_full_snapshot_slot: SeqLock<Option<Slot>>,
 
     /// Flag to indicate if the experimental accounts lattice hash is enabled.

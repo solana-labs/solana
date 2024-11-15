@@ -335,10 +335,20 @@ fn bank_forks_from_snapshot(
     // We must inform accounts-db of the latest full snapshot slot, which is used by the background
     // processes to handle zero lamport accounts.  Since we've now successfully loaded the bank
     // from snapshots, this is a good time to do that update.
-    bank.rc
-        .accounts
-        .accounts_db
-        .set_latest_full_snapshot_slot(full_snapshot_archive_info.slot());
+    // Note, this must only be set if we should generate snapshots.
+    if snapshot_config.should_generate_snapshots() {
+        bank.rc
+            .accounts
+            .accounts_db
+            .set_latest_full_snapshot_slot(full_snapshot_archive_info.slot());
+    } else {
+        assert!(bank
+            .rc
+            .accounts
+            .accounts_db
+            .latest_full_snapshot_slot()
+            .is_none());
+    }
 
     let full_snapshot_hash = FullSnapshotHash((
         full_snapshot_archive_info.slot(),
