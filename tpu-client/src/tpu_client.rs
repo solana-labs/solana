@@ -119,7 +119,7 @@ where
         let leaders = self
             .tpu_client
             .get_leader_tpu_service()
-            .leader_tpu_sockets(self.tpu_client.get_fanout_slots());
+            .unique_leader_tpu_sockets(self.tpu_client.get_fanout_slots());
 
         for tpu_address in &leaders {
             let cache = self.tpu_client.get_connection_cache();
