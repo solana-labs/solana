@@ -1,0 +1,40 @@
+[package]
+name = "json-rpc-server"
+description = "Reference example using Solana SVM API for RPC API"
+version = { workspace = true }
+edition = { workspace = true }
+publish = false
+
+[dependencies]
+base64 = { workspace = true }
+bincode = { workspace = true }
+bs58 = { workspace = true }
+clap = { workspace = true }
+crossbeam-channel = { workspace = true }
+env_logger = { workspace = true }
+jsonrpc-core = { workspace = true }
+jsonrpc-core-client = { workspace = true }
+jsonrpc-derive = { workspace = true }
+jsonrpc-http-server = { workspace = true }
+log = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+solana-account-decoder = { workspace = true }
+solana-bpf-loader-program = { workspace = true }
+solana-compute-budget = { workspace = true }
+solana-perf = { workspace = true }
+solana-program-runtime = { workspace = true }
+solana-rpc-client-api = { workspace = true }
+solana-sdk = { workspace = true }
+solana-svm = { workspace = true }
+solana-system-program = { workspace = true }
+solana-transaction-status = { workspace = true }
+solana-version = { workspace = true }
+solana-vote = { workspace = true }
+spl-token-2022 = { workspace = true, features = ["no-entrypoint"] }
+tokio = { workspace = true, features = ["full"] }
+tokio-util = { workspace = true, features = ["codec", "compat"] }
+
+[features]
+dummy-for-ci-check = []
+frozen-abi = []

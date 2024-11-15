@@ -16,7 +16,11 @@ solana-svm = { workspace = true }
 solana-system-program = { workspace = true }
 spl-associated-token-account = { workspace = true }
 spl-token = { workspace = true }
-termcolor = "1.4.1"
+termcolor = { workspace = true }
 
 [dev-dependencies]
 solana-test-validator = { workspace = true }
+
+[features]
+dummy-for-ci-check = []
+frozen-abi = []

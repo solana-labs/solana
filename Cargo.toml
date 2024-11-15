@@ -173,7 +173,6 @@ members = [
     "svm-conformance",
     "svm-rent-collector",
     "svm-transaction",
-    "svm/examples/paytube",
     "test-validator",
     "thin-client",
     "timings",
@@ -202,7 +201,7 @@ members = [
     "zk-token-sdk",
 ]
 
-exclude = ["programs/sbf", "svm/tests/example-programs"]
+exclude = ["programs/sbf", "svm/examples", "svm/tests/example-programs"]
 
 resolver = "2"
 
@@ -540,7 +539,6 @@ solana-storage-proto = { path = "storage-proto", version = "=2.2.0" }
 solana-streamer = { path = "streamer", version = "=2.2.0" }
 solana-svm = { path = "svm", version = "=2.2.0" }
 solana-svm-conformance = { path = "svm-conformance", version = "=2.2.0" }
-solana-svm-example-paytube = { path = "svm/examples/paytube", version = "=2.2.0" }
 solana-svm-rent-collector = { path = "svm-rent-collector", version = "=2.2.0" }
 solana-svm-transaction = { path = "svm-transaction", version = "=2.2.0" }
 solana-system-program = { path = "programs/system", version = "=2.2.0" }

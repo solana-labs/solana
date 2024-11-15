@@ -1,0 +1,75 @@
+[workspace]
+members = [
+    "json-rpc/client",
+    "json-rpc/server",
+    "paytube",
+]
+
+resolver = "2"
+
+[workspace.package]
+version = "2.2.0"
+authors = ["Anza Maintainers <maintainers@anza.xyz>"]
+repository = "https://github.com/anza-xyz/agave"
+homepage = "https://anza.xyz/"
+license = "Apache-2.0"
+edition = "2021"
+
+[workspace.dependencies]
+base64 = "0.22.1"
+bincode = "1.3.3"
+borsh = { version = "1.5.2", features = ["derive"] }
+bs58 = { version = "0.5.1", default-features = false }
+clap = "2.33.1"
+crossbeam-channel = "0.5.13"
+env_logger = "0.9.3"
+home = "0.5"
+jsonrpc-core = "18.0.0"
+jsonrpc-core-client = "18.0.0"
+jsonrpc-derive = "18.0.0"
+jsonrpc-http-server = "18.0.0"
+log = "0.4.22"
+serde = "1.0.214"
+serde_json = "1.0.132"
+solana-account-decoder = { path = "../../account-decoder" }
+solana-bpf-loader-program = { path = "../../programs/bpf_loader" }
+solana-client = { path = "../../client" }
+solana-compute-budget = { path = "../../compute-budget" }
+solana-logger = { path = "../../sdk/logger" }
+solana-perf = { path = "../../perf" }
+solana-program-runtime = { path = "../../program-runtime" }
+solana-rpc-client-api = { path = "../../rpc-client-api" }
+solana-sdk = { path = "../../sdk/" }
+solana-svm = { path = "../" }
+solana-system-program = { path = "../../programs/system" }
+solana-version = { path = "../../version" }
+solana-vote = { path = "../../vote" }
+solana-test-validator = { path = "../../test-validator" }
+solana-transaction-status = { path = "../../transaction-status" }
+spl-associated-token-account = "=6.0.0"
+spl-token = "=7.0.0"
+spl-token-2022 = "=6.0.0"
+termcolor = "1.4.1"
+thiserror = "1.0.68"
+tokio = "1.29.1"
+tokio-util = "0.7"
+yaml-rust = "0.4"
+
+[patch.crates-io]
+crossbeam-epoch = { git = "https://github.com/anza-xyz/crossbeam", rev = "fd279d707025f0e60951e429bf778b4813d1b6bf" }
+solana-curve25519 = { path = "../../curves/curve25519" }
+solana-account-info = { path = "../../sdk/account-info" }
+solana-borsh = { path = "../../sdk/borsh" }
+solana-cpi = { path = "../../sdk/cpi" }
+solana-decode-error = { path = "../../sdk/decode-error" }
+solana-hash = { path = "../../sdk/hash" }
+solana-instruction = { path = "../../sdk/instruction" }
+solana-msg = { path = "../../sdk/msg" }
+solana-program = { path = "../../sdk/program" }
+solana-program-entrypoint = { path = "../../sdk/program-entrypoint" }
+solana-program-error = { path = "../../sdk/program-error" }
+solana-program-option = { path = "../../sdk/program-option" }
+solana-program-pack = { path = "../../sdk/program-pack" }
+solana-pubkey = { path = "../../sdk/pubkey" }
+solana-sha256-hasher = { path = "../../sdk/sha256-hasher" }
+solana-zk-sdk = { path = "../../zk-sdk" }

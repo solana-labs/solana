@@ -1,0 +1,19 @@
+[package]
+name = "json-rpc-client"
+description = "Reference example using Solana SVM API for RPC API"
+version = { workspace = true }
+edition = { workspace = true }
+publish = false
+
+[dependencies]
+borsh = { workspace = true }
+clap = { workspace = true }
+home = { workspace = true }
+solana-client = { workspace = true }
+solana-sdk = { workspace = true }
+thiserror = { workspace = true }
+yaml-rust = { workspace = true }
+
+[features]
+dummy-for-ci-check = []
+frozen-abi = []
