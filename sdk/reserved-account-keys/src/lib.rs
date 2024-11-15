@@ -10,10 +10,9 @@ use {
     solana_sdk_ids::{
         address_lookup_table, bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
         compute_budget, config, ed25519_program, feature, loader_v4, native_loader,
-        secp256k1_program, stake, system_program, sysvar, vote, zk_elgamal_proof_program,
-        zk_token_proof_program,
+        secp256k1_program, secp256r1_program, stake, system_program, sysvar, vote,
+        zk_elgamal_proof_program, zk_token_proof_program,
     },
-    solana_secp256r1_program as secp256r1_program,
     std::collections::{HashMap, HashSet},
 };
 

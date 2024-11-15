@@ -13,7 +13,7 @@ edition = { workspace = true }
 bytemuck = { workspace = true, features = ["derive"] }
 solana-feature-set = { workspace = true }
 solana-precompile-error = { workspace = true }
-solana-pubkey = { workspace = true }
+solana-sdk-ids = { workspace = true }
 
 [target.'cfg(all(not(target_arch = "wasm32"), not(target_os = "solana")))'.dependencies]
 solana-instruction = { workspace = true, features = ["std"] }

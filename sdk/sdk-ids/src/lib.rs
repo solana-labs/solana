@@ -44,6 +44,10 @@ pub mod secp256k1_program {
     solana_pubkey::declare_id!("KeccakSecp256k11111111111111111111111111111");
 }
 
+pub mod secp256r1_program {
+    solana_pubkey::declare_id!("Secp256r1SigVerify1111111111111111111111111");
+}
+
 pub mod stake {
     pub mod config {
         solana_pubkey::declare_deprecated_id!("StakeConfig11111111111111111111111111111111");

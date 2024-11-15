@@ -6178,7 +6178,6 @@ dependencies = [
  "solana-feature-set",
  "solana-pubkey",
  "solana-sdk-ids",
- "solana-secp256r1-program",
 ]
 
 [[package]]
@@ -6519,7 +6518,7 @@ dependencies = [
  "solana-feature-set",
  "solana-instruction",
  "solana-precompile-error",
- "solana-pubkey",
+ "solana-sdk-ids",
 ]
 
 [[package]]

@@ -8035,7 +8035,6 @@ dependencies = [
  "solana-program",
  "solana-pubkey",
  "solana-sdk-ids",
- "solana-secp256r1-program",
 ]
 
 [[package]]
@@ -8458,8 +8457,8 @@ dependencies = [
  "solana-instruction",
  "solana-logger",
  "solana-precompile-error",
- "solana-pubkey",
  "solana-sdk",
+ "solana-sdk-ids",
 ]
 
 [[package]]
