@@ -7,6 +7,7 @@ pub use solana_precompile_error::PrecompileError;
 use {
     lazy_static::lazy_static, solana_feature_set::FeatureSet,
     solana_program::instruction::CompiledInstruction, solana_pubkey::Pubkey,
+    solana_secp256r1_program as secp256r1_program,
 };
 
 /// All precompiled programs must implement the `Verify` function
@@ -63,6 +64,11 @@ lazy_static! {
             None, // always enabled
             crate::ed25519_instruction::verify,
         ),
+        Precompile::new(
+            secp256r1_program::id(),
+            Some(solana_feature_set::enable_secp256r1_precompile::id()),
+            secp256r1_program::verify,
+        )
     ];
 }
 

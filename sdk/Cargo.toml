@@ -61,6 +61,8 @@ frozen-abi = [
     "solana-signature/frozen-abi",
     "solana-transaction-error/frozen-abi"
 ]
+# Enables the "vendored" feature of openssl inside of secp256r1-program
+openssl-vendored = ["solana-secp256r1-program/openssl-vendored"]
 
 [dependencies]
 bincode = { workspace = true }
@@ -131,6 +133,7 @@ solana-sanitize = { workspace = true }
 solana-sdk-ids = { workspace = true }
 solana-sdk-macro = { workspace = true }
 solana-secp256k1-recover = { workspace = true }
+solana-secp256r1-program = { workspace = true, default-features = false }
 solana-seed-derivable = { workspace = true, optional = true }
 solana-seed-phrase = { workspace = true, optional = true }
 solana-serde = { workspace = true }

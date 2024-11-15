@@ -147,6 +147,7 @@ members = [
     "sdk/reserved-account-keys",
     "sdk/sanitize",
     "sdk/sdk-ids",
+    "sdk/secp256r1-program",
     "sdk/seed-derivable",
     "sdk/seed-phrase",
     "sdk/serde",
@@ -504,6 +505,7 @@ solana-remote-wallet = { path = "remote-wallet", version = "=2.2.0", default-fea
 solana-rent = { path = "sdk/rent", version = "=2.2.0", default-features = false }
 solana-reserved-account-keys = { path = "sdk/reserved-account-keys", version = "=2.2.0", default-features = false }
 solana-reward-info = { path = "sdk/reward-info", version = "=2.2.0" }
+solana-secp256r1-program = { path = "sdk/secp256r1-program", version = "=2.2.0", default-features = false }
 solana-sanitize = { path = "sdk/sanitize", version = "=2.2.0" }
 solana-seed-derivable = { path = "sdk/seed-derivable", version = "=2.2.0" }
 solana-seed-phrase = { path = "sdk/seed-phrase", version = "=2.2.0" }

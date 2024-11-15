@@ -1,0 +1,36 @@
+[package]
+name = "solana-secp256r1-program"
+description = "Precompile implementation for the secp256r1 elliptic curve."
+documentation = "https://docs.rs/solana-secp256r1"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+bytemuck = { workspace = true, features = ["derive"] }
+solana-feature-set = { workspace = true }
+solana-precompile-error = { workspace = true }
+solana-pubkey = { workspace = true }
+
+[target.'cfg(all(not(target_arch = "wasm32"), not(target_os = "solana")))'.dependencies]
+solana-instruction = { workspace = true, features = ["std"] }
+openssl = { workspace = true }
+
+[dev-dependencies]
+solana-logger = { workspace = true }
+solana-sdk = { path = "../" }
+
+[features]
+default = []
+openssl-vendored = ["openssl/vendored"]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+all-features = true
+rustdoc-args = ["--cfg=docsrs"]
+
+[lints]
+workspace = true

@@ -20,6 +20,7 @@ solana-frozen-abi-macro = { workspace = true, optional = true, features = [
 ] }
 solana-pubkey = { workspace = true, default-features = false }
 solana-sdk-ids = { workspace = true }
+solana-secp256r1-program = { workspace = true }
 
 [dev-dependencies]
 solana-program = { path = "../program" }

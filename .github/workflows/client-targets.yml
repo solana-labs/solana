@@ -34,6 +34,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # This can be removed once cargo-ndk >= 3.5.4 is used.
+      - name: Setup environment for Android NDK
+        run: |
+          echo "RANLIB=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ranlib" >> $GITHUB_ENV
+
       - run: cargo install cargo-ndk@2.12.2
 
       - name: Setup Rust
