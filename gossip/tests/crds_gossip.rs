@@ -389,7 +389,11 @@ fn network_run_push(
                 let mut num_msgs: usize = 0;
                 let mut pruned: HashSet<(Pubkey, Pubkey)> = HashSet::new();
                 for (to, msgs) in push_messages {
-                    bytes += serialized_size(&msgs).unwrap() as usize;
+                    // 8 bytes for encoding the length of the vector.
+                    bytes += 8 + msgs
+                        .iter()
+                        .map(CrdsValue::bincode_serialized_size)
+                        .sum::<usize>();
                     num_msgs += 1;
                     let origins: HashSet<_> = network
                         .get(&to)
@@ -558,7 +562,7 @@ fn network_run_pull(
                     .iter()
                     .map(|f| f.filter.bits.len() as usize / 8)
                     .sum::<usize>();
-                bytes += serialized_size(&caller_info).unwrap() as usize;
+                bytes += caller_info.bincode_serialized_size();
                 let filters: Vec<_> = filters
                     .into_iter()
                     .map(|f| (caller_info.clone(), f))
@@ -579,7 +583,11 @@ fn network_run_pull(
                             .collect()
                     })
                     .unwrap();
-                bytes += serialized_size(&rsp).unwrap() as usize;
+                // 8 bytes for encoding the length of the vector.
+                bytes += 8 + rsp
+                    .iter()
+                    .map(CrdsValue::bincode_serialized_size)
+                    .sum::<usize>();
                 msgs += rsp.len();
                 if let Some(node) = network.get(&from) {
                     let mut stats = ProcessPullStats::default();

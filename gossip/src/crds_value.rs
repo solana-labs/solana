@@ -199,10 +199,12 @@ impl CrdsValue {
         Some(epoch_slots)
     }
 
-    /// Returns the size (in bytes) of a CrdsValue
-    #[cfg(test)]
-    pub(crate) fn size(&self) -> u64 {
-        bincode::serialized_size(&self).expect("unable to serialize contact info")
+    /// Returns the bincode serialized size (in bytes) of the CrdsValue.
+    pub fn bincode_serialized_size(&self) -> usize {
+        bincode::serialized_size(&self)
+            .map(usize::try_from)
+            .unwrap()
+            .unwrap()
     }
 
     /// Returns true if, regardless of prunes, this crds-value

@@ -81,6 +81,15 @@ pub(crate) struct PruneData {
 }
 
 impl Protocol {
+    /// Returns the bincode serialized size (in bytes) of the Protocol.
+    #[cfg(test)]
+    fn bincode_serialized_size(&self) -> usize {
+        bincode::serialized_size(self)
+            .map(usize::try_from)
+            .unwrap()
+            .unwrap()
+    }
+
     pub(crate) fn par_verify(self, stats: &GossipStats) -> Option<Self> {
         match self {
             Protocol::PullRequest(_, ref caller) => {
@@ -459,7 +468,7 @@ pub(crate) mod tests {
         let header = Protocol::PushMessage(Pubkey::default(), Vec::default());
         assert_eq!(
             PUSH_MESSAGE_MAX_PAYLOAD_SIZE,
-            PACKET_DATA_SIZE - bincode::serialized_size(&header).unwrap() as usize
+            PACKET_DATA_SIZE - header.bincode_serialized_size()
         );
     }
 
@@ -499,9 +508,9 @@ pub(crate) mod tests {
             let data = CrdsData::DuplicateShred(MAX_DUPLICATE_SHREDS - 1, chunk);
             let value = CrdsValue::new(data, &keypair);
             let pull_response = Protocol::PullResponse(keypair.pubkey(), vec![value.clone()]);
-            assert!(bincode::serialized_size(&pull_response).unwrap() < PACKET_DATA_SIZE as u64);
+            assert!(pull_response.bincode_serialized_size() < PACKET_DATA_SIZE);
             let push_message = Protocol::PushMessage(keypair.pubkey(), vec![value.clone()]);
-            assert!(bincode::serialized_size(&push_message).unwrap() < PACKET_DATA_SIZE as u64);
+            assert!(push_message.bincode_serialized_size() < PACKET_DATA_SIZE);
         }
     }
 
@@ -511,9 +520,9 @@ pub(crate) mod tests {
         for _ in 0..100 {
             let crds_values = vec![CrdsValue::new_rand(&mut rng, None)];
             let pull_response = Protocol::PullResponse(Pubkey::new_unique(), crds_values);
-            let size = bincode::serialized_size(&pull_response).unwrap();
+            let size = pull_response.bincode_serialized_size();
             assert!(
-                PULL_RESPONSE_MIN_SERIALIZED_SIZE as u64 <= size,
+                PULL_RESPONSE_MIN_SERIALIZED_SIZE <= size,
                 "pull-response serialized size: {size}"
             );
         }
@@ -559,13 +568,13 @@ pub(crate) mod tests {
         let header_size = PACKET_DATA_SIZE - PUSH_MESSAGE_MAX_PAYLOAD_SIZE;
         for values in splits {
             // Assert that sum of parts equals the whole.
-            let size: u64 = header_size as u64
+            let size = header_size
                 + values
                     .iter()
-                    .map(|v| bincode::serialized_size(v).unwrap())
-                    .sum::<u64>();
+                    .map(CrdsValue::bincode_serialized_size)
+                    .sum::<usize>();
             let message = Protocol::PushMessage(self_pubkey, values);
-            assert_eq!(bincode::serialized_size(&message).unwrap(), size);
+            assert_eq!(message.bincode_serialized_size(), size);
             // Assert that the message fits into a packet.
             assert!(Packet::from_data(Some(&socket), message).is_ok());
         }
@@ -582,7 +591,7 @@ pub(crate) mod tests {
         }));
 
         let mut i = 0;
-        while value.size() < PUSH_MESSAGE_MAX_PAYLOAD_SIZE as u64 {
+        while value.bincode_serialized_size() < PUSH_MESSAGE_MAX_PAYLOAD_SIZE {
             value = CrdsValue::new_unsigned(CrdsData::AccountsHashes(AccountsHashes {
                 from: Pubkey::default(),
                 hashes: vec![(0, Hash::default()); i],
@@ -596,18 +605,15 @@ pub(crate) mod tests {
     }
 
     fn test_split_messages(value: CrdsValue) {
-        const NUM_VALUES: u64 = 30;
-        let value_size = value.size();
-        let num_values_per_payload = (PUSH_MESSAGE_MAX_PAYLOAD_SIZE as u64 / value_size).max(1);
+        const NUM_VALUES: usize = 30;
+        let value_size = value.bincode_serialized_size();
+        let num_values_per_payload = (PUSH_MESSAGE_MAX_PAYLOAD_SIZE / value_size).max(1);
 
         // Expected len is the ceiling of the division
         let expected_len = (NUM_VALUES + num_values_per_payload - 1) / num_values_per_payload;
-        let msgs = vec![value; NUM_VALUES as usize];
+        let msgs = vec![value; NUM_VALUES];
 
-        assert!(
-            split_gossip_messages(PUSH_MESSAGE_MAX_PAYLOAD_SIZE, msgs).count() as u64
-                <= expected_len
-        );
+        assert!(split_gossip_messages(PUSH_MESSAGE_MAX_PAYLOAD_SIZE, msgs).count() <= expected_len);
     }
 
     #[test]
@@ -662,7 +668,7 @@ pub(crate) mod tests {
         )
         .unwrap();
         let vote = CrdsValue::new(CrdsData::Vote(1, vote), &Keypair::new());
-        assert!(bincode::serialized_size(&vote).unwrap() <= PUSH_MESSAGE_MAX_PAYLOAD_SIZE as u64);
+        assert!(vote.bincode_serialized_size() <= PUSH_MESSAGE_MAX_PAYLOAD_SIZE);
     }
 
     #[test]

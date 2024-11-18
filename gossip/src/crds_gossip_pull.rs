@@ -637,10 +637,7 @@ pub(crate) fn get_max_bloom_filter_bytes(caller: &CrdsValue) -> usize {
     let size_of_filter = PACKET_DATA_SIZE
         .checked_sub(
             // 4 bytes for u32 enum variant identifier of Protocol.
-            4 + bincode::serialized_size(caller)
-                .map(usize::try_from)
-                .unwrap()
-                .unwrap(),
+            4 + caller.bincode_serialized_size(),
         )
         .unwrap();
     MAX_BYTES_CACHE
@@ -1456,7 +1453,7 @@ pub(crate) mod tests {
         let packet_data_size_range = (PACKET_DATA_SIZE - 5)..=PACKET_DATA_SIZE;
         let max_bytes = get_max_bloom_filter_bytes(caller);
         let filters = CrdsFilterSet::new(rng, num_items, max_bytes);
-        let request_bytes = bincode::serialized_size(caller).unwrap();
+        let request_bytes = caller.bincode_serialized_size() as u64;
         for filter in Vec::<CrdsFilter>::from(filters) {
             let request_bytes = 4 + request_bytes + bincode::serialized_size(&filter).unwrap();
             let request = Protocol::PullRequest(filter, caller.clone());
