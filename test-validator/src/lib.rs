@@ -808,7 +808,7 @@ impl TestValidator {
                     lamports: Rent::default().minimum_balance(program_data.len()).max(1),
                     data: program_data,
                     owner: upgradeable_program.loader,
-                    executable: true,
+                    executable: false,
                     rent_epoch: 0,
                 }),
             );
