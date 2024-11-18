@@ -8,7 +8,7 @@ use {
         feature::{status_from_account, CliFeatureStatus},
         program::calculate_max_chunk_size,
     },
-    clap::{App, AppSettings, Arg, ArgMatches, SubCommand},
+    clap::{value_t, App, AppSettings, Arg, ArgMatches, SubCommand},
     log::*,
     solana_account_decoder::{UiAccountEncoding, UiDataSliceConfig},
     solana_clap_utils::{
@@ -16,7 +16,7 @@ use {
         input_validators::{is_valid_pubkey, is_valid_signer},
         keypair::{DefaultSigner, SignerIndex},
     },
-    solana_cli_output::{CliProgramId, CliProgramV4, CliProgramsV4, OutputFormat},
+    solana_cli_output::{CliProgramId, CliProgramV4, CliProgramsV4},
     solana_client::{
         connection_cache::ConnectionCache,
         send_and_confirm_transactions_in_parallel::{
@@ -30,15 +30,13 @@ use {
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
     solana_rpc_client::rpc_client::RpcClient,
     solana_rpc_client_api::{
-        config::{RpcAccountInfoConfig, RpcProgramAccountsConfig, RpcSendTransactionConfig},
+        config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},
         filter::{Memcmp, RpcFilterType},
         request::MAX_MULTIPLE_ACCOUNTS,
     },
     solana_sdk::{
         account::Account,
-        commitment_config::CommitmentConfig,
         feature_set::{FeatureSet, FEATURE_NAMES},
-        hash::Hash,
         instruction::Instruction,
         loader_v4::{
             self, LoaderV4State,
@@ -47,7 +45,7 @@ use {
         message::Message,
         pubkey::Pubkey,
         signature::Signer,
-        system_instruction::{self, SystemError},
+        system_instruction::{self, SystemError, MAX_PERMITTED_DATA_LENGTH},
         transaction::Transaction,
     },
     std::{
@@ -56,6 +54,7 @@ use {
         io::{Read, Write},
         mem::size_of,
         num::Saturating,
+        ops::Range,
         rc::Rc,
         sync::Arc,
     },
@@ -64,15 +63,13 @@ use {
 #[derive(Debug, PartialEq, Eq)]
 pub enum ProgramV4CliCommand {
     Deploy {
-        program_location: String,
-        program_signer_index: SignerIndex,
-        authority_signer_index: SignerIndex,
-    },
-    Redeploy {
-        program_location: String,
-        program_address: Pubkey,
+        program_address: Option<Pubkey>,
+        program_signer_index: Option<SignerIndex>,
         buffer_signer_index: Option<SignerIndex>,
         authority_signer_index: SignerIndex,
+        program_location: String,
+        upload_range: Range<Option<usize>>,
+        use_rpc: bool,
     },
     Undeploy {
         program_address: Pubkey,
@@ -111,13 +108,27 @@ impl ProgramV4SubCommands for App<'_, '_> {
                 .setting(AppSettings::SubcommandRequiredElseHelp)
                 .subcommand(
                     SubCommand::with_name("deploy")
-                        .about("Deploy a program")
+                        .about("Deploy a new or redeploy an existing program")
                         .arg(
-                            Arg::with_name("program_location")
+                            Arg::with_name("program-location")
                                 .index(1)
                                 .value_name("PROGRAM_FILEPATH")
                                 .takes_value(true)
                                 .help("/path/to/program.so"),
+                        )
+                        .arg(
+                            Arg::with_name("start-offset")
+                                .long("start-offset")
+                                .value_name("START_OFFSET")
+                                .takes_value(true)
+                                .help("Optionally starts writing at this byte offset"),
+                        )
+                        .arg(
+                            Arg::with_name("end-offset")
+                                .long("end-offset")
+                                .value_name("END_OFFSET")
+                                .takes_value(true)
+                                .help("Optionally stops writing after this byte offset"),
                         )
                         .arg(
                             Arg::with_name("program")
@@ -126,37 +137,15 @@ impl ProgramV4SubCommands for App<'_, '_> {
                                 .takes_value(true)
                                 .validator(is_valid_signer)
                                 .help(
-                                    "Program account signer. The program data is written to the \
-                                     associated account.",
+                                    "Program account signer for deploying a new program",
                                 ),
-                        )
-                        .arg(
-                            Arg::with_name("authority")
-                                .long("authority")
-                                .value_name("AUTHORITY_SIGNER")
-                                .takes_value(true)
-                                .validator(is_valid_signer)
-                                .help(
-                                    "Program authority [default: the default configured keypair]",
-                                ),
-                        ),
-                )
-                .subcommand(
-                    SubCommand::with_name("redeploy")
-                        .about("Redeploy a previously deployed program")
-                        .arg(
-                            Arg::with_name("program_location")
-                                .index(1)
-                                .value_name("PROGRAM_FILEPATH")
-                                .takes_value(true)
-                                .help("/path/to/program.so"),
                         )
                         .arg(
                             Arg::with_name("program-id")
                                 .long("program-id")
                                 .value_name("PROGRAM_ID")
                                 .takes_value(true)
-                                .help("Executable program's address"),
+                                .help("Program address for redeploying an existing program"),
                         )
                         .arg(
                             Arg::with_name("buffer")
@@ -165,8 +154,7 @@ impl ProgramV4SubCommands for App<'_, '_> {
                                 .takes_value(true)
                                 .validator(is_valid_signer)
                                 .help(
-                                    "Optional intermediate buffer account to write data to, which \
-                                     can be used to resume a failed deploy",
+                                    "Optional intermediate buffer account to write data to",
                                 ),
                         )
                         .arg(
@@ -178,7 +166,10 @@ impl ProgramV4SubCommands for App<'_, '_> {
                                 .help(
                                     "Program authority [default: the default configured keypair]",
                                 ),
-                        ),
+                        )
+                        .arg(Arg::with_name("use_rpc").long("use-rpc").help(
+                            "Send transactions to the configured RPC instead of validator TPUs",
+                        )),
                 )
                 .subcommand(
                     SubCommand::with_name("undeploy")
@@ -326,9 +317,10 @@ pub fn parse_program_v4_subcommand(
             )];
 
             let program_location = matches
-                .value_of("program_location")
+                .value_of("program-location")
                 .map(|location| location.to_string());
 
+            let program_address = pubkey_of(matches, "program-id");
             let program_pubkey = if let Ok((program_signer, Some(program_pubkey))) =
                 signer_of(matches, "program", wallet_manager)
             {
@@ -337,34 +329,6 @@ pub fn parse_program_v4_subcommand(
             } else {
                 pubkey_of_signer(matches, "program", wallet_manager)?
             };
-
-            let (authority, authority_pubkey) = signer_of(matches, "authority", wallet_manager)?;
-            bulk_signers.push(authority);
-
-            let signer_info =
-                default_signer.generate_unique_signers(bulk_signers, matches, wallet_manager)?;
-
-            CliCommandInfo {
-                command: CliCommand::ProgramV4(ProgramV4CliCommand::Deploy {
-                    program_location: program_location.expect("Program location is missing"),
-                    program_signer_index: signer_info
-                        .index_of(program_pubkey)
-                        .expect("Program signer is missing"),
-                    authority_signer_index: signer_info
-                        .index_of(authority_pubkey)
-                        .expect("Authority signer is missing"),
-                }),
-                signers: signer_info.signers,
-            }
-        }
-        ("redeploy", Some(matches)) => {
-            let mut bulk_signers = vec![Some(
-                default_signer.signer_from_path(matches, wallet_manager)?,
-            )];
-
-            let program_location = matches
-                .value_of("program_location")
-                .map(|location| location.to_string());
 
             let buffer_pubkey = if let Ok((buffer_signer, Some(buffer_pubkey))) =
                 signer_of(matches, "buffer", wallet_manager)
@@ -380,16 +344,24 @@ pub fn parse_program_v4_subcommand(
 
             let signer_info =
                 default_signer.generate_unique_signers(bulk_signers, matches, wallet_manager)?;
+            let program_signer_index = signer_info.index_of_or_none(program_pubkey);
+            assert!(
+                program_address.is_some() != program_signer_index.is_some(),
+                "Requires either program signer or program address",
+            );
 
             CliCommandInfo {
-                command: CliCommand::ProgramV4(ProgramV4CliCommand::Redeploy {
-                    program_location: program_location.expect("Program location is missing"),
-                    program_address: pubkey_of(matches, "program-id")
-                        .expect("Program address is missing"),
+                command: CliCommand::ProgramV4(ProgramV4CliCommand::Deploy {
+                    program_address,
+                    program_signer_index,
                     buffer_signer_index: signer_info.index_of_or_none(buffer_pubkey),
                     authority_signer_index: signer_info
                         .index_of(authority_pubkey)
                         .expect("Authority signer is missing"),
+                    program_location: program_location.expect("Program location is missing"),
+                    upload_range: value_t!(matches, "start-offset", usize).ok()
+                        ..value_t!(matches, "end-offset", usize).ok(),
+                    use_rpc: matches.is_present("use_rpc"),
                 }),
                 signers: signer_info.signers,
             }
@@ -504,7 +476,102 @@ pub fn parse_program_v4_subcommand(
     Ok(response)
 }
 
-fn fetch_feature_set(rpc_client: &RpcClient) -> Result<FeatureSet, Box<dyn std::error::Error>> {
+pub fn process_program_v4_subcommand(
+    rpc_client: Arc<RpcClient>,
+    config: &CliConfig,
+    program_subcommand: &ProgramV4CliCommand,
+) -> ProcessResult {
+    match program_subcommand {
+        ProgramV4CliCommand::Deploy {
+            program_address,
+            program_signer_index,
+            buffer_signer_index,
+            authority_signer_index,
+            program_location,
+            upload_range,
+            use_rpc,
+        } => {
+            let mut program_data = Vec::new();
+            let mut file = File::open(program_location)
+                .map_err(|err| format!("Unable to open program file: {err}"))?;
+            file.read_to_end(&mut program_data)
+                .map_err(|err| format!("Unable to read program file: {err}"))?;
+            process_deploy_program(
+                rpc_client,
+                config,
+                authority_signer_index,
+                &program_address
+                    .unwrap_or_else(|| config.signers[program_signer_index.unwrap()].pubkey()),
+                &program_data,
+                upload_range.clone(),
+                program_signer_index
+                    .or(*buffer_signer_index)
+                    .map(|index| config.signers[index]),
+                *use_rpc,
+            )
+        }
+        ProgramV4CliCommand::Undeploy {
+            program_address,
+            authority_signer_index,
+        } => process_undeploy_program(rpc_client, config, authority_signer_index, program_address),
+        ProgramV4CliCommand::TransferAuthority {
+            program_address,
+            authority_signer_index,
+            new_authority_signer_index,
+        } => process_transfer_authority_of_program(
+            rpc_client,
+            config,
+            authority_signer_index,
+            program_address,
+            config.signers[*new_authority_signer_index],
+        ),
+        ProgramV4CliCommand::Finalize {
+            program_address,
+            authority_signer_index,
+            next_version_signer_index,
+        } => process_finalize_program(
+            rpc_client,
+            config,
+            authority_signer_index,
+            program_address,
+            config.signers[*next_version_signer_index],
+        ),
+        ProgramV4CliCommand::Show {
+            account_pubkey,
+            authority,
+            all,
+        } => process_show(rpc_client, config, *account_pubkey, *authority, *all),
+        ProgramV4CliCommand::Dump {
+            account_pubkey,
+            output_location,
+        } => process_dump(rpc_client, config, *account_pubkey, output_location),
+    }
+}
+
+// This function can be used for the following use-cases
+// * Deploy a program
+//   - buffer_signer argument must contain program signer information
+//     (program_address must be same as buffer_signer.pubkey())
+// * Redeploy a program using original program account
+//   - buffer_signer argument must be None
+// * Redeploy a program using a buffer account
+//   - buffer_signer argument must contain the temporary buffer account information
+//     (program_address must contain program ID and must NOT be same as buffer_signer.pubkey())
+pub fn process_deploy_program(
+    rpc_client: Arc<RpcClient>,
+    config: &CliConfig,
+    auth_signer_index: &SignerIndex,
+    program_address: &Pubkey,
+    program_data: &[u8],
+    upload_range: Range<Option<usize>>,
+    buffer_signer: Option<&dyn Signer>,
+    use_rpc: bool,
+) -> ProcessResult {
+    let blockhash = rpc_client.get_latest_blockhash()?;
+    let payer_pubkey = config.signers[0].pubkey();
+    let authority_pubkey = config.signers[*auth_signer_index].pubkey();
+
+    // Download feature set
     let mut feature_set = FeatureSet::default();
     for feature_ids in FEATURE_NAMES
         .keys()
@@ -524,23 +591,6 @@ fn fetch_feature_set(rpc_client: &RpcClient) -> Result<FeatureSet, Box<dyn std::
                 }
             });
     }
-
-    Ok(feature_set)
-}
-
-pub fn read_and_verify_elf(
-    program_location: &str,
-    rpc_client: &RpcClient,
-) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-    let feature_set = fetch_feature_set(rpc_client)?;
-
-    let mut file = File::open(program_location)
-        .map_err(|err| format!("Unable to open program file: {err}"))?;
-    let mut program_data = Vec::new();
-    file.read_to_end(&mut program_data)
-        .map_err(|err| format!("Unable to read program file: {err}"))?;
-
-    // Verify the program
     let program_runtime_environment =
         solana_bpf_loader_program::syscalls::create_program_runtime_environment_v1(
             &feature_set,
@@ -549,220 +599,163 @@ pub fn read_and_verify_elf(
             false,
         )
         .unwrap();
-    let executable =
-        Executable::<InvokeContext>::from_elf(&program_data, Arc::new(program_runtime_environment))
-            .map_err(|err| format!("ELF error: {err}"))?;
 
+    // Verify the program
+    let upload_range =
+        upload_range.start.unwrap_or(0)..upload_range.end.unwrap_or(program_data.len());
+    const MAX_LEN: usize =
+        (MAX_PERMITTED_DATA_LENGTH as usize).saturating_sub(LoaderV4State::program_data_offset());
+    assert!(
+        program_data.len() <= MAX_LEN,
+        "Program length {} exeeds maximum length {}",
+        program_data.len(),
+        MAX_LEN,
+    );
+    assert!(
+        upload_range.start < upload_range.end,
+        "Range {}..{} is empty",
+        upload_range.start,
+        upload_range.end,
+    );
+    assert!(
+        upload_range.end <= program_data.len(),
+        "Range end {} exeeds program length {}",
+        upload_range.end,
+        program_data.len(),
+    );
+    let executable =
+        Executable::<InvokeContext>::from_elf(program_data, Arc::new(program_runtime_environment))
+            .map_err(|err| format!("ELF error: {err}"))?;
     executable
         .verify::<RequisiteVerifier>()
         .map_err(|err| format!("ELF error: {err}"))?;
 
-    Ok(program_data)
-}
-
-pub struct ProgramV4CommandConfig<'a> {
-    pub websocket_url: &'a str,
-    pub commitment: CommitmentConfig,
-    pub payer: &'a dyn Signer,
-    pub authority: &'a dyn Signer,
-    pub output_format: &'a OutputFormat,
-    pub use_quic: bool,
-    pub rpc_send_transaction_config: RpcSendTransactionConfig,
-}
-
-impl<'a> ProgramV4CommandConfig<'a> {
-    fn new_from_cli_config(config: &'a CliConfig, auth_signer_index: &SignerIndex) -> Self {
-        ProgramV4CommandConfig {
-            websocket_url: &config.websocket_url,
-            commitment: config.commitment,
-            payer: config.signers[0],
-            authority: config.signers[*auth_signer_index],
-            output_format: &config.output_format,
-            use_quic: config.use_quic,
-            rpc_send_transaction_config: config.send_transaction_config,
-        }
+    // Create and add retract message
+    let mut initial_messages = Vec::default();
+    let program_account = rpc_client
+        .get_account_with_commitment(program_address, config.commitment)?
+        .value;
+    let program_account_exists = program_account.is_some();
+    let mut retract_instruction = None;
+    if let Some(program_account) = program_account.as_ref() {
+        retract_instruction =
+            build_retract_instruction(program_account, program_address, &authority_pubkey)?;
     }
-}
 
-pub fn process_program_v4_subcommand(
-    rpc_client: Arc<RpcClient>,
-    config: &CliConfig,
-    program_subcommand: &ProgramV4CliCommand,
-) -> ProcessResult {
-    match program_subcommand {
-        ProgramV4CliCommand::Deploy {
-            program_location,
-            program_signer_index,
-            authority_signer_index,
-        } => {
-            let program_data = read_and_verify_elf(program_location, &rpc_client)?;
-            let program_len = program_data.len() as u32;
-
-            process_deploy_program(
-                rpc_client,
-                &ProgramV4CommandConfig::new_from_cli_config(config, authority_signer_index),
-                &program_data,
-                program_len,
-                &config.signers[*program_signer_index].pubkey(),
-                Some(config.signers[*program_signer_index]),
-            )
-        }
-        ProgramV4CliCommand::Redeploy {
-            program_location,
-            program_address,
-            buffer_signer_index,
-            authority_signer_index,
-        } => {
-            let program_data = read_and_verify_elf(program_location, &rpc_client)?;
-            let program_len = program_data.len() as u32;
-            let buffer_signer = buffer_signer_index.map(|index| config.signers[index]);
-
-            process_deploy_program(
-                rpc_client,
-                &ProgramV4CommandConfig::new_from_cli_config(config, authority_signer_index),
-                &program_data,
-                program_len,
-                program_address,
-                buffer_signer,
-            )
-        }
-        ProgramV4CliCommand::Undeploy {
-            program_address,
-            authority_signer_index,
-        } => process_undeploy_program(
-            rpc_client,
-            &ProgramV4CommandConfig::new_from_cli_config(config, authority_signer_index),
-            program_address,
-        ),
-        ProgramV4CliCommand::TransferAuthority {
-            program_address,
-            authority_signer_index,
-            new_authority_signer_index,
-        } => process_transfer_authority_of_program(
-            rpc_client,
-            &ProgramV4CommandConfig::new_from_cli_config(config, authority_signer_index),
-            program_address,
-            config.signers[*new_authority_signer_index],
-        ),
-        ProgramV4CliCommand::Finalize {
-            program_address,
-            authority_signer_index,
-            next_version_signer_index,
-        } => process_finalize_program(
-            rpc_client,
-            &ProgramV4CommandConfig::new_from_cli_config(config, authority_signer_index),
-            program_address,
-            config.signers[*next_version_signer_index],
-        ),
-        ProgramV4CliCommand::Show {
-            account_pubkey,
-            authority,
-            all,
-        } => process_show(rpc_client, config, *account_pubkey, *authority, *all),
-        ProgramV4CliCommand::Dump {
-            account_pubkey,
-            output_location,
-        } => process_dump(
-            rpc_client,
-            config.commitment,
-            *account_pubkey,
-            output_location,
-        ),
-    }
-}
-
-// This function can be used for the following use-cases
-// * Deploy a program
-//   - buffer_signer argument must contain program signer information
-//     (program_address must be same as buffer_signer.pubkey())
-// * Redeploy a program using original program account
-//   - buffer_signer argument must be None
-// * Redeploy a program using a buffer account
-//   - buffer_signer argument must contain the temporary buffer account information
-//     (program_address must contain program ID and must NOT be same as buffer_signer.pubkey())
-pub fn process_deploy_program(
-    rpc_client: Arc<RpcClient>,
-    config: &ProgramV4CommandConfig,
-    program_data: &[u8],
-    program_data_len: u32,
-    program_address: &Pubkey,
-    buffer_signer: Option<&dyn Signer>,
-) -> ProcessResult {
-    let blockhash = rpc_client.get_latest_blockhash()?;
-    let payer_pubkey = config.payer.pubkey();
-
-    let (initial_messages, balance_needed, buffer_address) =
-        if let Some(buffer_signer) = buffer_signer {
-            let buffer_address = buffer_signer.pubkey();
-            let (create_buffer_message, required_lamports) = build_create_buffer_message(
-                rpc_client.clone(),
-                config,
-                program_address,
-                &buffer_address,
-                program_data_len,
+    let lamports_required = rpc_client.get_minimum_balance_for_rent_exemption(
+        LoaderV4State::program_data_offset().saturating_add(program_data.len()),
+    )?;
+    let (buffer_address, buffer_account) = if let Some(buffer_signer) = buffer_signer {
+        // Deploy new program or redeploy with a buffer account
+        let buffer_address = buffer_signer.pubkey();
+        let buffer_account = rpc_client
+            .get_account_with_commitment(&buffer_address, config.commitment)?
+            .value;
+        if buffer_account.is_none() {
+            // Create and add create_buffer message
+            initial_messages.push(Message::new_with_blockhash(
+                &loader_v4::create_buffer(
+                    &payer_pubkey,
+                    &buffer_address,
+                    lamports_required,
+                    &authority_pubkey,
+                    program_data.len() as u32,
+                    &payer_pubkey,
+                ),
+                Some(&payer_pubkey),
                 &blockhash,
-            )?;
-
-            if let Some(message) = create_buffer_message {
-                (vec![message], required_lamports, buffer_address)
-            } else {
-                (vec![], 0, buffer_address)
-            }
-        } else {
-            build_retract_and_truncate_messages(
-                rpc_client.clone(),
-                config,
-                program_data_len,
-                program_address,
-            )
-            .map(|(messages, balance_needed)| (messages, balance_needed, *program_address))?
-        };
-
-    // Create and add write messages
-    let create_msg = |offset: u32, bytes: Vec<u8>| {
-        let instruction =
-            loader_v4::write(&buffer_address, &config.authority.pubkey(), offset, bytes);
-        Message::new_with_blockhash(&[instruction], Some(&payer_pubkey), &blockhash)
+            ));
+        }
+        (buffer_address, buffer_account)
+    } else {
+        // Redeploy without a buffer account
+        (*program_address, program_account)
     };
 
+    if buffer_signer.is_none() || &buffer_address != program_address {
+        // Redeploy an existing program
+        if !program_account_exists {
+            return Err("Program account does not exist".into());
+        }
+    } else {
+        // Deploy new program
+        if program_account_exists {
+            return Err("Program account does exist already".into());
+        }
+    }
+
+    // Create and add truncate message
+    if let Some(buffer_account) = buffer_account.as_ref() {
+        let (truncate_instructions, _lamports_required) = build_truncate_instructions(
+            rpc_client.clone(),
+            config,
+            auth_signer_index,
+            buffer_account,
+            &buffer_address,
+            program_data.len() as u32,
+        )?;
+        if !truncate_instructions.is_empty() {
+            initial_messages.push(Message::new_with_blockhash(
+                &truncate_instructions,
+                Some(&payer_pubkey),
+                &blockhash,
+            ));
+        }
+    }
+
+    // Create and add write messages
     let mut write_messages = vec![];
+    let create_msg = |offset: u32, bytes: Vec<u8>| {
+        let instruction = loader_v4::write(&buffer_address, &authority_pubkey, offset, bytes);
+        Message::new_with_blockhash(&[instruction], Some(&payer_pubkey), &blockhash)
+    };
     let chunk_size = calculate_max_chunk_size(&create_msg);
-    for (chunk, i) in program_data.chunks(chunk_size).zip(0usize..) {
+    for (chunk, i) in program_data[upload_range.clone()]
+        .chunks(chunk_size)
+        .zip(0usize..)
+    {
         write_messages.push(create_msg(
-            i.saturating_mul(chunk_size).try_into().map_err(|_| {
-                format!(
-                    "Program data size exceeds {}: {}",
-                    u32::MAX,
-                    program_data.len()
-                )
-            })?,
+            (upload_range.start as u32).saturating_add(i.saturating_mul(chunk_size) as u32),
             chunk.to_vec(),
         ));
     }
 
-    let final_messages = if *program_address != buffer_address {
-        build_retract_and_deploy_messages(
-            rpc_client.clone(),
-            config,
+    // Create and add deploy messages
+    let final_messages = [if &buffer_address != program_address {
+        // Redeploy with a buffer account
+        let mut instructions = Vec::default();
+        if let Some(retract_instruction) = retract_instruction {
+            instructions.push(retract_instruction);
+        }
+        instructions.push(loader_v4::deploy_from_source(
             program_address,
+            &authority_pubkey,
             &buffer_address,
-        )?
+        ));
+        Message::new_with_blockhash(&instructions, Some(&payer_pubkey), &blockhash)
     } else {
-        // Create and add deploy message
-        vec![Message::new_with_blockhash(
-            &[loader_v4::deploy(
-                program_address,
-                &config.authority.pubkey(),
-            )],
+        // Deploy new program or redeploy without a buffer account
+        if let Some(retract_instruction) = retract_instruction {
+            initial_messages.insert(
+                0,
+                Message::new_with_blockhash(
+                    &[retract_instruction],
+                    Some(&payer_pubkey),
+                    &blockhash,
+                ),
+            );
+        }
+        Message::new_with_blockhash(
+            &[loader_v4::deploy(program_address, &authority_pubkey)],
             Some(&payer_pubkey),
             &blockhash,
-        )]
-    };
+        )
+    }];
 
     check_payer(
-        &rpc_client,
+        rpc_client.clone(),
         config,
-        balance_needed,
+        lamports_required,
         &initial_messages,
         &write_messages,
         &final_messages,
@@ -771,10 +764,12 @@ pub fn process_deploy_program(
     send_messages(
         rpc_client,
         config,
+        auth_signer_index,
         &initial_messages,
         &write_messages,
         &final_messages,
         buffer_signer,
+        use_rpc,
     )?;
 
     let program_id = CliProgramId {
@@ -786,11 +781,13 @@ pub fn process_deploy_program(
 
 fn process_undeploy_program(
     rpc_client: Arc<RpcClient>,
-    config: &ProgramV4CommandConfig,
+    config: &CliConfig,
+    auth_signer_index: &SignerIndex,
     program_address: &Pubkey,
 ) -> ProcessResult {
     let blockhash = rpc_client.get_latest_blockhash()?;
-    let payer_pubkey = config.payer.pubkey();
+    let payer_pubkey = config.signers[0].pubkey();
+    let authority_pubkey = config.signers[*auth_signer_index].pubkey();
 
     let Some(program_account) = rpc_client
         .get_account_with_commitment(program_address, config.commitment)?
@@ -799,11 +796,8 @@ fn process_undeploy_program(
         return Err("Program account does not exist".into());
     };
 
-    let retract_instruction = build_retract_instruction(
-        &program_account,
-        program_address,
-        &config.authority.pubkey(),
-    )?;
+    let retract_instruction =
+        build_retract_instruction(&program_account, program_address, &authority_pubkey)?;
 
     let mut initial_messages = if let Some(instruction) = retract_instruction {
         vec![Message::new_with_blockhash(
@@ -815,12 +809,8 @@ fn process_undeploy_program(
         vec![]
     };
 
-    let truncate_instruction = loader_v4::truncate(
-        program_address,
-        &config.authority.pubkey(),
-        0,
-        &payer_pubkey,
-    );
+    let truncate_instruction =
+        loader_v4::truncate(program_address, &authority_pubkey, 0, &payer_pubkey);
 
     initial_messages.push(Message::new_with_blockhash(
         &[truncate_instruction],
@@ -828,9 +818,18 @@ fn process_undeploy_program(
         &blockhash,
     ));
 
-    check_payer(&rpc_client, config, 0, &initial_messages, &[], &[])?;
+    check_payer(rpc_client.clone(), config, 0, &initial_messages, &[], &[])?;
 
-    send_messages(rpc_client, config, &initial_messages, &[], &[], None)?;
+    send_messages(
+        rpc_client,
+        config,
+        auth_signer_index,
+        &initial_messages,
+        &[],
+        &[],
+        None,
+        true,
+    )?;
 
     let program_id = CliProgramId {
         program_id: program_address.to_string(),
@@ -841,24 +840,36 @@ fn process_undeploy_program(
 
 fn process_transfer_authority_of_program(
     rpc_client: Arc<RpcClient>,
-    config: &ProgramV4CommandConfig,
+    config: &CliConfig,
+    auth_signer_index: &SignerIndex,
     program_address: &Pubkey,
     new_authority: &dyn Signer,
 ) -> ProcessResult {
     let blockhash = rpc_client.get_latest_blockhash()?;
+    let payer_pubkey = config.signers[0].pubkey();
+    let authority_pubkey = config.signers[*auth_signer_index].pubkey();
 
     let message = [Message::new_with_blockhash(
         &[loader_v4::transfer_authority(
             program_address,
-            &config.authority.pubkey(),
+            &authority_pubkey,
             &new_authority.pubkey(),
         )],
-        Some(&config.payer.pubkey()),
+        Some(&payer_pubkey),
         &blockhash,
     )];
-    check_payer(&rpc_client, config, 0, &message, &[], &[])?;
+    check_payer(rpc_client.clone(), config, 0, &message, &[], &[])?;
 
-    send_messages(rpc_client, config, &message, &[], &[], None)?;
+    send_messages(
+        rpc_client,
+        config,
+        auth_signer_index,
+        &message,
+        &[],
+        &[],
+        None,
+        true,
+    )?;
 
     let program_id = CliProgramId {
         program_id: program_address.to_string(),
@@ -869,24 +880,36 @@ fn process_transfer_authority_of_program(
 
 fn process_finalize_program(
     rpc_client: Arc<RpcClient>,
-    config: &ProgramV4CommandConfig,
+    config: &CliConfig,
+    auth_signer_index: &SignerIndex,
     program_address: &Pubkey,
     next_version: &dyn Signer,
 ) -> ProcessResult {
     let blockhash = rpc_client.get_latest_blockhash()?;
+    let payer_pubkey = config.signers[0].pubkey();
+    let authority_pubkey = config.signers[*auth_signer_index].pubkey();
 
     let message = [Message::new_with_blockhash(
         &[loader_v4::finalize(
             program_address,
-            &config.authority.pubkey(),
+            &authority_pubkey,
             &next_version.pubkey(),
         )],
-        Some(&config.payer.pubkey()),
+        Some(&payer_pubkey),
         &blockhash,
     )];
-    check_payer(&rpc_client, config, 0, &message, &[], &[])?;
+    check_payer(rpc_client.clone(), config, 0, &message, &[], &[])?;
 
-    send_messages(rpc_client, config, &message, &[], &[], None)?;
+    send_messages(
+        rpc_client,
+        config,
+        auth_signer_index,
+        &message,
+        &[],
+        &[],
+        None,
+        true,
+    )?;
 
     let program_id = CliProgramId {
         program_id: program_address.to_string(),
@@ -898,13 +921,13 @@ fn process_finalize_program(
 fn process_show(
     rpc_client: Arc<RpcClient>,
     config: &CliConfig,
-    account_pubkey: Option<Pubkey>,
+    program_address: Option<Pubkey>,
     authority: Pubkey,
     all: bool,
 ) -> ProcessResult {
-    if let Some(account_pubkey) = account_pubkey {
+    if let Some(program_address) = program_address {
         if let Some(account) = rpc_client
-            .get_account_with_commitment(&account_pubkey, config.commitment)?
+            .get_account_with_commitment(&program_address, config.commitment)?
             .value
         {
             if loader_v4::check_id(&account.owner) {
@@ -915,7 +938,7 @@ fn process_show(
                         LoaderV4Status::Finalized => "finalized",
                     };
                     Ok(config.output_format.formatted_string(&CliProgramV4 {
-                        program_id: account_pubkey.to_string(),
+                        program_id: program_address.to_string(),
                         owner: account.owner.to_string(),
                         authority: state.authority_address_or_next_version.to_string(),
                         last_deploy_slot: state.slot,
@@ -926,30 +949,30 @@ fn process_show(
                         status: status.to_string(),
                     }))
                 } else {
-                    Err(format!("{account_pubkey} SBF program state is invalid").into())
+                    Err(format!("{program_address} SBF program state is invalid").into())
                 }
             } else {
-                Err(format!("{account_pubkey} is not an SBF program").into())
+                Err(format!("{program_address} is not an SBF program").into())
             }
         } else {
-            Err(format!("Unable to find the account {account_pubkey}").into())
+            Err(format!("Unable to find the account {program_address}").into())
         }
     } else {
         let authority_pubkey = if all { None } else { Some(authority) };
-        let programs = get_programs(rpc_client, authority_pubkey)?;
+        let programs = get_programs(rpc_client, config, authority_pubkey)?;
         Ok(config.output_format.formatted_string(&programs))
     }
 }
 
 pub fn process_dump(
     rpc_client: Arc<RpcClient>,
-    commitment: CommitmentConfig,
+    config: &CliConfig,
     account_pubkey: Option<Pubkey>,
     output_location: &str,
 ) -> ProcessResult {
     if let Some(account_pubkey) = account_pubkey {
         if let Some(account) = rpc_client
-            .get_account_with_commitment(&account_pubkey, commitment)?
+            .get_account_with_commitment(&account_pubkey, config.commitment)?
             .value
         {
             if loader_v4::check_id(&account.owner) {
@@ -968,13 +991,14 @@ pub fn process_dump(
 }
 
 fn check_payer(
-    rpc_client: &RpcClient,
-    config: &ProgramV4CommandConfig,
+    rpc_client: Arc<RpcClient>,
+    config: &CliConfig,
     balance_needed: u64,
     initial_messages: &[Message],
     write_messages: &[Message],
     other_messages: &[Message],
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let payer_pubkey = config.signers[0].pubkey();
     let mut fee = Saturating(0);
     for message in initial_messages {
         fee += rpc_client.get_fee_for_message(message)?;
@@ -989,8 +1013,8 @@ fn check_payer(
             .saturating_mul(write_messages.len() as u64);
     }
     check_account_for_spend_and_fee_with_commitment(
-        rpc_client,
-        &config.payer.pubkey(),
+        &rpc_client,
+        &payer_pubkey,
         balance_needed,
         fee.0,
         config.commitment,
@@ -1000,11 +1024,13 @@ fn check_payer(
 
 fn send_messages(
     rpc_client: Arc<RpcClient>,
-    config: &ProgramV4CommandConfig,
+    config: &CliConfig,
+    auth_signer_index: &SignerIndex,
     initial_messages: &[Message],
     write_messages: &[Message],
     final_messages: &[Message],
     program_signer: Option<&dyn Signer>,
+    use_rpc: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     for message in initial_messages {
         if message.header.num_required_signatures == 3 {
@@ -1014,16 +1040,22 @@ fn send_messages(
                 let blockhash = rpc_client.get_latest_blockhash()?;
 
                 let mut initial_transaction = Transaction::new_unsigned(message.clone());
-                initial_transaction
-                    .try_sign(&[config.payer, initial_signer, config.authority], blockhash)?;
+                initial_transaction.try_sign(
+                    &[
+                        config.signers[0],
+                        initial_signer,
+                        config.signers[*auth_signer_index],
+                    ],
+                    blockhash,
+                )?;
                 let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
                     &initial_transaction,
                     config.commitment,
-                    config.rpc_send_transaction_config,
+                    config.send_transaction_config,
                 );
                 log_instruction_custom_error_ex::<SystemError, _>(
                     result,
-                    config.output_format,
+                    &config.output_format,
                     common_error_adapter,
                 )
                 .map_err(|err| format!("Account allocation failed: {err}"))?;
@@ -1035,15 +1067,18 @@ fn send_messages(
             let blockhash = rpc_client.get_latest_blockhash()?;
 
             let mut initial_transaction = Transaction::new_unsigned(message.clone());
-            initial_transaction.try_sign(&[config.payer, config.authority], blockhash)?;
+            initial_transaction.try_sign(
+                &[config.signers[0], config.signers[*auth_signer_index]],
+                blockhash,
+            )?;
             let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
                 &initial_transaction,
                 config.commitment,
-                config.rpc_send_transaction_config,
+                config.send_transaction_config,
             );
             log_instruction_custom_error_ex::<SystemError, _>(
                 result,
-                config.output_format,
+                &config.output_format,
                 common_error_adapter,
             )
             .map_err(|err| format!("Failed to send initial message: {err}"))?;
@@ -1062,36 +1097,38 @@ fn send_messages(
         let transaction_errors = match connection_cache {
             ConnectionCache::Udp(cache) => TpuClient::new_with_connection_cache(
                 rpc_client.clone(),
-                config.websocket_url,
+                &config.websocket_url,
                 TpuClientConfig::default(),
                 cache,
             )?
             .send_and_confirm_messages_with_spinner(
                 write_messages,
-                &[config.payer, config.authority],
+                &[config.signers[0], config.signers[*auth_signer_index]],
             ),
             ConnectionCache::Quic(cache) => {
                 let tpu_client_fut =
                     solana_client::nonblocking::tpu_client::TpuClient::new_with_connection_cache(
                         rpc_client.get_inner_client().clone(),
-                        config.websocket_url,
+                        &config.websocket_url,
                         solana_client::tpu_client::TpuClientConfig::default(),
                         cache,
                     );
-                let tpu_client = rpc_client
-                    .runtime()
-                    .block_on(tpu_client_fut)
-                    .expect("Should return a valid tpu client");
+                let tpu_client = (!use_rpc).then(|| {
+                    rpc_client
+                        .runtime()
+                        .block_on(tpu_client_fut)
+                        .expect("Should return a valid tpu client")
+                });
 
                 send_and_confirm_transactions_in_parallel_blocking_v2(
                     rpc_client.clone(),
-                    Some(tpu_client),
+                    tpu_client,
                     write_messages,
-                    &[config.payer, config.authority],
+                    &[config.signers[0], config.signers[*auth_signer_index]],
                     SendAndConfirmConfigV2 {
                         resign_txs_count: Some(5),
                         with_spinner: true,
-                        rpc_send_transaction_config: config.rpc_send_transaction_config,
+                        rpc_send_transaction_config: config.send_transaction_config,
                     },
                 )
             }
@@ -1112,181 +1149,20 @@ fn send_messages(
     for message in final_messages {
         let blockhash = rpc_client.get_latest_blockhash()?;
         let mut final_tx = Transaction::new_unsigned(message.clone());
-        final_tx.try_sign(&[config.payer, config.authority], blockhash)?;
+        final_tx.try_sign(
+            &[config.signers[0], config.signers[*auth_signer_index]],
+            blockhash,
+        )?;
         rpc_client
             .send_and_confirm_transaction_with_spinner_and_config(
                 &final_tx,
                 config.commitment,
-                config.rpc_send_transaction_config,
+                config.send_transaction_config,
             )
             .map_err(|e| format!("Deploying program failed: {e}"))?;
     }
 
     Ok(())
-}
-
-fn build_create_buffer_message(
-    rpc_client: Arc<RpcClient>,
-    config: &ProgramV4CommandConfig,
-    program_address: &Pubkey,
-    buffer_address: &Pubkey,
-    program_data_length: u32,
-    blockhash: &Hash,
-) -> Result<(Option<Message>, u64), Box<dyn std::error::Error>> {
-    let expected_account_data_len =
-        LoaderV4State::program_data_offset().saturating_add(program_data_length as usize);
-    let lamports_required =
-        rpc_client.get_minimum_balance_for_rent_exemption(expected_account_data_len)?;
-
-    if let Some(account) = rpc_client
-        .get_account_with_commitment(buffer_address, config.commitment)?
-        .value
-    {
-        if !loader_v4::check_id(&account.owner) {
-            return Err("Buffer account passed is already in use by another program".into());
-        }
-
-        if account.lamports < lamports_required || account.data.len() != expected_account_data_len {
-            if program_address == buffer_address {
-                return Err(
-                    "Buffer account passed could be for a different deploy? It has different \
-                     size/lamports"
-                        .into(),
-                );
-            }
-
-            let (truncate_instructions, balance_needed) = build_truncate_instructions(
-                rpc_client.clone(),
-                config,
-                &account,
-                buffer_address,
-                program_data_length,
-            )?;
-            if !truncate_instructions.is_empty() {
-                Ok((
-                    Some(Message::new_with_blockhash(
-                        &truncate_instructions,
-                        Some(&config.payer.pubkey()),
-                        blockhash,
-                    )),
-                    balance_needed,
-                ))
-            } else {
-                Ok((None, 0))
-            }
-        } else {
-            Ok((None, 0))
-        }
-    } else {
-        Ok((
-            Some(Message::new_with_blockhash(
-                &loader_v4::create_buffer(
-                    &config.payer.pubkey(),
-                    buffer_address,
-                    lamports_required,
-                    &config.authority.pubkey(),
-                    program_data_length,
-                    &config.payer.pubkey(),
-                ),
-                Some(&config.payer.pubkey()),
-                blockhash,
-            )),
-            lamports_required,
-        ))
-    }
-}
-
-fn build_retract_and_truncate_messages(
-    rpc_client: Arc<RpcClient>,
-    config: &ProgramV4CommandConfig,
-    program_data_len: u32,
-    program_address: &Pubkey,
-) -> Result<(Vec<Message>, u64), Box<dyn std::error::Error>> {
-    let blockhash = rpc_client.get_latest_blockhash()?;
-    let Some(program_account) = rpc_client
-        .get_account_with_commitment(program_address, config.commitment)?
-        .value
-    else {
-        return Err("Program account does not exist".into());
-    };
-
-    let retract_instruction = build_retract_instruction(
-        &program_account,
-        program_address,
-        &config.authority.pubkey(),
-    )?;
-
-    let mut messages = if let Some(instruction) = retract_instruction {
-        vec![Message::new_with_blockhash(
-            &[instruction],
-            Some(&config.payer.pubkey()),
-            &blockhash,
-        )]
-    } else {
-        vec![]
-    };
-
-    let (truncate_instructions, balance_needed) = build_truncate_instructions(
-        rpc_client.clone(),
-        config,
-        &program_account,
-        program_address,
-        program_data_len,
-    )?;
-
-    if !truncate_instructions.is_empty() {
-        messages.push(Message::new_with_blockhash(
-            &truncate_instructions,
-            Some(&config.payer.pubkey()),
-            &blockhash,
-        ));
-    }
-
-    Ok((messages, balance_needed))
-}
-
-fn build_retract_and_deploy_messages(
-    rpc_client: Arc<RpcClient>,
-    config: &ProgramV4CommandConfig,
-    program_address: &Pubkey,
-    buffer_address: &Pubkey,
-) -> Result<Vec<Message>, Box<dyn std::error::Error>> {
-    let blockhash = rpc_client.get_latest_blockhash()?;
-
-    let Some(program_account) = rpc_client
-        .get_account_with_commitment(program_address, config.commitment)?
-        .value
-    else {
-        return Err("Program account does not exist".into());
-    };
-
-    let retract_instruction = build_retract_instruction(
-        &program_account,
-        program_address,
-        &config.authority.pubkey(),
-    )?;
-
-    let mut messages = if let Some(instruction) = retract_instruction {
-        vec![Message::new_with_blockhash(
-            &[instruction],
-            Some(&config.payer.pubkey()),
-            &blockhash,
-        )]
-    } else {
-        vec![]
-    };
-
-    // Create and add deploy message
-    messages.push(Message::new_with_blockhash(
-        &[loader_v4::deploy_from_source(
-            program_address,
-            &config.authority.pubkey(),
-            buffer_address,
-        )],
-        Some(&config.payer.pubkey()),
-        &blockhash,
-    ));
-    Ok(messages)
 }
 
 fn build_retract_instruction(
@@ -1322,7 +1198,8 @@ fn build_retract_instruction(
 
 fn build_truncate_instructions(
     rpc_client: Arc<RpcClient>,
-    config: &ProgramV4CommandConfig,
+    config: &CliConfig,
+    auth_signer_index: &SignerIndex,
     account: &Account,
     buffer_address: &Pubkey,
     program_data_length: u32,
@@ -1331,11 +1208,16 @@ fn build_truncate_instructions(
         return Err("Buffer account passed is already in use by another program".into());
     }
 
-    let payer = &config.payer.pubkey();
-    let authority = &config.authority.pubkey();
+    let payer_pubkey = config.signers[0].pubkey();
+    let authority_pubkey = config.signers[*auth_signer_index].pubkey();
 
     let truncate_instruction = if account.data.is_empty() {
-        loader_v4::truncate_uninitialized(buffer_address, authority, program_data_length, payer)
+        loader_v4::truncate_uninitialized(
+            buffer_address,
+            &authority_pubkey,
+            program_data_length,
+            &payer_pubkey,
+        )
     } else {
         if let Ok(LoaderV4State {
             slot: _,
@@ -1343,7 +1225,7 @@ fn build_truncate_instructions(
             status,
         }) = solana_loader_v4_program::get_state(&account.data)
         {
-            if authority != authority_address_or_next_version {
+            if &authority_pubkey != authority_address_or_next_version {
                 return Err(
                     "Program authority does not match with the provided authority address".into(),
                 );
@@ -1356,7 +1238,12 @@ fn build_truncate_instructions(
             return Err("Program account's state could not be deserialized".into());
         }
 
-        loader_v4::truncate(buffer_address, authority, program_data_length, payer)
+        loader_v4::truncate(
+            buffer_address,
+            &authority_pubkey,
+            program_data_length,
+            &payer_pubkey,
+        )
     };
 
     let expected_account_data_len =
@@ -1372,7 +1259,7 @@ fn build_truncate_instructions(
                 Ok((
                     vec![
                         system_instruction::transfer(
-                            payer,
+                            &payer_pubkey,
                             buffer_address,
                             extra_lamports_required,
                         ),
@@ -1401,6 +1288,7 @@ fn build_truncate_instructions(
 
 fn get_accounts_with_filter(
     rpc_client: Arc<RpcClient>,
+    _config: &CliConfig,
     filters: Vec<RpcFilterType>,
     length: usize,
 ) -> Result<Vec<(Pubkey, Account)>, Box<dyn std::error::Error>> {
@@ -1421,6 +1309,7 @@ fn get_accounts_with_filter(
 
 fn get_programs(
     rpc_client: Arc<RpcClient>,
+    config: &CliConfig,
     authority_pubkey: Option<Pubkey>,
 ) -> Result<CliProgramsV4, Box<dyn std::error::Error>> {
     let filters = if let Some(authority_pubkey) = authority_pubkey {
@@ -1434,8 +1323,12 @@ fn get_programs(
         vec![]
     };
 
-    let results =
-        get_accounts_with_filter(rpc_client, filters, LoaderV4State::program_data_offset())?;
+    let results = get_accounts_with_filter(
+        rpc_client,
+        config,
+        filters,
+        LoaderV4State::program_data_offset(),
+    )?;
 
     let mut programs = vec![];
     for (program, account) in results.iter() {
@@ -1549,7 +1442,9 @@ mod tests {
     #[test]
     fn test_deploy() {
         let mut config = CliConfig::default();
-        let data = [5u8; 2048];
+        let mut program_data = Vec::new();
+        let mut file = File::open("tests/fixtures/noop.so").unwrap();
+        file.read_to_end(&mut program_data).unwrap();
 
         let payer = keypair_from_seed(&[1u8; 32]).unwrap();
         let program_signer = keypair_from_seed(&[2u8; 32]).unwrap();
@@ -1558,35 +1453,39 @@ mod tests {
         config.signers.push(&payer);
         config.signers.push(&authority_signer);
 
-        let config = ProgramV4CommandConfig::new_from_cli_config(&config, &1);
-
         assert!(process_deploy_program(
             Arc::new(rpc_client_no_existing_program()),
             &config,
-            &data,
-            data.len() as u32,
+            &1,
             &program_signer.pubkey(),
+            &program_data,
+            None..None,
             Some(&program_signer),
+            true,
         )
         .is_ok());
 
         assert!(process_deploy_program(
             Arc::new(rpc_client_wrong_account_owner()),
             &config,
-            &data,
-            data.len() as u32,
+            &1,
             &program_signer.pubkey(),
+            &program_data,
+            None..None,
             Some(&program_signer),
+            true,
         )
         .is_err());
 
         assert!(process_deploy_program(
             Arc::new(rpc_client_with_program_deployed()),
             &config,
-            &data,
-            data.len() as u32,
+            &1,
             &program_signer.pubkey(),
+            &program_data,
+            None..None,
             Some(&program_signer),
+            true,
         )
         .is_err());
     }
@@ -1594,7 +1493,9 @@ mod tests {
     #[test]
     fn test_redeploy() {
         let mut config = CliConfig::default();
-        let data = [5u8; 2048];
+        let mut program_data = Vec::new();
+        let mut file = File::open("tests/fixtures/noop.so").unwrap();
+        file.read_to_end(&mut program_data).unwrap();
 
         let payer = keypair_from_seed(&[1u8; 32]).unwrap();
         let program_address = Pubkey::new_unique();
@@ -1603,66 +1504,76 @@ mod tests {
         config.signers.push(&payer);
         config.signers.push(&authority_signer);
 
-        let config = ProgramV4CommandConfig::new_from_cli_config(&config, &1);
-
         // Redeploying a non-existent program should fail
         assert!(process_deploy_program(
             Arc::new(rpc_client_no_existing_program()),
             &config,
-            &data,
-            data.len() as u32,
+            &1,
             &program_address,
+            &program_data,
+            None..None,
             None,
+            true,
         )
         .is_err());
 
         assert!(process_deploy_program(
             Arc::new(rpc_client_with_program_retracted()),
             &config,
-            &data,
-            data.len() as u32,
+            &1,
             &program_address,
+            &program_data,
+            None..None,
             None,
+            true,
         )
         .is_ok());
 
         assert!(process_deploy_program(
             Arc::new(rpc_client_with_program_deployed()),
             &config,
-            &data,
-            data.len() as u32,
+            &1,
             &program_address,
+            &program_data,
+            None..None,
             None,
+            true,
         )
         .is_ok());
 
         assert!(process_deploy_program(
             Arc::new(rpc_client_with_program_finalized()),
             &config,
-            &data,
-            data.len() as u32,
+            &1,
             &program_address,
+            &program_data,
+            None..None,
             None,
+            true,
         )
         .is_err());
 
         assert!(process_deploy_program(
             Arc::new(rpc_client_wrong_account_owner()),
             &config,
-            &data,
-            data.len() as u32,
+            &1,
             &program_address,
+            &program_data,
+            None..None,
             None,
+            true,
         )
         .is_err());
 
         assert!(process_deploy_program(
             Arc::new(rpc_client_wrong_authority()),
             &config,
-            &data,
-            data.len() as u32,
+            &1,
             &program_address,
+            &program_data,
+            None..None,
             None,
+            true,
         )
         .is_err());
     }
@@ -1670,7 +1581,9 @@ mod tests {
     #[test]
     fn test_redeploy_from_source() {
         let mut config = CliConfig::default();
-        let data = [5u8; 2048];
+        let mut program_data = Vec::new();
+        let mut file = File::open("tests/fixtures/noop.so").unwrap();
+        file.read_to_end(&mut program_data).unwrap();
 
         let payer = keypair_from_seed(&[1u8; 32]).unwrap();
         let buffer_signer = keypair_from_seed(&[2u8; 32]).unwrap();
@@ -1680,36 +1593,40 @@ mod tests {
         config.signers.push(&payer);
         config.signers.push(&authority_signer);
 
-        let config = ProgramV4CommandConfig::new_from_cli_config(&config, &1);
-
         // Redeploying a non-existent program should fail
         assert!(process_deploy_program(
             Arc::new(rpc_client_no_existing_program()),
             &config,
-            &data,
-            data.len() as u32,
+            &1,
             &program_address,
+            &program_data,
+            None..None,
             Some(&buffer_signer),
+            true,
         )
         .is_err());
 
         assert!(process_deploy_program(
             Arc::new(rpc_client_wrong_account_owner()),
             &config,
-            &data,
-            data.len() as u32,
+            &1,
             &program_address,
+            &program_data,
+            None..None,
             Some(&buffer_signer),
+            true,
         )
         .is_err());
 
         assert!(process_deploy_program(
             Arc::new(rpc_client_wrong_authority()),
             &config,
-            &data,
-            data.len() as u32,
+            &1,
             &program_address,
+            &program_data,
+            None..None,
             Some(&buffer_signer),
+            true,
         )
         .is_err());
     }
@@ -1725,11 +1642,10 @@ mod tests {
         config.signers.push(&payer);
         config.signers.push(&authority_signer);
 
-        let config = ProgramV4CommandConfig::new_from_cli_config(&config, &1);
-
         assert!(process_undeploy_program(
             Arc::new(rpc_client_no_existing_program()),
             &config,
+            &1,
             &program_signer.pubkey(),
         )
         .is_err());
@@ -1737,6 +1653,7 @@ mod tests {
         assert!(process_undeploy_program(
             Arc::new(rpc_client_with_program_retracted()),
             &config,
+            &1,
             &program_signer.pubkey(),
         )
         .is_ok());
@@ -1744,6 +1661,7 @@ mod tests {
         assert!(process_undeploy_program(
             Arc::new(rpc_client_with_program_deployed()),
             &config,
+            &1,
             &program_signer.pubkey(),
         )
         .is_ok());
@@ -1751,6 +1669,7 @@ mod tests {
         assert!(process_undeploy_program(
             Arc::new(rpc_client_with_program_finalized()),
             &config,
+            &1,
             &program_signer.pubkey(),
         )
         .is_err());
@@ -1758,6 +1677,7 @@ mod tests {
         assert!(process_undeploy_program(
             Arc::new(rpc_client_wrong_account_owner()),
             &config,
+            &1,
             &program_signer.pubkey(),
         )
         .is_err());
@@ -1765,6 +1685,7 @@ mod tests {
         assert!(process_undeploy_program(
             Arc::new(rpc_client_wrong_authority()),
             &config,
+            &1,
             &program_signer.pubkey(),
         )
         .is_err());
@@ -1783,11 +1704,10 @@ mod tests {
         config.signers.push(&authority_signer);
         config.signers.push(&new_authority_signer);
 
-        let config = ProgramV4CommandConfig::new_from_cli_config(&config, &1);
-
         assert!(process_transfer_authority_of_program(
             Arc::new(rpc_client_with_program_deployed()),
             &config,
+            &1,
             &program_signer.pubkey(),
             &new_authority_signer,
         )
@@ -1807,11 +1727,10 @@ mod tests {
         config.signers.push(&authority_signer);
         config.signers.push(&next_version_signer);
 
-        let config = ProgramV4CommandConfig::new_from_cli_config(&config, &1);
-
         assert!(process_finalize_program(
             Arc::new(rpc_client_with_program_deployed()),
             &config,
+            &1,
             &program_signer.pubkey(),
             &next_version_signer,
         )
@@ -1846,6 +1765,10 @@ mod tests {
         let program_keypair_file = make_tmp_path("program_keypair_file");
         write_keypair_file(&program_keypair, &program_keypair_file).unwrap();
 
+        let buffer_keypair = Keypair::new();
+        let buffer_keypair_file = make_tmp_path("buffer_keypair_file");
+        write_keypair_file(&buffer_keypair, &buffer_keypair_file).unwrap();
+
         let authority_keypair = Keypair::new();
         let authority_keypair_file = make_tmp_path("authority_keypair_file");
         write_keypair_file(&authority_keypair, &authority_keypair_file).unwrap();
@@ -1864,9 +1787,13 @@ mod tests {
             parse_command(&test_command, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
                 command: CliCommand::ProgramV4(ProgramV4CliCommand::Deploy {
-                    program_location: "/Users/test/program.so".to_string(),
-                    program_signer_index: 1,
+                    program_address: None,
+                    program_signer_index: Some(1),
+                    buffer_signer_index: None,
                     authority_signer_index: 2,
+                    program_location: "/Users/test/program.so".to_string(),
+                    upload_range: None..None,
+                    use_rpc: false,
                 }),
                 signers: vec![
                     Box::new(read_keypair_file(&keypair_file).unwrap()),
@@ -1875,30 +1802,11 @@ mod tests {
                 ],
             }
         );
-    }
-
-    #[test]
-    #[allow(clippy::cognitive_complexity)]
-    fn test_cli_parse_redeploy() {
-        let test_commands = get_clap_app("test", "desc", "version");
-
-        let default_keypair = Keypair::new();
-        let keypair_file = make_tmp_path("keypair_file");
-        write_keypair_file(&default_keypair, &keypair_file).unwrap();
-        let default_signer = DefaultSigner::new("", &keypair_file);
-
-        let program_keypair = Keypair::new();
-        let program_keypair_file = make_tmp_path("program_keypair_file");
-        write_keypair_file(&program_keypair, &program_keypair_file).unwrap();
-
-        let authority_keypair = Keypair::new();
-        let authority_keypair_file = make_tmp_path("authority_keypair_file");
-        write_keypair_file(&authority_keypair, &authority_keypair_file).unwrap();
 
         let test_command = test_commands.clone().get_matches_from(vec![
             "test",
             "program-v4",
-            "redeploy",
+            "deploy",
             "/Users/test/program.so",
             "--program-id",
             &program_keypair_file,
@@ -1908,11 +1816,14 @@ mod tests {
         assert_eq!(
             parse_command(&test_command, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
-                command: CliCommand::ProgramV4(ProgramV4CliCommand::Redeploy {
-                    program_location: "/Users/test/program.so".to_string(),
-                    program_address: program_keypair.pubkey(),
-                    authority_signer_index: 1,
+                command: CliCommand::ProgramV4(ProgramV4CliCommand::Deploy {
+                    program_address: Some(program_keypair.pubkey()),
+                    program_signer_index: None,
                     buffer_signer_index: None,
+                    authority_signer_index: 1,
+                    program_location: "/Users/test/program.so".to_string(),
+                    upload_range: None..None,
+                    use_rpc: false,
                 }),
                 signers: vec![
                     Box::new(read_keypair_file(&keypair_file).unwrap()),
@@ -1921,14 +1832,10 @@ mod tests {
             }
         );
 
-        let buffer_keypair = Keypair::new();
-        let buffer_keypair_file = make_tmp_path("buffer_keypair_file");
-        write_keypair_file(&buffer_keypair, &buffer_keypair_file).unwrap();
-
         let test_command = test_commands.clone().get_matches_from(vec![
             "test",
             "program-v4",
-            "redeploy",
+            "deploy",
             "/Users/test/program.so",
             "--program-id",
             &program_keypair_file,
@@ -1940,11 +1847,51 @@ mod tests {
         assert_eq!(
             parse_command(&test_command, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
-                command: CliCommand::ProgramV4(ProgramV4CliCommand::Redeploy {
-                    program_location: "/Users/test/program.so".to_string(),
-                    program_address: program_keypair.pubkey(),
+                command: CliCommand::ProgramV4(ProgramV4CliCommand::Deploy {
+                    program_address: Some(program_keypair.pubkey()),
+                    program_signer_index: None,
                     buffer_signer_index: Some(1),
                     authority_signer_index: 2,
+                    program_location: "/Users/test/program.so".to_string(),
+                    upload_range: None..None,
+                    use_rpc: false,
+                }),
+                signers: vec![
+                    Box::new(read_keypair_file(&keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&buffer_keypair_file).unwrap()),
+                    Box::new(read_keypair_file(&authority_keypair_file).unwrap())
+                ],
+            }
+        );
+
+        let test_command = test_commands.clone().get_matches_from(vec![
+            "test",
+            "program-v4",
+            "deploy",
+            "/Users/test/program.so",
+            "--start-offset",
+            "16",
+            "--end-offset",
+            "32",
+            "--program-id",
+            &program_keypair_file,
+            "--buffer",
+            &buffer_keypair_file,
+            "--authority",
+            &authority_keypair_file,
+            "--use-rpc",
+        ]);
+        assert_eq!(
+            parse_command(&test_command, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::ProgramV4(ProgramV4CliCommand::Deploy {
+                    program_address: Some(program_keypair.pubkey()),
+                    program_signer_index: None,
+                    buffer_signer_index: Some(1),
+                    authority_signer_index: 2,
+                    program_location: "/Users/test/program.so".to_string(),
+                    upload_range: Some(16)..Some(32),
+                    use_rpc: true,
                 }),
                 signers: vec![
                     Box::new(read_keypair_file(&keypair_file).unwrap()),
