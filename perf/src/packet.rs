@@ -1,5 +1,5 @@
 //! The `packet` module defines data structures and methods to pull data from the network.
-pub use solana_packet::{Meta, Packet, PacketFlags, PACKET_DATA_SIZE};
+pub use solana_packet::{self, Meta, Packet, PacketFlags, PACKET_DATA_SIZE};
 use {
     crate::{cuda_runtime::PinnedVec, recycler::Recycler},
     bincode::config::Options,
@@ -73,7 +73,7 @@ impl PacketBatch {
         batch
     }
 
-    pub fn new_unpinned_with_recycler_data_and_dests<T: Serialize>(
+    pub fn new_unpinned_with_recycler_data_and_dests<T: solana_packet::Encode>(
         recycler: &PacketBatchRecycler,
         name: &'static str,
         dests_and_data: &[(SocketAddr, T)],
@@ -85,7 +85,7 @@ impl PacketBatch {
 
         for ((addr, data), packet) in dests_and_data.iter().zip(batch.packets.iter_mut()) {
             if !addr.ip().is_unspecified() && addr.port() != 0 {
-                if let Err(e) = Packet::populate_packet(packet, Some(addr), &data) {
+                if let Err(e) = Packet::populate_packet(packet, Some(addr), data) {
                     // TODO: This should never happen. Instead the caller should
                     // break the payload into smaller messages, and here any errors
                     // should be propagated.

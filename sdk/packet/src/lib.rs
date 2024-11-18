@@ -2,10 +2,13 @@
 #![cfg_attr(feature = "frozen-abi", feature(min_specialization))]
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
 
-#[cfg(feature = "bincode")]
-use bincode::{Options, Result};
 #[cfg(feature = "frozen-abi")]
 use solana_frozen_abi_macro::AbiExample;
+#[cfg(feature = "bincode")]
+use {
+    bincode::{Options, Result},
+    std::io::Write,
+};
 use {
     bitflags::bitflags,
     std::{
@@ -27,6 +30,18 @@ static_assertions::const_assert_eq!(PACKET_DATA_SIZE, 1232);
 ///   40 bytes is the size of the IPv6 header
 ///   8 bytes is the size of the fragment header
 pub const PACKET_DATA_SIZE: usize = 1280 - 40 - 8;
+
+#[cfg(feature = "bincode")]
+pub trait Encode {
+    fn encode<W: Write>(&self, writer: W) -> Result<()>;
+}
+
+#[cfg(feature = "bincode")]
+impl<T: ?Sized + serde::Serialize> Encode for T {
+    fn encode<W: Write>(&self, writer: W) -> Result<()> {
+        bincode::serialize_into::<W, T>(writer, self)
+    }
+}
 
 bitflags! {
     #[repr(C)]
@@ -159,21 +174,21 @@ impl Packet {
     }
 
     #[cfg(feature = "bincode")]
-    pub fn from_data<T: serde::Serialize>(dest: Option<&SocketAddr>, data: T) -> Result<Self> {
+    pub fn from_data<T: Encode>(dest: Option<&SocketAddr>, data: T) -> Result<Self> {
         let mut packet = Self::default();
         Self::populate_packet(&mut packet, dest, &data)?;
         Ok(packet)
     }
 
     #[cfg(feature = "bincode")]
-    pub fn populate_packet<T: serde::Serialize>(
+    pub fn populate_packet<T: Encode>(
         &mut self,
         dest: Option<&SocketAddr>,
         data: &T,
     ) -> Result<()> {
         debug_assert!(!self.meta.discard());
         let mut wr = std::io::Cursor::new(self.buffer_mut());
-        bincode::serialize_into(&mut wr, data)?;
+        <T as Encode>::encode(data, &mut wr)?;
         self.meta.size = wr.position() as usize;
         if let Some(dest) = dest {
             self.meta.set_socket_addr(dest);
