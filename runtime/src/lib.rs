@@ -13,6 +13,7 @@ pub mod bank_hash_cache;
 pub mod bank_utils;
 pub mod commitment;
 pub mod epoch_stakes;
+mod fixed_concurrent_map;
 pub mod genesis_utils;
 pub mod installed_scheduler_pool;
 pub mod loader_utils;

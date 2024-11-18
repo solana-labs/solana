@@ -1,97 +1,89 @@
 use {
-    log::*,
+    crate::fixed_concurrent_map::FixedConcurrentMap,
+    ahash::random_state::RandomState as AHashRandomState,
+    dashmap::{mapref::entry::Entry, DashMap, DashSet},
     rand::{thread_rng, Rng},
     serde::Serialize,
+    smallvec::SmallVec,
     solana_accounts_db::ancestors::Ancestors,
     solana_sdk::{
         clock::{Slot, MAX_RECENT_BLOCKHASHES},
         hash::Hash,
     },
     std::{
-        collections::{hash_map::Entry, HashMap, HashSet},
-        sync::{Arc, Mutex},
+        mem::MaybeUninit,
+        ptr,
+        sync::{
+            atomic::{AtomicU64, Ordering},
+            Arc,
+        },
     },
 };
 
 pub const MAX_CACHE_ENTRIES: usize = MAX_RECENT_BLOCKHASHES;
 const CACHED_KEY_SIZE: usize = 20;
+const CONCURRENT_MAP_SLOTS: usize = (MAX_CACHE_ENTRIES * 4).next_power_of_two();
+const DASHMAP_SHARDS: usize = (MAX_CACHE_ENTRIES * 4).next_power_of_two();
 
 // Store forks in a single chunk of memory to avoid another lookup.
-pub type ForkStatus<T> = Vec<(Slot, T)>;
+pub type ForkStatus<T> = SmallVec<[(Slot, T); 2]>;
 type KeySlice = [u8; CACHED_KEY_SIZE];
-type KeyMap<T> = HashMap<KeySlice, ForkStatus<T>>;
+type KeyMap<T> = DashMap<KeySlice, ForkStatus<T>, AHashRandomState>;
 // Map of Hash and status
-pub type Status<T> = Arc<Mutex<HashMap<Hash, (usize, Vec<(KeySlice, T)>)>>>;
+pub type Status<T> = Arc<DashMap<Hash, (usize, Vec<(KeySlice, T)>), AHashRandomState>>;
 // A Map of hash + the highest fork it's been observed on along with
 // the key offset and a Map of the key slice + Fork status for that key
-type KeyStatusMap<T> = HashMap<Hash, (Slot, usize, KeyMap<T>)>;
+type KeyStatusMap<T> = FixedConcurrentMap<Hash, (AtomicU64, usize, KeyMap<T>)>;
 
 // A map of keys recorded in each fork; used to serialize for snapshots easily.
 // Doesn't store a `SlotDelta` in it because the bool `root` is usually set much later
-type SlotDeltaMap<T> = HashMap<Slot, Status<T>>;
+type SlotDeltaMap<T> = FixedConcurrentMap<Slot, Status<T>>;
 
 // The statuses added during a slot, can be used to build on top of a status cache or to
 // construct a new one. Usually derived from a status cache's `SlotDeltaMap`
 pub type SlotDelta<T> = (Slot, bool, Status<T>);
 
 #[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct StatusCache<T: Serialize + Clone> {
+    // map[blockhash][tx_key] => [(fork1_slot, tx_result), (fork2_slot, tx_result), ...]
+    // used to check if a tx_key was seen on a fork and for rpc to retrieve the tx_result
     cache: KeyStatusMap<T>,
-    roots: HashSet<Slot>,
-    /// all keys seen during a fork/slot
+    // set of rooted slots
+    roots: DashSet<Slot, AHashRandomState>,
+    // map[slot][blockhash] => [(tx_key, tx_result), ...] used to serialize for snapshots
     slot_deltas: SlotDeltaMap<T>,
 }
 
 impl<T: Serialize + Clone> Default for StatusCache<T> {
     fn default() -> Self {
         Self {
-            cache: HashMap::default(),
+            cache: KeyStatusMap::new(CONCURRENT_MAP_SLOTS),
             // 0 is always a root
-            roots: HashSet::from([0]),
-            slot_deltas: HashMap::default(),
+            roots: DashSet::from_iter([0].into_iter()),
+            slot_deltas: SlotDeltaMap::new(CONCURRENT_MAP_SLOTS),
         }
     }
 }
 
-impl<T: Serialize + Clone + PartialEq> PartialEq for StatusCache<T> {
-    fn eq(&self, other: &Self) -> bool {
-        self.roots == other.roots
-            && self
-                .cache
-                .iter()
-                .all(|(hash, (slot, key_index, hash_map))| {
-                    if let Some((other_slot, other_key_index, other_hash_map)) =
-                        other.cache.get(hash)
-                    {
-                        if slot == other_slot && key_index == other_key_index {
-                            return hash_map.iter().all(|(slice, fork_map)| {
-                                if let Some(other_fork_map) = other_hash_map.get(slice) {
-                                    // all this work just to compare the highest forks in the fork map
-                                    // per entry
-                                    return fork_map.last() == other_fork_map.last();
-                                }
-                                false
-                            });
-                        }
-                    }
-                    false
-                })
-    }
-}
-
 impl<T: Serialize + Clone> StatusCache<T> {
-    pub fn clear_slot_entries(&mut self, slot: Slot) {
+    /// Clear all entries for a slot.
+    ///
+    /// This is used when a slot is purged from the bank, see
+    /// ReplayStage::purge_unconfirmed_duplicate_slot(). When this is called, it's guaranteed that
+    /// there are no threads inserting new entries for this slot, so there are no races.
+    pub fn clear_slot_entries(&self, slot: Slot) {
         let slot_deltas = self.slot_deltas.remove(&slot);
         if let Some(slot_deltas) = slot_deltas {
-            let slot_deltas = slot_deltas.lock().unwrap();
-            for (blockhash, (_, key_list)) in slot_deltas.iter() {
+            for item in slot_deltas.iter() {
+                let blockhash = item.key();
+                let (_, key_list) = item.value();
                 // Any blockhash that exists in self.slot_deltas must also exist
                 // in self.cache, because in self.purge_roots(), when an entry
                 // (b, (max_slot, _, _)) is removed from self.cache, this implies
                 // all entries in self.slot_deltas < max_slot are also removed
-                if let Entry::Occupied(mut o_blockhash_entries) = self.cache.entry(*blockhash) {
-                    let (_, _, all_hash_maps) = o_blockhash_entries.get_mut();
+                if let Some(guard) = self.cache.get(blockhash) {
+                    let (_, _, all_hash_maps) = &*guard;
 
                     for (key_slice, _) in key_list {
                         if let Entry::Occupied(mut o_key_list) = all_hash_maps.entry(*key_slice) {
@@ -108,7 +100,8 @@ impl<T: Serialize + Clone> StatusCache<T> {
                     }
 
                     if all_hash_maps.is_empty() {
-                        o_blockhash_entries.remove_entry();
+                        drop(guard);
+                        self.cache.remove(blockhash);
                     }
                 } else {
                     panic!("Blockhash must exist if it exists in self.slot_deltas, slot: {slot}")
@@ -126,6 +119,19 @@ impl<T: Serialize + Clone> StatusCache<T> {
         ancestors: &Ancestors,
     ) -> Option<(Slot, T)> {
         let map = self.cache.get(transaction_blockhash)?;
+        self.do_get_status(&*map, &key, ancestors)
+    }
+
+    fn do_get_status<K: AsRef<[u8]>>(
+        &self,
+        map: &(
+            AtomicU64,
+            usize,
+            DashMap<[u8; 20], SmallVec<[(u64, T); 2]>, AHashRandomState>,
+        ),
+        key: &K,
+        ancestors: &Ancestors,
+    ) -> Option<(u64, T)> {
         let (_, index, keymap) = map;
         let max_key_index = key.as_ref().len().saturating_sub(CACHED_KEY_SIZE + 1);
         let index = (*index).min(max_key_index);
@@ -143,19 +149,17 @@ impl<T: Serialize + Clone> StatusCache<T> {
         None
     }
 
-    /// Search for a key with any blockhash
-    /// Prefer get_status for performance reasons, it doesn't need
-    /// to search all blockhashes.
+    /// Search for a key with any blockhash.
+    ///
+    /// Prefer get_status for performance reasons, it doesn't need to search all blockhashes.
     pub fn get_status_any_blockhash<K: AsRef<[u8]>>(
         &self,
         key: K,
         ancestors: &Ancestors,
     ) -> Option<(Slot, T)> {
-        let keys: Vec<_> = self.cache.keys().copied().collect();
-
-        for blockhash in keys.iter() {
-            trace!("get_status_any_blockhash: trying {}", blockhash);
-            let status = self.get_status(&key, blockhash, ancestors);
+        for item in self.cache.iter() {
+            let (_blockhash, map) = &*item;
+            let status = self.do_get_status(map, &key, ancestors);
             if status.is_some() {
                 return status;
             }
@@ -163,126 +167,159 @@ impl<T: Serialize + Clone> StatusCache<T> {
         None
     }
 
-    /// Add a known root fork.  Roots are always valid ancestors.
-    /// After MAX_CACHE_ENTRIES, roots are removed, and any old keys are cleared.
-    pub fn add_root(&mut self, fork: Slot) {
+    /// Add a known root fork.
+    ///
+    /// Roots are always valid ancestors. After MAX_CACHE_ENTRIES, roots are removed, and any old
+    /// keys are cleared.
+    pub fn add_root(&self, fork: Slot) {
         self.roots.insert(fork);
         self.purge_roots();
     }
 
-    pub fn roots(&self) -> &HashSet<Slot> {
-        &self.roots
+    /// Get all the roots.
+    pub fn roots(&self) -> impl Iterator<Item = Slot> + '_ {
+        self.roots.iter().map(|x| *x)
     }
 
     /// Insert a new key for a specific slot.
-    pub fn insert<K: AsRef<[u8]>>(
-        &mut self,
-        transaction_blockhash: &Hash,
-        key: K,
-        slot: Slot,
-        res: T,
-    ) {
+    pub fn insert<K: AsRef<[u8]>>(&self, transaction_blockhash: &Hash, key: K, slot: Slot, res: T) {
         let max_key_index = key.as_ref().len().saturating_sub(CACHED_KEY_SIZE + 1);
+        let mut key_slice = MaybeUninit::<[u8; CACHED_KEY_SIZE]>::uninit();
 
         // Get the cache entry for this blockhash.
-        let (max_slot, key_index, hash_map) =
-            self.cache.entry(*transaction_blockhash).or_insert_with(|| {
-                let key_index = thread_rng().gen_range(0..max_key_index + 1);
-                (slot, key_index, HashMap::new())
-            });
+        let key_index = {
+            let (max_slot, key_index, hash_map) = &*self
+                .cache
+                .get_or_insert_with(*transaction_blockhash, || {
+                    let key_index = thread_rng().gen_range(0..max_key_index + 1);
+                    (
+                        AtomicU64::new(slot),
+                        key_index,
+                        DashMap::with_hasher_and_shard_amount(
+                            AHashRandomState::default(),
+                            DASHMAP_SHARDS,
+                        ),
+                    )
+                })
+                .unwrap();
 
-        // Update the max slot observed to contain txs using this blockhash.
-        *max_slot = std::cmp::max(slot, *max_slot);
+            // Update the max slot observed to contain txs using this blockhash.
+            max_slot.fetch_max(slot, Ordering::Relaxed);
 
-        // Grab the key slice.
-        let key_index = (*key_index).min(max_key_index);
-        let mut key_slice = [0u8; CACHED_KEY_SIZE];
-        key_slice.clone_from_slice(&key.as_ref()[key_index..key_index + CACHED_KEY_SIZE]);
+            // Grab the key slice.
+            let key_index = (*key_index).min(max_key_index);
+            unsafe {
+                ptr::copy_nonoverlapping(
+                    key.as_ref()[key_index..key_index + CACHED_KEY_SIZE].as_ptr(),
+                    key_slice.as_mut_ptr() as *mut u8,
+                    CACHED_KEY_SIZE,
+                )
+            }
 
-        // Insert the slot and tx result into the cache entry associated with
-        // this blockhash and keyslice.
-        let forks = hash_map.entry(key_slice).or_default();
-        forks.push((slot, res.clone()));
+            // Insert the slot and tx result into the cache entry associated with
+            // this blockhash and keyslice.
+            let mut forks = hash_map
+                .entry(unsafe { key_slice.assume_init() })
+                .or_default();
+            forks.push((slot, res.clone()));
 
-        self.add_to_slot_delta(transaction_blockhash, slot, key_index, key_slice, res);
+            key_index
+        };
+
+        self.add_to_slot_delta(
+            transaction_blockhash,
+            slot,
+            key_index,
+            unsafe { key_slice.assume_init() },
+            res,
+        );
     }
 
-    pub fn purge_roots(&mut self) {
+    fn purge_roots(&self) {
         if self.roots.len() > MAX_CACHE_ENTRIES {
-            if let Some(min) = self.roots.iter().min().cloned() {
+            if let Some(min) = self.roots().min() {
                 self.roots.remove(&min);
-                self.cache.retain(|_, (fork, _, _)| *fork > min);
+                self.cache
+                    .retain(|_, (max_slot, _, _)| max_slot.load(Ordering::Relaxed) > min);
                 self.slot_deltas.retain(|slot, _| *slot > min);
             }
         }
     }
 
-    /// Clear for testing
-    pub fn clear(&mut self) {
-        for v in self.cache.values_mut() {
-            v.2 = HashMap::new();
-        }
-
-        self.slot_deltas
-            .iter_mut()
-            .for_each(|(_, status)| status.lock().unwrap().clear());
+    #[cfg(feature = "dev-context-only-utils")]
+    pub fn clear(&self) {
+        self.cache.clear();
+        self.slot_deltas.clear();
     }
 
-    /// Get the statuses for all the root slots
+    /// Get the statuses for all the root slots.
+    ///
+    /// This is never called concurrently with add_root(), and for a slot to be a root there must be
+    /// no new entries for that slot, so there are no races.
+    ///
+    /// See ReplayStage::handle_new_root() => BankForks::set_root() =>
+    /// BankForks::do_set_root_return_metrics() => root_slot_deltas()
     pub fn root_slot_deltas(&self) -> Vec<SlotDelta<T>> {
         self.roots()
-            .iter()
             .map(|root| {
                 (
-                    *root,
+                    root,
                     true, // <-- is_root
-                    self.slot_deltas.get(root).cloned().unwrap_or_default(),
+                    self.slot_deltas
+                        .get(&root)
+                        .map(|x| x.clone())
+                        .unwrap_or_default(),
                 )
             })
             .collect()
     }
 
-    // replay deltas into a status_cache allows "appending" data
-    pub fn append(&mut self, slot_deltas: &[SlotDelta<T>]) {
+    /// Pupulate the cache with the slot deltas from a snapshot.
+    ///
+    /// Really badly named method. See load_bank_forks() => ... =>
+    /// rebuild_bank_from_snapshot() => [load slot deltas from snapshot] => append()
+    pub fn append(&self, slot_deltas: &[SlotDelta<T>]) {
         for (slot, is_root, statuses) in slot_deltas {
-            statuses
-                .lock()
-                .unwrap()
-                .iter()
-                .for_each(|(tx_hash, (key_index, statuses))| {
-                    for (key_slice, res) in statuses.iter() {
-                        self.insert_with_slice(tx_hash, *slot, *key_index, *key_slice, res.clone())
-                    }
-                });
+            statuses.iter().for_each(|item| {
+                let tx_hash = item.key();
+                let (key_index, statuses) = item.value();
+                for (key_slice, res) in statuses.iter() {
+                    self.insert_with_slice(tx_hash, *slot, *key_index, *key_slice, res.clone())
+                }
+            });
             if *is_root {
                 self.add_root(*slot);
             }
         }
     }
 
-    pub fn from_slot_deltas(slot_deltas: &[SlotDelta<T>]) -> Self {
-        // play all deltas back into the status cache
-        let mut me = Self::default();
-        me.append(slot_deltas);
-        me
-    }
-
     fn insert_with_slice(
-        &mut self,
+        &self,
         transaction_blockhash: &Hash,
         slot: Slot,
         key_index: usize,
         key_slice: [u8; CACHED_KEY_SIZE],
         res: T,
     ) {
-        let hash_map =
-            self.cache
-                .entry(*transaction_blockhash)
-                .or_insert((slot, key_index, HashMap::new()));
-        hash_map.0 = std::cmp::max(slot, hash_map.0);
+        {
+            let (max_slot, _, hash_map) = &*self
+                .cache
+                .get_or_insert_with(*transaction_blockhash, || {
+                    (
+                        AtomicU64::new(slot),
+                        key_index,
+                        DashMap::with_hasher_and_shard_amount(
+                            AHashRandomState::default(),
+                            DASHMAP_SHARDS,
+                        ),
+                    )
+                })
+                .unwrap();
+            max_slot.fetch_max(slot, Ordering::Relaxed);
 
-        let forks = hash_map.2.entry(key_slice).or_default();
-        forks.push((slot, res.clone()));
+            let mut forks = hash_map.entry(key_slice).or_default();
+            forks.push((slot, res.clone()));
+        }
 
         self.add_to_slot_delta(transaction_blockhash, slot, key_index, key_slice, res);
     }
@@ -290,17 +327,26 @@ impl<T: Serialize + Clone> StatusCache<T> {
     // Add this key slice to the list of key slices for this slot and blockhash
     // combo.
     fn add_to_slot_delta(
-        &mut self,
+        &self,
         transaction_blockhash: &Hash,
         slot: Slot,
         key_index: usize,
         key_slice: [u8; CACHED_KEY_SIZE],
         res: T,
     ) {
-        let mut fork_entry = self.slot_deltas.entry(slot).or_default().lock().unwrap();
-        let (_key_index, hash_entry) = fork_entry
+        let fork_entry = self
+            .slot_deltas
+            .get_or_insert_with(slot, || {
+                Arc::new(DashMap::with_hasher_and_shard_amount(
+                    AHashRandomState::default(),
+                    DASHMAP_SHARDS,
+                ))
+            })
+            .unwrap();
+
+        let (_key_index, hash_entry) = &mut *fork_entry
             .entry(*transaction_blockhash)
-            .or_insert((key_index, vec![]));
+            .or_insert_with(|| (key_index, Vec::new()));
         hash_entry.push((key_slice, res))
     }
 }
@@ -313,6 +359,46 @@ mod tests {
     };
 
     type BankStatusCache = StatusCache<()>;
+
+    impl<T: Serialize + Clone> StatusCache<T> {
+        fn from_slot_deltas(slot_deltas: &[SlotDelta<T>]) -> Self {
+            let cache = Self::default();
+            cache.append(slot_deltas);
+            cache
+        }
+    }
+
+    impl<T: Serialize + Clone + PartialEq> PartialEq for StatusCache<T> {
+        fn eq(&self, other: &Self) -> bool {
+            use std::collections::HashSet;
+
+            let roots = self.roots.iter().map(|x| *x).collect::<HashSet<_>>();
+            let other_roots = other.roots.iter().map(|x| *x).collect::<HashSet<_>>();
+            roots == other_roots
+                && self.cache.iter().all(|item| {
+                    let (hash, (max_slot, key_index, hash_map)) = &*item;
+                    if let Some(item) = other.cache.get(hash) {
+                        let (other_max_slot, other_key_index, other_hash_map) = &*item;
+                        if max_slot.load(Ordering::Relaxed)
+                            == other_max_slot.load(Ordering::Relaxed)
+                            && key_index == other_key_index
+                        {
+                            return hash_map.iter().all(|item| {
+                                let slice = item.key();
+                                let fork_map = item.value();
+                                if let Some(other_fork_map) = other_hash_map.get(slice) {
+                                    // all this work just to compare the highest forks in the fork map
+                                    // per entry
+                                    return fork_map.last() == other_fork_map.last();
+                                }
+                                false
+                            });
+                        }
+                    }
+                    false
+                })
+        }
+    }
 
     #[test]
     fn test_empty_has_no_sigs() {
@@ -332,7 +418,7 @@ mod tests {
     #[test]
     fn test_find_sig_with_ancestor_fork() {
         let sig = Signature::default();
-        let mut status_cache = BankStatusCache::default();
+        let status_cache = BankStatusCache::default();
         let blockhash = hash(Hash::default().as_ref());
         let ancestors = vec![(0, 1)].into_iter().collect();
         status_cache.insert(&blockhash, sig, 0, ());
@@ -349,7 +435,7 @@ mod tests {
     #[test]
     fn test_find_sig_without_ancestor_fork() {
         let sig = Signature::default();
-        let mut status_cache = BankStatusCache::default();
+        let status_cache = BankStatusCache::default();
         let blockhash = hash(Hash::default().as_ref());
         let ancestors = Ancestors::default();
         status_cache.insert(&blockhash, sig, 1, ());
@@ -360,7 +446,7 @@ mod tests {
     #[test]
     fn test_find_sig_with_root_ancestor_fork() {
         let sig = Signature::default();
-        let mut status_cache = BankStatusCache::default();
+        let status_cache = BankStatusCache::default();
         let blockhash = hash(Hash::default().as_ref());
         let ancestors = Ancestors::default();
         status_cache.insert(&blockhash, sig, 0, ());
@@ -374,7 +460,7 @@ mod tests {
     #[test]
     fn test_insert_picks_latest_blockhash_fork() {
         let sig = Signature::default();
-        let mut status_cache = BankStatusCache::default();
+        let status_cache = BankStatusCache::default();
         let blockhash = hash(Hash::default().as_ref());
         let ancestors = vec![(0, 0)].into_iter().collect();
         status_cache.insert(&blockhash, sig, 0, ());
@@ -390,7 +476,7 @@ mod tests {
     #[test]
     fn test_root_expires() {
         let sig = Signature::default();
-        let mut status_cache = BankStatusCache::default();
+        let status_cache = BankStatusCache::default();
         let blockhash = hash(Hash::default().as_ref());
         let ancestors = Ancestors::default();
         status_cache.insert(&blockhash, sig, 0, ());
@@ -403,7 +489,7 @@ mod tests {
     #[test]
     fn test_clear_signatures_sigs_are_gone() {
         let sig = Signature::default();
-        let mut status_cache = BankStatusCache::default();
+        let status_cache = BankStatusCache::default();
         let blockhash = hash(Hash::default().as_ref());
         let ancestors = Ancestors::default();
         status_cache.insert(&blockhash, sig, 0, ());
@@ -415,7 +501,7 @@ mod tests {
     #[test]
     fn test_clear_signatures_insert_works() {
         let sig = Signature::default();
-        let mut status_cache = BankStatusCache::default();
+        let status_cache = BankStatusCache::default();
         let blockhash = hash(Hash::default().as_ref());
         let ancestors = Ancestors::default();
         status_cache.add_root(0);
@@ -429,11 +515,11 @@ mod tests {
     #[test]
     fn test_signatures_slice() {
         let sig = Signature::default();
-        let mut status_cache = BankStatusCache::default();
+        let status_cache = BankStatusCache::default();
         let blockhash = hash(Hash::default().as_ref());
         status_cache.clear();
         status_cache.insert(&blockhash, sig, 0, ());
-        let (_, index, sig_map) = status_cache.cache.get(&blockhash).unwrap();
+        let (_, index, sig_map) = &*status_cache.cache.get(&blockhash).unwrap();
         let sig_slice: &[u8; CACHED_KEY_SIZE] =
             arrayref::array_ref![sig.as_ref(), *index, CACHED_KEY_SIZE];
         assert!(sig_map.get(sig_slice).is_some());
@@ -442,11 +528,11 @@ mod tests {
     #[test]
     fn test_slot_deltas() {
         let sig = Signature::default();
-        let mut status_cache = BankStatusCache::default();
+        let status_cache = BankStatusCache::default();
         let blockhash = hash(Hash::default().as_ref());
         status_cache.clear();
         status_cache.insert(&blockhash, sig, 0, ());
-        assert!(status_cache.roots().contains(&0));
+        assert!(status_cache.roots().collect::<Vec<_>>().contains(&0));
         let slot_deltas = status_cache.root_slot_deltas();
         let cache = StatusCache::from_slot_deltas(&slot_deltas);
         assert_eq!(cache, status_cache);
@@ -458,7 +544,7 @@ mod tests {
     #[test]
     fn test_roots_deltas() {
         let sig = Signature::default();
-        let mut status_cache = BankStatusCache::default();
+        let status_cache = BankStatusCache::default();
         let blockhash = hash(Hash::default().as_ref());
         let blockhash2 = hash(blockhash.as_ref());
         status_cache.insert(&blockhash, sig, 0, ());
@@ -467,8 +553,7 @@ mod tests {
         for i in 0..(MAX_CACHE_ENTRIES + 1) {
             status_cache.add_root(i as u64);
         }
-        assert_eq!(status_cache.slot_deltas.len(), 1);
-        assert!(status_cache.slot_deltas.contains_key(&1));
+        assert!(status_cache.slot_deltas.get(&1).is_some());
         let slot_deltas = status_cache.root_slot_deltas();
         let cache = StatusCache::from_slot_deltas(&slot_deltas);
         assert_eq!(cache, status_cache);
@@ -483,7 +568,7 @@ mod tests {
     #[test]
     fn test_clear_slot_signatures() {
         let sig = Signature::default();
-        let mut status_cache = BankStatusCache::default();
+        let status_cache = BankStatusCache::default();
         let blockhash = hash(Hash::default().as_ref());
         let blockhash2 = hash(blockhash.as_ref());
         status_cache.insert(&blockhash, sig, 0, ());
@@ -512,26 +597,26 @@ mod tests {
 
         // Check that the slot delta for slot 0 is gone, but slot 1 still
         // exists
-        assert!(!status_cache.slot_deltas.contains_key(&0));
-        assert!(status_cache.slot_deltas.contains_key(&1));
+        assert!(!status_cache.slot_deltas.get(&0).is_some());
+        assert!(status_cache.slot_deltas.get(&1).is_some());
 
         // Clear slot 1 related data
         status_cache.clear_slot_entries(1);
-        assert!(status_cache.slot_deltas.is_empty());
+        assert!(status_cache.slot_deltas.get(&0).is_none());
+        assert!(status_cache.slot_deltas.get(&1).is_none());
         assert!(status_cache
             .get_status(sig, &blockhash, &ancestors1)
             .is_none());
         assert!(status_cache
             .get_status(sig, &blockhash2, &ancestors1)
             .is_none());
-        assert!(status_cache.cache.is_empty());
     }
 
     // Status cache uses a random key offset for each blockhash. Ensure that shorter
     // keys can still be used if the offset if greater than the key length.
     #[test]
     fn test_different_sized_keys() {
-        let mut status_cache = BankStatusCache::default();
+        let status_cache = BankStatusCache::default();
         let ancestors = vec![(0, 0)].into_iter().collect();
         let blockhash = Hash::default();
         for _ in 0..100 {

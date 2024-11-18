@@ -191,13 +191,12 @@ impl Bank {
     ) -> Vec<TransactionCheckResult> {
         // Do allocation before acquiring the lock on the status cache.
         let mut check_results = Vec::with_capacity(sanitized_txs.len());
-        let rcache = self.status_cache.read().unwrap();
 
         check_results.extend(sanitized_txs.iter().zip(lock_results).map(
             |(sanitized_tx, lock_result)| {
                 let sanitized_tx = sanitized_tx.borrow();
                 if lock_result.is_ok()
-                    && self.is_transaction_already_processed(sanitized_tx, &rcache)
+                    && self.is_transaction_already_processed(sanitized_tx, &self.status_cache)
                 {
                     error_counters.already_processed += 1;
                     return Err(TransactionError::AlreadyProcessed);

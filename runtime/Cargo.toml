@@ -39,6 +39,7 @@ num-derive = { workspace = true }
 num-traits = { workspace = true }
 num_cpus = { workspace = true }
 num_enum = { workspace = true }
+parking_lot = { workspace = true }
 percentage = { workspace = true }
 qualifier_attr = { workspace = true }
 rand = { workspace = true }
@@ -48,6 +49,7 @@ serde = { workspace = true, features = ["rc"] }
 serde_derive = { workspace = true }
 serde_json = { workspace = true }
 serde_with = { workspace = true }
+smallvec = { workspace = true }
 solana-accounts-db = { workspace = true }
 solana-address-lookup-table-program = { workspace = true }
 solana-bpf-loader-program = { workspace = true }
