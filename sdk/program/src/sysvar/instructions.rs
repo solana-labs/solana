@@ -31,6 +31,8 @@
 
 #[cfg(feature = "dev-context-only-utils")]
 use qualifier_attr::qualifiers;
+#[deprecated(since = "2.2.0", note = "Use solana-instruction crate instead")]
+pub use solana_instruction::{BorrowedAccountMeta, BorrowedInstruction};
 pub use solana_sdk_ids::sysvar::instructions::{check_id, id, ID};
 #[cfg(not(target_os = "solana"))]
 use {
@@ -42,7 +44,6 @@ use {
         account_info::AccountInfo,
         instruction::{AccountMeta, Instruction},
         program_error::ProgramError,
-        pubkey::Pubkey,
         serialize_utils::{read_pubkey, read_slice, read_u16, read_u8},
     },
     solana_sanitize::SanitizeError,
@@ -72,26 +73,6 @@ pub fn construct_instructions_data(instructions: &[BorrowedInstruction]) -> Vec<
     data.resize(data.len() + 2, 0);
 
     data
-}
-
-/// Borrowed version of `AccountMeta`.
-///
-/// This struct is used by the runtime when constructing the sysvar. It is not
-/// useful to Solana programs.
-pub struct BorrowedAccountMeta<'a> {
-    pub pubkey: &'a Pubkey,
-    pub is_signer: bool,
-    pub is_writable: bool,
-}
-
-/// Borrowed version of `Instruction`.
-///
-/// This struct is used by the runtime when constructing the sysvar. It is not
-/// useful to Solana programs.
-pub struct BorrowedInstruction<'a> {
-    pub program_id: &'a Pubkey,
-    pub accounts: Vec<BorrowedAccountMeta<'a>>,
-    pub data: &'a [u8],
 }
 
 #[cfg(not(target_os = "solana"))]

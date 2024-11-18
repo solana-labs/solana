@@ -296,3 +296,23 @@ pub struct ProcessedSiblingInstruction {
     /// Number of AccountMeta structures
     pub accounts_len: u64,
 }
+
+/// Borrowed version of `AccountMeta`.
+///
+/// This struct is used by the runtime when constructing the instructions sysvar. It is not
+/// useful to Solana programs.
+pub struct BorrowedAccountMeta<'a> {
+    pub pubkey: &'a Pubkey,
+    pub is_signer: bool,
+    pub is_writable: bool,
+}
+
+/// Borrowed version of `Instruction`.
+///
+/// This struct is used by the runtime when constructing the instructions sysvar. It is not
+/// useful to Solana programs.
+pub struct BorrowedInstruction<'a> {
+    pub program_id: &'a Pubkey,
+    pub accounts: Vec<BorrowedAccountMeta<'a>>,
+    pub data: &'a [u8],
+}
