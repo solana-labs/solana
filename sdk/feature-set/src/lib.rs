@@ -817,7 +817,7 @@ pub mod migrate_config_program_to_core_bpf {
 }
 
 pub mod enable_get_epoch_stake_syscall {
-    solana_pubkey::declare_id!("7mScTYkJXsbdrcwTQRs7oeCSXoJm4WjzBsRyf8bCU3Np");
+    solana_pubkey::declare_id!("FKe75t4LXxGaQnVHdUKM6DSFifVVraGZ8LyNo7oPwy1Z");
 }
 
 pub mod migrate_address_lookup_table_program_to_core_bpf {
