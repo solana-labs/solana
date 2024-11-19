@@ -7141,6 +7141,7 @@ dependencies = [
  "solana-signature",
  "solana-signer",
  "solana-time-utils",
+ "solana-transaction-context",
  "solana-transaction-error",
  "thiserror 2.0.3",
  "wasm-bindgen",
@@ -7560,6 +7561,20 @@ dependencies = [
  "solana-sdk",
  "thiserror 2.0.3",
  "tokio",
+]
+
+[[package]]
+name = "solana-transaction-context"
+version = "2.2.0"
+dependencies = [
+ "bincode",
+ "serde",
+ "serde_derive",
+ "solana-account",
+ "solana-instruction",
+ "solana-pubkey",
+ "solana-rent",
+ "solana-signature",
 ]
 
 [[package]]

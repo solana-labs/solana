@@ -28,6 +28,7 @@ full = [
     "rand0-7",
     "serde_json",
     "solana-signature",
+    "solana-transaction-context/debug-signature",
     "ed25519-dalek",
     "libsecp256k1",
     "sha3",
@@ -46,7 +47,11 @@ full = [
     "dep:solana-transaction-error"
 ]
 borsh = ["dep:borsh", "solana-program/borsh", "solana-secp256k1-recover/borsh"]
-dev-context-only-utils = ["qualifier_attr", "solana-account/dev-context-only-utils"]
+dev-context-only-utils = [
+    "qualifier_attr",
+    "solana-account/dev-context-only-utils",
+    "solana-transaction-context/dev-context-only-utils",
+]
 frozen-abi = [
     "dep:solana-frozen-abi",
     "dep:solana-frozen-abi-macro",
@@ -147,6 +152,9 @@ solana-signature = { workspace = true, features = [
 ], optional = true }
 solana-signer = { workspace = true, optional = true }
 solana-time-utils = { workspace = true }
+solana-transaction-context = { workspace = true, features = [
+    "bincode",
+] }
 solana-transaction-error = { workspace = true, features = ["serde"], optional = true }
 thiserror = { workspace = true }
 

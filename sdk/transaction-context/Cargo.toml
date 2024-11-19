@@ -1,0 +1,48 @@
+[package]
+name = "solana-transaction-context"
+description = "Solana data shared between program runtime and built-in programs as well as SBF programs."
+documentation = "https://docs.rs/solana-transaction-context"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+serde = { workspace = true, optional = true }
+serde_derive = { workspace = true, optional = true }
+solana-account = { workspace = true }
+solana-instruction = { workspace = true, features = ["std"] }
+solana-pubkey = { workspace = true }
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+all-features = true
+rustdoc-args = ["--cfg=docsrs"]
+
+[target.'cfg(not(target_os = "solana"))'.dependencies]
+bincode = { workspace = true, optional = true }
+solana-rent = { workspace = true }
+solana-signature = { workspace = true, optional = true }
+
+[dev-dependencies]
+solana-account-info = { workspace = true }
+solana-program = { workspace = true }
+solana-transaction-context = { path = ".", features = [
+    "dev-context-only-utils",
+] }
+static_assertions = { workspace = true }
+
+[features]
+bincode = ["dep:bincode", "serde", "solana-account/bincode"]
+debug-signature = ["dep:solana-signature"]
+dev-context-only-utils = [
+    "bincode",
+    "debug-signature",
+    "solana-account/dev-context-only-utils"
+]
+serde = ["dep:serde", "dep:serde_derive"]
+
+[lints]
+workspace = true

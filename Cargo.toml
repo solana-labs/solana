@@ -162,6 +162,7 @@ members = [
     "sdk/stable-layout",
     "sdk/sysvar-id",
     "sdk/time-utils",
+    "sdk/transaction-context",
     "sdk/transaction-error",
     "send-transaction-service",
     "stake-accounts",
@@ -548,6 +549,7 @@ solana-thin-client = { path = "thin-client", version = "=2.2.0" }
 solana-transaction-error = { path = "sdk/transaction-error", version = "=2.2.0" }
 solana-tpu-client = { path = "tpu-client", version = "=2.2.0", default-features = false }
 solana-tpu-client-next = { path = "tpu-client-next", version = "=2.2.0" }
+solana-transaction-context = { path = "sdk/transaction-context", version = "=2.2.0" }
 solana-transaction-status = { path = "transaction-status", version = "=2.2.0" }
 solana-transaction-status-client-types = { path = "transaction-status-client-types", version = "=2.2.0" }
 solana-transaction-metrics-tracker = { path = "transaction-metrics-tracker", version = "=2.2.0" }
