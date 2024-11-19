@@ -75,7 +75,8 @@ use {
         accounts::{AccountAddressFilter, Accounts, PubkeyAccountSlot},
         accounts_db::{
             AccountStorageEntry, AccountsDb, AccountsDbConfig, CalcAccountsHashDataSource,
-            DuplicatesLtHash, PubkeyHashAccount, VerifyAccountsHashAndLamportsConfig,
+            DuplicatesLtHash, OldStoragesPolicy, PubkeyHashAccount,
+            VerifyAccountsHashAndLamportsConfig,
         },
         accounts_hash::{
             AccountHash, AccountsHash, AccountsLtHash, CalcAccountsHashConfig, HashStats,
@@ -6251,7 +6252,7 @@ impl Bank {
             let should_clean = force_clean || (!skip_shrink && self.slot() > 0);
             if should_clean {
                 info!("Cleaning...");
-                // We cannot clean past the last full snapshot's slot because we are about to
+                // We cannot clean past the latest full snapshot's slot because we are about to
                 // perform an accounts hash calculation *up to that slot*.  If we cleaned *past*
                 // that slot, then accounts could be removed from older storages, which would
                 // change the accounts hash.
@@ -6259,6 +6260,7 @@ impl Bank {
                     Some(latest_full_snapshot_slot),
                     true,
                     self.epoch_schedule(),
+                    self.clean_accounts_old_storages_policy(),
                 );
                 info!("Cleaning... Done.");
             } else {
@@ -6566,6 +6568,7 @@ impl Bank {
             Some(highest_slot_to_clean),
             false,
             self.epoch_schedule(),
+            self.clean_accounts_old_storages_policy(),
         );
     }
 
@@ -6581,20 +6584,34 @@ impl Bank {
     }
 
     pub(crate) fn shrink_ancient_slots(&self) {
+        // Invoke ancient slot shrinking only when the validator is
+        // explicitly configured to do so. This condition may be
+        // removed when the skip rewrites feature is enabled.
+        if self.are_ancient_storages_enabled() {
+            self.rc
+                .accounts
+                .accounts_db
+                .shrink_ancient_slots(self.epoch_schedule())
+        }
+    }
+
+    /// Returns if ancient storages are enabled or not
+    pub fn are_ancient_storages_enabled(&self) -> bool {
         let can_skip_rewrites = self.bank_hash_skips_rent_rewrites();
         let test_skip_rewrites_but_include_in_bank_hash = self
             .rc
             .accounts
             .accounts_db
             .test_skip_rewrites_but_include_in_bank_hash;
-        // Invoke ancient slot shrinking only when the validator is
-        // explicitly configured to do so. This condition may be
-        // removed when the skip rewrites feature is enabled.
-        if can_skip_rewrites || test_skip_rewrites_but_include_in_bank_hash {
-            self.rc
-                .accounts
-                .accounts_db
-                .shrink_ancient_slots(self.epoch_schedule())
+        can_skip_rewrites || test_skip_rewrites_but_include_in_bank_hash
+    }
+
+    /// Returns how clean_accounts() should handle old storages
+    fn clean_accounts_old_storages_policy(&self) -> OldStoragesPolicy {
+        if self.are_ancient_storages_enabled() {
+            OldStoragesPolicy::Leave
+        } else {
+            OldStoragesPolicy::Clean
         }
     }
 

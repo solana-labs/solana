@@ -1953,13 +1953,23 @@ fn test_clean_max_slot_zero_lamport_account() {
     // updates in later slots in slot 1
     assert_eq!(accounts.alive_account_count_in_slot(0), 1);
     assert_eq!(accounts.alive_account_count_in_slot(1), 1);
-    accounts.clean_accounts(Some(0), false, &EpochSchedule::default());
+    accounts.clean_accounts(
+        Some(0),
+        false,
+        &EpochSchedule::default(),
+        OldStoragesPolicy::Leave,
+    );
     assert_eq!(accounts.alive_account_count_in_slot(0), 1);
     assert_eq!(accounts.alive_account_count_in_slot(1), 1);
     assert!(accounts.accounts_index.contains_with(&pubkey, None, None));
 
     // Now the account can be cleaned up
-    accounts.clean_accounts(Some(1), false, &EpochSchedule::default());
+    accounts.clean_accounts(
+        Some(1),
+        false,
+        &EpochSchedule::default(),
+        OldStoragesPolicy::Leave,
+    );
     assert_eq!(accounts.alive_account_count_in_slot(0), 0);
     assert_eq!(accounts.alive_account_count_in_slot(1), 0);
 
@@ -3488,7 +3498,12 @@ fn test_zero_lamport_new_root_not_cleaned() {
     db.add_root_and_flush_write_cache(1);
 
     // Only clean zero lamport accounts up to slot 0
-    db.clean_accounts(Some(0), false, &EpochSchedule::default());
+    db.clean_accounts(
+        Some(0),
+        false,
+        &EpochSchedule::default(),
+        OldStoragesPolicy::Leave,
+    );
 
     // Should still be able to find zero lamport account in slot 1
     assert_eq!(
@@ -4701,7 +4716,12 @@ fn run_test_shrink_unref(do_intra_cache_clean: bool) {
     db.calculate_accounts_delta_hash(1);
 
     // Clean to remove outdated entry from slot 0
-    db.clean_accounts(Some(1), false, &EpochSchedule::default());
+    db.clean_accounts(
+        Some(1),
+        false,
+        &EpochSchedule::default(),
+        OldStoragesPolicy::Leave,
+    );
 
     // Shrink Slot 0
     {
@@ -4720,7 +4740,12 @@ fn run_test_shrink_unref(do_intra_cache_clean: bool) {
     // Should be one store before clean for slot 0
     db.get_and_assert_single_storage(0);
     db.calculate_accounts_delta_hash(2);
-    db.clean_accounts(Some(2), false, &EpochSchedule::default());
+    db.clean_accounts(
+        Some(2),
+        false,
+        &EpochSchedule::default(),
+        OldStoragesPolicy::Leave,
+    );
 
     // No stores should exist for slot 0 after clean
     assert_no_storages_at_slot(&db, 0);
@@ -4765,7 +4790,7 @@ fn test_clean_drop_dead_zero_lamport_single_ref_accounts() {
     accounts_db.calculate_accounts_delta_hash(1);
 
     // run clean
-    accounts_db.clean_accounts(Some(1), false, &epoch_schedule);
+    accounts_db.clean_accounts(Some(1), false, &epoch_schedule, OldStoragesPolicy::Leave);
 
     // After clean, both slot0 and slot1 should be marked dead and dropped
     // from the store map.
@@ -4797,7 +4822,12 @@ fn test_clean_drop_dead_storage_handle_zero_lamport_single_ref_accounts() {
 
     // Clean should mark slot 0 dead and drop it. During the dropping, it
     // will find that slot 1 has a single ref zero accounts and mark it.
-    db.clean_accounts(Some(1), false, &EpochSchedule::default());
+    db.clean_accounts(
+        Some(1),
+        false,
+        &EpochSchedule::default(),
+        OldStoragesPolicy::Leave,
+    );
 
     // Assert that after clean, slot 0 is dropped.
     assert!(db.storage.get_slot_storage_entry(0).is_none());
@@ -4838,7 +4868,12 @@ fn test_shrink_unref_handle_zero_lamport_single_ref_accounts() {
     db.calculate_accounts_delta_hash(1);
 
     // Clean to remove outdated entry from slot 0
-    db.clean_accounts(Some(1), false, &EpochSchedule::default());
+    db.clean_accounts(
+        Some(1),
+        false,
+        &EpochSchedule::default(),
+        OldStoragesPolicy::Leave,
+    );
 
     // Shrink Slot 0
     {
@@ -4872,7 +4907,12 @@ fn test_shrink_unref_handle_zero_lamport_single_ref_accounts() {
     db.get_and_assert_single_storage(0);
     db.get_and_assert_single_storage(1);
     db.calculate_accounts_delta_hash(2);
-    db.clean_accounts(Some(2), false, &EpochSchedule::default());
+    db.clean_accounts(
+        Some(2),
+        false,
+        &EpochSchedule::default(),
+        OldStoragesPolicy::Leave,
+    );
 
     // No stores should exist for slot 0 after clean
     assert_no_storages_at_slot(&db, 0);
@@ -5690,15 +5730,30 @@ define_accounts_db_test!(
         assert_eq!(accounts_db.ref_count_for_pubkey(&pubkey), 3);
 
         accounts_db.set_latest_full_snapshot_slot(slot2);
-        accounts_db.clean_accounts(Some(slot2), false, &EpochSchedule::default());
+        accounts_db.clean_accounts(
+            Some(slot2),
+            false,
+            &EpochSchedule::default(),
+            OldStoragesPolicy::Leave,
+        );
         assert_eq!(accounts_db.ref_count_for_pubkey(&pubkey), 2);
 
         accounts_db.set_latest_full_snapshot_slot(slot2);
-        accounts_db.clean_accounts(None, false, &EpochSchedule::default());
+        accounts_db.clean_accounts(
+            None,
+            false,
+            &EpochSchedule::default(),
+            OldStoragesPolicy::Leave,
+        );
         assert_eq!(accounts_db.ref_count_for_pubkey(&pubkey), 1);
 
         accounts_db.set_latest_full_snapshot_slot(slot3);
-        accounts_db.clean_accounts(None, false, &EpochSchedule::default());
+        accounts_db.clean_accounts(
+            None,
+            false,
+            &EpochSchedule::default(),
+            OldStoragesPolicy::Leave,
+        );
         assert_eq!(accounts_db.ref_count_for_pubkey(&pubkey), 0);
     }
 );
@@ -8007,7 +8062,12 @@ define_accounts_db_test!(test_calculate_incremental_accounts_hash, |accounts_db|
 
     // calculate the full accounts hash
     let full_accounts_hash = {
-        accounts_db.clean_accounts(Some(slot - 1), false, &EpochSchedule::default());
+        accounts_db.clean_accounts(
+            Some(slot - 1),
+            false,
+            &EpochSchedule::default(),
+            OldStoragesPolicy::Leave,
+        );
         let (storages, _) = accounts_db.get_snapshot_storages(..=slot);
         let storages = SortedStorages::new(&storages);
         accounts_db.calculate_accounts_hash(
@@ -8073,7 +8133,12 @@ define_accounts_db_test!(test_calculate_incremental_accounts_hash, |accounts_db|
     // calculate the incremental accounts hash
     let incremental_accounts_hash = {
         accounts_db.set_latest_full_snapshot_slot(full_accounts_hash_slot);
-        accounts_db.clean_accounts(Some(slot - 1), false, &EpochSchedule::default());
+        accounts_db.clean_accounts(
+            Some(slot - 1),
+            false,
+            &EpochSchedule::default(),
+            OldStoragesPolicy::Leave,
+        );
         let (storages, _) = accounts_db.get_snapshot_storages(full_accounts_hash_slot + 1..=slot);
         let storages = SortedStorages::new(&storages);
         accounts_db.calculate_incremental_accounts_hash(
