@@ -6,15 +6,15 @@
 //! native programs like the [secp256k1] and [ed25519] programs.
 //!
 //! [in]: https://docs.solanalabs.com/implemented-proposals/instruction_introspection
-//! [secp256k1]: crate::secp256k1_program
-//! [ed25519]: crate::ed25519_program
+//! [secp256k1]: https://docs.rs/solana-secp256k1-program/latest/solana_secp256k1_program/
+//! [ed25519]: https://docs.rs/solana-ed25519-program/latest/solana_ed25519_program/
 //!
 //! Unlike other sysvars, the data in the instructions sysvar is not accessed
 //! through a type that implements the [`Sysvar`] trait. Instead, the
 //! instruction sysvar is accessed through several free functions within this
 //! module.
 //!
-//! [`Sysvar`]: crate::sysvar::Sysvar
+//! [`Sysvar`]: crate::Sysvar
 //!
 //! See also the Solana [documentation on the instructions sysvar][sdoc].
 //!
@@ -36,17 +36,15 @@ pub use solana_instruction::{BorrowedAccountMeta, BorrowedInstruction};
 pub use solana_sdk_ids::sysvar::instructions::{check_id, id, ID};
 #[cfg(not(target_os = "solana"))]
 use {
-    crate::serialize_utils::{append_slice, append_u16, append_u8},
     bitflags::bitflags,
+    solana_serialize_utils::{append_slice, append_u16, append_u8},
 };
 use {
-    crate::{
-        account_info::AccountInfo,
-        instruction::{AccountMeta, Instruction},
-        program_error::ProgramError,
-        serialize_utils::{read_pubkey, read_slice, read_u16, read_u8},
-    },
+    solana_account_info::AccountInfo,
+    solana_instruction::{AccountMeta, Instruction},
+    solana_program_error::ProgramError,
     solana_sanitize::SanitizeError,
+    solana_serialize_utils::{read_pubkey, read_slice, read_u16, read_u8},
 };
 
 /// Instructions sysvar, dummy type.
@@ -55,8 +53,8 @@ use {
 /// type that does not contain sysvar data. It implements the [`SysvarId`] trait
 /// but does not implement the [`Sysvar`] trait.
 ///
-/// [`SysvarId`]: crate::sysvar::SysvarId
-/// [`Sysvar`]: crate::sysvar::Sysvar
+/// [`SysvarId`]: https://docs.rs/solana-sysvar-id/latest/solana_sysvar_id/trait.SysvarId.html
+/// [`Sysvar`]: crate::Sysvar
 ///
 /// Use the free functions in this module to access the instructions sysvar.
 pub struct Instructions();
@@ -97,6 +95,7 @@ bitflags! {
 //   67..69 - data len - u16
 //   69..data_len - data
 #[cfg(not(target_os = "solana"))]
+#[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
 fn serialize_instructions(instructions: &[BorrowedInstruction]) -> Vec<u8> {
     // 64 bytes is a reasonable guess, calculating exactly is slower in benchmarks
     let mut data = Vec::with_capacity(instructions.len() * (32 * 2));
@@ -167,6 +166,7 @@ pub fn store_current_index(data: &mut [u8], instruction_index: u16) {
     data[last_index..last_index + 2].copy_from_slice(&instruction_index.to_le_bytes());
 }
 
+#[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
 fn deserialize_instruction(index: usize, data: &[u8]) -> Result<Instruction, SanitizeError> {
     const IS_SIGNER_BIT: usize = 0;
     const IS_WRITABLE_BIT: usize = 1;
@@ -278,17 +278,18 @@ pub fn get_instruction_relative(
 mod tests {
     use {
         super::*,
-        crate::{
-            instruction::AccountMeta,
-            message::{Message as LegacyMessage, SanitizedMessage},
-            pubkey::Pubkey,
+        solana_account_info::AccountInfo,
+        solana_instruction::{AccountMeta, BorrowedAccountMeta, BorrowedInstruction, Instruction},
+        solana_program_error::ProgramError,
+        solana_pubkey::Pubkey,
+        solana_sanitize::SanitizeError,
+        solana_sdk_ids::sysvar::instructions::id,
+        solana_sysvar::instructions::{
+            construct_instructions_data, deserialize_instruction, get_instruction_relative,
+            load_current_index_checked, load_instruction_at_checked, serialize_instructions,
+            store_current_index,
         },
-        std::collections::HashSet,
     };
-
-    fn new_sanitized_message(message: LegacyMessage) -> SanitizedMessage {
-        SanitizedMessage::try_from_legacy_message(message, &HashSet::default()).unwrap()
-    }
 
     #[test]
     fn test_load_store_instruction() {
@@ -300,28 +301,76 @@ mod tests {
         assert_eq!([4u8; 8], data[0..8]);
     }
 
+    #[derive(Copy, Clone)]
+    struct MakeInstructionParams {
+        program_id: Pubkey,
+        account_key: Pubkey,
+        is_signer: bool,
+        is_writable: bool,
+    }
+
+    fn make_borrowed_instruction(params: &MakeInstructionParams) -> BorrowedInstruction {
+        let MakeInstructionParams {
+            program_id,
+            account_key,
+            is_signer,
+            is_writable,
+        } = params;
+        BorrowedInstruction {
+            program_id,
+            accounts: vec![BorrowedAccountMeta {
+                pubkey: account_key,
+                is_signer: *is_signer,
+                is_writable: *is_writable,
+            }],
+            data: &[0],
+        }
+    }
+
+    fn make_instruction(params: MakeInstructionParams) -> Instruction {
+        let MakeInstructionParams {
+            program_id,
+            account_key,
+            is_signer,
+            is_writable,
+        } = params;
+        Instruction {
+            program_id,
+            accounts: vec![AccountMeta {
+                pubkey: account_key,
+                is_signer,
+                is_writable,
+            }],
+            data: vec![0],
+        }
+    }
+
     #[test]
     fn test_load_instruction_at_checked() {
-        let instruction0 = Instruction::new_with_bincode(
-            Pubkey::new_unique(),
-            &0,
-            vec![AccountMeta::new(Pubkey::new_unique(), false)],
-        );
-        let instruction1 = Instruction::new_with_bincode(
-            Pubkey::new_unique(),
-            &0,
-            vec![AccountMeta::new(Pubkey::new_unique(), false)],
-        );
-        let message = LegacyMessage::new(
-            &[instruction0.clone(), instruction1.clone()],
-            Some(&Pubkey::new_unique()),
-        );
-        let sanitized_message = new_sanitized_message(message);
-
+        let program_id0 = Pubkey::new_unique();
+        let program_id1 = Pubkey::new_unique();
+        let account_key0 = Pubkey::new_unique();
+        let account_key1 = Pubkey::new_unique();
+        let params0 = MakeInstructionParams {
+            program_id: program_id0,
+            account_key: account_key0,
+            is_signer: false,
+            is_writable: false,
+        };
+        let params1 = MakeInstructionParams {
+            program_id: program_id1,
+            account_key: account_key1,
+            is_signer: false,
+            is_writable: false,
+        };
+        let instruction0 = make_instruction(params0);
+        let instruction1 = make_instruction(params1);
+        let borrowed_instruction0 = make_borrowed_instruction(&params0);
+        let borrowed_instruction1 = make_borrowed_instruction(&params1);
         let key = id();
         let mut lamports = 0;
-        let mut data = construct_instructions_data(&sanitized_message.decompile_instructions());
-        let owner = crate::sysvar::id();
+        let mut data = construct_instructions_data(&[borrowed_instruction0, borrowed_instruction1]);
+        let owner = solana_sdk_ids::sysvar::id();
         let mut account_info = AccountInfo::new(
             &key,
             false,
@@ -356,25 +405,30 @@ mod tests {
 
     #[test]
     fn test_load_current_index_checked() {
-        let instruction0 = Instruction::new_with_bincode(
-            Pubkey::new_unique(),
-            &0,
-            vec![AccountMeta::new(Pubkey::new_unique(), false)],
-        );
-        let instruction1 = Instruction::new_with_bincode(
-            Pubkey::new_unique(),
-            &0,
-            vec![AccountMeta::new(Pubkey::new_unique(), false)],
-        );
-        let message =
-            LegacyMessage::new(&[instruction0, instruction1], Some(&Pubkey::new_unique()));
-        let sanitized_message = new_sanitized_message(message);
+        let program_id0 = Pubkey::new_unique();
+        let program_id1 = Pubkey::new_unique();
+        let account_key0 = Pubkey::new_unique();
+        let account_key1 = Pubkey::new_unique();
+        let params0 = MakeInstructionParams {
+            program_id: program_id0,
+            account_key: account_key0,
+            is_signer: false,
+            is_writable: false,
+        };
+        let params1 = MakeInstructionParams {
+            program_id: program_id1,
+            account_key: account_key1,
+            is_signer: false,
+            is_writable: false,
+        };
+        let borrowed_instruction0 = make_borrowed_instruction(&params0);
+        let borrowed_instruction1 = make_borrowed_instruction(&params1);
 
         let key = id();
         let mut lamports = 0;
-        let mut data = construct_instructions_data(&sanitized_message.decompile_instructions());
+        let mut data = construct_instructions_data(&[borrowed_instruction0, borrowed_instruction1]);
         store_current_index(&mut data, 1);
-        let owner = crate::sysvar::id();
+        let owner = solana_sdk_ids::sysvar::id();
         let mut account_info = AccountInfo::new(
             &key,
             false,
@@ -403,36 +457,46 @@ mod tests {
 
     #[test]
     fn test_get_instruction_relative() {
-        let instruction0 = Instruction::new_with_bincode(
-            Pubkey::new_unique(),
-            &0,
-            vec![AccountMeta::new(Pubkey::new_unique(), false)],
-        );
-        let instruction1 = Instruction::new_with_bincode(
-            Pubkey::new_unique(),
-            &0,
-            vec![AccountMeta::new(Pubkey::new_unique(), false)],
-        );
-        let instruction2 = Instruction::new_with_bincode(
-            Pubkey::new_unique(),
-            &0,
-            vec![AccountMeta::new(Pubkey::new_unique(), false)],
-        );
-        let message = LegacyMessage::new(
-            &[
-                instruction0.clone(),
-                instruction1.clone(),
-                instruction2.clone(),
-            ],
-            Some(&Pubkey::new_unique()),
-        );
-        let sanitized_message = new_sanitized_message(message);
+        let program_id0 = Pubkey::new_unique();
+        let program_id1 = Pubkey::new_unique();
+        let program_id2 = Pubkey::new_unique();
+        let account_key0 = Pubkey::new_unique();
+        let account_key1 = Pubkey::new_unique();
+        let account_key2 = Pubkey::new_unique();
+        let params0 = MakeInstructionParams {
+            program_id: program_id0,
+            account_key: account_key0,
+            is_signer: false,
+            is_writable: false,
+        };
+        let params1 = MakeInstructionParams {
+            program_id: program_id1,
+            account_key: account_key1,
+            is_signer: false,
+            is_writable: false,
+        };
+        let params2 = MakeInstructionParams {
+            program_id: program_id2,
+            account_key: account_key2,
+            is_signer: false,
+            is_writable: false,
+        };
+        let instruction0 = make_instruction(params0);
+        let instruction1 = make_instruction(params1);
+        let instruction2 = make_instruction(params2);
+        let borrowed_instruction0 = make_borrowed_instruction(&params0);
+        let borrowed_instruction1 = make_borrowed_instruction(&params1);
+        let borrowed_instruction2 = make_borrowed_instruction(&params2);
 
         let key = id();
         let mut lamports = 0;
-        let mut data = construct_instructions_data(&sanitized_message.decompile_instructions());
+        let mut data = construct_instructions_data(&[
+            borrowed_instruction0,
+            borrowed_instruction1,
+            borrowed_instruction2,
+        ]);
         store_current_index(&mut data, 1);
-        let owner = crate::sysvar::id();
+        let owner = solana_sdk_ids::sysvar::id();
         let mut account_info = AccountInfo::new(
             &key,
             false,
@@ -505,24 +569,38 @@ mod tests {
         let id1 = Pubkey::new_unique();
         let id2 = Pubkey::new_unique();
         let id3 = Pubkey::new_unique();
-        let instructions = vec![
-            Instruction::new_with_bincode(program_id0, &0, vec![AccountMeta::new(id0, false)]),
-            Instruction::new_with_bincode(program_id0, &0, vec![AccountMeta::new(id1, true)]),
-            Instruction::new_with_bincode(
-                program_id1,
-                &0,
-                vec![AccountMeta::new_readonly(id2, false)],
-            ),
-            Instruction::new_with_bincode(
-                program_id1,
-                &0,
-                vec![AccountMeta::new_readonly(id3, true)],
-            ),
+        let params = vec![
+            MakeInstructionParams {
+                program_id: program_id0,
+                account_key: id0,
+                is_signer: false,
+                is_writable: true,
+            },
+            MakeInstructionParams {
+                program_id: program_id0,
+                account_key: id1,
+                is_signer: true,
+                is_writable: true,
+            },
+            MakeInstructionParams {
+                program_id: program_id1,
+                account_key: id2,
+                is_signer: false,
+                is_writable: false,
+            },
+            MakeInstructionParams {
+                program_id: program_id1,
+                account_key: id3,
+                is_signer: true,
+                is_writable: false,
+            },
         ];
+        let instructions: Vec<Instruction> =
+            params.clone().into_iter().map(make_instruction).collect();
+        let borrowed_instructions: Vec<BorrowedInstruction> =
+            params.iter().map(make_borrowed_instruction).collect();
 
-        let message = LegacyMessage::new(&instructions, Some(&id1));
-        let sanitized_message = new_sanitized_message(message);
-        let serialized = serialize_instructions(&sanitized_message.decompile_instructions());
+        let serialized = serialize_instructions(&borrowed_instructions);
 
         // assert that deserialize_instruction is compatible with SanitizedMessage::serialize_instructions
         for (i, instruction) in instructions.iter().enumerate() {
@@ -538,14 +616,26 @@ mod tests {
         let program_id0 = Pubkey::new_unique();
         let id0 = Pubkey::new_unique();
         let id1 = Pubkey::new_unique();
-        let instructions = vec![
-            Instruction::new_with_bincode(program_id0, &0, vec![AccountMeta::new(id0, false)]),
-            Instruction::new_with_bincode(program_id0, &0, vec![AccountMeta::new(id1, true)]),
+        let params = vec![
+            MakeInstructionParams {
+                program_id: program_id0,
+                account_key: id0,
+                is_signer: false,
+                is_writable: true,
+            },
+            MakeInstructionParams {
+                program_id: program_id0,
+                account_key: id1,
+                is_signer: true,
+                is_writable: true,
+            },
         ];
+        let instructions: Vec<Instruction> =
+            params.clone().into_iter().map(make_instruction).collect();
+        let borrowed_instructions: Vec<BorrowedInstruction> =
+            params.iter().map(make_borrowed_instruction).collect();
 
-        let message = LegacyMessage::new(&instructions, Some(&id1));
-        let sanitized_message = new_sanitized_message(message);
-        let serialized = serialize_instructions(&sanitized_message.decompile_instructions());
+        let serialized = serialize_instructions(&borrowed_instructions);
         assert_eq!(
             deserialize_instruction(instructions.len(), &serialized).unwrap_err(),
             SanitizeError::IndexOutOfBounds,

@@ -27,16 +27,13 @@
 //! Accessing via on-chain program directly:
 //!
 //! ```no_run
-//! # use solana_program::{
-//! #    account_info::{AccountInfo, next_account_info},
-//! #    entrypoint::ProgramResult,
-//! #    msg,
-//! #    program_error::ProgramError,
-//! #    pubkey::Pubkey,
-//! #    sysvar::epoch_rewards::{self, EpochRewards},
-//! #    sysvar::Sysvar,
-//! # };
-//! #
+//! # use solana_account_info::AccountInfo;
+//! # use solana_epoch_rewards::EpochRewards;
+//! # use solana_msg::msg;
+//! # use solana_program_error::{ProgramError, ProgramResult};
+//! # use solana_pubkey::Pubkey;
+//! # use solana_sysvar::Sysvar;
+//! # use solana_sdk_ids::sysvar::epoch_rewards;
 //! fn process_instruction(
 //!     program_id: &Pubkey,
 //!     accounts: &[AccountInfo],
@@ -73,15 +70,13 @@
 //! Accessing via on-chain program's account parameters:
 //!
 //! ```
-//! # use solana_program::{
-//! #    account_info::{AccountInfo, next_account_info},
-//! #    entrypoint::ProgramResult,
-//! #    msg,
-//! #    pubkey::Pubkey,
-//! #    sysvar::epoch_rewards::{self, EpochRewards},
-//! #    sysvar::Sysvar,
-//! # };
-//! # use solana_program::program_error::ProgramError;
+//! # use solana_account_info::{AccountInfo, next_account_info};
+//! # use solana_epoch_rewards::EpochRewards;
+//! # use solana_msg::msg;
+//! # use solana_program_error::{ProgramError, ProgramResult};
+//! # use solana_pubkey::Pubkey;
+//! # use solana_sysvar::Sysvar;
+//! # use solana_sdk_ids::sysvar::epoch_rewards;
 //! #
 //! fn process_instruction(
 //!     program_id: &Pubkey,
@@ -123,11 +118,12 @@
 //! Accessing via the RPC client:
 //!
 //! ```
+//! # use solana_epoch_rewards::EpochRewards;
 //! # use solana_program::example_mocks::solana_sdk;
 //! # use solana_program::example_mocks::solana_rpc_client;
-//! # use solana_sdk::account::Account;
 //! # use solana_rpc_client::rpc_client::RpcClient;
-//! # use solana_sdk::sysvar::epoch_rewards::{self, EpochRewards};
+//! # use solana_sdk::account::Account;
+//! # use solana_sdk_ids::sysvar::epoch_rewards;
 //! # use anyhow::Result;
 //! #
 //! fn print_sysvar_epoch_rewards(client: &RpcClient) -> Result<()> {
@@ -142,7 +138,7 @@
 //! #   client.set_get_account_response(epoch_rewards::ID, Account {
 //! #       lamports: 1120560,
 //! #       data,
-//! #       owner: solana_sdk::system_program::ID,
+//! #       owner: solana_sdk_ids::system_program::ID,
 //! #       executable: false,
 //! #       rent_epoch: 307,
 //! # });
@@ -159,12 +155,14 @@
 //! # Ok::<(), anyhow::Error>(())
 //! ```
 
-use crate::{impl_sysvar_get, program_error::ProgramError, sysvar::Sysvar};
+#[cfg(feature = "bincode")]
+use crate::{impl_sysvar_get, Sysvar};
 pub use {
     solana_epoch_rewards::EpochRewards,
     solana_sdk_ids::sysvar::epoch_rewards::{check_id, id, ID},
 };
 
+#[cfg(feature = "bincode")]
 impl Sysvar for EpochRewards {
     impl_sysvar_get!(sol_get_epoch_rewards_sysvar);
 }

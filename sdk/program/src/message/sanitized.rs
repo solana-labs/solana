@@ -18,9 +18,9 @@ use {
         pubkey::Pubkey,
         secp256k1_program,
         solana_program::{system_instruction::SystemInstruction, system_program},
-        sysvar::instructions::{BorrowedAccountMeta, BorrowedInstruction},
     },
     solana_sanitize::Sanitize,
+    solana_sysvar::instructions::{BorrowedAccountMeta, BorrowedInstruction},
     std::{borrow::Cow, collections::HashSet, convert::TryFrom},
 };
 

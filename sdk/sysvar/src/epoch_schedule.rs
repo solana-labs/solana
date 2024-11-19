@@ -16,16 +16,13 @@
 //! Accessing via on-chain program directly:
 //!
 //! ```no_run
-//! # use solana_program::{
-//! #    account_info::{AccountInfo, next_account_info},
-//! #    entrypoint::ProgramResult,
-//! #    msg,
-//! #    pubkey::Pubkey,
-//! #    sysvar::epoch_schedule::{self, EpochSchedule},
-//! #    sysvar::Sysvar,
-//! # };
-//! # use solana_program::program_error::ProgramError;
-//! #
+//! # use solana_account_info::AccountInfo;
+//! # use solana_epoch_schedule::EpochSchedule;
+//! # use solana_msg::msg;
+//! # use solana_program_error::{ProgramError, ProgramResult};
+//! # use solana_pubkey::Pubkey;
+//! # use solana_sdk_ids::sysvar::epoch_schedule;
+//! # use solana_sysvar::Sysvar;
 //! fn process_instruction(
 //!     program_id: &Pubkey,
 //!     accounts: &[AccountInfo],
@@ -55,16 +52,13 @@
 //! Accessing via on-chain program's account parameters:
 //!
 //! ```
-//! # use solana_program::{
-//! #    account_info::{AccountInfo, next_account_info},
-//! #    entrypoint::ProgramResult,
-//! #    msg,
-//! #    pubkey::Pubkey,
-//! #    sysvar::epoch_schedule::{self, EpochSchedule},
-//! #    sysvar::Sysvar,
-//! # };
-//! # use solana_program::program_error::ProgramError;
-//! #
+//! # use solana_account_info::{AccountInfo, next_account_info};
+//! # use solana_epoch_schedule::EpochSchedule;
+//! # use solana_msg::msg;
+//! # use solana_program_error::{ProgramError, ProgramResult};
+//! # use solana_pubkey::Pubkey;
+//! # use solana_sdk_ids::sysvar::epoch_schedule;
+//! # use solana_sysvar::Sysvar;
 //! fn process_instruction(
 //!     program_id: &Pubkey,
 //!     accounts: &[AccountInfo],
@@ -98,18 +92,19 @@
 //! Accessing via the RPC client:
 //!
 //! ```
+//! # use solana_epoch_schedule::EpochSchedule;
 //! # use solana_program::example_mocks::solana_sdk;
 //! # use solana_program::example_mocks::solana_rpc_client;
-//! # use solana_sdk::account::Account;
 //! # use solana_rpc_client::rpc_client::RpcClient;
-//! # use solana_sdk::sysvar::epoch_schedule::{self, EpochSchedule};
+//! # use solana_sdk::account::Account;
+//! # use solana_sdk_ids::sysvar::epoch_schedule;
 //! # use anyhow::Result;
 //! #
 //! fn print_sysvar_epoch_schedule(client: &RpcClient) -> Result<()> {
 //! #   client.set_get_account_response(epoch_schedule::ID, Account {
 //! #       lamports: 1120560,
 //! #       data: vec![0, 32, 0, 0, 0, 0, 0, 0, 0, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-//! #       owner: solana_sdk::system_program::ID,
+//! #       owner: solana_sdk_ids::system_program::ID,
 //! #       executable: false,
 //! #       rent_epoch: 307,
 //! # });
@@ -125,12 +120,14 @@
 //! #
 //! # Ok::<(), anyhow::Error>(())
 //! ```
-use crate::{impl_sysvar_get, program_error::ProgramError, sysvar::Sysvar};
+#[cfg(feature = "bincode")]
+use crate::{impl_sysvar_get, Sysvar};
 pub use {
     solana_epoch_schedule::EpochSchedule,
     solana_sdk_ids::sysvar::epoch_schedule::{check_id, id, ID},
 };
 
+#[cfg(feature = "bincode")]
 impl Sysvar for EpochSchedule {
     impl_sysvar_get!(sol_get_epoch_schedule_sysvar);
 }

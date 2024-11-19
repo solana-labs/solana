@@ -16,14 +16,12 @@
 //! Accessing via on-chain program directly:
 //!
 //! ```no_run
-//! # use solana_program::{
-//! #    account_info::{AccountInfo, next_account_info},
-//! #    entrypoint::ProgramResult,
-//! #    msg,
-//! #    pubkey::Pubkey,
-//! #    sysvar::Sysvar,
-//! #    last_restart_slot::LastRestartSlot,
-//! # };
+//! # use solana_account_info::AccountInfo;
+//! # use solana_msg::msg;
+//! # use solana_sysvar::Sysvar;
+//! # use solana_program_error::ProgramResult;
+//! # use solana_pubkey::Pubkey;
+//! # use solana_last_restart_slot::LastRestartSlot;
 //!
 //! fn process_instruction(
 //!     program_id: &Pubkey,
@@ -38,13 +36,14 @@
 //! }
 //! ```
 //!
-
-use crate::{impl_sysvar_get, program_error::ProgramError, sysvar::Sysvar};
+#[cfg(feature = "bincode")]
+use crate::{impl_sysvar_get, Sysvar};
 pub use {
     solana_last_restart_slot::LastRestartSlot,
     solana_sdk_ids::sysvar::last_restart_slot::{check_id, id, ID},
 };
 
+#[cfg(feature = "bincode")]
 impl Sysvar for LastRestartSlot {
     impl_sysvar_get!(sol_get_last_restart_slot);
 }

@@ -161,6 +161,7 @@ members = [
     "sdk/slot-hashes",
     "sdk/slot-history",
     "sdk/stable-layout",
+    "sdk/sysvar",
     "sdk/sysvar-id",
     "sdk/time-utils",
     "sdk/transaction-context",
@@ -545,6 +546,7 @@ solana-svm-conformance = { path = "svm-conformance", version = "=2.2.0" }
 solana-svm-rent-collector = { path = "svm-rent-collector", version = "=2.2.0" }
 solana-svm-transaction = { path = "svm-transaction", version = "=2.2.0" }
 solana-system-program = { path = "programs/system", version = "=2.2.0" }
+solana-sysvar = { path = "sdk/sysvar", version = "=2.2.0" }
 solana-sysvar-id = { path = "sdk/sysvar-id", version = "=2.2.0" }
 solana-test-validator = { path = "test-validator", version = "=2.2.0" }
 solana-thin-client = { path = "thin-client", version = "=2.2.0" }

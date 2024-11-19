@@ -16,15 +16,12 @@
 //! Accessing via on-chain program directly:
 //!
 //! ```no_run
-//! # use solana_program::{
-//! #    account_info::{AccountInfo, next_account_info},
-//! #    entrypoint::ProgramResult,
-//! #    msg,
-//! #    pubkey::Pubkey,
-//! #    sysvar::clock::{self, Clock},
-//! #    sysvar::Sysvar,
-//! # };
-//! # use solana_program::program_error::ProgramError;
+//! # use solana_account_info::AccountInfo;
+//! # use solana_clock::Clock;
+//! # use solana_msg::msg;
+//! # use solana_program_error::{ProgramError, ProgramResult};
+//! # use solana_pubkey::Pubkey;
+//! # use solana_sysvar::Sysvar;
 //! #
 //! fn process_instruction(
 //!     program_id: &Pubkey,
@@ -55,15 +52,13 @@
 //! Accessing via on-chain program's account parameters:
 //!
 //! ```
-//! # use solana_program::{
-//! #    account_info::{AccountInfo, next_account_info},
-//! #    entrypoint::ProgramResult,
-//! #    msg,
-//! #    pubkey::Pubkey,
-//! #    sysvar::clock::{self, Clock},
-//! #    sysvar::Sysvar,
-//! # };
-//! # use solana_program::program_error::ProgramError;
+//! # use solana_account_info::{AccountInfo, next_account_info};
+//! # use solana_clock::Clock;
+//! # use solana_msg::msg;
+//! # use solana_program_error::{ProgramError, ProgramResult};
+//! # use solana_pubkey::Pubkey;
+//! # use solana_sysvar::Sysvar;
+//! # use solana_sdk_ids::sysvar::clock;
 //! #
 //! fn process_instruction(
 //!     program_id: &Pubkey,
@@ -98,18 +93,19 @@
 //! Accessing via the RPC client:
 //!
 //! ```
+//! # use solana_clock::Clock;
 //! # use solana_program::example_mocks::solana_sdk;
 //! # use solana_program::example_mocks::solana_rpc_client;
-//! # use solana_sdk::account::Account;
 //! # use solana_rpc_client::rpc_client::RpcClient;
-//! # use solana_sdk::sysvar::clock::{self, Clock};
+//! # use solana_sdk::account::Account;
+//! # use solana_sdk_ids::sysvar::clock;
 //! # use anyhow::Result;
 //! #
 //! fn print_sysvar_clock(client: &RpcClient) -> Result<()> {
 //! #   client.set_get_account_response(clock::ID, Account {
 //! #       lamports: 1169280,
 //! #       data: vec![240, 153, 233, 7, 0, 0, 0, 0, 11, 115, 118, 98, 0, 0, 0, 0, 51, 1, 0, 0, 0, 0, 0, 0, 52, 1, 0, 0, 0, 0, 0, 0, 121, 50, 119, 98, 0, 0, 0, 0],
-//! #       owner: solana_sdk::system_program::ID,
+//! #       owner: solana_sdk_ids::system_program::ID,
 //! #       executable: false,
 //! #       rent_epoch: 307,
 //! #   });
@@ -126,12 +122,14 @@
 //! # Ok::<(), anyhow::Error>(())
 //! ```
 
-use crate::{impl_sysvar_get, program_error::ProgramError, sysvar::Sysvar};
+#[cfg(feature = "bincode")]
+use crate::{impl_sysvar_get, Sysvar};
 pub use {
     solana_clock::Clock,
     solana_sdk_ids::sysvar::clock::{check_id, id, ID},
 };
 
+#[cfg(feature = "bincode")]
 impl Sysvar for Clock {
     impl_sysvar_get!(sol_get_clock_sysvar);
 }

@@ -1,0 +1,84 @@
+[package]
+name = "solana-sysvar"
+description = "Solana sysvar account types"
+documentation = "https://docs.rs/solana-sysvar"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+bincode = { workspace = true, optional = true }
+bytemuck = { workspace = true, optional = true }
+bytemuck_derive = { workspace = true, optional = true }
+lazy_static = { workspace = true }
+qualifier_attr = { workspace = true, optional = true }
+serde = { workspace = true, optional = true }
+serde_derive = { workspace = true, optional = true }
+solana-account-info = { workspace = true }
+solana-clock = { workspace = true, features = ["sysvar"] }
+solana-epoch-rewards = { workspace = true, features = ["sysvar"] }
+solana-epoch-schedule = { workspace = true, features = ["sysvar"] }
+solana-fee-calculator = { workspace = true }
+solana-frozen-abi = { workspace = true, optional = true }
+solana-frozen-abi-macro = { workspace = true, optional = true }
+solana-hash = { workspace = true, features = ["bytemuck"] }
+solana-instruction = { workspace = true }
+solana-last-restart-slot = { workspace = true, features = ["sysvar"] }
+solana-program-entrypoint = { workspace = true }
+solana-program-error = { workspace = true }
+solana-pubkey = { workspace = true }
+solana-rent = { workspace = true, features = ["sysvar"] }
+solana-sanitize = { workspace = true }
+solana-sdk-ids = { workspace = true }
+solana-sdk-macro = { workspace = true }
+solana-serialize-utils = { workspace = true }
+solana-slot-hashes = { workspace = true, features = ["sysvar"] }
+solana-slot-history = { workspace = true, features = ["sysvar"] }
+solana-sysvar-id = { workspace = true }
+
+[target.'cfg(not(target_os = "solana"))'.dependencies]
+base64 = { workspace = true }
+bitflags = { workspace = true }
+solana-program-memory = { workspace = true }
+
+[target.'cfg(target_os = "solana")'.dependencies]
+solana-define-syscall = { workspace = true }
+
+[dev-dependencies]
+anyhow = { workspace = true }
+serial_test = { workspace = true }
+solana-msg = { workspace = true }
+solana-program = { path = "../program" }
+solana-sdk = { path = ".." }
+solana-sha256-hasher = { workspace = true }
+solana-sysvar = { path = ".", features = ["dev-context-only-utils"] }
+test-case = { workspace = true }
+
+[features]
+bincode = ["dep:bincode", "serde"]
+bytemuck = ["dep:bytemuck", "dep:bytemuck_derive"]
+dev-context-only-utils = ["dep:qualifier_attr", "bincode", "bytemuck"]
+frozen-abi = ["dep:solana-frozen-abi", "dep:solana-frozen-abi-macro"]
+serde = [
+    "dep:serde",
+    "dep:serde_derive",
+    "solana-clock/serde",
+    "solana-epoch-rewards/serde",
+    "solana-epoch-schedule/serde",
+    "solana-fee-calculator/serde",
+    "solana-last-restart-slot/serde",
+    "solana-rent/serde",
+    "solana-slot-hashes/serde",
+    "solana-slot-history/serde",
+]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+all-features = true
+rustdoc-args = ["--cfg=docsrs"]
+
+[lints]
+workspace = true

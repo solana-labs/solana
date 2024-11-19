@@ -76,6 +76,7 @@ solana-short-vec = { workspace = true }
 solana-slot-hashes = { workspace = true, features = ["serde", "sysvar"] }
 solana-slot-history = { workspace = true, features = ["serde", "sysvar"] }
 solana-stable-layout = { workspace = true }
+solana-sysvar = { workspace = true, features = ["bincode", "bytemuck"] }
 solana-sysvar-id = { workspace = true }
 thiserror = { workspace = true }
 
@@ -120,6 +121,7 @@ itertools = { workspace = true }
 serde_json = { workspace = true }
 serial_test = { workspace = true }
 solana-pubkey = { workspace = true, features = ["dev-context-only-utils"] }
+solana-sysvar = { workspace = true, features = ["dev-context-only-utils"] }
 static_assertions = { workspace = true }
 test-case = { workspace = true }
 
@@ -151,7 +153,8 @@ frozen-abi = [
     "solana-instruction/frozen-abi",
     "solana-pubkey/frozen-abi",
     "solana-rent/frozen-abi",
-    "solana-short-vec/frozen-abi"
+    "solana-short-vec/frozen-abi",
+    "solana-sysvar/frozen-abi"
 ]
 
 [lints]

@@ -8,9 +8,9 @@
 //! [`SysvarId::id`], [`SysvarId::check_id`] and [`Sysvar::size_of`] methods in
 //! an on-chain program, and it can be accessed off-chain through RPC.
 //!
-//! [`ProgramError::UnsupportedSysvar`]: crate::program_error::ProgramError::UnsupportedSysvar
-//! [`SysvarId::id`]: crate::sysvar::SysvarId::id
-//! [`SysvarId::check_id`]: crate::sysvar::SysvarId::check_id
+//! [`ProgramError::UnsupportedSysvar`]: https://docs.rs/solana-program-error/latest/solana_program_error/enum.ProgramError.html#variant.UnsupportedSysvar
+//! [`SysvarId::id`]: https://docs.rs/solana-sysvar-id/latest/solana_sysvar_id/trait.SysvarId.html
+//! [`SysvarId::check_id`]: https://docs.rs/solana-sysvar-id/latest/solana_sysvar_id/trait.SysvarId.html#tymethod.check_id
 //!
 //! # Examples
 //!
@@ -19,16 +19,17 @@
 //! ```
 //! # use solana_program::example_mocks::solana_sdk;
 //! # use solana_program::example_mocks::solana_rpc_client;
+//! # use solana_program::stake_history::StakeHistory;
 //! # use solana_sdk::account::Account;
 //! # use solana_rpc_client::rpc_client::RpcClient;
-//! # use solana_sdk::sysvar::stake_history::{self, StakeHistory};
+//! # use solana_sdk_ids::sysvar::stake_history;
 //! # use anyhow::Result;
 //! #
 //! fn print_sysvar_stake_history(client: &RpcClient) -> Result<()> {
 //! #   client.set_get_account_response(stake_history::ID, Account {
 //! #       lamports: 114979200,
 //! #       data: vec![0, 0, 0, 0, 0, 0, 0, 0],
-//! #       owner: solana_sdk::system_program::ID,
+//! #       owner: solana_sdk_ids::system_program::ID,
 //! #       executable: false,
 //! #       rent_epoch: 307,
 //! #   });
@@ -45,21 +46,111 @@
 //! # Ok::<(), anyhow::Error>(())
 //! ```
 
-pub use {
-    crate::stake_history::StakeHistory,
-    solana_sdk_ids::sysvar::stake_history::{check_id, id, ID},
-};
+#[cfg(feature = "serde")]
+use serde_derive::{Deserialize, Serialize};
+pub use solana_sdk_ids::sysvar::stake_history::{check_id, id, ID};
+#[cfg(feature = "bincode")]
 use {
-    crate::{
-        stake_history::{StakeHistoryEntry, StakeHistoryGetEntry, MAX_ENTRIES},
-        sysvar::{get_sysvar, Sysvar, SysvarId},
-    },
-    solana_clock::Epoch,
-    solana_sysvar_id::impl_sysvar_id,
+    crate::{get_sysvar, Sysvar},
+    solana_sysvar_id::SysvarId,
 };
+use {solana_clock::Epoch, solana_sysvar_id::impl_sysvar_id, std::ops::Deref};
+
+pub const MAX_ENTRIES: usize = 512; // it should never take as many as 512 epochs to warm up or cool down
+
+#[repr(C)]
+#[cfg_attr(feature = "frozen-abi", derive(solana_frozen_abi_macro::AbiExample))]
+#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+#[derive(Debug, PartialEq, Eq, Default, Clone)]
+pub struct StakeHistoryEntry {
+    pub effective: u64,    // effective stake at this epoch
+    pub activating: u64,   // sum of portion of stakes not fully warmed up
+    pub deactivating: u64, // requested to be cooled down, not fully deactivated yet
+}
+
+impl StakeHistoryEntry {
+    pub fn with_effective(effective: u64) -> Self {
+        Self {
+            effective,
+            ..Self::default()
+        }
+    }
+
+    pub fn with_effective_and_activating(effective: u64, activating: u64) -> Self {
+        Self {
+            effective,
+            activating,
+            ..Self::default()
+        }
+    }
+
+    pub fn with_deactivating(deactivating: u64) -> Self {
+        Self {
+            effective: deactivating,
+            deactivating,
+            ..Self::default()
+        }
+    }
+}
+
+impl std::ops::Add for StakeHistoryEntry {
+    type Output = StakeHistoryEntry;
+    fn add(self, rhs: StakeHistoryEntry) -> Self::Output {
+        Self {
+            effective: self.effective.saturating_add(rhs.effective),
+            activating: self.activating.saturating_add(rhs.activating),
+            deactivating: self.deactivating.saturating_add(rhs.deactivating),
+        }
+    }
+}
+
+/// A type to hold data for the [`StakeHistory` sysvar][sv].
+///
+/// [sv]: https://docs.solanalabs.com/runtime/sysvars#stakehistory
+#[repr(C)]
+#[cfg_attr(feature = "frozen-abi", derive(solana_frozen_abi_macro::AbiExample))]
+#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+#[derive(Debug, PartialEq, Eq, Default, Clone)]
+pub struct StakeHistory(Vec<(Epoch, StakeHistoryEntry)>);
+
+impl StakeHistory {
+    pub fn get(&self, epoch: Epoch) -> Option<&StakeHistoryEntry> {
+        self.binary_search_by(|probe| epoch.cmp(&probe.0))
+            .ok()
+            .map(|index| &self[index].1)
+    }
+
+    pub fn add(&mut self, epoch: Epoch, entry: StakeHistoryEntry) {
+        match self.binary_search_by(|probe| epoch.cmp(&probe.0)) {
+            Ok(index) => (self.0)[index] = (epoch, entry),
+            Err(index) => (self.0).insert(index, (epoch, entry)),
+        }
+        (self.0).truncate(MAX_ENTRIES);
+    }
+}
+
+impl Deref for StakeHistory {
+    type Target = Vec<(Epoch, StakeHistoryEntry)>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+pub trait StakeHistoryGetEntry {
+    fn get_entry(&self, epoch: Epoch) -> Option<StakeHistoryEntry>;
+}
+
+impl StakeHistoryGetEntry for StakeHistory {
+    fn get_entry(&self, epoch: Epoch) -> Option<StakeHistoryEntry> {
+        self.binary_search_by(|probe| epoch.cmp(&probe.0))
+            .ok()
+            .map(|index| self[index].1.clone())
+    }
+}
 
 impl_sysvar_id!(StakeHistory);
 
+#[cfg(feature = "bincode")]
 impl Sysvar for StakeHistory {
     // override
     fn size_of() -> usize {
@@ -73,8 +164,10 @@ impl Sysvar for StakeHistory {
 pub struct StakeHistorySysvar(pub Epoch);
 
 // precompute so we can statically allocate buffer
+#[cfg(feature = "bincode")]
 const EPOCH_AND_ENTRY_SERIALIZED_SIZE: u64 = 32;
 
+#[cfg(feature = "bincode")]
 impl StakeHistoryGetEntry for StakeHistorySysvar {
     fn get_entry(&self, target_epoch: Epoch) -> Option<StakeHistoryEntry> {
         let current_epoch = self.0;
@@ -122,11 +215,32 @@ impl StakeHistoryGetEntry for StakeHistorySysvar {
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::*,
-        crate::{stake_history::*, sysvar::tests::mock_get_sysvar_syscall},
-        serial_test::serial,
-    };
+    use {super::*, crate::tests::mock_get_sysvar_syscall, serial_test::serial};
+
+    #[test]
+    fn test_stake_history() {
+        let mut stake_history = StakeHistory::default();
+
+        for i in 0..MAX_ENTRIES as u64 + 1 {
+            stake_history.add(
+                i,
+                StakeHistoryEntry {
+                    activating: i,
+                    ..StakeHistoryEntry::default()
+                },
+            );
+        }
+        assert_eq!(stake_history.len(), MAX_ENTRIES);
+        assert_eq!(stake_history.iter().map(|entry| entry.0).min().unwrap(), 1);
+        assert_eq!(stake_history.get(0), None);
+        assert_eq!(
+            stake_history.get(1),
+            Some(&StakeHistoryEntry {
+                activating: 1,
+                ..StakeHistoryEntry::default()
+            })
+        );
+    }
 
     #[test]
     fn test_size_of() {

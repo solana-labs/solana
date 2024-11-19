@@ -1,3 +1,5 @@
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+#![cfg_attr(feature = "frozen-abi", feature(min_specialization))]
 //! Access to special accounts with dynamically-updated data.
 //!
 //! Sysvars are special accounts that contain dynamically-updated data about the
@@ -10,21 +12,18 @@
 //! directly from the runtime, as in this example that logs the `clock` sysvar:
 //!
 //! ```
-//! use solana_program::{
-//!     account_info::AccountInfo,
-//!     clock,
-//!     entrypoint::ProgramResult,
-//!     msg,
-//!     pubkey::Pubkey,
-//!     sysvar::Sysvar,
-//! };
+//! use solana_account_info::AccountInfo;
+//! use solana_msg::msg;
+//! use solana_sysvar::Sysvar;
+//! use solana_program_error::ProgramResult;
+//! use solana_pubkey::Pubkey;
 //!
 //! fn process_instruction(
 //!     program_id: &Pubkey,
 //!     accounts: &[AccountInfo],
 //!     instruction_data: &[u8],
 //! ) -> ProgramResult {
-//!     let clock = clock::Clock::get()?;
+//!     let clock = solana_clock::Clock::get()?;
 //!     msg!("clock: {:#?}", clock);
 //!     Ok(())
 //! }
@@ -36,14 +35,11 @@
 //! again logs the [`clock`] sysvar.
 //!
 //! ```
-//! use solana_program::{
-//!     account_info::{next_account_info, AccountInfo},
-//!     clock,
-//!     entrypoint::ProgramResult,
-//!     msg,
-//!     pubkey::Pubkey,
-//!     sysvar::Sysvar,
-//! };
+//! use solana_account_info::{AccountInfo, next_account_info};
+//! use solana_msg::msg;
+//! use solana_sysvar::Sysvar;
+//! use solana_program_error::ProgramResult;
+//! use solana_pubkey::Pubkey;
 //!
 //! fn process_instruction(
 //!     program_id: &Pubkey,
@@ -52,7 +48,7 @@
 //! ) -> ProgramResult {
 //!     let account_info_iter = &mut accounts.iter();
 //!     let clock_account = next_account_info(account_info_iter)?;
-//!     let clock = clock::Clock::from_account_info(&clock_account)?;
+//!     let clock = solana_clock::Clock::from_account_info(&clock_account)?;
 //!     msg!("clock: {:#?}", clock);
 //!     Ok(())
 //! }
@@ -75,19 +71,30 @@
 //!
 //! All sysvar accounts are owned by the account identified by [`sysvar::ID`].
 //!
-//! [`sysvar::ID`]: crate::sysvar::ID
+//! [`sysvar::ID`]: https://docs.rs/solana-sdk-ids/latest/solana_sdk_ids/sysvar/constant.ID.html
 //!
 //! For more details see the Solana [documentation on sysvars][sysvardoc].
 //!
 //! [sysvardoc]: https://docs.solanalabs.com/runtime/sysvars
 
-use crate::{account_info::AccountInfo, program_error::ProgramError, pubkey::Pubkey};
-#[deprecated(since = "2.1.0", note = "Use `solana-sysvar-id` crate instead")]
-pub use solana_sysvar_id::{declare_deprecated_sysvar_id, declare_sysvar_id, SysvarId};
+// hidden re-exports to make macros work
+pub mod __private {
+    #[cfg(target_os = "solana")]
+    pub use solana_define_syscall::definitions;
+    pub use {solana_program_entrypoint::SUCCESS, solana_program_error::ProgramError};
+}
+use solana_pubkey::Pubkey;
 #[allow(deprecated)]
-pub use {
-    solana_sdk_ids::sysvar::{check_id, id, ID},
-    sysvar_ids::ALL_IDS,
+#[doc(inline)]
+#[deprecated(
+    since = "2.0.0",
+    note = "please use `solana_sdk::reserved_account_keys::ReservedAccountKeys` instead"
+)]
+pub use sysvar_ids::ALL_IDS;
+#[cfg(feature = "bincode")]
+use {
+    solana_account_info::AccountInfo, solana_program_error::ProgramError,
+    solana_sysvar_id::SysvarId,
 };
 
 pub mod clock;
@@ -96,6 +103,7 @@ pub mod epoch_schedule;
 pub mod fees;
 pub mod instructions;
 pub mod last_restart_slot;
+pub mod program_stubs;
 pub mod recent_blockhashes;
 pub mod rent;
 pub mod rewards;
@@ -138,6 +146,7 @@ pub fn is_sysvar_id(id: &Pubkey) -> bool {
     ALL_IDS.iter().any(|key| key == id)
 }
 
+#[cfg(feature = "bincode")]
 /// A type that holds sysvar data.
 pub trait Sysvar:
     SysvarId + Default + Sized + serde::Serialize + serde::de::DeserializeOwned
@@ -186,24 +195,25 @@ pub trait Sysvar:
 #[macro_export]
 macro_rules! impl_sysvar_get {
     ($syscall_name:ident) => {
-        fn get() -> Result<Self, ProgramError> {
+        fn get() -> Result<Self, $crate::__private::ProgramError> {
             let mut var = Self::default();
             let var_addr = &mut var as *mut _ as *mut u8;
 
             #[cfg(target_os = "solana")]
-            let result = unsafe { $crate::syscalls::$syscall_name(var_addr) };
+            let result = unsafe { $crate::__private::definitions::$syscall_name(var_addr) };
 
             #[cfg(not(target_os = "solana"))]
             let result = $crate::program_stubs::$syscall_name(var_addr);
 
             match result {
-                $crate::entrypoint::SUCCESS => Ok(var),
+                $crate::__private::SUCCESS => Ok(var),
                 e => Err(e.into()),
             }
         }
     };
 }
 
+#[cfg(feature = "bincode")]
 /// Handler for retrieving a slice of sysvar data from the `sol_get_sysvar`
 /// syscall.
 fn get_sysvar(
@@ -211,24 +221,26 @@ fn get_sysvar(
     sysvar_id: &Pubkey,
     offset: u64,
     length: u64,
-) -> Result<(), ProgramError> {
+) -> Result<(), solana_program_error::ProgramError> {
     // Check that the provided destination buffer is large enough to hold the
     // requested data.
     if dst.len() < length as usize {
-        return Err(ProgramError::InvalidArgument);
+        return Err(solana_program_error::ProgramError::InvalidArgument);
     }
 
     let sysvar_id = sysvar_id as *const _ as *const u8;
     let var_addr = dst as *mut _ as *mut u8;
 
     #[cfg(target_os = "solana")]
-    let result = unsafe { crate::syscalls::sol_get_sysvar(sysvar_id, var_addr, offset, length) };
+    let result = unsafe {
+        solana_define_syscall::definitions::sol_get_sysvar(sysvar_id, var_addr, offset, length)
+    };
 
     #[cfg(not(target_os = "solana"))]
     let result = crate::program_stubs::sol_get_sysvar(sysvar_id, var_addr, offset, length);
 
     match result {
-        crate::entrypoint::SUCCESS => Ok(()),
+        solana_program_entrypoint::SUCCESS => Ok(()),
         e => Err(e.into()),
     }
 }
@@ -237,13 +249,12 @@ fn get_sysvar(
 mod tests {
     use {
         super::*,
-        crate::{
-            entrypoint::SUCCESS,
-            program_error::ProgramError,
-            program_stubs::{set_syscall_stubs, SyscallStubs},
-            pubkey::Pubkey,
-        },
+        crate::program_stubs::{set_syscall_stubs, SyscallStubs},
+        serde_derive::{Deserialize, Serialize},
         solana_clock::Epoch,
+        solana_program_entrypoint::SUCCESS,
+        solana_program_error::ProgramError,
+        solana_pubkey::Pubkey,
         std::{cell::RefCell, rc::Rc},
     };
 
@@ -252,13 +263,13 @@ mod tests {
     struct TestSysvar {
         something: Pubkey,
     }
-    crate::declare_id!("TestSysvar111111111111111111111111111111111");
-    impl crate::sysvar::SysvarId for TestSysvar {
-        fn id() -> crate::pubkey::Pubkey {
+    solana_pubkey::declare_id!("TestSysvar111111111111111111111111111111111");
+    impl solana_sysvar_id::SysvarId for TestSysvar {
+        fn id() -> solana_pubkey::Pubkey {
             id()
         }
 
-        fn check_id(pubkey: &crate::pubkey::Pubkey) -> bool {
+        fn check_id(pubkey: &solana_pubkey::Pubkey) -> bool {
             check_id(pubkey)
         }
     }
@@ -291,7 +302,7 @@ mod tests {
     #[test]
     fn test_sysvar_account_info_to_from() {
         let test_sysvar = TestSysvar::default();
-        let key = crate::sysvar::tests::id();
+        let key = id();
         let wrong_key = Pubkey::new_unique();
         let owner = Pubkey::new_unique();
         let mut lamports = 42;

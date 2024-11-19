@@ -18,9 +18,14 @@
 
 #![allow(deprecated)]
 #![allow(clippy::arithmetic_side_effects)]
+#[cfg(feature = "bincode")]
+use crate::Sysvar;
+#[cfg(feature = "serde")]
+use serde_derive::{Deserialize, Serialize};
 pub use solana_sdk_ids::sysvar::recent_blockhashes::{check_id, id, ID};
 use {
-    crate::{fee_calculator::FeeCalculator, hash::Hash, sysvar::Sysvar},
+    solana_fee_calculator::FeeCalculator,
+    solana_hash::Hash,
     solana_sysvar_id::impl_sysvar_id,
     std::{cmp::Ordering, collections::BinaryHeap, iter::FromIterator, ops::Deref},
 };
@@ -38,7 +43,8 @@ impl_sysvar_id!(RecentBlockhashes);
     note = "Please do not use, will no longer be available in the future"
 )]
 #[repr(C)]
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Entry {
     pub blockhash: Hash,
     pub fee_calculator: FeeCalculator,
@@ -88,7 +94,8 @@ impl<'a> PartialOrd for IterItem<'a> {
     note = "Please do not use, will no longer be available in the future"
 )]
 #[repr(C)]
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RecentBlockhashes(Vec<Entry>);
 
 impl Default for RecentBlockhashes {
@@ -143,6 +150,7 @@ impl<T: Ord> Iterator for IntoIterSorted<T> {
     }
 }
 
+#[cfg(feature = "bincode")]
 impl Sysvar for RecentBlockhashes {
     fn size_of() -> usize {
         // hard-coded so that we don't have to construct an empty

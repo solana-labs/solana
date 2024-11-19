@@ -8,8 +8,8 @@ use {
         message::{Message, SanitizedMessage},
         pubkey::{self, Pubkey},
         reserved_account_keys::ReservedAccountKeys,
-        sysvar::instructions::{self, construct_instructions_data},
     },
+    solana_sysvar::instructions::{self, construct_instructions_data},
     test::Bencher,
 };
 
