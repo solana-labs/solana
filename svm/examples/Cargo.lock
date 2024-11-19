@@ -5366,6 +5366,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-epoch-info"
+version = "2.2.0"
+dependencies = [
+ "serde",
+ "serde_derive",
+]
+
+[[package]]
 name = "solana-epoch-rewards"
 version = "2.2.0"
 dependencies = [
@@ -6449,6 +6457,7 @@ dependencies = [
  "solana-decode-error",
  "solana-derivation-path",
  "solana-ed25519-program",
+ "solana-epoch-info",
  "solana-feature-set",
  "solana-fee-structure",
  "solana-inflation",
@@ -6477,6 +6486,7 @@ dependencies = [
  "solana-signature",
  "solana-signer",
  "solana-time-utils",
+ "solana-transaction-context",
  "solana-transaction-error",
  "thiserror 2.0.3",
  "wasm-bindgen",
@@ -6913,6 +6923,20 @@ dependencies = [
  "solana-sdk",
  "thiserror 2.0.3",
  "tokio",
+]
+
+[[package]]
+name = "solana-transaction-context"
+version = "2.2.0"
+dependencies = [
+ "bincode",
+ "serde",
+ "serde_derive",
+ "solana-account",
+ "solana-instruction",
+ "solana-pubkey",
+ "solana-rent",
+ "solana-signature",
 ]
 
 [[package]]
