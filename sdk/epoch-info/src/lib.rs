@@ -4,13 +4,15 @@
 //!
 //! [`getEpochInfo`]: https://solana.com/docs/rpc/http/getepochinfo
 
-use crate::clock::{Epoch, Slot};
-
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
-#[serde(rename_all = "camelCase")]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde_derive::Deserialize, serde_derive::Serialize),
+    serde(rename_all = "camelCase")
+)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EpochInfo {
     /// The current epoch
-    pub epoch: Epoch,
+    pub epoch: u64,
 
     /// The current slot, relative to the start of the current epoch
     pub slot_index: u64,
@@ -19,7 +21,7 @@ pub struct EpochInfo {
     pub slots_in_epoch: u64,
 
     /// The absolute current slot
-    pub absolute_slot: Slot,
+    pub absolute_slot: u64,
 
     /// The current block height
     pub block_height: u64,

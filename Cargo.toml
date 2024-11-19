@@ -112,6 +112,7 @@ members = [
     "sdk/define-syscall",
     "sdk/derivation-path",
     "sdk/ed25519-program",
+    "sdk/epoch-info",
     "sdk/epoch-rewards",
     "sdk/epoch-schedule",
     "sdk/feature-set",
@@ -444,6 +445,7 @@ solana-download-utils = { path = "download-utils", version = "=2.2.0" }
 solana-ed25519-program = { path = "sdk/ed25519-program", version = "=2.2.0" }
 solana-entry = { path = "entry", version = "=2.2.0" }
 solana-program-entrypoint = { path = "sdk/program-entrypoint", version = "=2.2.0" }
+solana-epoch-info = { path = "sdk/epoch-info", version = "=2.2.0" }
 solana-epoch-rewards = { path = "sdk/epoch-rewards", version = "=2.2.0" }
 solana-epoch-schedule = { path = "sdk/epoch-schedule", version = "=2.2.0" }
 solana-faucet = { path = "faucet", version = "=2.2.0" }

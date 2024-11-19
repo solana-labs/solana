@@ -5524,6 +5524,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-epoch-info"
+version = "2.2.0"
+dependencies = [
+ "serde",
+ "serde_derive",
+]
+
+[[package]]
 name = "solana-epoch-rewards"
 version = "2.2.0"
 dependencies = [
@@ -7113,6 +7121,7 @@ dependencies = [
  "solana-decode-error",
  "solana-derivation-path",
  "solana-ed25519-program",
+ "solana-epoch-info",
  "solana-feature-set",
  "solana-fee-structure",
  "solana-inflation",

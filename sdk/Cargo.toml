@@ -113,6 +113,7 @@ solana-commitment-config = { workspace = true, optional = true, features = ["ser
 solana-decode-error = { workspace = true }
 solana-derivation-path = { workspace = true }
 solana-ed25519-program = { workspace = true, optional = true }
+solana-epoch-info = { workspace = true, features = ["serde"] }
 solana-feature-set = { workspace = true }
 solana-fee-structure = { workspace = true, features = ["serde"] }
 solana-frozen-abi = { workspace = true, optional = true, features = [
