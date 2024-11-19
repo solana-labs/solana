@@ -74,6 +74,7 @@ members = [
     "programs/bpf_loader",
     "programs/bpf_loader/gen-syscall-list",
     "programs/compute-budget",
+    "programs/compute-budget-bench",
     "programs/config",
     "programs/ed25519-tests",
     "programs/loader-v4",

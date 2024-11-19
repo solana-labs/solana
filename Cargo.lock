@@ -6577,6 +6577,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-compute-budget-program-bench"
+version = "2.2.0"
+dependencies = [
+ "criterion",
+ "solana-compute-budget",
+ "solana-compute-budget-program",
+ "solana-runtime-transaction",
+ "solana-sdk",
+ "solana-svm-transaction",
+]
+
+[[package]]
 name = "solana-config-program"
 version = "2.2.0"
 dependencies = [
