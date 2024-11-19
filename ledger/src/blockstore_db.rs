@@ -32,7 +32,7 @@ use {
     },
     solana_storage_proto::convert::generated,
     std::{
-        collections::{HashMap, HashSet},
+        collections::HashSet,
         ffi::{CStr, CString},
         fs,
         marker::PhantomData,
@@ -1399,9 +1399,25 @@ impl<C: Column + ColumnName> LedgerColumn<C> {
     }
 }
 
-pub struct WriteBatch<'a> {
+pub struct WriteBatch {
     write_batch: RWriteBatch,
-    map: HashMap<&'static str, &'a ColumnFamily>,
+}
+
+impl WriteBatch {
+    fn put_cf(&mut self, cf: &ColumnFamily, key: &[u8], value: &[u8]) -> Result<()> {
+        self.write_batch.put_cf(cf, key, value);
+        Ok(())
+    }
+
+    fn delete_cf(&mut self, cf: &ColumnFamily, key: &[u8]) -> Result<()> {
+        self.write_batch.delete_cf(cf, key);
+        Ok(())
+    }
+
+    fn delete_range_cf(&mut self, cf: &ColumnFamily, from: &[u8], to: &[u8]) -> Result<()> {
+        self.write_batch.delete_range_cf(cf, from, to);
+        Ok(())
+    }
 }
 
 impl Database {
@@ -1450,12 +1466,7 @@ impl Database {
 
     pub fn batch(&self) -> Result<WriteBatch> {
         let write_batch = self.backend.batch();
-        let map = Rocks::columns()
-            .into_iter()
-            .map(|desc| (desc, self.backend.cf_handle(desc)))
-            .collect();
-
-        Ok(WriteBatch { write_batch, map })
+        Ok(WriteBatch { write_batch })
     }
 
     pub fn write(&self, batch: WriteBatch) -> Result<()> {
@@ -1464,25 +1475,6 @@ impl Database {
 
     pub fn storage_size(&self) -> Result<u64> {
         Ok(fs_extra::dir::get_size(&self.path)?)
-    }
-
-    /// Adds a \[`from`, `to`\] range that deletes all entries between the `from` slot
-    /// and `to` slot inclusively.  If `from` slot and `to` slot are the same, then all
-    /// entries in that slot will be removed.
-    ///
-    pub fn delete_range_cf<C>(&self, batch: &mut WriteBatch, from: Slot, to: Slot) -> Result<()>
-    where
-        C: Column + ColumnName,
-    {
-        let cf = self.cf_handle::<C>();
-        // Note that the default behavior of rocksdb's delete_range_cf deletes
-        // files within [from, to), while our purge logic applies to [from, to].
-        //
-        // For consistency, we make our delete_range_cf works for [from, to] by
-        // adjusting the `to` slot range by 1.
-        let from_index = C::as_index(from);
-        let to_index = C::as_index(to.saturating_add(1));
-        batch.delete_range_cf::<C>(cf, from_index, to_index)
     }
 
     /// Delete files whose slot range is within \[`from`, `to`\].
@@ -1621,6 +1613,16 @@ where
         result
     }
 
+    pub fn put_bytes_in_batch(
+        &self,
+        batch: &mut WriteBatch,
+        key: C::Index,
+        value: &[u8],
+    ) -> Result<()> {
+        let key = C::key(key);
+        batch.put_cf(self.handle(), &key, value)
+    }
+
     /// Retrieves the specified RocksDB integer property of the current
     /// column family.
     ///
@@ -1645,6 +1647,28 @@ where
             );
         }
         result
+    }
+
+    pub fn delete_in_batch(&self, batch: &mut WriteBatch, key: C::Index) -> Result<()> {
+        let key = C::key(key);
+        batch.delete_cf(self.handle(), &key)
+    }
+
+    /// Adds a \[`from`, `to`\] range that deletes all entries between the `from` slot
+    /// and `to` slot inclusively.  If `from` slot and `to` slot are the same, then all
+    /// entries in that slot will be removed.
+    pub fn delete_range_in_batch(&self, batch: &mut WriteBatch, from: Slot, to: Slot) -> Result<()>
+    where
+        C: Column + ColumnName,
+    {
+        // Note that the default behavior of rocksdb's delete_range_cf deletes
+        // files within [from, to), while our purge logic applies to [from, to].
+        //
+        // For consistency, we make our delete_range_cf works for [from, to] by
+        // adjusting the `to` slot range by 1.
+        let from_key = C::key(C::as_index(from));
+        let to_key = C::key(C::as_index(to.saturating_add(1)));
+        batch.delete_range_cf(self.handle(), &from_key, &to_key)
     }
 }
 
@@ -1727,6 +1751,17 @@ where
             );
         }
         result
+    }
+
+    pub fn put_in_batch(
+        &self,
+        batch: &mut WriteBatch,
+        key: C::Index,
+        value: &C::Type,
+    ) -> Result<()> {
+        let key = C::key(key);
+        let serialized_value = serialize(value)?;
+        batch.put_cf(self.handle(), &key, &serialized_value)
     }
 }
 
@@ -1851,55 +1886,14 @@ where
                 .map(|index| (index, value))
         }))
     }
-}
 
-impl<'a> WriteBatch<'a> {
-    pub fn put_bytes<C: Column + ColumnName>(&mut self, key: C::Index, bytes: &[u8]) -> Result<()> {
-        self.write_batch
-            .put_cf(self.get_cf::<C>(), C::key(key), bytes);
-        Ok(())
-    }
-
-    pub fn delete<C: Column + ColumnName>(&mut self, key: C::Index) -> Result<()> {
-        self.delete_raw::<C>(&C::key(key))
-    }
-
-    pub(crate) fn delete_raw<C: Column + ColumnName>(&mut self, key: &[u8]) -> Result<()> {
-        self.write_batch.delete_cf(self.get_cf::<C>(), key);
-        Ok(())
-    }
-
-    pub fn put<C: TypedColumn + ColumnName>(
-        &mut self,
-        key: C::Index,
-        value: &C::Type,
+    pub(crate) fn delete_deprecated_in_batch(
+        &self,
+        batch: &mut WriteBatch,
+        key: C::DeprecatedIndex,
     ) -> Result<()> {
-        let serialized_value = serialize(&value)?;
-        self.write_batch
-            .put_cf(self.get_cf::<C>(), C::key(key), serialized_value);
-        Ok(())
-    }
-
-    #[inline]
-    fn get_cf<C: Column + ColumnName>(&self) -> &'a ColumnFamily {
-        self.map[C::NAME]
-    }
-
-    /// Adds a \[`from`, `to`) range deletion entry to the batch.
-    ///
-    /// Note that the \[`from`, `to`) deletion range of WriteBatch::delete_range_cf
-    /// is different from \[`from`, `to`\] of Database::delete_range_cf as we makes
-    /// the semantics of Database::delete_range_cf matches the blockstore purge
-    /// logic.
-    fn delete_range_cf<C: Column>(
-        &mut self,
-        cf: &ColumnFamily,
-        from: C::Index,
-        to: C::Index, // exclusive
-    ) -> Result<()> {
-        self.write_batch
-            .delete_range_cf(cf, C::key(from), C::key(to));
-        Ok(())
+        let key = C::deprecated_key(key);
+        batch.delete_cf(self.handle(), &key)
     }
 }
 
