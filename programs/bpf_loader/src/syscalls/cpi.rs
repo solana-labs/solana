@@ -137,6 +137,10 @@ impl<'a, 'b> CallerAccount<'a, 'b> {
                 invoke_context.get_check_aligned(),
             )?;
             if direct_mapping {
+                if account_info.lamports.as_ptr() as u64 >= ebpf::MM_INPUT_START {
+                    return Err(SyscallError::InvalidPointer.into());
+                }
+
                 check_account_info_pointer(
                     invoke_context,
                     *ptr,
@@ -154,6 +158,10 @@ impl<'a, 'b> CallerAccount<'a, 'b> {
         )?;
 
         let (serialized_data, vm_data_addr, ref_to_len_in_vm) = {
+            if direct_mapping && account_info.data.as_ptr() as u64 >= ebpf::MM_INPUT_START {
+                return Err(SyscallError::InvalidPointer.into());
+            }
+
             // Double translate data out of RefCell
             let data = *translate_type::<&[u8]>(
                 memory_mapping,

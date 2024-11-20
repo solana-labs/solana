@@ -5002,6 +5002,98 @@ fn test_account_info_in_account() {
 }
 
 #[test]
+fn test_account_info_rc_in_account() {
+    solana_logger::setup();
+
+    let GenesisConfigInfo {
+        genesis_config,
+        mint_keypair,
+        ..
+    } = create_genesis_config(100_123_456_789);
+
+    for direct_mapping in [false, true] {
+        let mut bank = Bank::new_for_tests(&genesis_config);
+        let feature_set = Arc::make_mut(&mut bank.feature_set);
+        // by default test banks have all features enabled, so we only need to
+        // disable when needed
+        if !direct_mapping {
+            feature_set.deactivate(&feature_set::bpf_account_data_direct_mapping::id());
+        }
+
+        let (bank, bank_forks) = bank.wrap_with_bank_forks_for_tests();
+        let mut bank_client = BankClient::new_shared(bank.clone());
+        let authority_keypair = Keypair::new();
+
+        let (bank, invoke_program_id) = load_upgradeable_program_and_advance_slot(
+            &mut bank_client,
+            bank_forks.as_ref(),
+            &mint_keypair,
+            &authority_keypair,
+            "solana_sbf_rust_invoke",
+        );
+
+        let account_keypair = Keypair::new();
+
+        let mint_pubkey = mint_keypair.pubkey();
+
+        let account_metas = vec![
+            AccountMeta::new(mint_pubkey, true),
+            AccountMeta::new(account_keypair.pubkey(), false),
+            AccountMeta::new_readonly(invoke_program_id, false),
+        ];
+
+        let instruction_data = vec![TEST_ACCOUNT_INFO_LAMPORTS_RC, 0, 0, 0];
+
+        let instruction = Instruction::new_with_bytes(
+            invoke_program_id,
+            &instruction_data,
+            account_metas.clone(),
+        );
+
+        let account = AccountSharedData::new(42, 10240, &invoke_program_id);
+
+        bank.store_account(&account_keypair.pubkey(), &account);
+
+        let message = Message::new(&[instruction], Some(&mint_pubkey));
+        let tx = Transaction::new(&[&mint_keypair], message.clone(), bank.last_blockhash());
+        let (result, _, logs) = process_transaction_and_record_inner(&bank, tx);
+
+        if direct_mapping {
+            assert!(
+                logs.last().unwrap().ends_with(" failed: Invalid pointer"),
+                "{logs:?}"
+            );
+            assert!(result.is_err());
+        } else {
+            assert!(result.is_ok(), "{logs:?}");
+        }
+
+        let instruction_data = vec![TEST_ACCOUNT_INFO_DATA_RC, 0, 0, 0];
+
+        let instruction =
+            Instruction::new_with_bytes(invoke_program_id, &instruction_data, account_metas);
+
+        let account = AccountSharedData::new(42, 10240, &invoke_program_id);
+
+        bank.store_account(&account_keypair.pubkey(), &account);
+
+        let message = Message::new(&[instruction], Some(&mint_pubkey));
+        let tx = Transaction::new(&[&mint_keypair], message.clone(), bank.last_blockhash());
+        let (result, _, logs) = process_transaction_and_record_inner(&bank, tx);
+
+        if direct_mapping {
+            assert!(
+                logs.last().unwrap().ends_with(" failed: Invalid pointer"),
+                "{logs:?}"
+            );
+            assert!(result.is_err());
+        } else {
+            assert!(result.is_ok(), "{logs:?}");
+        }
+    }
+}
+
+#[test]
 fn test_clone_account_data() {
     // Test cloning account data works as expect with
     solana_logger::setup();
