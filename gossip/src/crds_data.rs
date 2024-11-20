@@ -176,6 +176,28 @@ impl CrdsData {
             CrdsData::RestartHeaviestFork(fork) => fork.from,
         }
     }
+
+    #[inline]
+    #[must_use]
+    pub(crate) fn is_deprecated(&self) -> bool {
+        match self {
+            Self::LegacyContactInfo(_) => true,
+            Self::Vote(..) => false,
+            Self::LowestSlot(0, _) => false,
+            Self::LowestSlot(1.., _) => true,
+            Self::LegacySnapshotHashes(_) => true,
+            Self::AccountsHashes(_) => true,
+            Self::EpochSlots(..) => false,
+            Self::LegacyVersion(_) => true,
+            Self::Version(_) => true,
+            Self::NodeInstance(_) => true,
+            Self::DuplicateShred(..) => false,
+            Self::SnapshotHashes(_) => false,
+            Self::ContactInfo(_) => false,
+            Self::RestartLastVotedForkSlots(_) => false,
+            Self::RestartHeaviestFork(_) => false,
+        }
+    }
 }
 
 #[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
