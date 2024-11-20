@@ -93,7 +93,6 @@ pub mod reward_type {
     pub use solana_reward_info::RewardType;
 }
 pub mod rpc_port;
-pub mod secp256k1_instruction;
 pub mod shred_version;
 pub mod signature;
 pub mod signer;
@@ -185,6 +184,9 @@ pub use solana_sdk_macro::declare_deprecated_id;
 pub use solana_sdk_macro::declare_id;
 /// Convenience macro to define multiple static public keys.
 pub use solana_sdk_macro::pubkeys;
+#[deprecated(since = "2.2.0", note = "Use `solana-secp256k1-program` crate instead")]
+#[cfg(feature = "full")]
+pub use solana_secp256k1_program as secp256k1_instruction;
 #[deprecated(since = "2.1.0", note = "Use `solana-secp256k1-recover` crate instead")]
 pub use solana_secp256k1_recover as secp256k1_recover;
 #[deprecated(since = "2.2.0", note = "Use `solana-serde` crate instead")]

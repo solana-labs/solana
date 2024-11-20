@@ -8450,6 +8450,7 @@ dependencies = [
  "solana-sdk",
  "solana-sdk-ids",
  "solana-sdk-macro",
+ "solana-secp256k1-program",
  "solana-secp256k1-recover",
  "solana-secp256r1-program",
  "solana-seed-derivable",
@@ -8484,6 +8485,36 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.87",
+]
+
+[[package]]
+name = "solana-secp256k1-program"
+version = "2.2.0"
+dependencies = [
+ "anyhow",
+ "bincode",
+ "digest 0.10.7",
+ "hex",
+ "libsecp256k1",
+ "rand 0.7.3",
+ "serde",
+ "serde_derive",
+ "sha3",
+ "solana-account-info",
+ "solana-feature-set",
+ "solana-hash",
+ "solana-instruction",
+ "solana-keccak-hasher",
+ "solana-keypair",
+ "solana-logger",
+ "solana-msg",
+ "solana-precompile-error",
+ "solana-program-error",
+ "solana-sdk",
+ "solana-sdk-ids",
+ "solana-secp256k1-program",
+ "solana-signer",
+ "solana-sysvar",
 ]
 
 [[package]]

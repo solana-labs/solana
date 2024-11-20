@@ -1,0 +1,55 @@
+[package]
+name = "solana-secp256k1-program"
+description = "Instructions for the Solana Secp256k1 native program."
+documentation = "https://docs.rs/solana-secp256k1-program"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+bincode = { workspace = true, optional = true }
+digest = { workspace = true }
+libsecp256k1 = { workspace = true, features = ["hmac"] }
+serde = { workspace = true, optional = true }
+serde_derive = { workspace = true, optional = true }
+sha3 = { workspace = true }
+solana-feature-set = { workspace = true, optional = true }
+solana-instruction = { workspace = true, features = ["std"], optional = true }
+solana-precompile-error = { workspace = true, optional = true }
+solana-sdk-ids = { workspace = true, optional = true }
+
+[dev-dependencies]
+anyhow = { workspace = true }
+hex = { workspace = true }
+rand0-7 = { workspace = true }
+solana-account-info = { workspace = true }
+solana-hash = { workspace = true }
+solana-keccak-hasher = { workspace = true }
+solana-keypair = { workspace = true }
+solana-logger = { workspace = true }
+solana-msg = { workspace = true }
+solana-program-error = { workspace = true }
+solana-sdk = { path = ".." }
+solana-secp256k1-program = { path = ".", features = ["dev-context-only-utils"] }
+solana-signer = { workspace = true }
+solana-sysvar = { workspace = true }
+
+[features]
+bincode = [
+    "dep:bincode",
+    "dep:solana-feature-set",
+    "dep:solana-instruction",
+    "dep:solana-precompile-error",
+    "dep:solana-sdk-ids",
+    "serde",
+]
+dev-context-only-utils = ["bincode"]
+serde = ["dep:serde", "dep:serde_derive"]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+all-features = true
+rustdoc-args = ["--cfg=docsrs"]
