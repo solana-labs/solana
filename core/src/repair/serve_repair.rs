@@ -144,7 +144,7 @@ impl AncestorHashesRepairType {
 #[cfg_attr(
     feature = "frozen-abi",
     derive(AbiEnumVisitor, AbiExample),
-    frozen_abi(digest = "9SdneX58ekpqLJBzUwfwJsK2fZc9mN4vTcaS4temEjkP")
+    frozen_abi(digest = "GPS6e6pgUdbXLwXN6XHTqrUVMwAL2YKLPDawgMi5hHzi")
 )]
 #[derive(Debug, Deserialize, Serialize)]
 pub enum AncestorHashesResponse {
@@ -225,7 +225,7 @@ pub(crate) type Ping = ping_pong::Ping<[u8; REPAIR_PING_TOKEN_SIZE]>;
 #[cfg_attr(
     feature = "frozen-abi",
     derive(AbiEnumVisitor, AbiExample),
-    frozen_abi(digest = "3E2R8jiSt9QfVHdX3MgW3UdeNWfor7zNjJcLJLz2K1JY")
+    frozen_abi(digest = "9KN64WUT7XDYj9zZopS1hztGyAP9y4N4QznsyC4mqsGs")
 )]
 #[derive(Debug, Deserialize, Serialize)]
 pub enum RepairProtocol {
@@ -273,7 +273,7 @@ fn discard_malformed_repair_requests(
 #[cfg_attr(
     feature = "frozen-abi",
     derive(AbiEnumVisitor, AbiExample),
-    frozen_abi(digest = "CpKVYghdpMDRMiGjZpa71dcnB7rCVHLVogZbB3AGDKAK")
+    frozen_abi(digest = "9A6ae44qpdT7PaxiDZbybMM2mewnSnPs3C4CxhpbbYuV")
 )]
 #[derive(Debug, Deserialize, Serialize)]
 pub(crate) enum RepairResponse {

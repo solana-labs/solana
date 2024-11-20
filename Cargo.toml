@@ -301,7 +301,6 @@ fs_extra = "1.3.0"
 futures = "0.3.31"
 futures-util = "0.3.29"
 gag = "1.0.0"
-generic-array = { version = "0.14.7", default-features = false }
 gethostname = "0.2.3"
 getrandom = "0.2.10"
 goauth = "0.13.1"
@@ -390,6 +389,7 @@ scopeguard = "1.2.0"
 semver = "1.0.23"
 seqlock = "0.2.0"
 serde = "1.0.215" # must match the serde_derive version, see https://github.com/serde-rs/serde/issues/2584#issuecomment-1685252251
+serde-big-array = "0.5.1"
 serde_bytes = "0.11.15"
 serde_derive = "1.0.215" # must match the serde version, see https://github.com/serde-rs/serde/issues/2584#issuecomment-1685252251
 serde_json = "1.0.133"

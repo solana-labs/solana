@@ -219,15 +219,6 @@ atomic_example_impls! { AtomicI64 }
 atomic_example_impls! { AtomicIsize }
 atomic_example_impls! { AtomicBool }
 
-#[cfg(not(target_os = "solana"))]
-use generic_array::{ArrayLength, GenericArray};
-#[cfg(not(target_os = "solana"))]
-impl<T: Default, U: ArrayLength<T>> AbiExample for GenericArray<T, U> {
-    fn example() -> Self {
-        Self::default()
-    }
-}
-
 use bv::{BitVec, BlockType};
 impl<T: BlockType> AbiExample for BitVec<T> {
     fn example() -> Self {

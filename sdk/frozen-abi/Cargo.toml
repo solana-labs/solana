@@ -21,7 +21,6 @@ solana-frozen-abi-macro = { workspace = true }
 thiserror = { workspace = true }
 
 [target.'cfg(not(target_os = "solana"))'.dependencies]
-generic-array = { workspace = true, features = ["serde", "more_lengths"] }
 im = { workspace = true, features = ["rayon", "serde"] }
 memmap2 = { workspace = true }
 

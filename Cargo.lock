@@ -2571,7 +2571,6 @@ version = "0.14.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "85649ca51fd72272d7821adaf274ad91c288277713d9c18820d8499a7ff69e9a"
 dependencies = [
- "serde",
  "typenum",
  "version_check",
 ]
@@ -5438,6 +5437,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde-big-array"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11fc7cc2c76d73e0f27ee52abbd64eec84d46f370c88371120433196934e4b7f"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "serde_bytes"
 version = "0.11.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7020,7 +7028,6 @@ dependencies = [
  "bitflags 2.6.0",
  "bs58",
  "bv",
- "generic-array 0.14.7",
  "im",
  "log",
  "memmap2",
@@ -8371,7 +8378,6 @@ dependencies = [
  "curve25519-dalek 4.1.3",
  "digest 0.10.7",
  "ed25519-dalek",
- "generic-array 0.14.7",
  "getrandom 0.1.16",
  "hex",
  "itertools 0.12.1",
@@ -8585,17 +8591,21 @@ dependencies = [
 name = "solana-signature"
 version = "2.2.0"
 dependencies = [
+ "bincode",
  "bs58",
  "curve25519-dalek 4.1.3",
  "ed25519-dalek",
- "generic-array 0.14.7",
  "rand 0.8.5",
  "serde",
+ "serde-big-array",
  "serde_derive",
+ "serde_json",
  "solana-frozen-abi",
  "solana-frozen-abi-macro",
  "solana-program",
  "solana-sanitize",
+ "solana-short-vec",
+ "solana-signature",
 ]
 
 [[package]]

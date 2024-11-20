@@ -12,9 +12,9 @@ edition = { workspace = true }
 [dependencies]
 bs58 = { workspace = true }
 ed25519-dalek = { workspace = true, optional = true }
-generic-array = { workspace = true, features = ["more_lengths"] }
 rand = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }
+serde-big-array = { workspace = true, optional = true }
 serde_derive = { workspace = true, optional = true }
 solana-frozen-abi = { workspace = true, optional = true, features = [
     "frozen-abi",
@@ -25,9 +25,14 @@ solana-frozen-abi-macro = { workspace = true, optional = true, features = [
 solana-sanitize = { workspace = true }
 
 [dev-dependencies]
+bincode = { workspace = true }
 curve25519-dalek = { workspace = true }
 ed25519-dalek = { workspace = true }
+serde_derive = { workspace = true }
+serde_json = { workspace = true }
 solana-program = { workspace = true }
+solana-short-vec = { workspace = true }
+solana-signature = { path = ".", features = ["serde"] }
 
 [features]
 default = ["std"]
@@ -37,7 +42,7 @@ frozen-abi = [
     "std"
 ]
 rand = ["dep:rand"]
-serde = ["dep:serde", "dep:serde_derive", "generic-array/serde"]
+serde = ["dep:serde", "dep:serde_derive", "dep:serde-big-array"]
 std = []
 verify = ["dep:ed25519-dalek"]
 

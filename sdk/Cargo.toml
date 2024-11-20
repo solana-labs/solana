@@ -81,10 +81,6 @@ chrono = { workspace = true, features = ["alloc"], optional = true }
 curve25519-dalek = { workspace = true, optional = true }
 digest = { workspace = true, optional = true }
 ed25519-dalek = { workspace = true, optional = true }
-generic-array = { workspace = true, features = [
-    "serde",
-    "more_lengths",
-], optional = true }
 itertools = { workspace = true }
 lazy_static = { workspace = true }
 libsecp256k1 = { workspace = true, optional = true, features = ["hmac"] }
