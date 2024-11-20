@@ -46,13 +46,19 @@ pub static BUILTINS: &[BuiltinPrototype] = &[
         program_id: solana_vote_program::id(),
         entrypoint: solana_vote_program::vote_processor::Entrypoint::vm,
     }),
-    testable_prototype!(BuiltinPrototype {
-        core_bpf_migration_config: None,
-        name: stake_program,
+    BuiltinPrototype {
+        core_bpf_migration_config: Some(CoreBpfMigrationConfig {
+            source_buffer_address: buffer_accounts::stake_program::id(),
+            upgrade_authority_address: None,
+            feature_id: solana_feature_set::migrate_stake_program_to_core_bpf::id(),
+            migration_target: core_bpf_migration::CoreBpfMigrationTargetType::Builtin,
+            datapoint_name: "migrate_builtin_to_core_bpf_stake_program",
+        }),
+        name: "stake_program",
         enable_feature_id: None,
         program_id: solana_stake_program::id(),
         entrypoint: solana_stake_program::stake_instruction::Entrypoint::vm,
-    }),
+    },
     BuiltinPrototype {
         core_bpf_migration_config: Some(CoreBpfMigrationConfig {
             source_buffer_address: buffer_accounts::config_program::id(),
@@ -153,6 +159,9 @@ mod buffer_accounts {
     pub mod feature_gate_program {
         solana_sdk::declare_id!("3D3ydPWvmEszrSjrickCtnyRSJm1rzbbSsZog8Ub6vLh");
     }
+    pub mod stake_program {
+        solana_sdk::declare_id!("8t3vv6v99tQA6Gp7fVdsBH66hQMaswH5qsJVqJqo8xvG");
+    }
 }
 
 // This module contains a number of arbitrary addresses used for testing Core
@@ -200,25 +209,6 @@ mod test_only {
             feature_id: feature::id(),
             migration_target: super::CoreBpfMigrationTargetType::Builtin,
             datapoint_name: "migrate_builtin_to_core_bpf_vote_program",
-        };
-    }
-
-    pub mod stake_program {
-        pub mod feature {
-            solana_sdk::declare_id!("5gp5YKtNEirX45igBvp39bN6nEwhkNMRS7m2c63D1xPM");
-        }
-        pub mod source_buffer {
-            solana_sdk::declare_id!("2a3XnUr4Xfxd8hBST8wd4D3Qbiu339XKessYsDwabCED");
-        }
-        pub mod upgrade_authority {
-            solana_sdk::declare_id!("F7K7ADSDzReQAgXYL1KE3u1UBjBtytxQ8bke7BF1Uegg");
-        }
-        pub const CONFIG: super::CoreBpfMigrationConfig = super::CoreBpfMigrationConfig {
-            source_buffer_address: source_buffer::id(),
-            upgrade_authority_address: Some(upgrade_authority::id()),
-            feature_id: feature::id(),
-            migration_target: super::CoreBpfMigrationTargetType::Builtin,
-            datapoint_name: "migrate_builtin_to_core_bpf_stake_program",
         };
     }
 
@@ -371,10 +361,8 @@ mod tests {
             &super::BUILTINS[1].core_bpf_migration_config,
             &Some(super::test_only::vote_program::CONFIG)
         );
-        assert_eq!(
-            &super::BUILTINS[2].core_bpf_migration_config,
-            &Some(super::test_only::stake_program::CONFIG)
-        );
+        // Stake has a live migration config, so it has no test-only configs
+        // to test here.
         // Config has a live migration config, so it has no test-only configs
         // to test here.
         assert_eq!(

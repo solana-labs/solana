@@ -887,6 +887,10 @@ pub mod accounts_lt_hash {
     solana_pubkey::declare_id!("LtHaSHHsUge7EWTPVrmpuexKz6uVHZXZL6cgJa7W7Zn");
 }
 
+pub mod migrate_stake_program_to_core_bpf {
+    solana_pubkey::declare_id!("6M4oQ6eXneVhtLoiAr4yRYQY43eVLjrKbiDZDJc892yk");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -1104,6 +1108,7 @@ lazy_static! {
         (disable_account_loader_special_case::id(), "Disable account loader special case #3513"),
         (accounts_lt_hash::id(), "enables lattice-based accounts hash #3333"),
         (enable_secp256r1_precompile::id(), "Enable secp256r1 precompile SIMD-0075"),
+        (migrate_stake_program_to_core_bpf::id(), "Migrate Stake program to Core BPF SIMD-0196 #3655"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
