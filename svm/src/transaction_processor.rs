@@ -389,12 +389,19 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
             program_cache_for_tx_batch
         });
 
-        let mut account_loader = AccountLoader::new(
+        // Determine a capacity for the internal account cache. This
+        // over-allocates but avoids ever reallocating, and spares us from
+        // deduplicating the account keys lists.
+        let account_keys_in_batch = sanitized_txs.iter().map(|tx| tx.account_keys().len()).sum();
+
+        // Create the account loader, which wraps all external account fetching.
+        let mut account_loader = AccountLoader::new_with_account_cache_capacity(
             config.account_overrides,
             program_cache_for_tx_batch,
             program_accounts_map,
             callbacks,
             environment.feature_set.clone(),
+            account_keys_in_batch,
         );
 
         let enable_transaction_loading_failure_fees = environment
@@ -439,6 +446,10 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                 TransactionLoadResult::NotLoaded(err) => Err(err),
                 TransactionLoadResult::FeesOnly(fees_only_tx) => {
                     if enable_transaction_loading_failure_fees {
+                        // Update loaded accounts cache with nonce and fee-payer
+                        account_loader
+                            .update_accounts_for_failed_tx(tx, &fees_only_tx.rollback_accounts);
+
                         Ok(ProcessedTransaction::FeesOnly(Box::new(fees_only_tx)))
                     } else {
                         Err(fees_only_tx.load_error)
@@ -455,13 +466,10 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                         config,
                     );
 
-                    // Update batch specific cache of the loaded programs with the modifications
-                    // made by the transaction, if it executed successfully.
-                    if executed_tx.was_successful() {
-                        account_loader
-                            .program_cache
-                            .merge(&executed_tx.programs_modified_by_tx);
-                    }
+                    // Update loaded accounts cache with account states which might have changed.
+                    // Also update local program cache with modifications made by the transaction,
+                    // if it executed successfully.
+                    account_loader.update_accounts_for_executed_tx(tx, &executed_tx);
 
                     Ok(ProcessedTransaction::Executed(Box::new(executed_tx)))
                 }
@@ -1295,12 +1303,13 @@ mod tests {
 
     impl<'a> From<&'a MockBankCallback> for AccountLoader<'a, MockBankCallback> {
         fn from(callbacks: &'a MockBankCallback) -> AccountLoader<'a, MockBankCallback> {
-            AccountLoader::new(
+            AccountLoader::new_with_account_cache_capacity(
                 None,
                 ProgramCacheForTxBatch::default(),
                 HashMap::default(),
                 callbacks,
                 Arc::<FeatureSet>::default(),
+                0,
             )
         }
     }
@@ -2558,67 +2567,6 @@ mod tests {
             assert_eq!(error_counters.insufficient_funds, 1);
             assert_eq!(result, Err(TransactionError::InsufficientFundsForFee));
         }
-    }
-
-    #[test]
-    fn test_validate_account_override_usage_on_validate_fee() {
-        /*
-            The test setups an account override with enough lamport to pass validate fee.
-            The account_db has the account with minimum rent amount thus would fail the validate_free.
-            The test verify that the override is used with a passing test of validate fee.
-        */
-        let lamports_per_signature = 5000;
-
-        let message =
-            new_unchecked_sanitized_message(Message::new(&[], Some(&Pubkey::new_unique())));
-
-        let fee_payer_address = message.fee_payer();
-        let transaction_fee = lamports_per_signature;
-        let rent_collector = RentCollector::default();
-        let min_balance = rent_collector.rent.minimum_balance(0);
-
-        let fee_payer_account = AccountSharedData::new(min_balance, 0, &Pubkey::default());
-        let mut mock_accounts = HashMap::new();
-        mock_accounts.insert(*fee_payer_address, fee_payer_account.clone());
-
-        let necessary_balance = min_balance + transaction_fee;
-        let mut account_overrides = AccountOverrides::default();
-        let fee_payer_account_override =
-            AccountSharedData::new(necessary_balance, 0, &Pubkey::default());
-        account_overrides.set_account(fee_payer_address, Some(fee_payer_account_override));
-
-        let mock_bank = MockBankCallback {
-            account_shared_data: Arc::new(RwLock::new(mock_accounts)),
-            ..Default::default()
-        };
-        let mut account_loader = AccountLoader::new(
-            Some(&account_overrides),
-            ProgramCacheForTxBatch::default(),
-            HashMap::default(),
-            &mock_bank,
-            Arc::<FeatureSet>::default(),
-        );
-
-        let mut error_counters = TransactionErrorMetrics::default();
-
-        let result =
-            TransactionBatchProcessor::<TestForkGraph>::validate_transaction_nonce_and_fee_payer(
-                &mut account_loader,
-                &message,
-                CheckedTransactionDetails {
-                    nonce: None,
-                    lamports_per_signature,
-                },
-                &Hash::default(),
-                FeeStructure::default().lamports_per_signature,
-                &rent_collector,
-                &mut error_counters,
-            );
-        assert!(
-            result.is_ok(),
-            "test_account_override_used: {:?}",
-            result.err()
-        );
     }
 
     // Ensure `TransactionProcessingCallback::inspect_account()` is called when

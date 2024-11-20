@@ -8787,6 +8787,7 @@ dependencies = [
 name = "solana-svm"
 version = "2.2.0"
 dependencies = [
+ "ahash 0.8.11",
  "assert_matches",
  "bincode",
  "itertools 0.12.1",
