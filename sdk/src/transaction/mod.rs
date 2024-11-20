@@ -136,8 +136,15 @@ use {
 mod sanitized;
 mod versioned;
 
+#[deprecated(
+    since = "2.2.0",
+    note = "Use `solana_transaction_error::TransactionResult` instead"
+)]
+pub use solana_transaction_error::TransactionResult as Result;
 #[deprecated(since = "2.1.0", note = "Use solana_transaction_error crate instead")]
-pub use solana_transaction_error::*;
+pub use solana_transaction_error::{
+    AddressLoaderError, SanitizeMessageError, TransactionError, TransportError, TransportResult,
+};
 pub use {sanitized::*, versioned::*};
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
@@ -146,8 +153,6 @@ pub enum TransactionVerificationMode {
     HashAndVerifyPrecompiles,
     FullVerification,
 }
-
-pub type Result<T> = result::Result<T, TransactionError>;
 
 /// An atomically-committed sequence of instructions.
 ///

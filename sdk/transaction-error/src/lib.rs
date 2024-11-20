@@ -8,6 +8,8 @@ use {
     core::fmt, solana_instruction::error::InstructionError, solana_sanitize::SanitizeError, std::io,
 };
 
+pub type TransactionResult<T> = Result<T, TransactionError>;
+
 /// Reasons a transaction might be rejected.
 #[cfg_attr(feature = "frozen-abi", derive(AbiExample, AbiEnumVisitor))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
