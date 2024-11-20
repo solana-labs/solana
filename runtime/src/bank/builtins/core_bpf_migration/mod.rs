@@ -202,8 +202,8 @@ impl Bank {
                 EnvironmentConfig::new(
                     Hash::default(),
                     0,
-                    None,
-                    None,
+                    0,
+                    &|_| 0,
                     self.feature_set.clone(),
                     &sysvar_cache,
                 ),

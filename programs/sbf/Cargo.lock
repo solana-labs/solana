@@ -6217,7 +6217,6 @@ dependencies = [
  "solana-sdk",
  "solana-timings",
  "solana-type-overrides",
- "solana-vote",
  "solana_rbpf",
  "thiserror 2.0.3",
 ]
@@ -7477,7 +7476,6 @@ dependencies = [
  "solana-system-program",
  "solana-timings",
  "solana-type-overrides",
- "solana-vote",
  "thiserror 2.0.3",
 ]
 

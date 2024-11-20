@@ -2071,7 +2071,7 @@ declare_builtin_function!(
             //     - Compute budget is exceeded.
             // - Otherwise, the syscall returns a `u64` integer representing the total active
             //   stake on the cluster for the current epoch.
-            Ok(invoke_context.get_epoch_total_stake().unwrap_or(0))
+            Ok(invoke_context.get_epoch_total_stake())
         } else {
             // As specified by SIMD-0133: If `var_addr` is _not_ a null pointer:
             //
@@ -2103,16 +2103,7 @@ declare_builtin_function!(
             let check_aligned = invoke_context.get_check_aligned();
             let vote_address = translate_type::<Pubkey>(memory_mapping, var_addr, check_aligned)?;
 
-            Ok(
-                if let Some(vote_accounts) = invoke_context.get_epoch_vote_accounts() {
-                    vote_accounts
-                        .get(vote_address)
-                        .map(|(stake, _)| *stake)
-                        .unwrap_or(0)
-                } else {
-                    0
-                },
-            )
+            Ok(invoke_context.get_epoch_vote_account_stake(vote_address))
         }
     }
 );
@@ -2147,8 +2138,7 @@ mod tests {
                 last_restart_slot::LastRestartSlot,
             },
         },
-        solana_vote::vote_account::VoteAccount,
-        std::{collections::HashMap, mem, str::FromStr},
+        std::{mem, str::FromStr},
         test_case::test_case,
     };
 
@@ -4801,8 +4791,8 @@ mod tests {
         invoke_context.environment_config = EnvironmentConfig::new(
             Hash::default(),
             0,
-            Some(expected_total_stake),
-            None, // Vote accounts are not needed for this test.
+            expected_total_stake,
+            &|_| 0, // Vote accounts are not needed for this test.
             Arc::<FeatureSet>::default(),
             &sysvar_cache,
         );
@@ -4845,18 +4835,19 @@ mod tests {
         compute_budget.compute_unit_limit = expected_cus;
 
         let vote_address = Pubkey::new_unique();
-        let mut vote_accounts_map = HashMap::new();
-        vote_accounts_map.insert(
-            vote_address,
-            (expected_epoch_stake, VoteAccount::new_random()),
-        );
-
         with_mock_invoke_context!(invoke_context, transaction_context, vec![]);
+        let callback = |pubkey: &Pubkey| {
+            if *pubkey == vote_address {
+                expected_epoch_stake
+            } else {
+                0
+            }
+        };
         invoke_context.environment_config = EnvironmentConfig::new(
             Hash::default(),
             0,
-            None, // Total stake is not needed for this test.
-            Some(&vote_accounts_map),
+            0, // Total stake is not needed for this test.
+            &callback,
             Arc::<FeatureSet>::default(),
             &sysvar_cache,
         );

@@ -1464,6 +1464,7 @@ impl Bank {
             .unwrap()
             .stats
             .reset();
+
         new
     }
 
@@ -3768,8 +3769,7 @@ impl Bank {
         let processing_environment = TransactionProcessingEnvironment {
             blockhash,
             blockhash_lamports_per_signature,
-            epoch_total_stake: Some(self.get_current_epoch_total_stake()),
-            epoch_vote_accounts: Some(self.get_current_epoch_vote_accounts()),
+            epoch_total_stake: self.get_current_epoch_total_stake(),
             feature_set: Arc::clone(&self.feature_set),
             fee_lamports_per_signature: self.fee_structure.lamports_per_signature,
             rent_collector: Some(&rent_collector_with_metrics),
@@ -7145,6 +7145,13 @@ impl TransactionProcessingCallback for Bank {
         if self.is_accounts_lt_hash_enabled() {
             self.inspect_account_for_accounts_lt_hash(address, &account_state, is_writable);
         }
+    }
+
+    fn get_current_epoch_vote_account_stake(&self, vote_address: &Pubkey) -> u64 {
+        self.get_current_epoch_vote_accounts()
+            .get(vote_address)
+            .map(|(stake, _)| (*stake))
+            .unwrap_or(0)
     }
 }
 

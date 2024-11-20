@@ -63,7 +63,6 @@ use {
     solana_svm_transaction::{svm_message::SVMMessage, svm_transaction::SVMTransaction},
     solana_timings::{ExecuteTimingType, ExecuteTimings},
     solana_type_overrides::sync::{atomic::Ordering, Arc, RwLock, RwLockReadGuard},
-    solana_vote::vote_account::VoteAccountsHashMap,
     std::{
         collections::{hash_map::Entry, HashMap, HashSet},
         fmt::{Debug, Formatter},
@@ -140,9 +139,7 @@ pub struct TransactionProcessingEnvironment<'a> {
     /// `fee_per_signature` field to adjust transaction fees.
     pub blockhash_lamports_per_signature: u64,
     /// The total stake for the current epoch.
-    pub epoch_total_stake: Option<u64>,
-    /// The vote accounts for the current epoch.
-    pub epoch_vote_accounts: Option<&'a VoteAccountsHashMap>,
+    pub epoch_total_stake: u64,
     /// Runtime feature set to use for the transaction batch.
     pub feature_set: Arc<FeatureSet>,
     /// Transaction fee to charge per signature, in lamports.
@@ -156,8 +153,7 @@ impl Default for TransactionProcessingEnvironment<'_> {
         Self {
             blockhash: Hash::default(),
             blockhash_lamports_per_signature: 0,
-            epoch_total_stake: None,
-            epoch_vote_accounts: None,
+            epoch_total_stake: 0,
             feature_set: Arc::<FeatureSet>::default(),
             fee_lamports_per_signature: FeeStructure::default().lamports_per_signature, // <-- Default fee.
             rent_collector: None,
@@ -457,6 +453,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                 }
                 TransactionLoadResult::Loaded(loaded_transaction) => {
                     let executed_tx = self.execute_loaded_transaction(
+                        callbacks,
                         tx,
                         loaded_transaction,
                         &mut execute_timings,
@@ -912,8 +909,9 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
     /// Execute a transaction using the provided loaded accounts and update
     /// the executors cache if the transaction was successful.
     #[allow(clippy::too_many_arguments)]
-    fn execute_loaded_transaction(
+    fn execute_loaded_transaction<CB: TransactionProcessingCallback>(
         &self,
+        callback: &CB,
         tx: &impl SVMTransaction,
         mut loaded_transaction: LoadedTransaction,
         execute_timings: &mut ExecuteTimings,
@@ -978,6 +976,8 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
 
         let mut executed_units = 0u64;
         let sysvar_cache = &self.sysvar_cache.read().unwrap();
+        let epoch_vote_account_stake_callback =
+            |pubkey| callback.get_current_epoch_vote_account_stake(pubkey);
 
         let mut invoke_context = InvokeContext::new(
             &mut transaction_context,
@@ -986,7 +986,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                 environment.blockhash,
                 environment.blockhash_lamports_per_signature,
                 environment.epoch_total_stake,
-                environment.epoch_vote_accounts,
+                &epoch_vote_account_stake_callback,
                 Arc::clone(&environment.feature_set),
                 sysvar_cache,
             ),
@@ -1449,7 +1449,10 @@ mod tests {
         let mut processing_config = TransactionProcessingConfig::default();
         processing_config.recording_config.enable_log_recording = true;
 
+        let mock_bank = MockBankCallback::default();
+
         let executed_tx = batch_processor.execute_loaded_transaction(
+            &mock_bank,
             &sanitized_transaction,
             loaded_transaction.clone(),
             &mut ExecuteTimings::default(),
@@ -1463,6 +1466,7 @@ mod tests {
         processing_config.log_messages_bytes_limit = Some(2);
 
         let executed_tx = batch_processor.execute_loaded_transaction(
+            &mock_bank,
             &sanitized_transaction,
             loaded_transaction.clone(),
             &mut ExecuteTimings::default(),
@@ -1479,6 +1483,7 @@ mod tests {
         processing_config.log_messages_bytes_limit = None;
 
         let executed_tx = batch_processor.execute_loaded_transaction(
+            &mock_bank,
             &sanitized_transaction,
             loaded_transaction,
             &mut ExecuteTimings::default(),
@@ -1541,8 +1546,10 @@ mod tests {
             ..Default::default()
         };
         let mut error_metrics = TransactionErrorMetrics::new();
+        let mock_bank = MockBankCallback::default();
 
         let _ = batch_processor.execute_loaded_transaction(
+            &mock_bank,
             &sanitized_transaction,
             loaded_transaction,
             &mut ExecuteTimings::default(),

@@ -30,7 +30,6 @@ solana-svm = { workspace = true }
 solana-system-program = { workspace = true }
 solana-transaction-status = { workspace = true }
 solana-version = { workspace = true }
-solana-vote = { workspace = true }
 spl-token-2022 = { workspace = true, features = ["no-entrypoint"] }
 tokio = { workspace = true, features = ["full"] }
 tokio-util = { workspace = true, features = ["codec", "compat"] }

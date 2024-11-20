@@ -24,7 +24,7 @@ use {
     },
     solana_sdk::{
         account::{from_account, Account, AccountSharedData, ReadableAccount},
-        clock::{Epoch, Slot, MAX_PROCESSING_AGE, MAX_TRANSACTION_FORWARDING_DELAY},
+        clock::{Slot, MAX_PROCESSING_AGE, MAX_TRANSACTION_FORWARDING_DELAY},
         commitment_config::CommitmentConfig,
         exit::Exit,
         hash::Hash,
@@ -61,7 +61,6 @@ use {
         map_inner_instructions, parse_ui_inner_instructions, TransactionBinaryEncoding,
         UiTransactionEncoding,
     },
-    solana_vote::vote_account::VoteAccountsHashMap,
     spl_token_2022::{
         extension::{
             interest_bearing_mint::InterestBearingConfig, BaseStateWithExtensions,
@@ -435,14 +434,6 @@ impl JsonRpcRequestProcessor {
             .unwrap_or_default()
     }
 
-    fn epoch_total_stake(&self, _epoch: Epoch) -> Option<u64> {
-        Some(u64::default())
-    }
-
-    fn epoch_vote_accounts(&self, _epoch: Epoch) -> Option<&VoteAccountsHashMap> {
-        None
-    }
-
     fn get_account(&self, pubkey: &Pubkey) -> Option<AccountSharedData> {
         let account_map: HashMap<Pubkey, AccountSharedData> =
             HashMap::from_iter(self.account_map.clone());
@@ -547,8 +538,7 @@ impl JsonRpcRequestProcessor {
         let processing_environment = TransactionProcessingEnvironment {
             blockhash,
             blockhash_lamports_per_signature: lamports_per_signature,
-            epoch_total_stake: self.epoch_total_stake(Epoch::default()),
-            epoch_vote_accounts: self.epoch_vote_accounts(Epoch::default()),
+            epoch_total_stake: 0,
             feature_set: Arc::clone(&bank.feature_set),
             fee_lamports_per_signature: lamports_per_signature,
             rent_collector: None,

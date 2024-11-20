@@ -40,7 +40,6 @@ use {
     },
     solana_timings::{ExecuteDetailsTimings, ExecuteTimings},
     solana_type_overrides::sync::{atomic::Ordering, Arc},
-    solana_vote::vote_account::VoteAccountsHashMap,
     std::{
         alloc::Layout,
         cell::RefCell,
@@ -151,8 +150,8 @@ impl BpfAllocator {
 pub struct EnvironmentConfig<'a> {
     pub blockhash: Hash,
     pub blockhash_lamports_per_signature: u64,
-    epoch_total_stake: Option<u64>,
-    epoch_vote_accounts: Option<&'a VoteAccountsHashMap>,
+    epoch_total_stake: u64,
+    get_epoch_vote_account_stake_callback: &'a dyn Fn(&'a Pubkey) -> u64,
     pub feature_set: Arc<FeatureSet>,
     sysvar_cache: &'a SysvarCache,
 }
@@ -160,8 +159,8 @@ impl<'a> EnvironmentConfig<'a> {
     pub fn new(
         blockhash: Hash,
         blockhash_lamports_per_signature: u64,
-        epoch_total_stake: Option<u64>,
-        epoch_vote_accounts: Option<&'a VoteAccountsHashMap>,
+        epoch_total_stake: u64,
+        get_epoch_vote_account_stake_callback: &'a dyn Fn(&'a Pubkey) -> u64,
         feature_set: Arc<FeatureSet>,
         sysvar_cache: &'a SysvarCache,
     ) -> Self {
@@ -169,7 +168,7 @@ impl<'a> EnvironmentConfig<'a> {
             blockhash,
             blockhash_lamports_per_signature,
             epoch_total_stake,
-            epoch_vote_accounts,
+            get_epoch_vote_account_stake_callback,
             feature_set,
             sysvar_cache,
         }
@@ -658,13 +657,15 @@ impl<'a> InvokeContext<'a> {
     }
 
     /// Get cached epoch total stake.
-    pub fn get_epoch_total_stake(&self) -> Option<u64> {
+    pub fn get_epoch_total_stake(&self) -> u64 {
         self.environment_config.epoch_total_stake
     }
 
-    /// Get cached epoch vote accounts.
-    pub fn get_epoch_vote_accounts(&self) -> Option<&VoteAccountsHashMap> {
-        self.environment_config.epoch_vote_accounts
+    /// Get cached stake for the epoch vote account.
+    pub fn get_epoch_vote_account_stake(&self, pubkey: &'a Pubkey) -> u64 {
+        (self
+            .environment_config
+            .get_epoch_vote_account_stake_callback)(pubkey)
     }
 
     // Should alignment be enforced during user pointer translation
@@ -765,8 +766,8 @@ macro_rules! with_mock_invoke_context {
         let environment_config = EnvironmentConfig::new(
             Hash::default(),
             0,
-            None,
-            None,
+            0,
+            &|_| 0,
             Arc::new(FeatureSet::all_enabled()),
             &sysvar_cache,
         );

@@ -43,7 +43,6 @@ solana-sdk = { path = "../../sdk/" }
 solana-svm = { path = "../" }
 solana-system-program = { path = "../../programs/system" }
 solana-version = { path = "../../version" }
-solana-vote = { path = "../../vote" }
 solana-test-validator = { path = "../../test-validator" }
 solana-transaction-status = { path = "../../transaction-status" }
 spl-associated-token-account = "=6.0.0"
