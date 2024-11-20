@@ -1477,18 +1477,6 @@ impl Database {
         Ok(fs_extra::dir::get_size(&self.path)?)
     }
 
-    /// Delete files whose slot range is within \[`from`, `to`\].
-    pub fn delete_file_in_range_cf<C>(&self, from: Slot, to: Slot) -> Result<()>
-    where
-        C: Column + ColumnName,
-    {
-        self.backend.delete_file_in_range_cf(
-            self.cf_handle::<C>(),
-            &C::key(C::as_index(from)),
-            &C::key(C::as_index(to)),
-        )
-    }
-
     pub fn is_primary_access(&self) -> bool {
         self.backend.is_primary_access()
     }
@@ -1669,6 +1657,18 @@ where
         let from_key = C::key(C::as_index(from));
         let to_key = C::key(C::as_index(to.saturating_add(1)));
         batch.delete_range_cf(self.handle(), &from_key, &to_key)
+    }
+
+    /// Delete files whose slot range is within \[`from`, `to`\].
+    pub fn delete_file_in_range(&self, from: Slot, to: Slot) -> Result<()>
+    where
+        C: Column + ColumnName,
+    {
+        self.backend.delete_file_in_range_cf(
+            self.handle(),
+            &C::key(C::as_index(from)),
+            &C::key(C::as_index(to)),
+        )
     }
 }
 

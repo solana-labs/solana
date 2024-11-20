@@ -8,7 +8,7 @@ use {
 pub struct PurgeStats {
     delete_range: u64,
     write_batch: u64,
-    delete_files_in_range: u64,
+    delete_file_in_range: u64,
 }
 
 #[derive(Clone, Copy)]
@@ -50,8 +50,8 @@ impl Blockstore {
             ("delete_range_us", purge_stats.delete_range as i64, i64),
             ("write_batch_us", purge_stats.write_batch as i64, i64),
             (
-                "delete_files_in_range_us",
-                purge_stats.delete_files_in_range as i64,
+                "delete_file_in_range_us",
+                purge_stats.delete_file_in_range as i64,
                 i64
             )
         );
@@ -241,7 +241,7 @@ impl Blockstore {
 
         purge_stats.delete_range += delete_range_timer.as_us();
         purge_stats.write_batch += write_timer.as_us();
-        purge_stats.delete_files_in_range += purge_files_in_range_timer.as_us();
+        purge_stats.delete_file_in_range += purge_files_in_range_timer.as_us();
 
         Ok(columns_purged)
     }
@@ -334,68 +334,68 @@ impl Blockstore {
     }
 
     fn purge_files_in_range(&self, from_slot: Slot, to_slot: Slot) -> bool {
-        self.db
-            .delete_file_in_range_cf::<cf::SlotMeta>(from_slot, to_slot)
+        self.meta_cf
+            .delete_file_in_range(from_slot, to_slot)
             .is_ok()
             & self
-                .db
-                .delete_file_in_range_cf::<cf::BankHash>(from_slot, to_slot)
+                .bank_hash_cf
+                .delete_file_in_range(from_slot, to_slot)
                 .is_ok()
             & self
-                .db
-                .delete_file_in_range_cf::<cf::Root>(from_slot, to_slot)
+                .roots_cf
+                .delete_file_in_range(from_slot, to_slot)
                 .is_ok()
             & self
-                .db
-                .delete_file_in_range_cf::<cf::ShredData>(from_slot, to_slot)
+                .data_shred_cf
+                .delete_file_in_range(from_slot, to_slot)
                 .is_ok()
             & self
-                .db
-                .delete_file_in_range_cf::<cf::ShredCode>(from_slot, to_slot)
+                .code_shred_cf
+                .delete_file_in_range(from_slot, to_slot)
                 .is_ok()
             & self
-                .db
-                .delete_file_in_range_cf::<cf::DeadSlots>(from_slot, to_slot)
+                .dead_slots_cf
+                .delete_file_in_range(from_slot, to_slot)
                 .is_ok()
             & self
-                .db
-                .delete_file_in_range_cf::<cf::DuplicateSlots>(from_slot, to_slot)
+                .duplicate_slots_cf
+                .delete_file_in_range(from_slot, to_slot)
                 .is_ok()
             & self
-                .db
-                .delete_file_in_range_cf::<cf::ErasureMeta>(from_slot, to_slot)
+                .erasure_meta_cf
+                .delete_file_in_range(from_slot, to_slot)
                 .is_ok()
             & self
-                .db
-                .delete_file_in_range_cf::<cf::Orphans>(from_slot, to_slot)
+                .orphans_cf
+                .delete_file_in_range(from_slot, to_slot)
                 .is_ok()
             & self
-                .db
-                .delete_file_in_range_cf::<cf::Index>(from_slot, to_slot)
+                .index_cf
+                .delete_file_in_range(from_slot, to_slot)
                 .is_ok()
             & self
-                .db
-                .delete_file_in_range_cf::<cf::Rewards>(from_slot, to_slot)
+                .rewards_cf
+                .delete_file_in_range(from_slot, to_slot)
                 .is_ok()
             & self
-                .db
-                .delete_file_in_range_cf::<cf::Blocktime>(from_slot, to_slot)
+                .blocktime_cf
+                .delete_file_in_range(from_slot, to_slot)
                 .is_ok()
             & self
-                .db
-                .delete_file_in_range_cf::<cf::PerfSamples>(from_slot, to_slot)
+                .perf_samples_cf
+                .delete_file_in_range(from_slot, to_slot)
                 .is_ok()
             & self
-                .db
-                .delete_file_in_range_cf::<cf::BlockHeight>(from_slot, to_slot)
+                .block_height_cf
+                .delete_file_in_range(from_slot, to_slot)
                 .is_ok()
             & self
-                .db
-                .delete_file_in_range_cf::<cf::OptimisticSlots>(from_slot, to_slot)
+                .optimistic_slots_cf
+                .delete_file_in_range(from_slot, to_slot)
                 .is_ok()
             & self
-                .db
-                .delete_file_in_range_cf::<cf::MerkleRootMeta>(from_slot, to_slot)
+                .merkle_root_meta_cf
+                .delete_file_in_range(from_slot, to_slot)
                 .is_ok()
     }
 
