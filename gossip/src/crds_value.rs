@@ -243,11 +243,16 @@ mod test {
         super::*,
         crate::crds_data::{LowestSlot, NodeInstance, Vote},
         bincode::deserialize,
+        rand0_7::{Rng, SeedableRng},
+        rand_chacha0_2::ChaChaRng,
         solana_perf::test_tx::new_test_vote_tx,
         solana_sdk::{
             signature::{Keypair, Signer},
             timing::timestamp,
+            vote::state::TowerSync,
         },
+        solana_vote_program::{vote_state::Lockout, vote_transaction::new_tower_sync_transaction},
+        std::str::FromStr,
     };
 
     #[test]
@@ -347,5 +352,90 @@ mod test {
         )));
         assert!(node.should_force_push(&pubkey));
         assert!(!node.should_force_push(&Pubkey::new_unique()));
+    }
+
+    #[test]
+    fn test_serialize_round_trip() {
+        let mut rng = ChaChaRng::from_seed(
+            bs58::decode("4nHgVgCvVaHnsrg4dYggtvWYYgV3JbeyiRBWupPMt3EG")
+                .into_vec()
+                .map(<[u8; 32]>::try_from)
+                .unwrap()
+                .unwrap(),
+        );
+        let values: Vec<CrdsValue> = vec![
+            {
+                let keypair = Keypair::generate(&mut rng);
+                let lockouts: [Lockout; 4] = [
+                    Lockout::new_with_confirmation_count(302_388_991, 11),
+                    Lockout::new_with_confirmation_count(302_388_995, 7),
+                    Lockout::new_with_confirmation_count(302_389_001, 3),
+                    Lockout::new_with_confirmation_count(302_389_005, 1),
+                ];
+                let tower_sync = TowerSync {
+                    lockouts: lockouts.into_iter().collect(),
+                    root: Some(302_388_989),
+                    hash: Hash::new_from_array(rng.gen()),
+                    timestamp: Some(1_732_044_716_167),
+                    block_id: Hash::new_from_array(rng.gen()),
+                };
+                let vote = new_tower_sync_transaction(
+                    tower_sync,
+                    Hash::new_from_array(rng.gen()), // blockhash
+                    &keypair,                        // node_keypair
+                    &Keypair::generate(&mut rng),    // vote_keypair
+                    &Keypair::generate(&mut rng),    // authorized_voter_keypair
+                    None,                            // switch_proof_hash
+                );
+                let vote = Vote::new(
+                    keypair.pubkey(),
+                    vote,
+                    1_732_045_236_371, // wallclock
+                )
+                .unwrap();
+                CrdsValue::new(CrdsData::Vote(5, vote), &keypair)
+            },
+            {
+                let keypair = Keypair::generate(&mut rng);
+                let lockouts: [Lockout; 3] = [
+                    Lockout::new_with_confirmation_count(302_410_500, 9),
+                    Lockout::new_with_confirmation_count(302_410_505, 5),
+                    Lockout::new_with_confirmation_count(302_410_517, 1),
+                ];
+                let tower_sync = TowerSync {
+                    lockouts: lockouts.into_iter().collect(),
+                    root: Some(302_410_499),
+                    hash: Hash::new_from_array(rng.gen()),
+                    timestamp: Some(1_732_053_615_237),
+                    block_id: Hash::new_from_array(rng.gen()),
+                };
+                let vote = new_tower_sync_transaction(
+                    tower_sync,
+                    Hash::new_from_array(rng.gen()), // blockhash
+                    &keypair,                        // node_keypair
+                    &Keypair::generate(&mut rng),    // vote_keypair
+                    &Keypair::generate(&mut rng),    // authorized_voter_keypair
+                    None,                            // switch_proof_hash
+                );
+                let vote = Vote::new(
+                    keypair.pubkey(),
+                    vote,
+                    1_732_053_639_350, // wallclock
+                )
+                .unwrap();
+                CrdsValue::new(CrdsData::Vote(5, vote), &keypair)
+            },
+        ];
+        let bytes = bincode::serialize(&values).unwrap();
+        // Serialized bytes are fixed and should never change.
+        assert_eq!(
+            solana_sdk::hash::hash(&bytes),
+            Hash::from_str("7gtcoafccWE964njbs2bA1QuVFeV34RaoY781yLx2A8N").unwrap()
+        );
+        // serialize -> deserialize should round trip.
+        assert_eq!(
+            bincode::deserialize::<Vec<CrdsValue>>(&bytes).unwrap(),
+            values
+        );
     }
 }

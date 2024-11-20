@@ -7112,6 +7112,7 @@ version = "2.2.0"
 dependencies = [
  "assert_matches",
  "bincode",
+ "bs58",
  "bv",
  "clap 2.33.3",
  "crossbeam-channel",
@@ -7122,7 +7123,9 @@ dependencies = [
  "lru",
  "num-traits",
  "num_cpus",
+ "rand 0.7.3",
  "rand 0.8.5",
+ "rand_chacha 0.2.2",
  "rand_chacha 0.3.1",
  "rayon",
  "serde",
