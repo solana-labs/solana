@@ -18,9 +18,11 @@ semver = { workspace = true }
 serde = { workspace = true }
 serde_derive = { workspace = true }
 serde_json = { workspace = true }
-solana-account-decoder = { workspace = true }
+solana-account-decoder-client-types = { workspace = true }
+solana-clock = { workspace = true }
+solana-pubkey = { workspace = true }
 solana-rpc-client-api = { workspace = true }
-solana-sdk = { workspace = true }
+solana-signature = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tokio-stream = { workspace = true }
@@ -30,6 +32,8 @@ url = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
+solana-commitment-config = { workspace = true }
+solana-pubkey = { workspace = true, features = ["rand"] }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
