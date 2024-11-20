@@ -23,10 +23,13 @@ solana-frozen-abi-macro = { workspace = true, optional = true, features = [
     "frozen-abi",
 ] }
 solana-sanitize = { workspace = true }
-solana-sdk = { workspace = true }
+solana-time-utils = { workspace = true }
 
 [dev-dependencies]
 rayon = { workspace = true }
+solana-hash = { workspace = true }
+solana-sha256-hasher = { workspace = true }
+solana-signature = { workspace = true, features = ["std"] }
 
 [lib]
 crate-type = ["lib"]
@@ -39,7 +42,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 frozen-abi = [
     "dep:solana-frozen-abi",
     "dep:solana-frozen-abi-macro",
-    "solana-sdk/frozen-abi",
+    "solana-hash/frozen-abi",
 ]
 
 [lints]

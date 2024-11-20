@@ -6169,8 +6169,11 @@ dependencies = [
  "serde_derive",
  "solana-frozen-abi",
  "solana-frozen-abi-macro",
+ "solana-hash",
  "solana-sanitize",
- "solana-sdk",
+ "solana-sha256-hasher",
+ "solana-signature",
+ "solana-time-utils",
 ]
 
 [[package]]

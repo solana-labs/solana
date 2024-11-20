@@ -5084,7 +5084,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "solana-sanitize",
- "solana-sdk",
+ "solana-time-utils",
 ]
 
 [[package]]

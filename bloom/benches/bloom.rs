@@ -6,10 +6,9 @@ use {
     fnv::FnvHasher,
     rand::Rng,
     solana_bloom::bloom::{Bloom, BloomHashIndex, ConcurrentBloom},
-    solana_sdk::{
-        hash::{hash, Hash},
-        signature::Signature,
-    },
+    solana_hash::Hash,
+    solana_sha256_hasher::hash,
+    solana_signature::Signature,
     std::{collections::HashSet, hash::Hasher},
     test::Bencher,
 };
