@@ -1,34 +1,51 @@
 //! Hashing with the [keccak] (SHA-3) hash function.
 //!
 //! [keccak]: https://keccak.team/keccak.html
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+#![cfg_attr(feature = "frozen-abi", feature(min_specialization))]
+#![no_std]
+#[cfg(feature = "std")]
+extern crate std;
 
+#[cfg(any(feature = "sha3", not(target_os = "solana")))]
+use sha3::{Digest, Keccak256};
+pub use solana_hash::{ParseHashError, HASH_BYTES, MAX_BASE58_LEN};
 #[cfg(feature = "borsh")]
-use borsh::{BorshDeserialize, BorshSchema, BorshSerialize};
 use {
-    sha3::{Digest, Keccak256},
+    borsh::{BorshDeserialize, BorshSchema, BorshSerialize},
+    std::string::ToString,
+};
+use {
+    core::{fmt, str::FromStr},
     solana_sanitize::Sanitize,
-    std::{convert::TryFrom, fmt, str::FromStr},
-    thiserror::Error,
 };
 
-pub const HASH_BYTES: usize = 32;
-/// Maximum string length of a base58 encoded hash
-const MAX_BASE58_LEN: usize = 44;
-#[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
+// TODO: replace this with `solana_hash::Hash` in the
+// next breaking change.
+// It's a breaking change because the field is public
+// here and private in `solana_hash`, and making
+// it public in `solana_hash` would break wasm-bindgen
+#[cfg_attr(feature = "frozen-abi", derive(solana_frozen_abi_macro::AbiExample))]
 #[cfg_attr(
     feature = "borsh",
     derive(BorshSerialize, BorshDeserialize, BorshSchema),
     borsh(crate = "borsh")
 )]
-#[derive(Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde_derive::Deserialize, serde_derive::Serialize)
+)]
+#[derive(Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 #[repr(transparent)]
 pub struct Hash(pub [u8; HASH_BYTES]);
 
+#[cfg(any(feature = "sha3", not(target_os = "solana")))]
 #[derive(Clone, Default)]
 pub struct Hasher {
     hasher: Keccak256,
 }
 
+#[cfg(any(feature = "sha3", not(target_os = "solana")))]
 impl Hasher {
     pub fn hash(&mut self, val: &[u8]) {
         self.hasher.update(val);
@@ -43,6 +60,18 @@ impl Hasher {
     }
 }
 
+impl From<solana_hash::Hash> for Hash {
+    fn from(val: solana_hash::Hash) -> Self {
+        Self(val.to_bytes())
+    }
+}
+
+impl From<Hash> for solana_hash::Hash {
+    fn from(val: Hash) -> Self {
+        Self::new_from_array(val.0)
+    }
+}
+
 impl Sanitize for Hash {}
 
 impl AsRef<[u8]> for Hash {
@@ -53,46 +82,32 @@ impl AsRef<[u8]> for Hash {
 
 impl fmt::Debug for Hash {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", bs58::encode(self.0).into_string())
+        let converted: solana_hash::Hash = (*self).into();
+        fmt::Debug::fmt(&converted, f)
     }
 }
 
 impl fmt::Display for Hash {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", bs58::encode(self.0).into_string())
+        let converted: solana_hash::Hash = (*self).into();
+        fmt::Display::fmt(&converted, f)
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Error)]
-pub enum ParseHashError {
-    #[error("string decoded to wrong size for hash")]
-    WrongSize,
-    #[error("failed to decoded string to hash")]
-    Invalid,
 }
 
 impl FromStr for Hash {
     type Err = ParseHashError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s.len() > MAX_BASE58_LEN {
-            return Err(ParseHashError::WrongSize);
-        }
-        bs58::decode(s)
-            .into_vec()
-            .map_err(|_| ParseHashError::Invalid)
-            .and_then(|bytes| {
-                <[u8; HASH_BYTES]>::try_from(bytes)
-                    .map(Hash::new_from_array)
-                    .map_err(|_| ParseHashError::WrongSize)
-            })
+        let unconverted = solana_hash::Hash::from_str(s)?;
+        Ok(unconverted.into())
     }
 }
 
 impl Hash {
     #[deprecated(since = "2.2.0", note = "Use 'Hash::new_from_array' instead")]
     pub fn new(hash_slice: &[u8]) -> Self {
-        Hash(<[u8; HASH_BYTES]>::try_from(hash_slice).unwrap())
+        #[allow(deprecated)]
+        Self::from(solana_hash::Hash::new(hash_slice))
     }
 
     pub const fn new_from_array(hash_array: [u8; HASH_BYTES]) -> Self {
@@ -101,13 +116,7 @@ impl Hash {
 
     /// unique Hash for tests and benchmarks.
     pub fn new_unique() -> Self {
-        use solana_atomic_u64::AtomicU64;
-        static I: AtomicU64 = AtomicU64::new(1);
-
-        let mut b = [0u8; HASH_BYTES];
-        let i = I.fetch_add(1);
-        b[0..8].copy_from_slice(&i.to_le_bytes());
-        Self::new_from_array(b)
+        Self::from(solana_hash::Hash::new_unique())
     }
 
     pub fn to_bytes(self) -> [u8; HASH_BYTES] {
@@ -130,7 +139,7 @@ pub fn hashv(vals: &[&[u8]]) -> Hash {
     {
         let mut hash_result = [0; HASH_BYTES];
         unsafe {
-            crate::syscalls::sol_keccak256(
+            solana_define_syscall::definitions::sol_keccak256(
                 vals as *const _ as *const u8,
                 vals.len() as u64,
                 &mut hash_result as *mut _ as *mut u8,
@@ -145,6 +154,7 @@ pub fn hash(val: &[u8]) -> Hash {
     hashv(&[val])
 }
 
+#[cfg(feature = "std")]
 /// Return the hash of the given hash extended with the given value.
 pub fn extend_and_hash(id: &Hash, val: &[u8]) -> Hash {
     let mut hash_data = id.as_ref().to_vec();

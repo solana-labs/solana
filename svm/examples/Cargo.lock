@@ -5587,6 +5587,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-keccak-hasher"
+version = "2.2.0"
+dependencies = [
+ "sha3",
+ "solana-define-syscall",
+ "solana-hash",
+ "solana-sanitize",
+]
+
+[[package]]
 name = "solana-keypair"
 version = "2.2.0"
 dependencies = [
@@ -5932,6 +5942,7 @@ dependencies = [
  "solana-fee-calculator",
  "solana-hash",
  "solana-instruction",
+ "solana-keccak-hasher",
  "solana-last-restart-slot",
  "solana-msg",
  "solana-native-token",

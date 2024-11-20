@@ -1,0 +1,48 @@
+[package]
+name = "solana-keccak-hasher"
+description = "Solana Keccak hashing"
+documentation = "https://docs.rs/solana-keccak-hasher"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+all-features = true
+rustdoc-args = ["--cfg=docsrs"]
+
+[dependencies]
+borsh = { workspace = true, optional = true }
+serde = { workspace = true, optional = true }
+serde_derive = { workspace = true, optional = true }
+solana-frozen-abi = { workspace = true, optional = true, features = [
+    "frozen-abi",
+] }
+solana-frozen-abi-macro = { workspace = true, optional = true, features = [
+    "frozen-abi",
+] }
+solana-hash = { workspace = true }
+solana-sanitize = { workspace = true }
+
+[target.'cfg(not(target_os = "solana"))'.dependencies]
+sha3 = { workspace = true }
+
+[target.'cfg(target_os = "solana")'.dependencies]
+# sha3 should be removed in the next breaking release,
+# as there's no reason to use the crate instead of the syscall
+# onchain
+sha3 = { workspace = true, optional = true }
+solana-define-syscall = { workspace = true }
+
+[features]
+borsh = ["dep:borsh", "std"]
+frozen-abi = ["dep:solana-frozen-abi", "dep:solana-frozen-abi-macro", "std"]
+serde = ["dep:serde", "dep:serde_derive"]
+sha3 = ["dep:sha3"]
+std = ["solana-hash/std"]
+
+[lints]
+workspace = true

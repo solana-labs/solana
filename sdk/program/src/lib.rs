@@ -484,7 +484,6 @@ pub mod feature;
 pub mod hash;
 pub mod incinerator;
 pub mod instruction;
-pub mod keccak;
 pub mod lamports;
 pub mod loader_instruction;
 pub mod loader_upgradeable_instruction;
@@ -521,6 +520,8 @@ pub use solana_borsh::v1 as borsh1;
 pub use solana_epoch_rewards as epoch_rewards;
 #[deprecated(since = "2.1.0", note = "Use `solana-fee-calculator` crate instead")]
 pub use solana_fee_calculator as fee_calculator;
+#[deprecated(since = "2.2.0", note = "Use `solana-keccak-hasher` crate instead")]
+pub use solana_keccak_hasher as keccak;
 #[deprecated(since = "2.1.0", note = "Use `solana-last-restart-slot` crate instead")]
 pub use solana_last_restart_slot as last_restart_slot;
 #[deprecated(since = "2.1.0", note = "Use `solana-program-memory` crate instead")]
