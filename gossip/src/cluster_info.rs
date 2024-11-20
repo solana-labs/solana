@@ -2038,49 +2038,7 @@ impl ClusterInfo {
             self.gossip.process_push_message(messages, now)
         };
         // Generate prune messages.
-        let self_pubkey = self.id();
-        let prunes = {
-            let _st = ScopedTimer::from(&self.stats.prune_received_cache);
-            self.gossip
-                .prune_received_cache(&self_pubkey, origins, stakes)
-        };
-        let prunes: Vec<(Pubkey /*from*/, Vec<Pubkey> /*origins*/)> = prunes
-            .into_iter()
-            .flat_map(|(from, prunes)| {
-                repeat(from).zip(
-                    prunes
-                        .into_iter()
-                        .chunks(MAX_PRUNE_DATA_NODES)
-                        .into_iter()
-                        .map(Iterator::collect)
-                        .collect::<Vec<_>>(),
-                )
-            })
-            .collect();
-
-        let prune_messages: Vec<_> = {
-            let gossip_crds = self.gossip.crds.read().unwrap();
-            let wallclock = timestamp();
-            thread_pool.install(|| {
-                prunes
-                    .into_par_iter()
-                    .with_min_len(256)
-                    .filter_map(|(from, prunes)| {
-                        let peer: &ContactInfo = gossip_crds.get(from)?;
-                        let mut prune_data = PruneData {
-                            pubkey: self_pubkey,
-                            prunes,
-                            signature: Signature::default(),
-                            destination: from,
-                            wallclock,
-                        };
-                        prune_data.sign(&self.keypair());
-                        let prune_message = Protocol::PruneMessage(self_pubkey, prune_data);
-                        Some((peer.gossip().ok()?, prune_message))
-                    })
-                    .collect()
-            })
-        };
+        let prune_messages = self.generate_prune_messages(thread_pool, origins, stakes);
         let mut packet_batch = PacketBatch::new_unpinned_with_recycler_data_and_dests(
             recycler,
             "handle_batch_push_messages",
@@ -2113,6 +2071,65 @@ impl ClusterInfo {
         if !packet_batch.is_empty() {
             let _ = response_sender.send(packet_batch);
         }
+    }
+
+    fn generate_prune_messages(
+        &self,
+        thread_pool: &ThreadPool,
+        // Unique origin pubkeys of upserted CRDS values from push messages.
+        origins: impl IntoIterator<Item = Pubkey>,
+        stakes: &HashMap<Pubkey, u64>,
+    ) -> Vec<(SocketAddr, Protocol /*::PruneMessage*/)> {
+        let _st = ScopedTimer::from(&self.stats.generate_prune_messages);
+        let self_pubkey = self.id();
+        // Obtain redundant gossip links which can be pruned.
+        let prunes: HashMap</*gossip peer:*/ Pubkey, /*origins:*/ Vec<Pubkey>> = {
+            let _st = ScopedTimer::from(&self.stats.prune_received_cache);
+            self.gossip
+                .prune_received_cache(&self_pubkey, origins, stakes)
+        };
+        // Look up gossip addresses of destination nodes.
+        let prunes: Vec<(
+            Pubkey,      // gossip peer to be pruned
+            SocketAddr,  // gossip socket-addr of peer
+            Vec<Pubkey>, // CRDS value origins
+        )> = {
+            let gossip_crds = self.gossip.crds.read().unwrap();
+            thread_pool.install(|| {
+                prunes
+                    .into_par_iter()
+                    .filter_map(|(pubkey, prunes)| {
+                        let addr = gossip_crds.get::<&ContactInfo>(pubkey)?.gossip().ok()?;
+                        Some((pubkey, addr, prunes))
+                    })
+                    .collect()
+            })
+        };
+        // Create and sign Protocol::PruneMessages.
+        thread_pool.install(|| {
+            let wallclock = timestamp();
+            let keypair: Arc<Keypair> = self.keypair().clone();
+            prunes
+                .into_par_iter()
+                .flat_map(|(destination, addr, prunes)| {
+                    // Chunk up origins so that each chunk fits into a packet.
+                    let prunes = prunes.into_par_iter().chunks(MAX_PRUNE_DATA_NODES);
+                    rayon::iter::repeat((destination, addr)).zip(prunes)
+                })
+                .map(|((destination, addr), prunes)| {
+                    let mut prune_data = PruneData {
+                        pubkey: self_pubkey,
+                        prunes,
+                        signature: Signature::default(),
+                        destination,
+                        wallclock,
+                    };
+                    prune_data.sign(&keypair);
+                    let prune_message = Protocol::PruneMessage(self_pubkey, prune_data);
+                    (addr, prune_message)
+                })
+                .collect()
+        })
     }
 
     fn require_stake_for_gossip(&self, stakes: &HashMap<Pubkey, u64>) -> bool {

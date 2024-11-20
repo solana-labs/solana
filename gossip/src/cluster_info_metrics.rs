@@ -98,6 +98,7 @@ pub struct GossipStats {
     pub(crate) filter_crds_values_dropped_requests: Counter,
     pub(crate) filter_crds_values_dropped_values: Counter,
     pub(crate) filter_pull_response: Counter,
+    pub(crate) generate_prune_messages: Counter,
     pub(crate) generate_pull_responses: Counter,
     pub(crate) get_epoch_duration_no_working_bank: Counter,
     pub(crate) get_votes: Counter,
@@ -471,6 +472,11 @@ pub(crate) fn submit_gossip_stats(
         (
             "get_epoch_duration_no_working_bank",
             stats.get_epoch_duration_no_working_bank.clear(),
+            i64
+        ),
+        (
+            "generate_prune_messages",
+            stats.generate_prune_messages.clear(),
             i64
         ),
     );
