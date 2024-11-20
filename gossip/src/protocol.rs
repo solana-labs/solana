@@ -241,8 +241,7 @@ impl Signable for PruneData {
     }
 
     fn signable_data(&self) -> Cow<[u8]> {
-        // Continue to return signable data without a prefix until cluster has upgraded
-        self.signable_data_without_prefix()
+        self.signable_data_with_prefix()
     }
 
     fn get_signature(&self) -> Signature {
