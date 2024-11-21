@@ -291,7 +291,7 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
     let cluster_info = Arc::new(cluster_info);
     let (s, _r) = unbounded();
     let _banking_stage = BankingStage::new(
-        BlockProductionMethod::ThreadLocalMultiIterator,
+        BlockProductionMethod::CentralScheduler,
         &cluster_info,
         &poh_recorder,
         non_vote_receiver,

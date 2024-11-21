@@ -397,22 +397,6 @@ impl BankingStage {
         enable_forwarding: bool,
     ) -> Self {
         match block_production_method {
-            BlockProductionMethod::ThreadLocalMultiIterator => {
-                Self::new_thread_local_multi_iterator(
-                    cluster_info,
-                    poh_recorder,
-                    non_vote_receiver,
-                    tpu_vote_receiver,
-                    gossip_vote_receiver,
-                    num_threads,
-                    transaction_status_sender,
-                    replay_vote_sender,
-                    log_messages_bytes_limit,
-                    connection_cache,
-                    bank_forks,
-                    prioritization_fee_cache,
-                )
-            }
             BlockProductionMethod::CentralScheduler => Self::new_central_scheduler(
                 cluster_info,
                 poh_recorder,
@@ -898,7 +882,7 @@ mod tests {
             let (replay_vote_sender, _replay_vote_receiver) = unbounded();
 
             let banking_stage = BankingStage::new(
-                BlockProductionMethod::ThreadLocalMultiIterator,
+                BlockProductionMethod::CentralScheduler,
                 &cluster_info,
                 &poh_recorder,
                 non_vote_receiver,
@@ -954,7 +938,7 @@ mod tests {
             let (replay_vote_sender, _replay_vote_receiver) = unbounded();
 
             let banking_stage = BankingStage::new(
-                BlockProductionMethod::ThreadLocalMultiIterator,
+                BlockProductionMethod::CentralScheduler,
                 &cluster_info,
                 &poh_recorder,
                 non_vote_receiver,
@@ -1126,11 +1110,6 @@ mod tests {
             drop(entry_receiver);
         }
         Blockstore::destroy(ledger_path.path()).unwrap();
-    }
-
-    #[test]
-    fn test_banking_stage_entries_only_thread_local_multi_iterator() {
-        test_banking_stage_entries_only(BlockProductionMethod::ThreadLocalMultiIterator);
     }
 
     #[test]
@@ -1396,7 +1375,7 @@ mod tests {
             let (replay_vote_sender, _replay_vote_receiver) = unbounded();
 
             let banking_stage = BankingStage::new(
-                BlockProductionMethod::ThreadLocalMultiIterator,
+                BlockProductionMethod::CentralScheduler,
                 &cluster_info,
                 &poh_recorder,
                 non_vote_receiver,
