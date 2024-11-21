@@ -2449,3 +2449,40 @@ fn svm_inspect_account() {
         num_actual_inspected_accounts,
     );
 }
+
+// Tests for proper accumulation of metrics across loaded programs in a batch.
+#[test]
+fn svm_metrics_accumulation() {
+    for test_entry in program_medley() {
+        let env = SvmTestEnvironment::create(test_entry);
+
+        let (transactions, check_results) = env.test_entry.prepare_transactions();
+
+        let result = env.batch_processor.load_and_execute_sanitized_transactions(
+            &env.mock_bank,
+            &transactions,
+            check_results,
+            &env.processing_environment,
+            &env.processing_config,
+        );
+
+        assert_ne!(
+            result
+                .execute_timings
+                .details
+                .create_executor_jit_compile_us,
+            0
+        );
+        assert_ne!(
+            result.execute_timings.details.create_executor_load_elf_us,
+            0
+        );
+        assert_ne!(
+            result
+                .execute_timings
+                .details
+                .create_executor_verify_code_us,
+            0
+        );
+    }
+}

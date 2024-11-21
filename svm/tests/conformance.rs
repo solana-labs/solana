@@ -424,6 +424,7 @@ fn execute_fixture_as_instr(
         &batch_processor.get_environments_for_epoch(2).unwrap(),
         &program_id,
         42,
+        &mut ExecuteTimings::default(),
         false,
     )
     .unwrap();

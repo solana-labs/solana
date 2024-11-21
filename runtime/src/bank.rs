@@ -7365,7 +7365,14 @@ impl Bank {
         let environments = self
             .transaction_processor
             .get_environments_for_epoch(effective_epoch)?;
-        load_program_with_pubkey(self, &environments, pubkey, self.slot(), reload)
+        load_program_with_pubkey(
+            self,
+            &environments,
+            pubkey,
+            self.slot(),
+            &mut ExecuteTimings::default(), // Called by ledger-tool, metrics not accumulated.
+            reload,
+        )
     }
 
     pub fn withdraw(&self, pubkey: &Pubkey, lamports: u64) -> Result<()> {
