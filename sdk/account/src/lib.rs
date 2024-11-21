@@ -9,17 +9,13 @@ use serde::ser::{Serialize, Serializer};
 #[cfg(feature = "frozen-abi")]
 use solana_frozen_abi_macro::{frozen_abi, AbiExample};
 #[cfg(feature = "bincode")]
-use solana_program::sysvar::Sysvar;
+use solana_sysvar::Sysvar;
 use {
-    solana_program::{
-        account_info::AccountInfo,
-        bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
-        clock::{Epoch, INITIAL_RENT_EPOCH},
-        debug_account_data::*,
-        lamports::LamportsError,
-        loader_v4,
-        pubkey::Pubkey,
-    },
+    solana_account_info::{debug_account_data::*, AccountInfo},
+    solana_clock::{Epoch, INITIAL_RENT_EPOCH},
+    solana_instruction::error::LamportsError,
+    solana_pubkey::Pubkey,
+    solana_sdk_ids::{bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable, loader_v4},
     std::{
         cell::{Ref, RefCell},
         fmt,
@@ -67,7 +63,8 @@ mod account_serialize {
     use {
         crate::ReadableAccount,
         serde::{ser::Serializer, Serialize},
-        solana_program::{clock::Epoch, pubkey::Pubkey},
+        solana_clock::Epoch,
+        solana_pubkey::Pubkey,
     };
     #[repr(C)]
     #[cfg_attr(
@@ -722,7 +719,7 @@ pub fn create_account_with_fields<S: Sysvar>(
     (lamports, rent_epoch): InheritableAccountFields,
 ) -> Account {
     let data_len = S::size_of().max(bincode::serialized_size(sysvar).unwrap() as usize);
-    let mut account = Account::new(lamports, data_len, &solana_program::sysvar::id());
+    let mut account = Account::new(lamports, data_len, &solana_sdk_ids::sysvar::id());
     to_account::<S, Account>(sysvar, &mut account).unwrap();
     account.rent_epoch = rent_epoch;
     account
@@ -764,7 +761,7 @@ pub fn to_account<S: Sysvar, T: WritableAccount>(sysvar: &S, account: &mut T) ->
 
 /// Return the information required to construct an `AccountInfo`.  Used by the
 /// `AccountInfo` conversion implementations.
-impl solana_program::account_info::Account for Account {
+impl solana_account_info::Account for Account {
     fn get(&mut self) -> (&mut u64, &mut [u8], &Pubkey, bool, Epoch) {
         (
             &mut self.lamports,

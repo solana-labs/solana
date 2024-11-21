@@ -11,7 +11,7 @@ edition = { workspace = true }
 
 [dependencies]
 base64 = { workspace = true }
-bs58 = { workspace = true }
+bs58 = { workspace = true, features = ["std"] }
 serde = { workspace = true }
 serde_derive = { workspace = true }
 serde_json = { workspace = true }

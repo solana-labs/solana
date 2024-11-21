@@ -5815,12 +5815,15 @@ dependencies = [
  "serde_bytes",
  "serde_derive",
  "solana-account",
+ "solana-account-info",
+ "solana-clock",
  "solana-frozen-abi",
  "solana-frozen-abi-macro",
  "solana-instruction",
  "solana-logger",
- "solana-program",
  "solana-pubkey",
+ "solana-sdk-ids",
+ "solana-sysvar",
 ]
 
 [[package]]
