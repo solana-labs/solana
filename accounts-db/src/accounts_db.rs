@@ -511,6 +511,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
     storage_access: StorageAccess::Mmap,
     scan_filter_for_shrinking: ScanFilter::OnlyAbnormalWithVerify,
     enable_experimental_accumulator_hash: false,
+    verify_experimental_accumulator_hash: false,
     num_clean_threads: None,
     num_foreground_threads: None,
     num_hash_threads: None,
@@ -536,6 +537,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig
     storage_access: StorageAccess::Mmap,
     scan_filter_for_shrinking: ScanFilter::OnlyAbnormalWithVerify,
     enable_experimental_accumulator_hash: false,
+    verify_experimental_accumulator_hash: false,
     num_clean_threads: None,
     num_foreground_threads: None,
     num_hash_threads: None,
@@ -663,6 +665,7 @@ pub struct AccountsDbConfig {
     pub storage_access: StorageAccess,
     pub scan_filter_for_shrinking: ScanFilter,
     pub enable_experimental_accumulator_hash: bool,
+    pub verify_experimental_accumulator_hash: bool,
     /// Number of threads for background cleaning operations (`thread_pool_clean')
     pub num_clean_threads: Option<NonZeroUsize>,
     /// Number of threads for foreground operations (`thread_pool`)
@@ -1621,6 +1624,10 @@ pub struct AccountsDb {
     /// (For R&D only; a feature-gate also exists to turn this on and make it a part of consensus.)
     pub is_experimental_accumulator_hash_enabled: AtomicBool,
 
+    /// Flag to indicate if the experimental accounts lattice hash should be verified.
+    /// (For R&D only)
+    pub verify_experimental_accumulator_hash: bool,
+
     /// These are the ancient storages that could be valuable to
     /// shrink, sorted by amount of dead bytes.  The elements
     /// are sorted from the largest dead bytes to the smallest.
@@ -2040,6 +2047,8 @@ impl AccountsDb {
             is_experimental_accumulator_hash_enabled: accounts_db_config
                 .enable_experimental_accumulator_hash
                 .into(),
+            verify_experimental_accumulator_hash: accounts_db_config
+                .verify_experimental_accumulator_hash,
             bank_hash_stats,
             thread_pool,
             thread_pool_clean,
