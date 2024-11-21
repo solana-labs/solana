@@ -576,11 +576,10 @@ impl Consumer {
             .sanitized_transactions()
             .iter()
             .filter_map(|transaction| {
-                process_compute_budget_instructions(SVMMessage::program_instructions_iter(
-                    transaction,
-                ))
-                .ok()
-                .map(|limits| limits.compute_unit_price)
+                transaction
+                    .compute_budget_limits(&bank.feature_set)
+                    .ok()
+                    .map(|limits| limits.compute_unit_price)
             })
             .minmax();
         let (min_prioritization_fees, max_prioritization_fees) =
