@@ -108,6 +108,7 @@ members = [
     "sdk/clock",
     "sdk/cluster-type",
     "sdk/commitment-config",
+    "sdk/compute-budget-interface",
     "sdk/cpi",
     "sdk/decode-error",
     "sdk/define-syscall",
@@ -436,6 +437,7 @@ solana-clock = { path = "sdk/clock", version = "=2.2.0" }
 solana-cluster-type = { path = "sdk/cluster-type", version = "=2.2.0" }
 solana-commitment-config = { path = "sdk/commitment-config", version = "=2.2.0" }
 solana-compute-budget = { path = "compute-budget", version = "=2.2.0" }
+solana-compute-budget-interface = { path = "sdk/compute-budget-interface", version = "=2.2.0" }
 solana-compute-budget-program = { path = "programs/compute-budget", version = "=2.2.0" }
 solana-config-program = { path = "programs/config", version = "=2.2.0" }
 solana-connection-cache = { path = "connection-cache", version = "=2.2.0", default-features = false }

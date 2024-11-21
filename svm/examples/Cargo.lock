@@ -5156,6 +5156,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-compute-budget-interface"
+version = "2.2.0"
+dependencies = [
+ "borsh 1.5.3",
+ "serde",
+ "serde_derive",
+ "solana-instruction",
+ "solana-sdk-ids",
+]
+
+[[package]]
 name = "solana-compute-budget-program"
 version = "2.2.0"
 dependencies = [
@@ -6478,6 +6489,7 @@ dependencies = [
  "solana-bn254",
  "solana-cluster-type",
  "solana-commitment-config",
+ "solana-compute-budget-interface",
  "solana-decode-error",
  "solana-derivation-path",
  "solana-ed25519-program",

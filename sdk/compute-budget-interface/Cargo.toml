@@ -1,0 +1,37 @@
+[package]
+name = "solana-compute-budget-interface"
+description = "Solana compute budget interface."
+documentation = "https://docs.rs/solana-compute-budget-interface"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+borsh = { workspace = true, optional = true }
+serde = { workspace = true, optional = true }
+serde_derive = { workspace = true, optional = true }
+solana-frozen-abi = { workspace = true, features = [
+    "frozen-abi",
+], optional = true }
+solana-frozen-abi-macro = { workspace = true, features = [
+    "frozen-abi",
+], optional = true }
+solana-instruction = { workspace = true, features = ["std"] }
+solana-sdk-ids = { workspace = true }
+
+[features]
+borsh = ["dep:borsh"]
+dev-context-only-utils = ["borsh"]
+frozen-abi = ["dep:solana-frozen-abi", "dep:solana-frozen-abi-macro", "serde"]
+serde = ["dep:serde", "dep:serde_derive"]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+all-features = true
+rustdoc-args = ["--cfg=docsrs"]
+
+[lints]
+workspace = true

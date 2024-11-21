@@ -37,6 +37,7 @@ full = [
     "solana-pubkey/rand",
     "dep:solana-cluster-type",
     "dep:solana-ed25519-program",
+    "dep:solana-compute-budget-interface",
     "dep:solana-keypair",
     "dep:solana-precompile-error",
     "dep:solana-presigner",
@@ -47,10 +48,16 @@ full = [
     "dep:solana-signer",
     "dep:solana-transaction-error"
 ]
-borsh = ["dep:borsh", "solana-program/borsh", "solana-secp256k1-recover/borsh"]
+borsh = [
+    "dep:borsh",
+    "solana-compute-budget-interface/borsh",
+    "solana-program/borsh",
+    "solana-secp256k1-recover/borsh"
+]
 dev-context-only-utils = [
     "qualifier_attr",
     "solana-account/dev-context-only-utils",
+    "solana-compute-budget-interface/dev-context-only-utils",
     "solana-transaction-context/dev-context-only-utils",
 ]
 frozen-abi = [
@@ -107,6 +114,9 @@ solana-cluster-type = { workspace = true, features = [
     "serde",
 ], optional = true }
 solana-commitment-config = { workspace = true, optional = true, features = ["serde"] }
+solana-compute-budget-interface = { workspace = true, optional = true, features = [
+    "serde",
+] }
 solana-decode-error = { workspace = true }
 solana-derivation-path = { workspace = true }
 solana-ed25519-program = { workspace = true, optional = true }
