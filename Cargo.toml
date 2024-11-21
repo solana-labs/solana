@@ -138,6 +138,7 @@ members = [
     "sdk/package-metadata-macro",
     "sdk/packet",
     "sdk/precompile-error",
+    "sdk/precompiles",
     "sdk/presigner",
     "sdk/program",
     "sdk/program-entrypoint",
@@ -498,6 +499,7 @@ solana-perf = { path = "perf", version = "=2.2.0" }
 solana-poh = { path = "poh", version = "=2.2.0" }
 solana-poseidon = { path = "poseidon", version = "=2.2.0" }
 solana-precompile-error = { path = "sdk/precompile-error", version = "=2.2.0" }
+solana-precompiles = { path = "sdk/precompiles", version = "=2.2.0" }
 solana-presigner = { path = "sdk/presigner", version = "=2.2.0" }
 solana-program = { path = "sdk/program", version = "=2.2.0", default-features = false }
 solana-program-error = { path = "sdk/program-error", version = "=2.2.0" }

@@ -6082,6 +6082,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-precompiles"
+version = "2.2.0"
+dependencies = [
+ "lazy_static",
+ "solana-ed25519-program",
+ "solana-feature-set",
+ "solana-precompile-error",
+ "solana-program",
+ "solana-pubkey",
+ "solana-sdk-ids",
+ "solana-secp256k1-program",
+ "solana-secp256r1-program",
+]
+
+[[package]]
 name = "solana-presigner"
 version = "2.2.0"
 dependencies = [
@@ -7167,6 +7182,7 @@ dependencies = [
  "solana-native-token",
  "solana-packet",
  "solana-precompile-error",
+ "solana-precompiles",
  "solana-presigner",
  "solana-program",
  "solana-program-memory",

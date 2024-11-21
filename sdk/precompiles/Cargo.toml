@@ -1,0 +1,33 @@
+[package]
+name = "solana-precompiles"
+description = "Solana precompiled programs."
+documentation = "https://docs.rs/solana-precompiles"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+lazy_static = { workspace = true }
+solana-ed25519-program = { workspace = true }
+solana-feature-set = { workspace = true }
+solana-precompile-error = { workspace = true }
+solana-program = { workspace = true, default-features = false }
+solana-pubkey = { workspace = true }
+solana-sdk-ids = { workspace = true }
+solana-secp256k1-program = { workspace = true, features = ["bincode"] }
+solana-secp256r1-program = { workspace = true, default-features = false }
+
+[features]
+# Enables the "vendored" feature of openssl inside of secp256r1-program
+openssl-vendored = ["solana-secp256r1-program/openssl-vendored"]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+all-features = true
+rustdoc-args = ["--cfg=docsrs"]
+
+[lints]
+workspace = true

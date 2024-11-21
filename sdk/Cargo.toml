@@ -40,6 +40,7 @@ full = [
     "dep:solana-compute-budget-interface",
     "dep:solana-keypair",
     "dep:solana-precompile-error",
+    "dep:solana-precompiles",
     "dep:solana-presigner",
     "dep:solana-quic-definitions",
     "dep:solana-secp256k1-program",
@@ -75,7 +76,7 @@ frozen-abi = [
     "solana-transaction-error/frozen-abi"
 ]
 # Enables the "vendored" feature of openssl inside of secp256r1-program
-openssl-vendored = ["solana-secp256r1-program/openssl-vendored"]
+openssl-vendored = ["solana-precompiles/openssl-vendored"]
 
 [dependencies]
 bincode = { workspace = true }
@@ -135,6 +136,7 @@ solana-keypair = { workspace = true, optional = true, features = ["seed-derivabl
 solana-native-token = { workspace = true }
 solana-packet = { workspace = true, features = ["bincode", "serde"] }
 solana-precompile-error = { workspace = true, optional = true }
+solana-precompiles = { workspace = true, optional = true }
 solana-presigner = { workspace = true, optional = true }
 solana-program = { workspace = true }
 solana-program-memory = { workspace = true }
