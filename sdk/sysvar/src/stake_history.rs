@@ -46,15 +46,17 @@
 //! # Ok::<(), anyhow::Error>(())
 //! ```
 
+#[cfg(feature = "bincode")]
+use crate::Sysvar;
 #[cfg(feature = "serde")]
 use serde_derive::{Deserialize, Serialize};
 pub use solana_sdk_ids::sysvar::stake_history::{check_id, id, ID};
-#[cfg(feature = "bincode")]
 use {
-    crate::{get_sysvar, Sysvar},
-    solana_sysvar_id::SysvarId,
+    crate::get_sysvar,
+    solana_clock::Epoch,
+    solana_sysvar_id::{impl_sysvar_id, SysvarId},
+    std::ops::Deref,
 };
-use {solana_clock::Epoch, solana_sysvar_id::impl_sysvar_id, std::ops::Deref};
 
 pub const MAX_ENTRIES: usize = 512; // it should never take as many as 512 epochs to warm up or cool down
 
@@ -164,10 +166,8 @@ impl Sysvar for StakeHistory {
 pub struct StakeHistorySysvar(pub Epoch);
 
 // precompute so we can statically allocate buffer
-#[cfg(feature = "bincode")]
 const EPOCH_AND_ENTRY_SERIALIZED_SIZE: u64 = 32;
 
-#[cfg(feature = "bincode")]
 impl StakeHistoryGetEntry for StakeHistorySysvar {
     fn get_entry(&self, target_epoch: Epoch) -> Option<StakeHistoryEntry> {
         let current_epoch = self.0;
@@ -200,13 +200,20 @@ impl StakeHistoryGetEntry for StakeHistorySysvar {
 
         match result {
             Ok(()) => {
-                let (entry_epoch, entry) =
-                    bincode::deserialize::<(Epoch, StakeHistoryEntry)>(&entry_buf).ok()?;
+                // All safe because `entry_buf` is a 32-length array
+                let entry_epoch = u64::from_le_bytes(entry_buf[0..8].try_into().unwrap());
+                let effective = u64::from_le_bytes(entry_buf[8..16].try_into().unwrap());
+                let activating = u64::from_le_bytes(entry_buf[16..24].try_into().unwrap());
+                let deactivating = u64::from_le_bytes(entry_buf[24..32].try_into().unwrap());
 
                 // this would only fail if stake history skipped an epoch or the binary format of the sysvar changed
                 assert_eq!(entry_epoch, target_epoch);
 
-                Some(entry)
+                Some(StakeHistoryEntry {
+                    effective,
+                    activating,
+                    deactivating,
+                })
             }
             _ => None,
         }

@@ -99,7 +99,6 @@ pub struct PodSlotHashes {
 
 #[cfg(feature = "bytemuck")]
 impl PodSlotHashes {
-    #[cfg(feature = "bincode")]
     /// Fetch all of the raw sysvar data using the `sol_get_sysvar` syscall.
     pub fn fetch() -> Result<Self, solana_program_error::ProgramError> {
         // Allocate an uninitialized buffer for the raw sysvar data.
@@ -207,7 +206,7 @@ impl SlotHashesSysvar {
     }
 }
 
-#[cfg(all(feature = "bincode", feature = "bytemuck"))]
+#[cfg(feature = "bytemuck")]
 fn get_pod_slot_hashes() -> Result<Vec<PodSlotHash>, solana_program_error::ProgramError> {
     let mut pod_hashes = vec![PodSlotHash::default(); solana_slot_hashes::MAX_ENTRIES];
     {

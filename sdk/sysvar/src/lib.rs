@@ -213,7 +213,6 @@ macro_rules! impl_sysvar_get {
     };
 }
 
-#[cfg(feature = "bincode")]
 /// Handler for retrieving a slice of sysvar data from the `sol_get_sysvar`
 /// syscall.
 fn get_sysvar(
