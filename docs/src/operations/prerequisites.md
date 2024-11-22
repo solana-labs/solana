@@ -15,10 +15,10 @@ Here is a list of some of the requirements for being a good operator:
   - You can find a list of [hardware requirements here](./requirements.md)
   - Solana helps facilitate data-center server rentals through the [Solana server program](https://solana.foundation/server-program)
 - Knowledge of the Linux terminal
-- Ubuntu system administration
+- Linux system administration
   - Accessing your machine via ssh and scp
   - Installing software (installing from source is encouraged)
-  - Keeping Ubuntu up to date
+  - Keeping your Linux distribution up to date
   - Managing users and system access
   - Understanding computer processes
   - Formatting and mounting drives
