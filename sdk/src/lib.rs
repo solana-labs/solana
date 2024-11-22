@@ -82,7 +82,6 @@ pub mod precompiles;
 pub mod program_utils;
 pub mod pubkey;
 pub mod rent_collector;
-pub mod rent_debits;
 #[deprecated(since = "2.2.0", note = "Use `solana-reward-info` crate instead")]
 pub mod reward_info {
     pub use solana_reward_info::RewardInfo;
@@ -155,6 +154,8 @@ pub use solana_pubkey::pubkey;
 #[cfg(feature = "full")]
 #[deprecated(since = "2.2.0", note = "Use `solana-quic-definitions` crate instead")]
 pub use solana_quic_definitions as quic;
+#[deprecated(since = "2.2.0", note = "Use `solana-rent-debits` crate instead")]
+pub use solana_rent_debits as rent_debits;
 #[cfg(feature = "full")]
 #[deprecated(
     since = "2.2.0",

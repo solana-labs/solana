@@ -59,6 +59,7 @@ dev-context-only-utils = [
     "qualifier_attr",
     "solana-account/dev-context-only-utils",
     "solana-compute-budget-interface/dev-context-only-utils",
+    "solana-rent-debits/dev-context-only-utils",
     "solana-transaction-context/dev-context-only-utils",
 ]
 frozen-abi = [
@@ -142,6 +143,7 @@ solana-program = { workspace = true }
 solana-program-memory = { workspace = true }
 solana-pubkey = { workspace = true, default-features = false, features = ["std"] }
 solana-quic-definitions = { workspace = true, optional = true }
+solana-rent-debits = { workspace = true }
 solana-reserved-account-keys = { workspace = true }
 solana-reward-info = { workspace = true, features = ["serde"] }
 solana-sanitize = { workspace = true }

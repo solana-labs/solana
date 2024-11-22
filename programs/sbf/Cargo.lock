@@ -6409,6 +6409,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-rent-debits"
+version = "2.2.0"
+dependencies = [
+ "solana-pubkey",
+ "solana-reward-info",
+]
+
+[[package]]
 name = "solana-reserved-account-keys"
 version = "2.2.0"
 dependencies = [
@@ -7188,6 +7196,7 @@ dependencies = [
  "solana-program-memory",
  "solana-pubkey",
  "solana-quic-definitions",
+ "solana-rent-debits",
  "solana-reserved-account-keys",
  "solana-reward-info",
  "solana-sanitize",

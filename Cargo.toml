@@ -149,7 +149,9 @@ members = [
     "sdk/pubkey",
     "sdk/quic-definitions",
     "sdk/rent",
+    "sdk/rent-debits",
     "sdk/reserved-account-keys",
+    "sdk/reward-info",
     "sdk/sanitize",
     "sdk/sdk-ids",
     "sdk/secp256k1-program",
@@ -515,6 +517,7 @@ solana-quic-definitions = { path = "sdk/quic-definitions", version = "=2.2.0" }
 solana-rayon-threadlimit = { path = "rayon-threadlimit", version = "=2.2.0" }
 solana-remote-wallet = { path = "remote-wallet", version = "=2.2.0", default-features = false }
 solana-rent = { path = "sdk/rent", version = "=2.2.0", default-features = false }
+solana-rent-debits = { path = "sdk/rent-debits", version = "=2.2.0" }
 solana-reserved-account-keys = { path = "sdk/reserved-account-keys", version = "=2.2.0", default-features = false }
 solana-reward-info = { path = "sdk/reward-info", version = "=2.2.0" }
 solana-secp256r1-program = { path = "sdk/secp256r1-program", version = "=2.2.0", default-features = false }
