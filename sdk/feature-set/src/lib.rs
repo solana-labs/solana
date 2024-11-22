@@ -883,6 +883,7 @@ pub mod disable_account_loader_special_case {
 pub mod enable_secp256r1_precompile {
     solana_pubkey::declare_id!("sr11RdZWgbHTHxSroPALe6zgaT5A1K9LcE4nfsZS4gi");
 }
+
 pub mod accounts_lt_hash {
     solana_pubkey::declare_id!("LtHaSHHsUge7EWTPVrmpuexKz6uVHZXZL6cgJa7W7Zn");
 }
