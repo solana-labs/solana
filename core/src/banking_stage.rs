@@ -51,6 +51,10 @@ use {
         thread::{self, Builder, JoinHandle},
         time::{Duration, Instant},
     },
+    transaction_scheduler::{
+        receive_and_buffer::SanitizedTransactionReceiveAndBuffer,
+        transaction_state_container::TransactionStateContainer,
+    },
 };
 
 // Below modules are pub to allow use by banking_stage bench
@@ -612,10 +616,15 @@ impl BankingStage {
         // Spawn the central scheduler thread
         bank_thread_hdls.push({
             let packet_deserializer = PacketDeserializer::new(non_vote_receiver);
+            let receive_and_buffer = SanitizedTransactionReceiveAndBuffer::new(
+                packet_deserializer,
+                bank_forks.clone(),
+                forwarder.is_some(),
+            );
             let scheduler = PrioGraphScheduler::new(work_senders, finished_work_receiver);
             let scheduler_controller = SchedulerController::new(
                 decision_maker.clone(),
-                packet_deserializer,
+                receive_and_buffer,
                 bank_forks,
                 scheduler,
                 worker_metrics,

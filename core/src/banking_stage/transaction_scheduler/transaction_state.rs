@@ -2,14 +2,12 @@ use {
     crate::banking_stage::{
         immutable_deserialized_packet::ImmutableDeserializedPacket, scheduler_messages::MaxAge,
     },
-    solana_runtime_transaction::runtime_transaction::RuntimeTransaction,
-    solana_sdk::transaction::SanitizedTransaction,
     std::sync::Arc,
 };
 
 /// Simple wrapper type to tie a sanitized transaction to max age slot.
-pub(crate) struct SanitizedTransactionTTL {
-    pub(crate) transaction: RuntimeTransaction<SanitizedTransaction>,
+pub(crate) struct SanitizedTransactionTTL<Tx> {
+    pub(crate) transaction: Tx,
     pub(crate) max_age: MaxAge,
 }
 
@@ -33,10 +31,10 @@ pub(crate) struct SanitizedTransactionTTL {
 ///   to the appropriate thread for processing. This is done to avoid cloning the
 ///  `SanitizedTransaction`.
 #[allow(clippy::large_enum_variant)]
-pub(crate) enum TransactionState {
+pub(crate) enum TransactionState<Tx> {
     /// The transaction is available for scheduling.
     Unprocessed {
-        transaction_ttl: SanitizedTransactionTTL,
+        transaction_ttl: SanitizedTransactionTTL<Tx>,
         packet: Arc<ImmutableDeserializedPacket>,
         priority: u64,
         cost: u64,
@@ -53,10 +51,10 @@ pub(crate) enum TransactionState {
     Transitioning,
 }
 
-impl TransactionState {
+impl<Tx> TransactionState<Tx> {
     /// Creates a new `TransactionState` in the `Unprocessed` state.
     pub(crate) fn new(
-        transaction_ttl: SanitizedTransactionTTL,
+        transaction_ttl: SanitizedTransactionTTL<Tx>,
         packet: Arc<ImmutableDeserializedPacket>,
         priority: u64,
         cost: u64,
@@ -133,7 +131,7 @@ impl TransactionState {
     /// # Panics
     /// This method will panic if the transaction is already in the `Pending` state,
     ///   as this is an invalid state transition.
-    pub(crate) fn transition_to_pending(&mut self) -> SanitizedTransactionTTL {
+    pub(crate) fn transition_to_pending(&mut self) -> SanitizedTransactionTTL<Tx> {
         match self.take() {
             TransactionState::Unprocessed {
                 transaction_ttl,
@@ -163,7 +161,10 @@ impl TransactionState {
     /// # Panics
     /// This method will panic if the transaction is already in the `Unprocessed`
     ///   state, as this is an invalid state transition.
-    pub(crate) fn transition_to_unprocessed(&mut self, transaction_ttl: SanitizedTransactionTTL) {
+    pub(crate) fn transition_to_unprocessed(
+        &mut self,
+        transaction_ttl: SanitizedTransactionTTL<Tx>,
+    ) {
         match self.take() {
             TransactionState::Unprocessed { .. } => panic!("already unprocessed"),
             TransactionState::Pending {
@@ -188,7 +189,7 @@ impl TransactionState {
     ///
     /// # Panics
     /// This method will panic if the transaction is in the `Pending` state.
-    pub(crate) fn transaction_ttl(&self) -> &SanitizedTransactionTTL {
+    pub(crate) fn transaction_ttl(&self) -> &SanitizedTransactionTTL<Tx> {
         match self {
             Self::Unprocessed {
                 transaction_ttl, ..
@@ -209,13 +210,22 @@ impl TransactionState {
 mod tests {
     use {
         super::*,
+        solana_runtime_transaction::runtime_transaction::RuntimeTransaction,
         solana_sdk::{
-            compute_budget::ComputeBudgetInstruction, hash::Hash, message::Message, packet::Packet,
-            signature::Keypair, signer::Signer, system_instruction, transaction::Transaction,
+            compute_budget::ComputeBudgetInstruction,
+            hash::Hash,
+            message::Message,
+            packet::Packet,
+            signature::Keypair,
+            signer::Signer,
+            system_instruction,
+            transaction::{SanitizedTransaction, Transaction},
         },
     };
 
-    fn create_transaction_state(compute_unit_price: u64) -> TransactionState {
+    fn create_transaction_state(
+        compute_unit_price: u64,
+    ) -> TransactionState<RuntimeTransaction<SanitizedTransaction>> {
         let from_keypair = Keypair::new();
         let ixs = vec![
             system_instruction::transfer(

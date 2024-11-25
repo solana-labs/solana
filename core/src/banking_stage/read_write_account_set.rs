@@ -1,6 +1,5 @@
 use {
-    ahash::AHashSet,
-    solana_sdk::{message::SanitizedMessage, pubkey::Pubkey},
+    ahash::AHashSet, solana_sdk::pubkey::Pubkey, solana_svm_transaction::svm_message::SVMMessage,
 };
 
 /// Wrapper struct to accumulate locks for a batch of transactions.
@@ -14,7 +13,7 @@ pub struct ReadWriteAccountSet {
 
 impl ReadWriteAccountSet {
     /// Returns true if all account locks were available and false otherwise.
-    pub fn check_locks(&self, message: &SanitizedMessage) -> bool {
+    pub fn check_locks(&self, message: &impl SVMMessage) -> bool {
         message
             .account_keys()
             .iter()
@@ -30,7 +29,7 @@ impl ReadWriteAccountSet {
 
     /// Add all account locks.
     /// Returns true if all account locks were available and false otherwise.
-    pub fn take_locks(&mut self, message: &SanitizedMessage) -> bool {
+    pub fn take_locks(&mut self, message: &impl SVMMessage) -> bool {
         message
             .account_keys()
             .iter()

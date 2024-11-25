@@ -8,6 +8,7 @@ use {
     solana_measure::measure_us,
     solana_poh::leader_bank_notifier::LeaderBankNotifier,
     solana_runtime::bank::Bank,
+    solana_runtime_transaction::transaction_with_meta::TransactionWithMeta,
     solana_sdk::clock::Slot,
     solana_svm::transaction_error_metrics::TransactionErrorMetrics,
     std::{
@@ -21,28 +22,28 @@ use {
 };
 
 #[derive(Debug, Error)]
-pub enum ConsumeWorkerError {
+pub enum ConsumeWorkerError<Tx> {
     #[error("Failed to receive work from scheduler: {0}")]
     Recv(#[from] RecvError),
     #[error("Failed to send finalized consume work to scheduler: {0}")]
-    Send(#[from] SendError<FinishedConsumeWork>),
+    Send(#[from] SendError<FinishedConsumeWork<Tx>>),
 }
 
-pub(crate) struct ConsumeWorker {
-    consume_receiver: Receiver<ConsumeWork>,
+pub(crate) struct ConsumeWorker<Tx> {
+    consume_receiver: Receiver<ConsumeWork<Tx>>,
     consumer: Consumer,
-    consumed_sender: Sender<FinishedConsumeWork>,
+    consumed_sender: Sender<FinishedConsumeWork<Tx>>,
 
     leader_bank_notifier: Arc<LeaderBankNotifier>,
     metrics: Arc<ConsumeWorkerMetrics>,
 }
 
-impl ConsumeWorker {
+impl<Tx: TransactionWithMeta> ConsumeWorker<Tx> {
     pub fn new(
         id: u32,
-        consume_receiver: Receiver<ConsumeWork>,
+        consume_receiver: Receiver<ConsumeWork<Tx>>,
         consumer: Consumer,
-        consumed_sender: Sender<FinishedConsumeWork>,
+        consumed_sender: Sender<FinishedConsumeWork<Tx>>,
         leader_bank_notifier: Arc<LeaderBankNotifier>,
     ) -> Self {
         Self {
@@ -58,14 +59,14 @@ impl ConsumeWorker {
         self.metrics.clone()
     }
 
-    pub fn run(self) -> Result<(), ConsumeWorkerError> {
+    pub fn run(self) -> Result<(), ConsumeWorkerError<Tx>> {
         loop {
             let work = self.consume_receiver.recv()?;
             self.consume_loop(work)?;
         }
     }
 
-    fn consume_loop(&self, work: ConsumeWork) -> Result<(), ConsumeWorkerError> {
+    fn consume_loop(&self, work: ConsumeWork<Tx>) -> Result<(), ConsumeWorkerError<Tx>> {
         let (maybe_consume_bank, get_bank_us) = measure_us!(self.get_consume_bank());
         let Some(mut bank) = maybe_consume_bank else {
             self.metrics
@@ -103,7 +104,11 @@ impl ConsumeWorker {
     }
 
     /// Consume a single batch.
-    fn consume(&self, bank: &Arc<Bank>, work: ConsumeWork) -> Result<(), ConsumeWorkerError> {
+    fn consume(
+        &self,
+        bank: &Arc<Bank>,
+        work: ConsumeWork<Tx>,
+    ) -> Result<(), ConsumeWorkerError<Tx>> {
         let output = self.consumer.process_and_record_aged_transactions(
             bank,
             &work.transactions,
@@ -130,7 +135,7 @@ impl ConsumeWorker {
     }
 
     /// Retry current batch and all outstanding batches.
-    fn retry_drain(&self, work: ConsumeWork) -> Result<(), ConsumeWorkerError> {
+    fn retry_drain(&self, work: ConsumeWork<Tx>) -> Result<(), ConsumeWorkerError<Tx>> {
         for work in try_drain_iter(work, &self.consume_receiver) {
             self.retry(work)?;
         }
@@ -138,7 +143,7 @@ impl ConsumeWorker {
     }
 
     /// Send transactions back to scheduler as retryable.
-    fn retry(&self, work: ConsumeWork) -> Result<(), ConsumeWorkerError> {
+    fn retry(&self, work: ConsumeWork<Tx>) -> Result<(), ConsumeWorkerError<Tx>> {
         let retryable_indexes: Vec<_> = (0..work.transactions.len()).collect();
         let num_retryable = retryable_indexes.len();
         self.metrics
@@ -774,7 +779,9 @@ mod tests {
             signature::Keypair,
             signer::Signer,
             system_instruction, system_transaction,
-            transaction::{MessageHash, TransactionError, VersionedTransaction},
+            transaction::{
+                MessageHash, SanitizedTransaction, TransactionError, VersionedTransaction,
+            },
         },
         solana_svm_transaction::svm_message::SVMMessage,
         std::{
@@ -798,11 +805,14 @@ mod tests {
         _poh_simulator: JoinHandle<()>,
         _replay_vote_receiver: ReplayVoteReceiver,
 
-        consume_sender: Sender<ConsumeWork>,
-        consumed_receiver: Receiver<FinishedConsumeWork>,
+        consume_sender: Sender<ConsumeWork<RuntimeTransaction<SanitizedTransaction>>>,
+        consumed_receiver: Receiver<FinishedConsumeWork<RuntimeTransaction<SanitizedTransaction>>>,
     }
 
-    fn setup_test_frame() -> (TestFrame, ConsumeWorker) {
+    fn setup_test_frame() -> (
+        TestFrame,
+        ConsumeWorker<RuntimeTransaction<SanitizedTransaction>>,
+    ) {
         let GenesisConfigInfo {
             genesis_config,
             mint_keypair,
