@@ -261,7 +261,9 @@ impl solana_runtime_transaction::transaction_meta::StaticMeta for WritableKeysTr
 #[cfg(feature = "dev-context-only-utils")]
 impl TransactionWithMeta for WritableKeysTransaction {
     #[allow(refining_impl_trait)]
-    fn as_sanitized_transaction(&self) -> solana_sdk::transaction::SanitizedTransaction {
+    fn as_sanitized_transaction(
+        &self,
+    ) -> std::borrow::Cow<solana_sdk::transaction::SanitizedTransaction> {
         unimplemented!("WritableKeysTransaction::as_sanitized_transaction");
     }
 

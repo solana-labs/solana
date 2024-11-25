@@ -62,7 +62,6 @@ use {
     solana_transaction_status::token_balances::TransactionTokenBalancesSet,
     solana_vote::vote_account::VoteAccountsHashMap,
     std::{
-        borrow::Borrow,
         collections::{HashMap, HashSet},
         ops::{Index, Range},
         path::PathBuf,
@@ -208,7 +207,7 @@ pub fn execute_batch(
         let transactions: Vec<SanitizedTransaction> = batch
             .sanitized_transactions()
             .iter()
-            .map(|tx| tx.as_sanitized_transaction().borrow().clone())
+            .map(|tx| tx.as_sanitized_transaction().into_owned())
             .collect();
         let post_token_balances = if record_token_balances {
             collect_token_balances(bank, batch, &mut mint_decimals)

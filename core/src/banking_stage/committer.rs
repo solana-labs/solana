@@ -23,7 +23,7 @@ use {
     solana_transaction_status::{
         token_balances::TransactionTokenBalancesSet, TransactionTokenBalance,
     },
-    std::{borrow::Borrow, collections::HashMap, sync::Arc},
+    std::{collections::HashMap, sync::Arc},
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -140,7 +140,7 @@ impl Committer {
             let txs = batch
                 .sanitized_transactions()
                 .iter()
-                .map(|tx| tx.as_sanitized_transaction().borrow().clone())
+                .map(|tx| tx.as_sanitized_transaction().into_owned())
                 .collect_vec();
             let post_balances = bank.collect_balances(batch);
             let post_token_balances =

@@ -5,7 +5,6 @@ use {
         transaction_meta::{StaticMeta, TransactionMeta},
         transaction_with_meta::TransactionWithMeta,
     },
-    core::borrow::Borrow,
     solana_pubkey::Pubkey,
     solana_sdk::{
         message::{AddressLoader, TransactionSignatureDetails},
@@ -16,7 +15,7 @@ use {
         },
     },
     solana_svm_transaction::instruction::SVMInstruction,
-    std::collections::HashSet,
+    std::{borrow::Cow, collections::HashSet},
 };
 
 impl RuntimeTransaction<SanitizedVersionedTransaction> {
@@ -125,8 +124,8 @@ impl RuntimeTransaction<SanitizedTransaction> {
 
 impl TransactionWithMeta for RuntimeTransaction<SanitizedTransaction> {
     #[inline]
-    fn as_sanitized_transaction(&self) -> impl Borrow<SanitizedTransaction> {
-        &self.transaction
+    fn as_sanitized_transaction(&self) -> Cow<SanitizedTransaction> {
+        Cow::Borrowed(self)
     }
 
     #[inline]

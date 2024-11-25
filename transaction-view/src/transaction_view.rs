@@ -197,6 +197,14 @@ impl<D: TransactionData> TransactionView<true, D> {
         self.num_required_signatures()
             .wrapping_sub(self.num_readonly_signed_static_accounts())
     }
+
+    /// Return the total number of accounts in the transactions.
+    #[inline]
+    pub fn total_num_accounts(&self) -> u16 {
+        u16::from(self.num_static_account_keys())
+            .wrapping_add(self.total_writable_lookup_accounts())
+            .wrapping_add(self.total_readonly_lookup_accounts())
+    }
 }
 
 // Manual implementation of `Debug` - avoids bound on `D`.

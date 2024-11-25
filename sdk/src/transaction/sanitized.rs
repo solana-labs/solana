@@ -145,6 +145,28 @@ impl SanitizedTransaction {
         Self::try_from_legacy_transaction(tx, &ReservedAccountKeys::empty_key_set()).unwrap()
     }
 
+    /// Create a sanitized transaction from fields.
+    /// Performs only basic signature sanitization.
+    pub fn try_new_from_fields(
+        message: SanitizedMessage,
+        message_hash: Hash,
+        is_simple_vote_tx: bool,
+        signatures: Vec<Signature>,
+    ) -> Result<Self> {
+        VersionedTransaction::sanitize_signatures_inner(
+            usize::from(message.header().num_required_signatures),
+            message.static_account_keys().len(),
+            signatures.len(),
+        )?;
+
+        Ok(Self {
+            message,
+            message_hash,
+            signatures,
+            is_simple_vote_tx,
+        })
+    }
+
     /// Return the first signature for this transaction.
     ///
     /// Notes:
@@ -320,7 +342,10 @@ mod tests {
             reserved_account_keys::ReservedAccountKeys,
             signer::{keypair::Keypair, Signer},
         },
-        solana_program::vote::{self, state::Vote},
+        solana_program::{
+            message::MessageHeader,
+            vote::{self, state::Vote},
+        },
     };
 
     #[test]
@@ -389,6 +414,58 @@ mod tests {
             )
             .unwrap();
             assert!(vote_transaction.is_simple_vote_transaction());
+        }
+    }
+
+    #[test]
+    fn test_try_new_from_fields() {
+        let legacy_message = SanitizedMessage::try_from_legacy_message(
+            legacy::Message {
+                header: MessageHeader {
+                    num_required_signatures: 2,
+                    num_readonly_signed_accounts: 1,
+                    num_readonly_unsigned_accounts: 1,
+                },
+                account_keys: vec![
+                    Pubkey::new_unique(),
+                    Pubkey::new_unique(),
+                    Pubkey::new_unique(),
+                ],
+                ..legacy::Message::default()
+            },
+            &HashSet::default(),
+        )
+        .unwrap();
+
+        for is_simple_vote_tx in [false, true] {
+            // Not enough signatures
+            assert!(SanitizedTransaction::try_new_from_fields(
+                legacy_message.clone(),
+                Hash::new_unique(),
+                is_simple_vote_tx,
+                vec![],
+            )
+            .is_err());
+            // Too many signatures
+            assert!(SanitizedTransaction::try_new_from_fields(
+                legacy_message.clone(),
+                Hash::new_unique(),
+                is_simple_vote_tx,
+                vec![
+                    Signature::default(),
+                    Signature::default(),
+                    Signature::default()
+                ],
+            )
+            .is_err());
+            // Correct number of signatures.
+            assert!(SanitizedTransaction::try_new_from_fields(
+                legacy_message.clone(),
+                Hash::new_unique(),
+                is_simple_vote_tx,
+                vec![Signature::default(), Signature::default()]
+            )
+            .is_ok());
         }
     }
 }

@@ -2,6 +2,7 @@ use {
     crate::{
         result::{Result, TransactionViewError},
         transaction_data::TransactionData,
+        transaction_version::TransactionVersion,
         transaction_view::TransactionView,
     },
     core::{
@@ -14,10 +15,11 @@ use {
         message::{v0::LoadedAddresses, AccountKeys, TransactionSignatureDetails},
         pubkey::Pubkey,
         secp256k1_program,
+        signature::Signature,
     },
     solana_svm_transaction::{
         instruction::SVMInstruction, message_address_table_lookup::SVMMessageAddressTableLookup,
-        svm_message::SVMMessage,
+        svm_message::SVMMessage, svm_transaction::SVMTransaction,
     },
     std::collections::HashSet,
 };
@@ -54,6 +56,11 @@ impl<D: TransactionData> ResolvedTransactionView<D> {
         // verify that the number of readable and writable match up.
         // This is a basic sanity check to make sure we're not passing a totally
         // invalid set of resolved addresses.
+        // Additionally if it is a v0 transaction it *must* have resolved
+        // addresses, even if they are empty.
+        if matches!(view.version(), TransactionVersion::V0) && resolved_addresses_ref.is_none() {
+            return Err(TransactionViewError::AddressLookupMismatch);
+        }
         if let Some(loaded_addresses) = resolved_addresses_ref {
             if loaded_addresses.writable.len() != usize::from(view.total_writable_lookup_accounts())
                 || loaded_addresses.readonly.len()
@@ -146,6 +153,10 @@ impl<D: TransactionData> ResolvedTransactionView<D> {
             .wrapping_add(usize::from(
                 self.view.num_readonly_unsigned_static_accounts(),
             ))
+    }
+
+    pub fn loaded_addresses(&self) -> Option<&LoadedAddresses> {
+        self.resolved_addresses.as_ref()
     }
 
     fn signature_details(&self) -> TransactionSignatureDetails {
@@ -242,6 +253,16 @@ impl<D: TransactionData> SVMMessage for ResolvedTransactionView<D> {
 
     fn message_address_table_lookups(&self) -> impl Iterator<Item = SVMMessageAddressTableLookup> {
         self.view.address_table_lookup_iter()
+    }
+}
+
+impl<D: TransactionData> SVMTransaction for ResolvedTransactionView<D> {
+    fn signature(&self) -> &Signature {
+        &self.view.signatures()[0]
+    }
+
+    fn signatures(&self) -> &[Signature] {
+        self.view.signatures()
     }
 }
 
