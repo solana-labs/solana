@@ -796,7 +796,11 @@ impl LedgerStorage {
             Some(before_signature) => {
                 let TransactionInfo { slot, index, .. } = bigtable
                     .get_bincode_cell("tx", before_signature.to_string())
-                    .await?;
+                    .await
+                    .map_err(|err| match err {
+                        bigtable::Error::RowNotFound => Error::SignatureNotFound,
+                        _ => err.into(),
+                    })?;
 
                 (slot, index)
             }
@@ -808,7 +812,11 @@ impl LedgerStorage {
             Some(until_signature) => {
                 let TransactionInfo { slot, index, .. } = bigtable
                     .get_bincode_cell("tx", until_signature.to_string())
-                    .await?;
+                    .await
+                    .map_err(|err| match err {
+                        bigtable::Error::RowNotFound => Error::SignatureNotFound,
+                        _ => err.into(),
+                    })?;
 
                 (slot, index)
             }

@@ -26,6 +26,7 @@ pub const JSON_RPC_SERVER_ERROR_UNSUPPORTED_TRANSACTION_VERSION: i64 = -32015;
 pub const JSON_RPC_SERVER_ERROR_MIN_CONTEXT_SLOT_NOT_REACHED: i64 = -32016;
 pub const JSON_RPC_SERVER_ERROR_EPOCH_REWARDS_PERIOD_ACTIVE: i64 = -32017;
 pub const JSON_RPC_SERVER_ERROR_SLOT_NOT_EPOCH_BOUNDARY: i64 = -32018;
+pub const JSON_RPC_SERVER_ERROR_LONG_TERM_STORAGE_UNREACHABLE: i64 = -32019;
 
 #[derive(Error, Debug)]
 pub enum RpcCustomError {
@@ -75,6 +76,8 @@ pub enum RpcCustomError {
     },
     #[error("SlotNotEpochBoundary")]
     SlotNotEpochBoundary { slot: Slot },
+    #[error("LongTermStorageUnreachable")]
+    LongTermStorageUnreachable,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -242,6 +245,11 @@ impl From<RpcCustomError> for Error {
                     "Rewards cannot be found because slot {slot} is not the epoch boundary. This \
                      may be due to gap in the queried node's local ledger or long-term storage"
                 ),
+                data: None,
+            },
+            RpcCustomError::LongTermStorageUnreachable => Self {
+                code: ErrorCode::ServerError(JSON_RPC_SERVER_ERROR_LONG_TERM_STORAGE_UNREACHABLE),
+                message: "Failed to query long-term storage; please try again".to_string(),
                 data: None,
             },
         }
