@@ -11,8 +11,8 @@ use {
         address_lookup_table::{
             self,
             instruction::{
-                close_lookup_table, create_lookup_table, create_lookup_table_signed,
-                deactivate_lookup_table, extend_lookup_table, freeze_lookup_table,
+                close_lookup_table, create_lookup_table, deactivate_lookup_table,
+                extend_lookup_table, freeze_lookup_table,
             },
             state::AddressLookupTable,
         },
@@ -31,7 +31,6 @@ use {
 pub enum AddressLookupTableCliCommand {
     CreateLookupTable {
         authority_pubkey: Pubkey,
-        authority_signer_index: Option<SignerIndex>,
         payer_signer_index: SignerIndex,
     },
     FreezeLookupTable {
@@ -76,26 +75,12 @@ impl AddressLookupTableSubCommands for App<'_, '_> {
                         .arg(
                             Arg::with_name("authority")
                                 .long("authority")
+                                .alias("authority-signer")
                                 .value_name("AUTHORITY_PUBKEY")
                                 .takes_value(true)
-                                .validator(is_pubkey)
+                                .validator(is_pubkey_or_keypair)
                                 .help(
                                     "Lookup table authority address \
-                                    [default: the default configured keypair]. \
-                                    WARNING: Cannot be used for creating a lookup table for \
-                                    a cluster running v1.11 or earlier which requires the \
-                                    authority to sign for lookup table creation.",
-                                ),
-                        )
-                        .arg(
-                            Arg::with_name("authority_signer")
-                                .long("authority-signer")
-                                .value_name("AUTHORITY_SIGNER")
-                                .takes_value(true)
-                                .conflicts_with("authority")
-                                .validator(is_valid_signer)
-                                .help(
-                                    "Lookup table authority keypair \
                                     [default: the default configured keypair].",
                                 ),
                         )
@@ -278,12 +263,7 @@ pub fn parse_address_lookup_table_subcommand(
                 default_signer.signer_from_path(matches, wallet_manager)?,
             )];
 
-            let authority_pubkey = if let Ok((authority_signer, Some(authority_pubkey))) =
-                signer_of(matches, "authority_signer", wallet_manager)
-            {
-                bulk_signers.push(authority_signer);
-                authority_pubkey
-            } else if let Some(authority_pubkey) = pubkey_of(matches, "authority") {
+            let authority_pubkey = if let Some(authority_pubkey) = pubkey_of(matches, "authority") {
                 authority_pubkey
             } else {
                 default_signer
@@ -311,7 +291,6 @@ pub fn parse_address_lookup_table_subcommand(
                 command: CliCommand::AddressLookupTable(
                     AddressLookupTableCliCommand::CreateLookupTable {
                         authority_pubkey,
-                        authority_signer_index: signer_info.index_of(Some(authority_pubkey)),
                         payer_signer_index: signer_info.index_of(payer_pubkey).unwrap(),
                     },
                 ),
@@ -500,15 +479,10 @@ pub fn process_address_lookup_table_subcommand(
     match subcommand {
         AddressLookupTableCliCommand::CreateLookupTable {
             authority_pubkey,
-            authority_signer_index,
             payer_signer_index,
-        } => process_create_lookup_table(
-            &rpc_client,
-            config,
-            *authority_pubkey,
-            *authority_signer_index,
-            *payer_signer_index,
-        ),
+        } => {
+            process_create_lookup_table(&rpc_client, config, *authority_pubkey, *payer_signer_index)
+        }
         AddressLookupTableCliCommand::FreezeLookupTable {
             lookup_table_pubkey,
             authority_signer_index,
@@ -565,10 +539,8 @@ fn process_create_lookup_table(
     rpc_client: &RpcClient,
     config: &CliConfig,
     authority_address: Pubkey,
-    authority_signer_index: Option<usize>,
     payer_signer_index: usize,
 ) -> ProcessResult {
-    let authority_signer = authority_signer_index.map(|index| config.signers[index]);
     let payer_signer = config.signers[payer_signer_index];
 
     let get_clock_result = rpc_client
@@ -579,11 +551,8 @@ fn process_create_lookup_table(
     })?;
 
     let payer_address = payer_signer.pubkey();
-    let (create_lookup_table_ix, lookup_table_address) = if authority_signer.is_some() {
-        create_lookup_table_signed(authority_address, payer_address, clock.slot)
-    } else {
-        create_lookup_table(authority_address, payer_address, clock.slot)
-    };
+    let (create_lookup_table_ix, lookup_table_address) =
+        create_lookup_table(authority_address, payer_address, clock.slot);
 
     let blockhash = rpc_client.get_latest_blockhash()?;
     let mut tx = Transaction::new_unsigned(Message::new(
@@ -591,11 +560,7 @@ fn process_create_lookup_table(
         Some(&config.signers[0].pubkey()),
     ));
 
-    let mut keypairs: Vec<&dyn Signer> = vec![config.signers[0], payer_signer];
-    if let Some(authority_signer) = authority_signer {
-        keypairs.push(authority_signer);
-    }
-
+    let keypairs: Vec<&dyn Signer> = vec![config.signers[0], payer_signer];
     tx.try_sign(&keypairs, blockhash)?;
     let result = rpc_client.send_and_confirm_transaction_with_spinner_and_config(
         &tx,

@@ -43,7 +43,6 @@ fn test_cli_create_extend_and_freeze_address_lookup_table() {
     config.command =
         CliCommand::AddressLookupTable(AddressLookupTableCliCommand::CreateLookupTable {
             authority_pubkey: keypair.pubkey(),
-            authority_signer_index: None,
             payer_signer_index: 0,
         });
     let response: CliAddressLookupTableCreated =
@@ -158,7 +157,6 @@ fn test_cli_create_and_deactivate_address_lookup_table() {
     config.command =
         CliCommand::AddressLookupTable(AddressLookupTableCliCommand::CreateLookupTable {
             authority_pubkey: keypair.pubkey(),
-            authority_signer_index: Some(0),
             payer_signer_index: 0,
         });
     let response: CliAddressLookupTableCreated =
