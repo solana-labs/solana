@@ -3892,6 +3892,7 @@ impl AccountsDb {
                 if store.num_zero_lamport_single_ref_accounts() == store.count() {
                     // all accounts in this storage can be dead
                     self.accounts_index.add_uncleaned_roots([slot]);
+                    self.dirty_stores.entry(slot).or_insert(store);
                     self.shrink_stats
                         .num_dead_slots_added_to_clean
                         .fetch_add(1, Ordering::Relaxed);
