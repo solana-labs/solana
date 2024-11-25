@@ -47,13 +47,13 @@ full = [
     "dep:solana-seed-derivable",
     "dep:solana-seed-phrase",
     "dep:solana-signer",
-    "dep:solana-transaction-error"
+    "dep:solana-transaction-error",
 ]
 borsh = [
     "dep:borsh",
     "solana-compute-budget-interface/borsh",
     "solana-program/borsh",
-    "solana-secp256k1-recover/borsh"
+    "solana-secp256k1-recover/borsh",
 ]
 dev-context-only-utils = [
     "qualifier_attr",
@@ -74,7 +74,7 @@ frozen-abi = [
     "solana-reward-info/frozen-abi",
     "solana-short-vec/frozen-abi",
     "solana-signature/frozen-abi",
-    "solana-transaction-error/frozen-abi"
+    "solana-transaction-error/frozen-abi",
 ]
 # Enables the "vendored" feature of openssl inside of secp256r1-program
 openssl-vendored = ["solana-precompiles/openssl-vendored"]
@@ -115,7 +115,9 @@ solana-bn254 = { workspace = true }
 solana-cluster-type = { workspace = true, features = [
     "serde",
 ], optional = true }
-solana-commitment-config = { workspace = true, optional = true, features = ["serde"] }
+solana-commitment-config = { workspace = true, optional = true, features = [
+    "serde",
+] }
 solana-compute-budget-interface = { workspace = true, optional = true, features = [
     "serde",
 ] }
@@ -133,7 +135,9 @@ solana-frozen-abi-macro = { workspace = true, optional = true, features = [
 ] }
 solana-inflation = { workspace = true, features = ["serde"] }
 solana-instruction = { workspace = true }
-solana-keypair = { workspace = true, optional = true, features = ["seed-derivable"] }
+solana-keypair = { workspace = true, optional = true, features = [
+    "seed-derivable",
+] }
 solana-native-token = { workspace = true }
 solana-packet = { workspace = true, features = ["bincode", "serde"] }
 solana-precompile-error = { workspace = true, optional = true }
@@ -141,7 +145,9 @@ solana-precompiles = { workspace = true, optional = true }
 solana-presigner = { workspace = true, optional = true }
 solana-program = { workspace = true }
 solana-program-memory = { workspace = true }
-solana-pubkey = { workspace = true, default-features = false, features = ["std"] }
+solana-pubkey = { workspace = true, default-features = false, features = [
+    "std",
+] }
 solana-quic-definitions = { workspace = true, optional = true }
 solana-rent-debits = { workspace = true }
 solana-reserved-account-keys = { workspace = true }
@@ -149,7 +155,9 @@ solana-reward-info = { workspace = true, features = ["serde"] }
 solana-sanitize = { workspace = true }
 solana-sdk-ids = { workspace = true }
 solana-sdk-macro = { workspace = true }
-solana-secp256k1-program = { workspace = true, optional = true, features = ["bincode"] }
+solana-secp256k1-program = { workspace = true, optional = true, features = [
+    "bincode",
+] }
 solana-secp256k1-recover = { workspace = true }
 solana-secp256r1-program = { workspace = true, default-features = false }
 solana-seed-derivable = { workspace = true, optional = true }
@@ -165,10 +173,10 @@ solana-signature = { workspace = true, features = [
 ], optional = true }
 solana-signer = { workspace = true, optional = true }
 solana-time-utils = { workspace = true }
-solana-transaction-context = { workspace = true, features = [
-    "bincode",
-] }
-solana-transaction-error = { workspace = true, features = ["serde"], optional = true }
+solana-transaction-context = { workspace = true, features = ["bincode"] }
+solana-transaction-error = { workspace = true, features = [
+    "serde",
+], optional = true }
 thiserror = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]

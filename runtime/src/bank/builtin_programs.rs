@@ -37,7 +37,7 @@ mod tests {
         let only_apply_transitions_for_new_features = true;
         bank.apply_builtin_program_feature_transitions(
             only_apply_transitions_for_new_features,
-            &HashSet::new(),
+            &AHashSet::new(),
         );
     }
 

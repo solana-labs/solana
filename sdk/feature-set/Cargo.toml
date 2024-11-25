@@ -10,6 +10,7 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
+ahash = { workspace = true }
 lazy_static = { workspace = true }
 solana-epoch-schedule = { workspace = true }
 solana-frozen-abi = { workspace = true, optional = true, features = [
@@ -23,10 +24,7 @@ solana-pubkey = { workspace = true }
 solana-sha256-hasher = { workspace = true }
 
 [features]
-frozen-abi = [
-    "dep:solana-frozen-abi",
-    "dep:solana-frozen-abi-macro",
-]
+frozen-abi = ["dep:solana-frozen-abi", "dep:solana-frozen-abi-macro"]
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
