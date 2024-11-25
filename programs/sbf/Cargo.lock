@@ -5210,7 +5210,7 @@ dependencies = [
  "serde_derive",
  "serde_yaml",
  "solana-clap-utils",
- "solana-sdk",
+ "solana-commitment-config",
  "url 2.5.3",
 ]
 
