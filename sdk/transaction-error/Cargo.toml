@@ -21,7 +21,7 @@ solana-sanitize = { workspace = true }
 
 [features]
 frozen-abi = ["dep:solana-frozen-abi", "dep:solana-frozen-abi-macro"]
-serde = ["dep:serde", "dep:serde_derive"]
+serde = ["dep:serde", "dep:serde_derive", "solana-instruction/serde"]
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

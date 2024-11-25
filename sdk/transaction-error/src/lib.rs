@@ -4,9 +4,7 @@
 use serde_derive::{Deserialize, Serialize};
 #[cfg(feature = "frozen-abi")]
 use solana_frozen_abi_macro::{AbiEnumVisitor, AbiExample};
-use {
-    core::fmt, solana_instruction::error::InstructionError, solana_sanitize::SanitizeError, std::io,
-};
+use {core::fmt, solana_instruction::error::InstructionError, solana_sanitize::SanitizeError};
 
 pub type TransactionResult<T> = Result<T, TransactionError>;
 
@@ -356,7 +354,7 @@ impl From<SanitizeError> for SanitizeMessageError {
 #[cfg(not(target_os = "solana"))]
 #[derive(Debug)]
 pub enum TransportError {
-    IoError(io::Error),
+    IoError(std::io::Error),
     TransactionError(TransactionError),
     Custom(String),
 }
@@ -386,8 +384,8 @@ impl fmt::Display for TransportError {
 }
 
 #[cfg(not(target_os = "solana"))]
-impl From<io::Error> for TransportError {
-    fn from(e: io::Error) -> Self {
+impl From<std::io::Error> for TransportError {
+    fn from(e: std::io::Error) -> Self {
         TransportError::IoError(e)
     }
 }
