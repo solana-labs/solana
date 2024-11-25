@@ -8474,44 +8474,27 @@ impl AccountsDb {
         &self,
         requested_slots: impl RangeBounds<Slot> + Sync,
     ) -> (Vec<Arc<AccountStorageEntry>>, Vec<Slot>) {
-        let mut m = Measure::start("get slots");
-        let mut slots_and_storages = self
+        let start = Instant::now();
+        let max_alive_root_exclusive = self
+            .accounts_index
+            .roots_tracker
+            .read()
+            .unwrap()
+            .alive_roots
+            .max_exclusive();
+        let (slots, storages) = self
             .storage
-            .iter()
-            .filter_map(|(slot, store)| {
-                requested_slots
-                    .contains(&slot)
-                    .then_some((slot, Some(store)))
+            .get_if(|slot, storage| {
+                (*slot < max_alive_root_exclusive)
+                    && requested_slots.contains(slot)
+                    && storage.has_accounts()
             })
-            .collect::<Vec<_>>();
-        m.stop();
-        let mut m2 = Measure::start("filter");
-        let chunk_size = 5_000;
-        let (result, slots): (Vec<_>, Vec<_>) = self.thread_pool_clean.install(|| {
-            slots_and_storages
-                .par_chunks_mut(chunk_size)
-                .map(|slots_and_storages| {
-                    slots_and_storages
-                        .iter_mut()
-                        .filter(|(slot, _)| self.accounts_index.is_alive_root(*slot))
-                        .filter_map(|(slot, store)| {
-                            let store = std::mem::take(store).unwrap();
-                            store.has_accounts().then_some((store, *slot))
-                        })
-                        .collect::<Vec<(Arc<AccountStorageEntry>, Slot)>>()
-                })
-                .flatten()
-                .unzip()
-        });
-
-        m2.stop();
-
-        debug!(
-            "hash_total: get slots: {}, filter: {}",
-            m.as_us(),
-            m2.as_us(),
-        );
-        (result, slots)
+            .into_vec()
+            .into_iter()
+            .unzip();
+        let duration = start.elapsed();
+        debug!("get_snapshot_storages: {duration:?}");
+        (storages, slots)
     }
 
     /// Returns the latest full snapshot slot
