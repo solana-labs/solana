@@ -5,7 +5,7 @@ set -e
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # shellcheck disable=SC1091
-source "$here/../rust-version.sh"
+source "$here/env.sh"
 
 platform=()
 if [[ $(uname -m) = arm64 ]]; then
@@ -13,11 +13,16 @@ if [[ $(uname -m) = arm64 ]]; then
   platform+=(--platform linux/amd64)
 fi
 
-echo "build image: ${ci_docker_image:?}"
+echo "build image: ${CI_DOCKER_IMAGE:?}"
 docker build "${platform[@]}" \
   -f "$here/Dockerfile" \
-  --build-arg "RUST_VERSION=${rust_stable:?}" \
-  --build-arg "RUST_NIGHTLY_VERSION=${rust_nightly:?}" \
-  -t "$ci_docker_image" .
+  --build-arg "BASE_IMAGE=${BASE_IMAGE}" \
+  --build-arg "RUST_VERSION=${RUST_VERSION}" \
+  --build-arg "RUST_NIGHTLY_VERSION=${RUST_NIGHTLY_VERSION}" \
+  --build-arg "GOLANG_VERSION=${GOLANG_VERSION}" \
+  --build-arg "NODE_MAJOR=${NODE_MAJOR}" \
+  --build-arg "SCCACHE_VERSION=${SCCACHE_VERSION}" \
+  --build-arg "GRCOV_VERSION=${GRCOV_VERSION}" \
+  -t "$CI_DOCKER_IMAGE" .
 
-docker push "$ci_docker_image"
+docker push "$CI_DOCKER_IMAGE"

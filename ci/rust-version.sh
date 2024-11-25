@@ -37,8 +37,6 @@ export rust_stable="$stable_version"
 
 export rust_nightly=nightly-"$nightly_version"
 
-export ci_docker_image="anzaxyz/ci:rust_${rust_stable}_${rust_nightly}"
-
 [[ -z $1 ]] || (
 
   rustup_install() {
