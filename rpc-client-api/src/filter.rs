@@ -1,8 +1,8 @@
 use {
     base64::{prelude::BASE64_STANDARD, Engine},
     serde::Deserialize,
+    solana_account::{AccountSharedData, ReadableAccount},
     solana_inline_spl::{token::GenericTokenAccount, token_2022::Account},
-    solana_sdk::account::{AccountSharedData, ReadableAccount},
     std::borrow::Cow,
     thiserror::Error,
 };

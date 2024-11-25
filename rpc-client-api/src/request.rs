@@ -1,7 +1,8 @@
 use {
     crate::response::RpcSimulateTransactionResult,
     serde_json::{json, Value},
-    solana_sdk::{clock::Slot, pubkey::Pubkey},
+    solana_clock::Slot,
+    solana_pubkey::Pubkey,
     std::fmt,
     thiserror::Error,
 };
@@ -226,7 +227,7 @@ mod tests {
     use {
         super::*,
         crate::config::RpcTokenAccountsFilter,
-        solana_sdk::commitment_config::{CommitmentConfig, CommitmentLevel},
+        solana_commitment_config::{CommitmentConfig, CommitmentLevel},
     };
 
     #[test]
@@ -289,7 +290,7 @@ mod tests {
 
         // Test request with CommitmentConfig and params
         let test_request = RpcRequest::GetTokenAccountsByOwner;
-        let mint = solana_sdk::pubkey::new_rand();
+        let mint = solana_pubkey::new_rand();
         let token_account_filter = RpcTokenAccountsFilter::Mint(mint.to_string());
         let request = test_request
             .build_request_json(1, json!([addr, token_account_filter, commitment_config]));

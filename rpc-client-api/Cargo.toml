@@ -20,9 +20,16 @@ semver = { workspace = true }
 serde = { workspace = true }
 serde_derive = { workspace = true }
 serde_json = { workspace = true }
+solana-account = { workspace = true }
 solana-account-decoder-client-types = { workspace = true }
+solana-clock = { workspace = true }
+solana-commitment-config = { workspace = true }
+solana-fee-calculator = { workspace = true }
+solana-inflation = { workspace = true }
 solana-inline-spl = { workspace = true }
-solana-sdk = { workspace = true }
+solana-pubkey = { workspace = true }
+solana-signer = { workspace = true }
+solana-transaction-error = { workspace = true }
 solana-transaction-status-client-types = { workspace = true }
 solana-version = { workspace = true }
 thiserror = { workspace = true }
