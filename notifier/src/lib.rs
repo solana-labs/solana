@@ -27,7 +27,7 @@ use log::*;
 use {
     reqwest::{blocking::Client, StatusCode},
     serde_json::json,
-    solana_sdk::hash::Hash,
+    solana_hash::Hash,
     std::{env, str::FromStr, thread::sleep, time::Duration},
 };
 
