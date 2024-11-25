@@ -22,7 +22,7 @@ extern crate test;
 use {
     rayon::prelude::*,
     solana_bucket_map::bucket_map::{BucketMap, BucketMapConfig},
-    solana_sdk::pubkey::Pubkey,
+    solana_pubkey::Pubkey,
     std::{collections::hash_map::HashMap, sync::RwLock},
     test::Bencher,
 };

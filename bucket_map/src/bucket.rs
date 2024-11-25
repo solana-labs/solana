@@ -16,7 +16,7 @@ use {
     },
     rand::{thread_rng, Rng},
     solana_measure::measure::Measure,
-    solana_sdk::pubkey::Pubkey,
+    solana_pubkey::Pubkey,
     std::{
         collections::hash_map::DefaultHasher,
         fs,

@@ -6258,9 +6258,10 @@ dependencies = [
  "num_enum",
  "rand 0.8.5",
  "rayon",
+ "solana-clock",
  "solana-logger",
  "solana-measure",
- "solana-sdk",
+ "solana-pubkey",
  "tempfile",
 ]
 

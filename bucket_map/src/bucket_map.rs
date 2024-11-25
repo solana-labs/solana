@@ -4,7 +4,7 @@ use {
     crate::{
         bucket_api::BucketApi, bucket_stats::BucketMapStats, restart::Restart, MaxSearch, RefCount,
     },
-    solana_sdk::pubkey::Pubkey,
+    solana_pubkey::Pubkey,
     std::{
         convert::TryInto,
         fmt::Debug,
@@ -491,7 +491,7 @@ mod tests {
 
                     let additions = (0..to_add)
                         .map(|_| {
-                            let k = solana_sdk::pubkey::new_rand();
+                            let k = solana_pubkey::new_rand();
                             let mut v = gen_rand_value();
                             if use_batch_insert {
                                 // refcount has to be 1 to use batch insert
