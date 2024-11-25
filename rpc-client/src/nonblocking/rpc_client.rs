@@ -45,12 +45,12 @@ use {
         pubkey::Pubkey,
         signature::Signature,
         transaction,
+        vote::state::MAX_LOCKOUT_HISTORY,
     },
     solana_transaction_status_client_types::{
         EncodedConfirmedBlock, EncodedConfirmedTransactionWithStatusMeta, TransactionStatus,
         UiConfirmedBlock, UiTransactionEncoding,
     },
-    solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY,
     std::{
         net::SocketAddr,
         str::FromStr,

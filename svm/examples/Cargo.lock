@@ -6336,7 +6336,6 @@ dependencies = [
  "solana-sdk",
  "solana-transaction-status-client-types",
  "solana-version",
- "solana-vote-program",
  "tokio",
 ]
 
