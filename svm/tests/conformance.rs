@@ -15,33 +15,25 @@ use {
     },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
-        bpf_loader_upgradeable,
         hash::Hash,
         instruction::AccountMeta,
         message::SanitizedMessage,
         pubkey::Pubkey,
         rent::Rent,
         signature::Signature,
-        transaction::TransactionError,
         transaction_context::{
             ExecutionRecord, IndexOfAccount, InstructionAccount, TransactionAccount,
             TransactionContext,
         },
     },
     solana_svm::{
-        account_loader::CheckedTransactionDetails,
-        program_loader,
-        transaction_processing_callback::TransactionProcessingCallback,
-        transaction_processing_result::TransactionProcessingResultExtensions,
-        transaction_processor::{
-            ExecutionRecordingConfig, TransactionBatchProcessor, TransactionProcessingConfig,
-            TransactionProcessingEnvironment,
-        },
+        program_loader, transaction_processing_callback::TransactionProcessingCallback,
+        transaction_processor::TransactionBatchProcessor,
     },
     solana_svm_conformance::proto::{InstrEffects, InstrFixture},
     solana_timings::ExecuteTimings,
     std::{
-        collections::{HashMap, HashSet},
+        collections::HashMap,
         env,
         ffi::OsString,
         fs::{self, File},
@@ -120,38 +112,28 @@ fn execute_fixtures() {
 
     // bpf-loader tests
     base_dir.push("bpf-loader");
-    run_from_folder(&base_dir, &HashSet::new());
+    run_from_folder(&base_dir);
     base_dir.pop();
 
     // System program tests
     base_dir.push("system");
-    // These cases hit a debug_assert here:
-    // https://github.com/anza-xyz/agave/blob/0142c7fa1c46b05d201552102eb91b6d4b10f077/svm/src/transaction_account_state_info.rs#L34
-    let run_as_instr = HashSet::from([
-        OsString::from("7fcde5cb94e1dc44.bin.fix"),
-        OsString::from("9f3c001dcd1803fe.bin.fix"),
-        OsString::from("34ee00c659dc5aa6.bin.fix"),
-        OsString::from("8fd951ecde987723.bin.fix"),
-    ]);
-    run_from_folder(&base_dir, &run_as_instr);
+    run_from_folder(&base_dir);
 
     cleanup();
 }
 
-fn run_from_folder(base_dir: &PathBuf, run_as_instr: &HashSet<OsString>) {
+fn run_from_folder(base_dir: &PathBuf) {
     for path in std::fs::read_dir(base_dir).unwrap() {
         let filename = path.as_ref().unwrap().file_name();
         let mut file = File::open(path.as_ref().unwrap().path()).expect("file not found");
         let mut buffer = Vec::new();
         file.read_to_end(&mut buffer).expect("Failed to read file");
-
         let fixture = InstrFixture::decode(buffer.as_slice()).unwrap();
-        let execute_as_instr = run_as_instr.contains(&filename);
-        run_fixture(fixture, filename, execute_as_instr);
+        run_fixture(fixture, filename);
     }
 }
 
-fn run_fixture(fixture: InstrFixture, filename: OsString, execute_as_instr: bool) {
+fn run_fixture(fixture: InstrFixture, filename: OsString) {
     let input = fixture.input.unwrap();
     let output = fixture.output.as_ref().unwrap();
 
@@ -226,10 +208,6 @@ fn run_fixture(fixture: InstrFixture, filename: OsString, execute_as_instr: bool
     };
 
     let transactions = vec![transaction];
-    let transaction_check = vec![Ok(CheckedTransactionDetails {
-        nonce: None,
-        lamports_per_signature: 30,
-    })];
 
     let compute_budget = ComputeBudget {
         compute_unit_limit: input.cu_avail,
@@ -251,128 +229,15 @@ fn run_fixture(fixture: InstrFixture, filename: OsString, execute_as_instr: bool
     );
 
     batch_processor.fill_missing_sysvar_cache_entries(&mock_bank);
-    register_builtins(&batch_processor, &mock_bank);
 
-    #[allow(deprecated)]
-    let (blockhash, lamports_per_signature) = batch_processor
-        .sysvar_cache()
-        .get_recent_blockhashes()
-        .ok()
-        .and_then(|x| (*x).last().cloned())
-        .map(|x| (x.blockhash, x.fee_calculator.lamports_per_signature))
-        .unwrap_or_default();
-
-    let recording_config = ExecutionRecordingConfig {
-        enable_log_recording: true,
-        enable_return_data_recording: true,
-        enable_cpi_recording: false,
-    };
-    let processor_config = TransactionProcessingConfig {
-        account_overrides: None,
-        check_program_modification_slot: false,
-        compute_budget: None,
-        log_messages_bytes_limit: None,
-        limit_to_load_programs: true,
-        recording_config,
-        transaction_account_lock_limit: None,
-    };
-
-    if execute_as_instr {
-        execute_fixture_as_instr(
-            &mock_bank,
-            &batch_processor,
-            transactions[0].message(),
-            compute_budget,
-            output,
-            filename,
-            input.cu_avail,
-        );
-        return;
-    }
-
-    let result = batch_processor.load_and_execute_sanitized_transactions(
+    execute_fixture_as_instr(
         &mock_bank,
-        &transactions,
-        transaction_check,
-        &TransactionProcessingEnvironment {
-            blockhash,
-            blockhash_lamports_per_signature: lamports_per_signature,
-            ..Default::default()
-        },
-        &processor_config,
-    );
-
-    // Assert that the transaction has worked without errors.
-    if let Err(err) = result.processing_results[0].flattened_result() {
-        if matches!(err, TransactionError::InsufficientFundsForRent { .. }) {
-            // This is a transaction error not an instruction error, so execute the instruction
-            // instead.
-            execute_fixture_as_instr(
-                &mock_bank,
-                &batch_processor,
-                transactions[0].message(),
-                compute_budget,
-                output,
-                filename,
-                input.cu_avail,
-            );
-            return;
-        }
-
-        assert_ne!(
-            output.result, 0,
-            "Transaction was not successful, but should have been: file {:?}",
-            filename
-        );
-        return;
-    }
-
-    let processed_tx = result.processing_results[0]
-        .processed_transaction()
-        .unwrap();
-    let executed_tx = processed_tx.executed_transaction().unwrap();
-    let execution_details = &executed_tx.execution_details;
-    let loaded_accounts = &executed_tx.loaded_transaction.accounts;
-    verify_accounts_and_data(
-        loaded_accounts,
+        &batch_processor,
+        transactions[0].message(),
+        compute_budget,
         output,
-        execution_details.executed_units,
-        input.cu_avail,
-        execution_details
-            .return_data
-            .as_ref()
-            .map(|x| &x.data)
-            .unwrap_or(&Vec::new()),
         filename,
-    );
-}
-
-fn register_builtins(
-    batch_processor: &TransactionBatchProcessor<MockForkGraph>,
-    mock_bank: &MockBankCallback,
-) {
-    let bpf_loader = "solana_bpf_loader_upgradeable_program";
-    batch_processor.add_builtin(
-        mock_bank,
-        bpf_loader_upgradeable::id(),
-        bpf_loader,
-        ProgramCacheEntry::new_builtin(
-            0,
-            bpf_loader.len(),
-            solana_bpf_loader_program::Entrypoint::vm,
-        ),
-    );
-
-    let system_program = "system_program";
-    batch_processor.add_builtin(
-        mock_bank,
-        solana_system_program::id(),
-        system_program,
-        ProgramCacheEntry::new_builtin(
-            0,
-            system_program.len(),
-            solana_system_program::system_processor::Entrypoint::vm,
-        ),
+        input.cu_avail,
     );
 }
 
@@ -442,9 +307,18 @@ fn execute_fixture_as_instr(
     let log_collector = LogCollector::new_ref();
 
     let sysvar_cache = &batch_processor.sysvar_cache();
+    #[allow(deprecated)]
+    let (blockhash, lamports_per_signature) = batch_processor
+        .sysvar_cache()
+        .get_recent_blockhashes()
+        .ok()
+        .and_then(|x| (*x).last().cloned())
+        .map(|x| (x.blockhash, x.fee_calculator.lamports_per_signature))
+        .unwrap_or_default();
+
     let env_config = EnvironmentConfig::new(
-        Hash::default(),
-        0,
+        blockhash,
+        lamports_per_signature,
         0,
         &|_| 0,
         mock_bank.feature_set.clone(),
