@@ -40,7 +40,9 @@ use {
     solana_vote_program::{
         vote_error::VoteError,
         vote_instruction::{self, withdraw, CreateVoteAccountConfig},
-        vote_state::{VoteAuthorize, VoteInit, VoteState, VoteStateVersions},
+        vote_state::{
+            VoteAuthorize, VoteInit, VoteState, VoteStateVersions, VOTE_CREDITS_MAXIMUM_PER_SLOT,
+        },
     },
     std::rc::Rc,
 };
@@ -1293,6 +1295,9 @@ pub fn process_show_vote_account(
         get_vote_account(rpc_client, vote_account_address, config.commitment)?;
 
     let epoch_schedule = rpc_client.get_epoch_schedule()?;
+    let tvc_activation_slot =
+        rpc_client.get_feature_activation_slot(&solana_feature_set::timely_vote_credits::id())?;
+    let tvc_activation_epoch = tvc_activation_slot.map(|s| epoch_schedule.get_epoch(s));
 
     let mut votes: Vec<CliLandedVote> = vec![];
     let mut epoch_voting_history: Vec<CliEpochVotingHistory> = vec![];
@@ -1303,12 +1308,19 @@ pub fn process_show_vote_account(
         for (epoch, credits, prev_credits) in vote_state.epoch_credits().iter().copied() {
             let credits_earned = credits.saturating_sub(prev_credits);
             let slots_in_epoch = epoch_schedule.get_slots_in_epoch(epoch);
+            let is_tvc_active = tvc_activation_epoch.map(|e| epoch >= e).unwrap_or_default();
+            let max_credits_per_slot = if is_tvc_active {
+                VOTE_CREDITS_MAXIMUM_PER_SLOT
+            } else {
+                1
+            };
             epoch_voting_history.push(CliEpochVotingHistory {
                 epoch,
                 slots_in_epoch,
                 credits_earned,
                 credits,
                 prev_credits,
+                max_credits_per_slot,
             });
         }
     }
