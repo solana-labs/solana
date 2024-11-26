@@ -31,6 +31,11 @@ macro_rules! testable_prototype {
     };
 }
 
+/// DEVELOPER: when a builtin is migrated to sbpf, please add its corresponding
+/// migration feature ID to solana-builtin-default-costs::BUILTIN_INSTRUCTION_COSTS,
+/// so the builtin's default cost can be determined properly based on feature status.
+/// When migration completed, and the feature gate is enabled everywhere, please
+/// remove that builtin entry from solana-builtin-default-costs::BUILTIN_INSTRUCTION_COSTS.
 pub static BUILTINS: &[BuiltinPrototype] = &[
     testable_prototype!(BuiltinPrototype {
         core_bpf_migration_config: None,

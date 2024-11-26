@@ -1,9 +1,18 @@
 use {
     super::immutable_deserialized_packet::ImmutableDeserializedPacket,
-    solana_builtins_default_costs::BUILTIN_INSTRUCTION_COSTS,
-    solana_sdk::{ed25519_program, saturating_add_assign, secp256k1_program},
+    lazy_static::lazy_static,
+    solana_builtins_default_costs::get_builtin_instruction_cost,
+    solana_sdk::{
+        ed25519_program, feature_set::FeatureSet, saturating_add_assign, secp256k1_program,
+    },
     thiserror::Error,
 };
+
+lazy_static! {
+    // To calculate the static_builtin_cost_sum conservatively, an all-enabled dummy feature_set
+    // is used. It lowers required minimal compute_unit_limit, aligns with future versions.
+    static ref FEATURE_SET: FeatureSet = FeatureSet::all_enabled();
+}
 
 #[derive(Debug, Error, PartialEq)]
 pub enum PacketFilterFailure {
@@ -22,8 +31,8 @@ impl ImmutableDeserializedPacket {
     pub fn check_insufficent_compute_unit_limit(&self) -> Result<(), PacketFilterFailure> {
         let mut static_builtin_cost_sum: u64 = 0;
         for (program_id, _) in self.transaction().get_message().program_instructions_iter() {
-            if let Some(ix_cost) = BUILTIN_INSTRUCTION_COSTS.get(program_id) {
-                saturating_add_assign!(static_builtin_cost_sum, *ix_cost);
+            if let Some(ix_cost) = get_builtin_instruction_cost(program_id, &FEATURE_SET) {
+                saturating_add_assign!(static_builtin_cost_sum, ix_cost);
             }
         }
 

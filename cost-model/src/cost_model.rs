@@ -7,7 +7,7 @@
 
 use {
     crate::{block_cost_limits::*, transaction_cost::*},
-    solana_builtins_default_costs::BUILTIN_INSTRUCTION_COSTS,
+    solana_builtins_default_costs::get_builtin_instruction_cost,
     solana_compute_budget::compute_budget_limits::{
         DEFAULT_HEAP_COST, DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT, MAX_COMPUTE_UNIT_LIMIT,
     },
@@ -163,8 +163,8 @@ impl CostModel {
 
         for (program_id, instruction) in transaction.program_instructions_iter() {
             let ix_execution_cost =
-                if let Some(builtin_cost) = BUILTIN_INSTRUCTION_COSTS.get(program_id) {
-                    *builtin_cost
+                if let Some(builtin_cost) = get_builtin_instruction_cost(program_id, feature_set) {
+                    builtin_cost
                 } else {
                     has_user_space_instructions = true;
                     u64::from(DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT)
@@ -518,14 +518,13 @@ mod tests {
         );
 
         // expected cost for one system transfer instructions
-        let expected_execution_cost = BUILTIN_INSTRUCTION_COSTS
-            .get(&system_program::id())
-            .unwrap();
+        let expected_execution_cost =
+            solana_system_program::system_processor::DEFAULT_COMPUTE_UNITS;
 
         let (program_execution_cost, _loaded_accounts_data_size_cost, data_bytes_cost) =
             CostModel::get_transaction_cost(&simple_transaction, &FeatureSet::all_enabled());
 
-        assert_eq!(*expected_execution_cost, program_execution_cost);
+        assert_eq!(expected_execution_cost, program_execution_cost);
         assert_eq!(3, data_bytes_cost);
     }
 
@@ -672,9 +671,7 @@ mod tests {
         debug!("many transfer transaction {:?}", tx);
 
         // expected cost for two system transfer instructions
-        let program_cost = BUILTIN_INSTRUCTION_COSTS
-            .get(&system_program::id())
-            .unwrap();
+        let program_cost = solana_system_program::system_processor::DEFAULT_COMPUTE_UNITS;
         let expected_cost = program_cost * 2;
 
         let (program_execution_cost, _loaded_accounts_data_size_cost, data_bytes_cost) =
@@ -757,9 +754,8 @@ mod tests {
         ));
 
         let expected_account_cost = WRITE_LOCK_UNITS * 2;
-        let expected_execution_cost = BUILTIN_INSTRUCTION_COSTS
-            .get(&system_program::id())
-            .unwrap();
+        let expected_execution_cost =
+            solana_system_program::system_processor::DEFAULT_COMPUTE_UNITS;
         const DEFAULT_PAGE_COST: u64 = 8;
         let expected_loaded_accounts_data_size_cost =
             solana_compute_budget::compute_budget_limits::MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES.get()
@@ -769,7 +765,7 @@ mod tests {
 
         let tx_cost = CostModel::calculate_cost(&tx, &FeatureSet::all_enabled());
         assert_eq!(expected_account_cost, tx_cost.write_lock_cost());
-        assert_eq!(*expected_execution_cost, tx_cost.programs_execution_cost());
+        assert_eq!(expected_execution_cost, tx_cost.programs_execution_cost());
         assert_eq!(2, tx_cost.writable_accounts().count());
         assert_eq!(
             expected_loaded_accounts_data_size_cost,
@@ -795,12 +791,8 @@ mod tests {
 
         let feature_set = FeatureSet::all_enabled();
         let expected_account_cost = WRITE_LOCK_UNITS * 2;
-        let expected_execution_cost = BUILTIN_INSTRUCTION_COSTS
-            .get(&system_program::id())
-            .unwrap()
-            + BUILTIN_INSTRUCTION_COSTS
-                .get(&compute_budget::id())
-                .unwrap();
+        let expected_execution_cost = solana_system_program::system_processor::DEFAULT_COMPUTE_UNITS
+            + solana_compute_budget_program::DEFAULT_COMPUTE_UNITS;
         let expected_loaded_accounts_data_size_cost = (data_limit as u64) / (32 * 1024) * 8;
 
         let tx_cost = CostModel::calculate_cost(&tx, &feature_set);
@@ -828,9 +820,7 @@ mod tests {
                 start_hash,
             ));
         // transaction has one builtin instruction, and one bpf instruction, no ComputeBudget::compute_unit_limit
-        let expected_builtin_cost = *BUILTIN_INSTRUCTION_COSTS
-            .get(&solana_system_program::id())
-            .unwrap();
+        let expected_builtin_cost = solana_system_program::system_processor::DEFAULT_COMPUTE_UNITS;
         let expected_bpf_cost = DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT;
 
         let (program_execution_cost, _loaded_accounts_data_size_cost, _data_bytes_cost) =
@@ -857,12 +847,8 @@ mod tests {
                 start_hash,
             ));
         // transaction has one builtin instruction, and one ComputeBudget::compute_unit_limit
-        let expected_cost = *BUILTIN_INSTRUCTION_COSTS
-            .get(&solana_system_program::id())
-            .unwrap()
-            + BUILTIN_INSTRUCTION_COSTS
-                .get(&compute_budget::id())
-                .unwrap();
+        let expected_cost = solana_system_program::system_processor::DEFAULT_COMPUTE_UNITS
+            + solana_compute_budget_program::DEFAULT_COMPUTE_UNITS;
 
         let (program_execution_cost, _loaded_accounts_data_size_cost, _data_bytes_cost) =
             CostModel::get_transaction_cost(&transaction, &FeatureSet::all_enabled());
