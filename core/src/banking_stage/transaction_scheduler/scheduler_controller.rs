@@ -220,17 +220,14 @@ impl<C: LikeClusterInfo, R: ReceiveAndBuffer> SchedulerController<C, R> {
             &mut error_counters,
         );
 
-        let fee_check_results: Vec<_> = check_results
+        for ((check_result, tx), result) in check_results
             .into_iter()
             .zip(transactions)
-            .map(|(result, tx)| {
-                result?; // if there's already error do nothing
-                Consumer::check_fee_payer_unlocked(bank, *tx, &mut error_counters)
-            })
-            .collect();
-
-        for (fee_check_result, result) in fee_check_results.into_iter().zip(results.iter_mut()) {
-            *result = fee_check_result.is_ok();
+            .zip(results.iter_mut())
+        {
+            *result = check_result
+                .and_then(|_| Consumer::check_fee_payer_unlocked(bank, *tx, &mut error_counters))
+                .is_ok();
         }
     }
 
