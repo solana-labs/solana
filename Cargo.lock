@@ -148,7 +148,7 @@ dependencies = [
  "solana-version",
  "tar",
  "tempfile",
- "url 2.5.3",
+ "url 2.5.4",
  "winapi 0.3.9",
  "winreg",
 ]
@@ -5031,7 +5031,7 @@ dependencies = [
  "tokio-rustls",
  "tokio-util 0.7.12",
  "tower-service",
- "url 2.5.3",
+ "url 2.5.4",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
@@ -6344,7 +6344,7 @@ dependencies = [
  "thiserror 2.0.3",
  "tiny-bip39",
  "uriparse",
- "url 2.5.3",
+ "url 2.5.4",
 ]
 
 [[package]]
@@ -6375,7 +6375,7 @@ dependencies = [
  "thiserror 2.0.3",
  "tiny-bip39",
  "uriparse",
- "url 2.5.3",
+ "url 2.5.4",
 ]
 
 [[package]]
@@ -6452,7 +6452,7 @@ dependencies = [
  "serde_yaml 0.9.34+deprecated",
  "solana-clap-utils",
  "solana-commitment-config",
- "url 2.5.3",
+ "url 2.5.4",
 ]
 
 [[package]]
@@ -7580,7 +7580,7 @@ dependencies = [
  "solana-sdk",
  "solana-version",
  "tokio",
- "url 2.5.3",
+ "url 2.5.4",
 ]
 
 [[package]]
@@ -8024,7 +8024,7 @@ dependencies = [
  "tokio-stream",
  "tokio-tungstenite",
  "tungstenite",
- "url 2.5.3",
+ "url 2.5.4",
 ]
 
 [[package]]
@@ -10814,7 +10814,7 @@ dependencies = [
  "rustls 0.21.12",
  "sha1",
  "thiserror 1.0.69",
- "url 2.5.3",
+ "url 2.5.4",
  "utf-8",
  "webpki-roots 0.24.0",
 ]
@@ -10945,9 +10945,9 @@ dependencies = [
 
 [[package]]
 name = "url"
-version = "2.5.3"
+version = "2.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d157f1b96d14500ffdc1f10ba712e780825526c03d9a49b4d0324b0d9113ada"
+checksum = "32f8b686cadd1473f4bd0117a5d28d36b1ade384ea9b5069a1c40aefed7fda60"
 dependencies = [
  "form_urlencoded",
  "idna 1.0.3",
