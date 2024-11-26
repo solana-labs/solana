@@ -15,6 +15,7 @@ use {
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount},
         clock::{Epoch, Slot},
+        feature_set,
         fee::FeeDetails,
         hash::Hash,
         inner_instruction::InnerInstructionsList,
@@ -123,6 +124,8 @@ pub struct BankHashComponents {
     pub last_blockhash: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub epoch_accounts_hash: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub accounts_lt_hash_checksum: Option<String>,
     pub accounts: AccountsDetails,
 }
 
@@ -155,6 +158,17 @@ impl SlotDetails {
                 epoch_accounts_hash: bank
                     .wait_get_epoch_accounts_hash()
                     .map(|hash| hash.as_ref().to_string()),
+                accounts_lt_hash_checksum: bank
+                    .feature_set
+                    .is_active(&feature_set::accounts_lt_hash::id())
+                    .then(|| {
+                        bank.accounts_lt_hash
+                            .lock()
+                            .unwrap()
+                            .0
+                            .checksum()
+                            .to_string()
+                    }),
                 accounts: AccountsDetails { accounts },
             })
         } else {
@@ -335,6 +349,11 @@ pub mod tests {
                         last_blockhash: "last_blockhash".into(),
                         epoch_accounts_hash: if slot % 2 == 0 {
                             Some("epoch_accounts_hash".into())
+                        } else {
+                            None
+                        },
+                        accounts_lt_hash_checksum: if slot % 3 == 0 {
+                            Some("accounts_lt_hash_checksum".into())
                         } else {
                             None
                         },
