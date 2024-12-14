@@ -98,7 +98,7 @@
 //! Many steps must be done manually.
 //!
 //! The `solana_program` crate provides no APIs to assist in interpreting
-//! the the secp256k1 instruction data. It must be done manually.
+//! the secp256k1 instruction data. It must be done manually.
 //!
 //! The secp256k1 program is implemented with the [`libsecp256k1`] crate,
 //! which clients may also want to use.

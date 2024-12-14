@@ -233,7 +233,7 @@ impl Secp256k1Pubkey {
 /// lengths of `hash` and `signature` beforehand.
 ///
 /// When run on-chain this function will not directly validate the lengths of
-/// `hash` and `signature`. It will assume they are the the correct lengths and
+/// `hash` and `signature`. It will assume they are the correct lengths and
 /// pass their pointers to the runtime, which will interpret them as 32-byte and
 /// 64-byte buffers. If the provided slices are too short, the runtime will read
 /// invalid data and attempt to interpret it, most likely returning an error,

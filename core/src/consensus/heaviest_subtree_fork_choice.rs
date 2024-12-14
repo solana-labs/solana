@@ -3514,7 +3514,7 @@ mod test {
             (vote_pubkeys[1], duplicate_leaves_descended_from_5[0]),
         ];
 
-        // The best slot should be the the smallest leaf descended from 4
+        // The best slot should be the smallest leaf descended from 4
         assert_eq!(
             heaviest_subtree_fork_choice.add_votes(
                 pubkey_votes.iter(),
@@ -3560,7 +3560,7 @@ mod test {
             ..,
         ) = setup_mark_invalid_forks_duplicate_tests();
 
-        // Marking candidate as valid again will choose the the heaviest leaf of
+        // Marking candidate as valid again will choose the heaviest leaf of
         // the newly valid branch
         let duplicate_slot = duplicate_leaves_descended_from_4[0].0;
         let duplicate_descendant = (duplicate_slot + 1, Hash::new_unique());
