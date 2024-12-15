@@ -108,7 +108,7 @@ some problem.  Our unit-test suite is how we encode the set of *problems* the co
 the test suite should indicate that your change didn't *infringe* on anyone else's solutions. Adding a
 test *protects* your solution from future changes. Say you don't understand why a line of code exists,
 try deleting it and running the unit-tests. The nearest test failure should tell you what problem
-was solved by that code. If no test fails, go ahead and submit a Pull Request that asks, "what
+was solved by that code. If no test fails, go ahead and submit a Pull Request that asks, "What
 problem is solved by this code?" On the other hand, if a test does fail and you can think of a
 better way to solve the same problem, a Pull Request with your solution would most certainly be
 welcome! Likewise, if rewriting a test can better communicate what code it's protecting, please
