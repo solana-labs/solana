@@ -75,7 +75,7 @@ The different protocol strategies to address the above challenges:
      the orphans in blockstore.
 
      `Orphan(orphan)` request - `orphan` is the orphan slot that the
-     requestor wants to know the parents of `Orphan(orphan)` response -
+     requester wants to know the parents of `Orphan(orphan)` response -
      The highest shreds for each of the first `N` parents of the requested
      `orphan`
 
