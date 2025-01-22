@@ -1,4 +1,4 @@
-# PLEASE READ: This repo no longer contains the SPL program implementations
+# PLEASE READ: This repo is now a public archive
 
 This repo still exists in archived form, feel free to fork any reference
 implementations it still contains.
