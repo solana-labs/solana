@@ -165,7 +165,7 @@ mod test {
             &account_pubkey,
             &system_program::id(),
             &nonce_account_data,
-            None,
+            Full,
         )
         .unwrap();
         assert_eq!(parsed.program, "nonce".to_string());
