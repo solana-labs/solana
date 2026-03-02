@@ -2,8 +2,9 @@
 name: Community Issue
 about: Create a report describing a problem and a proposed solution
 title: ''
-labels: ["community"]
+labels: ''
 assignees: ''
+
 ---
 
 #### Problem
